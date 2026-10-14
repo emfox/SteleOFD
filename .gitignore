@@ -35,6 +35,10 @@ include/steleofd.h
 /docs/book/
 /doc/
 
+# ─── Python ───
+__pycache__/
+*.py[cod]
+
 # ─── IDE / editor ───
 .idea/
 .vscode/
@@ -66,6 +70,7 @@ logs/
 *.ofd
 !tests/fixtures/**/*.ofd
 !docs/**/*.ofd
+!compliance/corpus/**/*.ofd
 
 # ─── Secrets: must never be committed ───
 .env

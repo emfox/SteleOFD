@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ofd:Page xmlns:ofd="http://www.ofdspec.org/2016">
+  <ofd:Area>
+    <ofd:PhysicalBox>0 0 210 297</ofd:PhysicalBox>
+  </ofd:Area>
+  <ofd:Content>
+    <ofd:Layer ID="2" Type="Body">
+      <ofd:PathObject ID="3" Boundary="10 10 60 20" Fill="true">
+        <ofd:FillColor Value="255 0 0"/>
+        <ofd:AbbreviatedData>M 10 10 L 70 10 L 70 30 L 10 30 C</ofd:AbbreviatedData>
+      </ofd:PathObject>
+      <ofd:TextObject ID="4" Boundary="10 40 90 20" Font="5" Size="3.5">
+        <ofd:FillColor Value="0 0 0"/>
+        <ofd:TextCode X="10" Y="50">SteleOFD</ofd:TextCode>
+      </ofd:TextObject>
+    </ofd:Layer>
+  </ofd:Content>
+</ofd:Page>

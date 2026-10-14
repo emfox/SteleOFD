@@ -64,3 +64,8 @@ jobs:
         run: |
           python3 scripts/check_compliance.py
           git diff --exit-code docs/COMPLIANCE.md
+
+      - name: Corpus validates against annex A schemas
+        run: |
+          python3 -m pip install --quiet lxml
+          python3 scripts/validate_ofd.py $(find compliance/corpus -name '*.ofd' -o -name '*.xml' | sort)
