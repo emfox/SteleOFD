@@ -1,7 +1,6 @@
 //! Electronic signature reading and verification (GB/T 33190 clause 11).
 //! Subset: signature list, descriptor with references and check value, and
-//! SM3 + SM2 verification against an embedded certificate. Stamps and
-//! certificate chain validation are follow-up work.
+//! SM3 + SM2 verification against an embedded certificate.
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
