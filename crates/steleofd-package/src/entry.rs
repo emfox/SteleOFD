@@ -130,3 +130,95 @@ fn extension(name: &str) -> Option<String> {
     let (_, ext) = name.rsplit_once('.')?;
     Some(ext.to_ascii_lowercase())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn entry_point_is_recognized() {
+        assert_eq!(EntryKind::from_path("OFD.xml"), Some(EntryKind::EntryPoint));
+    }
+
+    #[test]
+    fn document_and_page_paths_are_recognized() {
+        assert_eq!(
+            EntryKind::from_path("Doc_0/Document.xml"),
+            Some(EntryKind::Document)
+        );
+        assert_eq!(
+            EntryKind::from_path("Doc_0/Pages/Page_0/Content.xml"),
+            Some(EntryKind::Page)
+        );
+    }
+
+    #[test]
+    fn templates_are_distinguished_from_pages() {
+        assert_eq!(
+            EntryKind::from_path("Doc_0/Tpls/Tpl_0/Content.xml"),
+            Some(EntryKind::Template)
+        );
+    }
+
+    #[test]
+    fn fonts_and_images_are_detected_by_extension() {
+        assert_eq!(
+            EntryKind::from_path("Doc_0/Res/Font_0.ttf"),
+            Some(EntryKind::Font)
+        );
+        assert_eq!(
+            EntryKind::from_path("Doc_0/Res/Image_1.PNG"),
+            Some(EntryKind::Image)
+        );
+    }
+
+    #[test]
+    fn an_image_outside_res_is_still_an_image() {
+        // Extension wins over directory so a misplaced asset is still decodable.
+        assert_eq!(
+            EntryKind::from_path("Doc_0/Pages/img.png"),
+            Some(EntryKind::Image)
+        );
+    }
+
+    #[test]
+    fn signatures_are_recognized() {
+        assert_eq!(
+            EntryKind::from_path("Doc_0/Signs/Signatures.xml"),
+            Some(EntryKind::Signature)
+        );
+    }
+
+    #[test]
+    fn unknown_paths_fall_back_to_other() {
+        assert_eq!(
+            EntryKind::from_path("Doc_0/Misc/notes.bin"),
+            Some(EntryKind::Other)
+        );
+    }
+
+    #[test]
+    fn kind_reports_binary_and_xml_correctly() {
+        assert!(EntryKind::Font.is_binary());
+        assert!(EntryKind::Image.is_binary());
+        assert!(!EntryKind::Font.is_xml());
+        assert!(EntryKind::Document.is_xml());
+        assert!(!EntryKind::Other.is_xml());
+    }
+
+    #[test]
+    fn entry_info_derives_its_kind() {
+        let info = EntryInfo::new("Doc_0/Res/Font_0.ttf", 1234);
+        assert_eq!(info.kind, EntryKind::Font);
+        assert_eq!(info.size, 1234);
+        assert!(info.to_string().contains("font"));
+    }
+
+    #[test]
+    fn paths_without_an_extension_do_not_panic() {
+        assert_eq!(
+            EntryKind::from_path("Doc_0/Res/font"),
+            Some(EntryKind::Resource)
+        );
+    }
+}

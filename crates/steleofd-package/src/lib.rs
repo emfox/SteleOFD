@@ -389,3 +389,265 @@ pub fn looks_like_dir(path: &str) -> bool {
 pub fn to_path_buf(path: &str) -> PathBuf {
     PathBuf::from(path)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn resolve_walks_up_and_down() {
+        assert_eq!(
+            resolve("Doc_0/Pages", "Page_0.xml"),
+            "Doc_0/Pages/Page_0.xml"
+        );
+        assert_eq!(
+            resolve("Doc_0/Pages", "../Res/Font_0.ttf"),
+            "Doc_0/Res/Font_0.ttf"
+        );
+        assert_eq!(
+            resolve("Doc_0", "./Res/Image_1.png"),
+            "Doc_0/Res/Image_1.png"
+        );
+    }
+
+    #[test]
+    fn resolve_keeps_absolute_references_intact() {
+        assert_eq!(resolve("Doc_0", "/Res/Font_0.ttf"), "Res/Font_0.ttf");
+        assert_eq!(
+            resolve("Doc_0", "http://example.com/a.ttf"),
+            "http://example.com/a.ttf"
+        );
+    }
+
+    #[test]
+    fn resolve_from_the_root_has_no_parent_to_pop() {
+        // Popping past the root must not panic; it simply stays at the root.
+        assert_eq!(resolve("", "../../evil.ttf"), "evil.ttf");
+    }
+
+    #[test]
+    fn join_and_parent_round_trip() {
+        assert_eq!(join("Doc_0", "OFD.xml"), "Doc_0/OFD.xml");
+        assert_eq!(join("", "OFD.xml"), "OFD.xml");
+        assert_eq!(parent_of("Doc_0/Pages/Page_0.xml"), "Doc_0/Pages");
+        assert_eq!(parent_of("OFD.xml"), "");
+        assert_eq!(file_name_of("Doc_0/Pages/Page_0.xml"), "Page_0.xml");
+    }
+
+    #[test]
+    fn entry_point_name_matches_the_standard() {
+        assert_eq!(ENTRY_POINT, "OFD.xml");
+        assert!(is_document_path("Doc_0/Document.xml"));
+        assert!(!is_document_path("OFD.xml"));
+    }
+
+    // --- container behaviour against real archive bytes -------------------
+
+    const MINIMAL_OFD: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
+<OFD xmlns="http://www.ofdspec.org/2016"><DocBody><DocRoot>Doc_0/Document.xml</DocRoot></DocBody></OFD>"#;
+
+    fn fixture() -> Vec<u8> {
+        build_archive(&[
+            ("OFD.xml", MINIMAL_OFD.as_bytes()),
+            ("Doc_0/Document.xml", b"<Document/>"),
+            ("Doc_0/Pages/Page_0/Content.xml", b"<Page/>"),
+            ("Doc_0/Res/Font_0.ttf", b"\x00\x01\x00\x00font"),
+        ])
+        .expect("fixture should build")
+    }
+
+    #[test]
+    fn a_well_formed_archive_lists_its_entries() {
+        let pkg = Package::from_bytes(&fixture()).expect("open");
+        assert_eq!(pkg.len(), 4);
+        assert!(!pkg.is_empty());
+        assert!(pkg.contains("OFD.xml"));
+        assert!(pkg.contains("Doc_0/Res/Font_0.ttf"));
+        assert!(!pkg.contains("Doc_0/Missing.xml"));
+    }
+
+    #[test]
+    fn the_entry_point_reads_back_verbatim() {
+        let mut pkg = Package::from_bytes(&fixture()).expect("open");
+        assert!(pkg.has_entry_point());
+        assert_eq!(pkg.entry_point().expect("entry point"), MINIMAL_OFD);
+    }
+
+    #[test]
+    fn entries_read_back_byte_for_byte() {
+        let mut pkg = Package::from_bytes(&fixture()).expect("open");
+        assert_eq!(
+            pkg.read("Doc_0/Document.xml").expect("read"),
+            b"<Document/>"
+        );
+        // Binary content must survive the deflate round trip untouched.
+        assert_eq!(
+            pkg.read("Doc_0/Res/Font_0.ttf").expect("read"),
+            b"\x00\x01\x00\x00font"
+        );
+    }
+
+    #[test]
+    fn reading_an_absent_entry_reports_it_by_name() {
+        let mut pkg = Package::from_bytes(&fixture()).expect("open");
+        let err = pkg.read("Doc_0/Nope.xml").expect_err("must fail");
+        match err {
+            OfdError::Package(PackageError::MissingEntry { entry }) => {
+                assert_eq!(entry, "Doc_0/Nope.xml");
+            }
+            other => panic!("unexpected error: {other}"),
+        }
+    }
+
+    #[test]
+    fn an_archive_without_an_entry_point_is_not_an_ofd() {
+        let bytes = build_archive(&[("readme.txt", b"hello")]).expect("build");
+        let mut pkg = Package::from_bytes(&bytes).expect("open");
+        assert!(!pkg.has_entry_point());
+        let err = pkg.entry_point().expect_err("must fail");
+        assert!(matches!(
+            err,
+            OfdError::Format(steleofd_error::FormatError::NotOfd)
+        ));
+    }
+
+    #[test]
+    fn optional_reads_distinguish_absent_from_empty() {
+        let bytes = build_archive(&[
+            ("OFD.xml", MINIMAL_OFD.as_bytes()),
+            ("Doc_0/empty.xml", b""),
+        ])
+        .expect("build");
+        let mut pkg = Package::from_bytes(&bytes).expect("open");
+
+        assert_eq!(
+            pkg.read_optional("Doc_0/empty.xml").expect("read"),
+            Some(vec![])
+        );
+        assert_eq!(pkg.read_optional("Doc_0/absent.xml").expect("read"), None);
+    }
+
+    #[test]
+    fn document_directories_are_discovered_and_sorted() {
+        let bytes = build_archive(&[
+            ("OFD.xml", MINIMAL_OFD.as_bytes()),
+            ("Doc_0/Document.xml", b"<a/>"),
+            ("Doc_1/Document.xml", b"<b/>"),
+            ("Doc_1/Pages/Page_0/Content.xml", b"<c/>"),
+        ])
+        .expect("build");
+        let pkg = Package::from_bytes(&bytes).expect("open");
+
+        assert_eq!(pkg.document_dirs(), vec!["Doc_0", "Doc_1"]);
+        assert_eq!(pkg.entries_under("Doc_1").len(), 2);
+        assert!(pkg.entries_under("Doc_9").is_empty());
+    }
+
+    #[test]
+    fn entry_kinds_are_derived_from_paths() {
+        let pkg = Package::from_bytes(&fixture()).expect("open");
+        assert_eq!(pkg.kind_of("OFD.xml"), Some(EntryKind::EntryPoint));
+        assert_eq!(pkg.kind_of("Doc_0/Document.xml"), Some(EntryKind::Document));
+        assert_eq!(pkg.kind_of("Doc_0/Res/Font_0.ttf"), Some(EntryKind::Font));
+    }
+
+    #[test]
+    fn too_many_entries_is_refused_before_reading_any() {
+        let entries: Vec<(String, &[u8])> = (0..8)
+            .map(|i| (format!("Doc_0/f{i}.xml"), b"x" as &[u8]))
+            .collect();
+        let refs: Vec<(&str, &[u8])> = entries.iter().map(|(n, d)| (n.as_str(), *d)).collect();
+        let bytes = build_archive(&refs).expect("build");
+
+        let limits = PackageLimits {
+            max_entry_count: 3,
+            ..PackageLimits::default()
+        };
+        let err = Package::open_with_limits(&steleofd_io::SliceSource::new(&bytes, "t"), limits)
+            .expect_err("must fail");
+        match err {
+            OfdError::Package(PackageError::EntryCountLimit { actual, limit }) => {
+                assert_eq!(actual, 8);
+                assert_eq!(limit, 3);
+            }
+            other => panic!("unexpected error: {other}"),
+        }
+    }
+
+    #[test]
+    fn an_oversized_entry_is_refused_on_read() {
+        let big = vec![b'a'; 4096];
+        let bytes = build_archive(&[("OFD.xml", &big)]).expect("build");
+
+        let limits = PackageLimits {
+            max_entry_size: 64,
+            ..PackageLimits::default()
+        };
+        let mut pkg =
+            Package::open_with_limits(&steleofd_io::SliceSource::new(&bytes, "t"), limits)
+                .expect("open");
+        let err = pkg.read("OFD.xml").expect_err("must fail");
+        assert!(matches!(
+            err,
+            OfdError::Package(PackageError::DecompressionLimit { .. })
+        ));
+    }
+
+    #[test]
+    fn garbage_bytes_are_reported_as_corruption() {
+        let err = Package::from_bytes(b"this is not a zip archive at all").expect_err("must fail");
+        assert!(matches!(
+            err,
+            OfdError::Package(PackageError::Corrupted { .. })
+        ));
+        assert!(err.is_corruption());
+    }
+
+    #[test]
+    fn truncated_archives_are_reported_as_corruption() {
+        let mut bytes = fixture();
+        bytes.truncate(bytes.len() / 2);
+        let err = Package::from_bytes(&bytes).expect_err("must fail");
+        assert!(err.is_corruption(), "unexpected error: {err}");
+    }
+
+    #[test]
+    fn non_utf8_xml_is_rejected_with_the_entry_named() {
+        let bytes = build_archive(&[("OFD.xml", &[0xff, 0xfe, 0xfd])]).expect("build");
+        let mut pkg = Package::from_bytes(&bytes).expect("open");
+        let err = pkg.read_string("OFD.xml").expect_err("must fail");
+        match err {
+            OfdError::Package(PackageError::Corrupted { reason }) => {
+                assert!(reason.contains("OFD.xml"), "reason was {reason}");
+            }
+            other => panic!("unexpected error: {other}"),
+        }
+    }
+
+    #[test]
+    fn an_empty_archive_is_simply_empty() {
+        let bytes = build_archive(&[]).expect("build");
+        let pkg = Package::from_bytes(&bytes).expect("open");
+        assert!(pkg.is_empty());
+        assert_eq!(pkg.len(), 0);
+        assert!(!pkg.has_entry_point());
+    }
+
+    #[test]
+    fn debug_output_summarizes_without_dumping_bytes() {
+        let pkg = Package::from_bytes(&fixture()).expect("open");
+        let text = format!("{pkg:?}");
+        assert!(text.contains("Package"));
+        assert!(text.contains("entries: 4"));
+    }
+
+    #[test]
+    fn limits_round_trip_through_the_container() {
+        let limits = PackageLimits::strict();
+        let bytes = fixture();
+        let pkg = Package::open_with_limits(&steleofd_io::SliceSource::new(&bytes, "t"), limits)
+            .expect("open");
+        assert_eq!(pkg.limits().max_entry_count, limits.max_entry_count);
+        assert_eq!(pkg.limits().max_entry_size, limits.max_entry_size);
+    }
+}
