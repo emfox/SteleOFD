@@ -38,6 +38,7 @@ impl Default for RenderOptions {
 }
 
 /// A finished rasterization of one page.
+#[derive(Debug)]
 pub struct RasterOutput {
     /// Width in pixels.
     pub width: u32,
@@ -182,7 +183,7 @@ pub fn render_page(
             } => {
                 let total = total_transform(&state, &page.page_box, options.dpi);
                 let shader = linear_shader(*start, *end, stops, total)?;
-                fill_with_shader(&mut pixmap, path, shader, state.clip.as_ref())?;
+                fill_with_shader(&mut pixmap, path, shader, total, state.clip.as_ref())?;
             }
             DrawOp::RadialGradient {
                 center,
@@ -192,7 +193,7 @@ pub fn render_page(
             } => {
                 let total = total_transform(&state, &page.page_box, options.dpi);
                 let shader = radial_shader(*center, *radius, stops, total)?;
-                fill_with_shader(&mut pixmap, path, shader, state.clip.as_ref())?;
+                fill_with_shader(&mut pixmap, path, shader, total, state.clip.as_ref())?;
             }
         }
     }
@@ -215,10 +216,12 @@ fn to_color(c: &Color) -> tiny_skia::Color {
 }
 
 /// Page-space millimetres to pixmap pixels, page box origin included.
+/// `then` applies `self` first, so the CTM acts in millimetres and the
+/// pixel scale maps the result onto the bitmap.
 fn total_transform(state: &State, page_box: &Rect, dpi: f64) -> Transform {
     let s = dpi / 25.4;
     let mm_to_px = Affine::translate(-page_box.x * s, -page_box.y * s).then(Affine::scale(s, s));
-    to_ts(mm_to_px.then(state.ctm))
+    to_ts(state.ctm.then(mm_to_px))
 }
 
 /// Convert an affine matrix into a tiny-skia transform, pixel for pixel.
@@ -637,9 +640,10 @@ fn fill_with_shader(
     pixmap: &mut Pixmap,
     path: &Path,
     shader: Shader<'static>,
+    total: Transform,
     clip: Option<&Mask>,
 ) -> Result<()> {
-    let ts_path = to_ts_path(path, Transform::identity())?;
+    let ts_path = to_ts_path(path, total)?;
     let paint = TsPaint {
         shader,
         anti_alias: true,
@@ -653,4 +657,363 @@ fn fill_with_shader(
         clip,
     );
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use steleofd_display::ops::GradientStop as DisplayStop;
+    use steleofd_display::{
+        DisplayListBuilder, DrawOp, ImageCodec, ImageRef, Paint, PaintRule, StrokeStyle,
+    };
+    use steleofd_font::{FontId, FontManager};
+    use steleofd_geometry::Path;
+
+    const FONT_BYTES: &[u8] = include_bytes!("../tests/data/Orbitron-Bold.ttf");
+
+    fn manager_with_font() -> FontManager {
+        let mut manager = FontManager::new();
+        manager.registry_mut().register_embedded(
+            "tests/data/Orbitron-Bold.ttf",
+            "Orbitron",
+            Arc::new(FONT_BYTES.to_vec()),
+        );
+        manager
+    }
+
+    fn small_box() -> Rect {
+        Rect::new(0.0, 0.0, 20.0, 20.0)
+    }
+
+    fn rect_path(x: f64, y: f64, w: f64, h: f64) -> Path {
+        Path::build(|b| {
+            b.move_to(x, y)
+                .line_to(x + w, y)
+                .line_to(x + w, y + h)
+                .line_to(x, y + h)
+                .close();
+        })
+    }
+
+    fn fill_rect_op(x: f64, y: f64, w: f64, h: f64, color: Color) -> DrawOp {
+        DrawOp::Path {
+            path: rect_path(x, y, w, h),
+            fill: Some(Paint::Solid(color)),
+            stroke: None,
+            stroke_style: StrokeStyle::default(),
+            rule: PaintRule::NonZero,
+        }
+    }
+
+    fn page_with(ops: Vec<DrawOp>) -> PageDisplay {
+        let mut b = DisplayListBuilder::new(small_box());
+        for op in ops {
+            b.push(op);
+        }
+        b.finish(0)
+    }
+
+    fn render(page: &PageDisplay, fonts: &FontManager) -> RasterOutput {
+        render_page(page, fonts, &RenderOptions::default()).expect("render")
+    }
+
+    fn pixel_at(out: &RasterOutput, x: u32, y: u32) -> [u8; 4] {
+        let px = out.pixmap().pixel(x, y).expect("in-bounds pixel");
+        [px.red(), px.green(), px.blue(), px.alpha()]
+    }
+
+    #[test]
+    fn a_blank_page_comes_out_white() {
+        let manager = FontManager::new();
+        let page = page_with(Vec::new());
+        let out = render(&page, &manager);
+        assert_eq!(out.width, 76);
+        assert_eq!(out.height, 76);
+        assert_eq!(pixel_at(&out, 5, 5), [255, 255, 255, 255]);
+    }
+
+    #[test]
+    fn a_filled_rectangle_lands_where_asked() {
+        let manager = FontManager::new();
+        // 20 mm box at 96 DPI is about 76 px, so 10 mm is roughly centred.
+        let page = page_with(vec![fill_rect_op(
+            10.0,
+            10.0,
+            5.0,
+            5.0,
+            Color::rgba(255, 0, 0, 255),
+        )]);
+        let out = render(&page, &manager);
+        assert_eq!(pixel_at(&out, 50, 50)[0], 255, "inside the rect is red");
+        assert_eq!(
+            pixel_at(&out, 5, 5),
+            [255, 255, 255, 255],
+            "outside stays white"
+        );
+    }
+
+    #[test]
+    fn a_transform_moves_geometry() {
+        let manager = FontManager::new();
+        let mut b = DisplayListBuilder::new(small_box());
+        b.save().expect("save");
+        b.transform(Affine::translate(10.0, 10.0));
+        b.push(fill_rect_op(
+            0.0,
+            0.0,
+            5.0,
+            5.0,
+            Color::rgba(0, 128, 0, 255),
+        ));
+        b.restore().expect("restore");
+        let out = render(&b.finish(0), &manager);
+        assert_eq!(
+            pixel_at(&out, 50, 50)[1],
+            128,
+            "the rect moved with its CTM"
+        );
+        assert_eq!(
+            pixel_at(&out, 10, 10),
+            [255, 255, 255, 255],
+            "origin stays untouched"
+        );
+    }
+
+    #[test]
+    fn save_and_restore_isolate_the_clip() {
+        let manager = FontManager::new();
+        let mut b = DisplayListBuilder::new(small_box());
+        b.save().expect("save");
+        b.push(DrawOp::ClipPath {
+            path: rect_path(0.0, 0.0, 5.0, 5.0),
+            rule: PaintRule::NonZero,
+        });
+        b.push(fill_rect_op(
+            0.0,
+            0.0,
+            20.0,
+            20.0,
+            Color::rgba(0, 0, 255, 255),
+        ));
+        b.restore().expect("restore");
+        b.push(fill_rect_op(
+            10.0,
+            10.0,
+            5.0,
+            5.0,
+            Color::rgba(255, 0, 0, 255),
+        ));
+        let out = render(&b.finish(0), &manager);
+        assert_eq!(
+            pixel_at(&out, 10, 10),
+            [255, 255, 255, 255],
+            "clipped away by the saved clip"
+        );
+        assert_eq!(
+            pixel_at(&out, 50, 50)[0],
+            255,
+            "restored state allows new drawing"
+        );
+    }
+
+    #[test]
+    fn a_stroke_paints_the_border_not_the_middle() {
+        let manager = FontManager::new();
+        let page = page_with(vec![DrawOp::Path {
+            path: rect_path(5.0, 5.0, 10.0, 10.0),
+            fill: None,
+            stroke: Some(Paint::Solid(Color::rgba(0, 0, 0, 255))),
+            stroke_style: StrokeStyle::default(),
+            rule: PaintRule::NonZero,
+        }]);
+        let out = render(&page, &manager);
+        let dark_in_row = (0..out.width)
+            .filter(|x| pixel_at(&out, *x, 38)[0] < 128)
+            .count();
+        assert!(
+            dark_in_row >= 2,
+            "border pixels are inked, found {dark_in_row}"
+        );
+        assert_eq!(
+            pixel_at(&out, 40, 40),
+            [255, 255, 255, 255],
+            "middle is untouched"
+        );
+    }
+
+    #[test]
+    fn a_linear_gradient_runs_light_to_dark() {
+        let manager = FontManager::new();
+        let page = page_with(vec![DrawOp::LinearGradient {
+            start: steleofd_common::Point::new(0.0, 10.0),
+            end: steleofd_common::Point::new(20.0, 10.0),
+            stops: vec![
+                DisplayStop {
+                    offset: 0.0,
+                    color: Color::rgba(0, 0, 0, 255),
+                },
+                DisplayStop {
+                    offset: 1.0,
+                    color: Color::rgba(255, 255, 255, 255),
+                },
+            ],
+            path: rect_path(0.0, 0.0, 20.0, 20.0),
+        }]);
+        let out = render(&page, &manager);
+        let left = pixel_at(&out, 5, 38)[0] as i32;
+        let right = pixel_at(&out, 70, 38)[0] as i32;
+        assert!(left < 80, "left edge is dark, got {left}");
+        assert!(right > 175, "right edge is light, got {right}");
+    }
+
+    #[test]
+    fn an_image_is_placed_on_the_page() {
+        let manager = FontManager::new();
+        // Encode a 4x4 solid blue PNG through the image crate itself.
+        let mut img = image::RgbaImage::from_pixel(4, 4, image::Rgba([0, 0, 255, 255]));
+        let mut png = Vec::new();
+        image::DynamicImage::ImageRgba8(img.clone())
+            .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+            .expect("encode");
+        let _ = &mut img;
+        let page = page_with(vec![DrawOp::Image {
+            image: ImageRef::new("img1", Arc::new(png), (4, 4), ImageCodec::Png),
+            dst: Rect::new(10.0, 10.0, 8.0, 8.0),
+            transform: Affine::IDENTITY,
+        }]);
+        let out = render(&page, &manager);
+        assert_eq!(pixel_at(&out, 50, 50)[2], 255, "image area is blue");
+        assert_eq!(
+            pixel_at(&out, 5, 5),
+            [255, 255, 255, 255],
+            "outside stays white"
+        );
+    }
+
+    #[test]
+    fn text_renders_real_glyph_outlines() {
+        let manager = manager_with_font();
+        let run = steleofd_display::GlyphRun {
+            font: FontId(0),
+            size: steleofd_common::Millimeter::new(6.0),
+            glyphs: vec![65u16], // Orbitron covers basic Latin
+            advances: vec![5.0],
+            text: Some("A".to_string()),
+            cluster_map: None,
+            transform: Affine::translate(2.0, 12.0),
+            fill: Some(Paint::Solid(Color::rgba(0, 0, 0, 255))),
+            stroke: None,
+            letter_spacing: 0.0,
+            word_spacing: 0.0,
+            bbox: Rect::new(2.0, 6.0, 5.0, 6.0),
+        };
+        let page = page_with(vec![DrawOp::Text(run)]);
+        let out = render(&page, &manager);
+        let dark = (0..out.width)
+            .step_by(2)
+            .flat_map(|x| (0..out.height).step_by(2).map(move |y| (x, y)))
+            .filter(|(x, y)| pixel_at(&out, *x, *y)[0] < 128)
+            .count();
+        assert!(dark > 5, "expected inked glyph pixels, found {dark}");
+    }
+
+    #[test]
+    fn a_missing_font_is_reported() {
+        let manager = FontManager::new();
+        let run = steleofd_display::GlyphRun {
+            font: FontId(7),
+            size: steleofd_common::Millimeter::new(3.0),
+            glyphs: vec![65u16],
+            advances: vec![3.0],
+            text: Some("A".to_string()),
+            cluster_map: None,
+            transform: Affine::IDENTITY,
+            fill: Some(Paint::Solid(Color::BLACK)),
+            stroke: None,
+            letter_spacing: 0.0,
+            word_spacing: 0.0,
+            bbox: Rect::new(0.0, 0.0, 3.0, 3.0),
+        };
+        let page = page_with(vec![DrawOp::Text(run)]);
+        let err = render_page(&page, &manager, &RenderOptions::default()).expect_err("must fail");
+        assert!(err.to_string().contains("Font"), "{err}");
+    }
+
+    #[test]
+    fn an_oversized_page_refuses_to_rasterize() {
+        let manager = FontManager::new();
+        let options = RenderOptions::default();
+        let huge = DisplayListBuilder::new(Rect::new(0.0, 0.0, 100000.0, 100000.0)).finish(0);
+        let err = render_page(&huge, &manager, &options).expect_err("must fail");
+        assert!(err.to_string().contains("budget"), "{err}");
+    }
+
+    #[test]
+    fn a_transparent_background_keeps_alpha_zero() {
+        let manager = FontManager::new();
+        let options = RenderOptions {
+            background: None,
+            ..RenderOptions::default()
+        };
+        let page = page_with(Vec::new());
+        let out = render_page(&page, &manager, &options).expect("render");
+        assert_eq!(
+            pixel_at(&out, 5, 5)[3],
+            0,
+            "no background means transparent"
+        );
+    }
+
+    #[test]
+    fn output_pixels_are_straight_alpha() {
+        let manager = FontManager::new();
+        let options = RenderOptions {
+            background: Some(Color::rgba(255, 0, 0, 128)),
+            ..RenderOptions::default()
+        };
+        let page = page_with(Vec::new());
+        let out = render_page(&page, &manager, &options).expect("render");
+        let bytes = out.rgba_bytes();
+        // Premultiplied red at half alpha would read 128; straight keeps 255.
+        assert_eq!(bytes[0], 255, "red channel un-premultiplied");
+        assert_eq!(bytes[3], 128, "alpha preserved");
+    }
+
+    #[test]
+    fn an_arc_path_rasterizes_without_error() {
+        let manager = FontManager::new();
+        let arc = Path::build(|b| {
+            b.move_to(5.0, 10.0);
+        });
+        let arc = {
+            // Reuse the segment form a parser would emit for `A`.
+            let mut p = arc;
+            p.segments.push(PathSegment::Arc {
+                rx: 5.0,
+                ry: 5.0,
+                x_axis_rotation: 0.0,
+                large_arc: false,
+                sweep: true,
+                to: (15.0, 10.0),
+            });
+            p
+        };
+        let page = page_with(vec![
+            fill_rect_op(0.0, 0.0, 0.0, 0.0, Color::BLACK),
+            DrawOp::Path {
+                path: arc,
+                fill: Some(Paint::Solid(Color::rgba(0, 0, 0, 255))),
+                stroke: None,
+                stroke_style: StrokeStyle::default(),
+                rule: PaintRule::NonZero,
+            },
+        ]);
+        let out = render(&page, &manager);
+        let dark = (0..out.width)
+            .step_by(2)
+            .flat_map(|x| (0..out.height).step_by(2).map(move |y| (x, y)))
+            .filter(|(x, y)| pixel_at(&out, *x, *y)[0] < 128)
+            .count();
+        assert!(dark > 3, "the semicircle contributes ink, found {dark}");
+    }
 }
