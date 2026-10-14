@@ -105,7 +105,12 @@ pdf        = { version = "0.10", default-features = false }
 lopdf      = "0.36"
 
 # Chinese national cryptography
-sm2        = "0.14"
+cipher     = "0.5"
+ecb        = "0.2"
+cbc        = "0.2"
+sm2        = { version = "0.14", features = ["arithmetic", "dsa", "pem", "getrandom"] }
+signature  = "3"
+getrandom  = "0.3"
 sm3        = "0.5"
 sm4        = "0.6"
 x509-parser = "0.18"

@@ -2673,9 +2673,12 @@ dependencies = [
 name = "steleofd-crypto"
 version = "0.1.0"
 dependencies = [
+ "cipher 0.5.2",
  "der 0.8.2",
+ "getrandom 0.3.4",
  "pkcs12",
  "rsa",
+ "signature 3.0.0",
  "sm2",
  "sm3",
  "sm4",
