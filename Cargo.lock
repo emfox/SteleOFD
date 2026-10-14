@@ -2690,6 +2690,7 @@ name = "steleofd-display"
 version = "0.1.0"
 dependencies = [
  "serde",
+ "serde_json",
  "steleofd-common",
  "steleofd-error",
  "steleofd-font",

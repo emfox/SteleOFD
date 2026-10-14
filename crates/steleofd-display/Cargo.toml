@@ -13,3 +13,6 @@ steleofd-error.workspace = true
 steleofd-geometry.workspace = true
 steleofd-font.workspace = true
 serde.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true

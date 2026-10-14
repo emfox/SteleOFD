@@ -24,7 +24,6 @@ impl PageDisplay {
     pub fn is_blank(&self) -> bool {
         self.ops.is_empty() || self.content_bbox.area() <= 0.0
     }
-
     /// Cheap upper bound on commands that may survive viewport culling.
     pub fn visible_ops_count(&self, viewport: Rect) -> usize {
         if !self.content_bbox.intersects(viewport) {
@@ -81,7 +80,7 @@ impl DisplayListBuilder {
             ops: Vec::with_capacity(64),
             state_stack: Vec::with_capacity(8),
             current: Affine::IDENTITY,
-            content_bbox: Rect::default(),
+            content_bbox: Rect::EMPTY,
             max_depth: 64,
         }
     }
@@ -145,6 +144,8 @@ impl DisplayListBuilder {
 }
 
 /// Conservative extent of a command, used only for bounds and blank detection.
+/// State commands are absent on purpose, including [`DrawOp::ClipPath`]: a clip
+/// bounds later drawing but paints nothing, so it must not mark a page non-blank.
 fn op_bbox(op: &DrawOp) -> Option<Rect> {
     match op {
         DrawOp::Path { path, .. } => Some(path.bounding_box()),
@@ -153,7 +154,339 @@ fn op_bbox(op: &DrawOp) -> Option<Rect> {
         DrawOp::LinearGradient { path, .. } | DrawOp::RadialGradient { path, .. } => {
             Some(path.bounding_box())
         }
-        DrawOp::ClipPath { path, .. } => Some(path.bounding_box()),
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ops::{Color, Paint, PaintRule, StrokeStyle};
+    use crate::resource::{ImageCodec, ImageRef};
+    use crate::text::GlyphRun;
+    use steleofd_common::Point;
+    use steleofd_error::FormatError;
+    use steleofd_font::FontId;
+    use steleofd_geometry::Path;
+
+    fn rect_path(x: f64, y: f64, w: f64, h: f64) -> Path {
+        Path::build(|b| {
+            b.move_to(x, y)
+                .line_to(x + w, y)
+                .line_to(x + w, y + h)
+                .line_to(x, y + h)
+                .close();
+        })
+    }
+
+    fn fill_rect(builder: &mut DisplayListBuilder, x: f64, y: f64, w: f64, h: f64) {
+        builder.push(DrawOp::Path {
+            path: rect_path(x, y, w, h),
+            fill: Some(Paint::Solid(Color::BLACK)),
+            stroke: None,
+            stroke_style: StrokeStyle::default(),
+            rule: PaintRule::NonZero,
+        });
+    }
+
+    fn glyph_run(bbox: Rect) -> GlyphRun {
+        GlyphRun {
+            font: FontId(1),
+            size: steleofd_common::Millimeter(3.0),
+            glyphs: vec![42],
+            advances: vec![1.5],
+            text: Some("A".to_string()),
+            cluster_map: None,
+            transform: Affine::IDENTITY,
+            fill: Some(Paint::Solid(Color::BLACK)),
+            stroke: None,
+            letter_spacing: 0.0,
+            word_spacing: 0.0,
+            bbox,
+        }
+    }
+
+    fn image_ref() -> ImageRef {
+        ImageRef::new(
+            "img1",
+            std::sync::Arc::new(Vec::new()),
+            (4, 4),
+            ImageCodec::Png,
+        )
+    }
+
+    #[test]
+    fn a_fresh_builder_starts_identity_with_no_ops() {
+        let b = DisplayListBuilder::new(Rect::A4_PORTRAIT);
+        assert_eq!(b.current_transform(), Affine::IDENTITY);
+        let page = b.finish(0);
+        assert!(page.ops.is_empty());
+        assert_eq!(page.index, 0);
+        assert_eq!(page.page_box, Rect::A4_PORTRAIT);
+    }
+
+    #[test]
+    fn max_depth_defaults_to_sixty_four() {
+        let mut b = DisplayListBuilder::new(Rect::A4_PORTRAIT);
+        for _ in 0..64 {
+            b.save().expect("64 levels should fit");
+        }
+        let err = b.save().expect_err("the 65th save must be refused");
+        assert!(matches!(
+            err,
+            steleofd_error::OfdError::Format(FormatError::MaxDepthExceeded(64))
+        ));
+    }
+
+    #[test]
+    fn with_max_depth_lowers_the_ceiling() {
+        let mut b = DisplayListBuilder::new(Rect::A4_PORTRAIT).with_max_depth(2);
+        b.save().unwrap();
+        b.save().unwrap();
+        let err = b.save().expect_err("third save exceeds a depth of two");
+        assert!(matches!(
+            err,
+            steleofd_error::OfdError::Format(FormatError::MaxDepthExceeded(2))
+        ));
+    }
+
+    #[test]
+    fn a_refused_save_emits_no_command() {
+        // The guard runs before any mutation, so a rejected save cannot leave a
+        // dangling Save in the stream that a backend would pair with a Restore.
+        let mut b = DisplayListBuilder::new(Rect::A4_PORTRAIT).with_max_depth(1);
+        b.save().unwrap();
+        assert!(b.save().is_err());
+        let page = b.finish(0);
+        assert_eq!(
+            page.ops
+                .iter()
+                .filter(|o| matches!(o, DrawOp::Save))
+                .count(),
+            1
+        );
+    }
+
+    #[test]
+    fn save_and_restore_round_trip_the_transform() {
+        let mut b = DisplayListBuilder::new(Rect::A4_PORTRAIT);
+        b.transform(Affine::translate(10.0, 20.0));
+        b.save().unwrap();
+        b.transform(Affine::scale(2.0, 2.0));
+        assert_ne!(b.current_transform(), Affine::translate(10.0, 20.0));
+
+        b.restore().unwrap();
+        assert_eq!(
+            b.current_transform(),
+            Affine::translate(10.0, 20.0),
+            "restore must reinstate the saved transform"
+        );
+
+        let page = b.finish(0);
+        assert!(matches!(page.ops[0], DrawOp::Transform(_)));
+        assert!(matches!(page.ops[1], DrawOp::Save));
+        assert!(matches!(page.ops[3], DrawOp::Restore));
+    }
+
+    #[test]
+    fn restore_without_a_matching_save_is_an_error() {
+        let mut b = DisplayListBuilder::new(Rect::A4_PORTRAIT);
+        let err = b.restore().expect_err("unbalanced restore must fail");
+        assert!(matches!(
+            err,
+            steleofd_error::OfdError::Format(FormatError::CircularReference { .. })
+        ));
+        assert!(b.finish(0).ops.is_empty());
+    }
+
+    #[test]
+    fn nested_saves_unwind_in_reverse_order() {
+        let mut b = DisplayListBuilder::new(Rect::A4_PORTRAIT);
+        b.transform(Affine::translate(1.0, 0.0));
+        b.save().unwrap();
+        b.transform(Affine::translate(2.0, 0.0));
+        b.save().unwrap();
+        b.transform(Affine::translate(4.0, 0.0));
+
+        let innermost = b.current_transform();
+        b.restore().unwrap();
+        let middle = b.current_transform();
+        b.restore().unwrap();
+        let outermost = b.current_transform();
+
+        assert_ne!(innermost, middle);
+        assert_ne!(middle, outermost);
+        assert_eq!(outermost, Affine::translate(1.0, 0.0));
+    }
+
+    #[test]
+    fn transforms_accumulate_left_to_right() {
+        // The builder folds each transform into the running CTM, so the emitted
+        // ops describe absolute placement and backends never reapply a matrix.
+        // `then` applies self first: translate(5) after scale(2) sends 1 -> 7.
+        let mut b = DisplayListBuilder::new(Rect::A4_PORTRAIT);
+        b.transform(Affine::translate(5.0, 0.0));
+        b.transform(Affine::scale(2.0, 2.0));
+        let ctm = b.current_transform();
+
+        assert_point(ctm.apply(1.0, 0.0), 12.0, 0.0);
+        assert_point(ctm.apply(2.0, 0.0), 14.0, 0.0);
+    }
+
+    fn assert_point(actual: (f64, f64), x: f64, y: f64) {
+        assert!(
+            (actual.0 - x).abs() < 1e-9 && (actual.1 - y).abs() < 1e-9,
+            "expected ({x}, {y}), got {actual:?}"
+        );
+    }
+
+    #[test]
+    fn content_bbox_is_the_union_of_drawn_geometry() {
+        let mut b = DisplayListBuilder::new(Rect::A4_PORTRAIT);
+        fill_rect(&mut b, 10.0, 10.0, 20.0, 20.0);
+        fill_rect(&mut b, 50.0, 40.0, 10.0, 10.0);
+        let bbox = b.finish(0).content_bbox;
+
+        assert!((bbox.x - 10.0).abs() < 1e-9);
+        assert!((bbox.y - 10.0).abs() < 1e-9);
+        assert!(((bbox.x + bbox.w) - 60.0).abs() < 1e-9);
+        assert!(((bbox.y + bbox.h) - 50.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn state_commands_do_not_contribute_to_content_bbox() {
+        // Save, Restore, Transform and Clip draw nothing, so a page made only of
+        // them must still read as blank.
+        let mut b = DisplayListBuilder::new(Rect::A4_PORTRAIT);
+        b.save().unwrap();
+        b.transform(Affine::translate(100.0, 100.0));
+        b.push(DrawOp::ClipPath {
+            path: rect_path(0.0, 0.0, 10.0, 10.0),
+            rule: PaintRule::NonZero,
+        });
+        b.restore().unwrap();
+        let page = b.finish(0);
+        assert!(page.is_blank());
+    }
+
+    #[test]
+    fn text_and_images_extend_the_content_bbox() {
+        let mut b = DisplayListBuilder::new(Rect::A4_PORTRAIT);
+        b.push(DrawOp::Text(glyph_run(Rect::new(10.0, 20.0, 30.0, 4.0))));
+        b.push(DrawOp::Image {
+            image: image_ref(),
+            dst: Rect::new(80.0, 90.0, 40.0, 30.0),
+            transform: Affine::IDENTITY,
+        });
+        let bbox = b.finish(0).content_bbox;
+
+        assert!((bbox.x - 10.0).abs() < 1e-9);
+        assert!(((bbox.y + bbox.h) - 120.0).abs() < 1e-9);
+        assert!(((bbox.x + bbox.w) - 120.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn gradients_contribute_the_clip_path_not_the_endpoints() {
+        // A gradient's start and end may lie far outside the shape it fills, so
+        // only the clip path is a safe bound.
+        let mut b = DisplayListBuilder::new(Rect::A4_PORTRAIT);
+        b.push(DrawOp::LinearGradient {
+            start: Point::new(-500.0, -500.0),
+            end: Point::new(500.0, 500.0),
+            stops: Vec::new(),
+            path: rect_path(10.0, 10.0, 20.0, 20.0),
+        });
+        let bbox = b.finish(0).content_bbox;
+        assert!((bbox.x - 10.0).abs() < 1e-9);
+        assert!(((bbox.x + bbox.w) - 30.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn an_empty_page_is_blank() {
+        let page = DisplayListBuilder::new(Rect::A4_PORTRAIT).finish(0);
+        assert!(page.is_blank());
+        assert_eq!(page.visible_ops_count(Rect::A4_PORTRAIT), 0);
+    }
+
+    #[test]
+    fn a_page_with_zero_area_content_is_blank() {
+        // A degenerate path is the classic accidental blank page.
+        let mut b = DisplayListBuilder::new(Rect::A4_PORTRAIT);
+        fill_rect(&mut b, 10.0, 10.0, 0.0, 0.0);
+        let page = b.finish(0);
+        assert!(!page.ops.is_empty(), "the op was still recorded");
+        assert!(page.is_blank(), "but it draws nothing");
+    }
+
+    #[test]
+    fn a_page_with_geometry_is_not_blank() {
+        let mut b = DisplayListBuilder::new(Rect::A4_PORTRAIT);
+        fill_rect(&mut b, 10.0, 10.0, 20.0, 20.0);
+        let page = b.finish(0);
+        assert!(!page.is_blank());
+        assert_eq!(page.ops.len(), 1);
+        assert_eq!(page.visible_ops_count(Rect::A4_PORTRAIT), 1);
+    }
+
+    #[test]
+    fn a_viewport_missing_the_content_culls_everything() {
+        let mut b = DisplayListBuilder::new(Rect::A4_PORTRAIT);
+        fill_rect(&mut b, 10.0, 10.0, 20.0, 20.0);
+        let page = b.finish(0);
+
+        assert_eq!(page.visible_ops_count(Rect::new(0.0, 0.0, 5.0, 5.0)), 0);
+        assert_eq!(page.visible_ops_count(Rect::new(10.0, 10.0, 20.0, 20.0)), 1);
+    }
+
+    #[test]
+    fn finish_records_the_requested_page_index() {
+        let mut b = DisplayListBuilder::new(Rect::A4_LANDSCAPE);
+        fill_rect(&mut b, 0.0, 0.0, 10.0, 10.0);
+        let page = b.finish(7);
+        assert_eq!(page.index, 7);
+        assert_eq!(page.page_box, Rect::A4_LANDSCAPE);
+    }
+
+    #[test]
+    fn display_list_finds_pages_by_index() {
+        // Pages need not be contiguous, since a large document may hold a window.
+        let mut first = DisplayListBuilder::new(Rect::A4_PORTRAIT);
+        fill_rect(&mut first, 0.0, 0.0, 10.0, 10.0);
+        let mut second = DisplayListBuilder::new(Rect::A4_PORTRAIT);
+        fill_rect(&mut second, 0.0, 0.0, 20.0, 20.0);
+
+        let list = DisplayList {
+            page_count: 100,
+            pages: vec![first.finish(0), second.finish(5)],
+        };
+
+        assert_eq!(list.page(0).map(|p| p.index), Some(0));
+        assert_eq!(list.page(5).map(|p| p.index), Some(5));
+        assert!(list.page(1).is_none());
+        assert!(list.page(99).is_none());
+        assert_eq!(list.page_count, 100);
+    }
+
+    #[test]
+    fn display_list_defaults_to_empty() {
+        let list = DisplayList::default();
+        assert_eq!(list.page_count, 0);
+        assert!(list.page(0).is_none());
+    }
+
+    #[test]
+    fn a_page_display_survives_a_serde_round_trip() {
+        // Pages cross a process boundary when rendering is farmed out, so the
+        // wire format has to preserve both the ops and the cached bounds.
+        let mut b = DisplayListBuilder::new(Rect::A4_PORTRAIT);
+        fill_rect(&mut b, 10.0, 10.0, 20.0, 20.0);
+        let page = b.finish(3);
+
+        let json = serde_json::to_string(&page).expect("serialize");
+        let back: PageDisplay = serde_json::from_str(&json).expect("deserialize");
+
+        assert_eq!(back.index, 3);
+        assert_eq!(back.ops.len(), page.ops.len());
+        assert!((back.content_bbox.area() - page.content_bbox.area()).abs() < 1e-9);
     }
 }
