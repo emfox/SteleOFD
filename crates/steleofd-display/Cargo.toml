@@ -1,0 +1,15 @@
+[package]
+name = "steleofd-display"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+# The display list is the shared IR for render, print and export.
+# It depends on geometry and fonts, never on a concrete backend.
+[dependencies]
+steleofd-common.workspace = true
+steleofd-error.workspace = true
+steleofd-geometry.workspace = true
+steleofd-font.workspace = true
+serde.workspace = true

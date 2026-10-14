@@ -1,0 +1,30 @@
+# Example local build configuration for SteleOFD
+#
+# Usage: copy to .cargo/config.toml (which .gitignore excludes)
+#
+# A registry mirror is recommended on mainland networks, otherwise cargo can
+# stall for a long time during downloads when static.crates.io is unreachable.
+
+# ── Registry mirror ──
+[source.crates-io]
+replace-with = "rsproxy-sparse"
+
+[source.rsproxy-sparse]
+registry = "sparse+https://rsproxy.cn/index/"
+
+[source.ustc]
+registry = "sparse+https://mirrors.ustc.edu.cn/crates.io-index/"
+
+# ── Network and concurrency ──
+[net]
+git-fetch-with-cli = true
+retry = 3
+
+[build]
+# CI can go higher; locally stay at or below the physical core count
+jobs = 4
+
+# ── Build acceleration (optional) ──
+# Uncomment below when using sccache or mold
+# [build]
+# rustflags = ["-C", "link-arg=-fuse-ld=mold"]

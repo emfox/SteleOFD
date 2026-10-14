@@ -1,0 +1,35 @@
+//! Shared foundational types.
+//! Layer L0: depends on no other crate, holds only primitives and constants.
+
+#![forbid(unsafe_code)]
+#![warn(missing_docs)]
+
+pub mod units;
+pub mod version;
+
+pub use units::{Millimeter, Point, Rect, Unit};
+pub use version::{OfdVersion, SpecVersion};
+
+/// Common namespace prefix used throughout OFD documents (GB/T 33190-2016 5.1).
+pub const OFD_NS: &str = "http://www.ofd.org/ofd/1.0/";
+
+/// Conventional ZIP container entry point.
+pub const OFD_ENTRY: &str = "OFD.xml";
+
+/// Fixed name of a page content stream.
+pub const CONTENT_XML: &str = "Content.xml";
+
+/// Fixed name of the document structure file.
+pub const DOCUMENT_XML: &str = "Document.xml";
+
+/// Fixed name of the document resource file.
+pub const DOCUMENT_RES_XML: &str = "DocumentRes.xml";
+
+/// Fixed name of the public resource file.
+pub const PUBLIC_RES_XML: &str = "PublicRes.xml";
+
+/// Fixed name of the signature list file.
+pub const SIGNATURES_XML: &str = "Signatures.xml";
+
+/// Fixed name of the annotation list file.
+pub const ANNOTATIONS_XML: &str = "Annotations.xml";

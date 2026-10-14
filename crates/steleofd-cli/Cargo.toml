@@ -1,0 +1,19 @@
+[package]
+name = "steleofd-cli"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "steleofd"
+path = "src/main.rs"
+
+[dependencies]
+steleofd-core = { workspace = true, features = ["render", "sign", "convert", "print", "edit", "search", "archive", "async"] }
+clap = { version = "4", features = ["derive"] }
+anyhow.workspace = true
+tracing.workspace = true
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+indicatif = "0.17"
+serde_json.workspace = true

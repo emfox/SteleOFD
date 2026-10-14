@@ -1,0 +1,13 @@
+[package]
+name = "steleofd-search"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+steleofd-common.workspace = true
+steleofd-error.workspace = true
+steleofd-display.workspace = true
+steleofd-geometry.workspace = true
+tracing.workspace = true

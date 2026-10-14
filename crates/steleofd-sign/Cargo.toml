@@ -1,0 +1,17 @@
+[package]
+name = "steleofd-sign"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+steleofd-common.workspace = true
+steleofd-error.workspace = true
+steleofd-model.workspace = true
+steleofd-xml.workspace = true
+steleofd-package.workspace = true
+steleofd-crypto.workspace = true
+steleofd-geometry.workspace = true
+serde.workspace = true
+tracing.workspace = true

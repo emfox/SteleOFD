@@ -1,0 +1,21 @@
+[package]
+name = "steleofd-server"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "steleofd-server"
+path = "src/main.rs"
+
+[dependencies]
+steleofd-core = { workspace = true, features = ["render", "sign", "convert", "print", "edit", "search", "archive", "async", "pdf"] }
+axum.workspace = true
+tokio.workspace = true
+tower-http = { version = "0.6", features = ["cors", "limit", "trace"] }
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+uuid.workspace = true

@@ -1,0 +1,17 @@
+[package]
+name = "steleofd-edit"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+# Editing applies undoable changes through the command pattern,
+# produces a new package, and persists it through the package layer.
+[dependencies]
+steleofd-common.workspace = true
+steleofd-error.workspace = true
+steleofd-model.workspace = true
+steleofd-package.workspace = true
+steleofd-parser.workspace = true
+steleofd-geometry.workspace = true
+tracing.workspace = true

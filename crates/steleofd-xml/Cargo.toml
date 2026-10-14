@@ -1,0 +1,11 @@
+[package]
+name = "steleofd-xml"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+steleofd-error.workspace = true
+quick-xml.workspace = true
+serde.workspace = true

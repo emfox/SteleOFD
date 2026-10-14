@@ -1,0 +1,16 @@
+[package]
+name = "steleofd-ffi"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[lib]
+crate-type = ["cdylib", "staticlib"]
+
+[dependencies]
+steleofd-core = { workspace = true }
+libc = "0.2"
+
+[build-dependencies]
+cbindgen = "0.27"

@@ -1,0 +1,46 @@
+[package]
+name = "steleofd-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+# Facade crate: the only public surface, so internals can be refactored freely.
+[dependencies]
+steleofd-common.workspace = true
+steleofd-error.workspace = true
+steleofd-io.workspace = true
+steleofd-model.workspace = true
+steleofd-package.workspace = true
+steleofd-geometry.workspace = true
+steleofd-font.workspace = true
+steleofd-display.workspace = true
+steleofd-parser.workspace = true
+steleofd-render.workspace = true
+steleofd-crypto = { workspace = true, optional = true }
+steleofd-sign = { workspace = true, optional = true }
+steleofd-convert = { workspace = true, optional = true }
+steleofd-edit = { workspace = true, optional = true }
+steleofd-search = { workspace = true, optional = true }
+steleofd-archive = { workspace = true, optional = true }
+steleofd-print = { workspace = true, optional = true }
+tracing.workspace = true
+tokio = { version = "1", features = ["rt-multi-thread", "macros"], optional = true }
+rayon = { version = "1.11", optional = true }
+
+[features]
+default = ["render", "sign", "convert"]
+
+# Capability features, to trim binary size per delivery form.
+render   = ["steleofd-render/backend-raster"]
+canvas   = ["steleofd-render/backend-canvas"]
+print    = ["dep:steleofd-print"]
+sign     = ["dep:steleofd-sign", "dep:steleofd-crypto"]
+convert  = ["dep:steleofd-convert"]
+pdf      = ["convert", "steleofd-convert/pdf"]
+office   = ["convert", "steleofd-convert/office"]
+ocr      = ["convert", "steleofd-convert/ocr"]
+edit     = ["dep:steleofd-edit"]
+search   = ["dep:steleofd-search"]
+archive  = ["dep:steleofd-archive"]
+async    = ["dep:tokio", "dep:rayon"]

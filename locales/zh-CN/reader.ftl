@@ -1,0 +1,12 @@
+# SteleOFD 简体中文 · 阅读模块
+
+reader-open = 打开文件
+reader-page-of = 第 { $current } 页 / 共 { $total } 页
+reader-zoom = 缩放 { $percent }%
+reader-fit-width = 适应页宽
+reader-fit-page = 适应页面
+reader-layout-single = 单页
+reader-layout-double = 双页
+reader-layout-continuous = 连续滚动
+reader-blank-page = 本页为空白页
+reader-no-match = 未找到匹配内容

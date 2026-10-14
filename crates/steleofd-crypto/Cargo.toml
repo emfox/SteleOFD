@@ -1,0 +1,18 @@
+[package]
+name = "steleofd-crypto"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+steleofd-common.workspace = true
+steleofd-error.workspace = true
+sm2.workspace = true
+sm3.workspace = true
+sm4.workspace = true
+der.workspace = true
+x509-parser.workspace = true
+pkcs12.workspace = true
+rsa.workspace = true
+tracing.workspace = true

@@ -1,0 +1,27 @@
+[package]
+name = "steleofd-convert"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+# Conversion reads one display list and writes another format,
+# so it depends on display plus the relevant format readers and writers.
+[dependencies]
+steleofd-common.workspace = true
+steleofd-error.workspace = true
+steleofd-model.workspace = true
+steleofd-display.workspace = true
+steleofd-geometry.workspace = true
+steleofd-font.workspace = true
+steleofd-parser.workspace = true
+steleofd-render.workspace = true
+image.workspace = true
+tracing.workspace = true
+lopdf = { workspace = true, optional = true }
+
+[features]
+default = ["pdf"]
+pdf     = ["dep:lopdf"]
+office  = []
+ocr     = []

@@ -1,0 +1,13 @@
+[package]
+name = "steleofd-package"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+steleofd-error.workspace = true
+steleofd-io.workspace = true
+steleofd-xml.workspace = true
+zip.workspace = true
+tracing.workspace = true

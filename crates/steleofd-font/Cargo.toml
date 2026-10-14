@@ -1,0 +1,20 @@
+[package]
+name = "steleofd-font"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+steleofd-common.workspace = true
+steleofd-error.workspace = true
+steleofd-geometry.workspace = true
+ttf-parser.workspace = true
+rustybuzz.workspace = true
+serde.workspace = true
+tracing.workspace = true
+font-kit = { version = "0.13", optional = true }
+
+[features]
+default = ["system-fonts"]
+system-fonts = ["dep:font-kit"]

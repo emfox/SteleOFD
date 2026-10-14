@@ -1,0 +1,24 @@
+[package]
+name = "steleofd-render"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+steleofd-common.workspace = true
+steleofd-error.workspace = true
+steleofd-geometry.workspace = true
+steleofd-font.workspace = true
+steleofd-display.workspace = true
+tiny-skia.workspace = true
+image.workspace = true
+tracing.workspace = true
+
+[features]
+default = ["backend-raster"]
+# Backends are pluggable: bitmap for server and CLI, command stream for browsers.
+backend-raster   = []
+backend-canvas   = []
+backend-svg      = []
+backend-pdf      = []

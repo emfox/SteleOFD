@@ -1,0 +1,146 @@
+[workspace]
+resolver = "3"
+members = [
+    # Update this list whenever a crate is added.
+    # L0 foundation: pure capability, no domain semantics
+    "crates/steleofd-common",
+    "crates/steleofd-error",
+    "crates/steleofd-io",
+
+    # L1 format: OFD national standard data model
+    "crates/steleofd-model",
+    "crates/steleofd-xml",
+    "crates/steleofd-package",
+
+    # L1.5 i18n: depended on by presentation only, never by the engine
+    "crates/steleofd-i18n",
+
+    # L2 engine: parsing, geometry, rendering, fonts
+    "crates/steleofd-geometry",
+    "crates/steleofd-font",
+    "crates/steleofd-display",
+    "crates/steleofd-parser",
+    "crates/steleofd-render",
+
+    # L3 capabilities: decoupled business capabilities
+    "crates/steleofd-sign",
+    "crates/steleofd-crypto",
+    "crates/steleofd-convert",
+    "crates/steleofd-edit",
+    "crates/steleofd-search",
+    "crates/steleofd-archive",
+    "crates/steleofd-print",
+
+    # L4 facade
+    "crates/steleofd-core",
+
+    # L5 adapters: one per delivery form
+    "crates/steleofd-cli",
+    "crates/steleofd-wasm",
+    "crates/steleofd-ffi",
+    "crates/steleofd-server",
+]
+default-members = ["crates/steleofd-core", "crates/steleofd-cli"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+license = "Apache-2.0"
+repository = "https://example.com/ofd/steleofd-rs"
+authors = ["OFD Team"]
+
+[workspace.dependencies]
+# Internal crates: paths declared once so each crate stays consistent
+steleofd-common   = { path = "crates/steleofd-common",   version = "0.1.0" }
+steleofd-error    = { path = "crates/steleofd-error",    version = "0.1.0" }
+steleofd-io       = { path = "crates/steleofd-io",       version = "0.1.0" }
+steleofd-model    = { path = "crates/steleofd-model",    version = "0.1.0" }
+steleofd-xml      = { path = "crates/steleofd-xml",      version = "0.1.0" }
+steleofd-package  = { path = "crates/steleofd-package",  version = "0.1.0" }
+steleofd-i18n     = { path = "crates/steleofd-i18n",     version = "0.1.0" }
+steleofd-geometry = { path = "crates/steleofd-geometry", version = "0.1.0" }
+steleofd-font     = { path = "crates/steleofd-font",     version = "0.1.0" }
+steleofd-display  = { path = "crates/steleofd-display",  version = "0.1.0" }
+steleofd-parser   = { path = "crates/steleofd-parser",   version = "0.1.0" }
+steleofd-render   = { path = "crates/steleofd-render",   version = "0.1.0" }
+steleofd-sign     = { path = "crates/steleofd-sign",     version = "0.1.0" }
+steleofd-crypto   = { path = "crates/steleofd-crypto",   version = "0.1.0" }
+steleofd-convert  = { path = "crates/steleofd-convert",  version = "0.1.0" }
+steleofd-edit     = { path = "crates/steleofd-edit",     version = "0.1.0" }
+steleofd-search   = { path = "crates/steleofd-search",   version = "0.1.0" }
+steleofd-archive  = { path = "crates/steleofd-archive",  version = "0.1.0" }
+steleofd-print    = { path = "crates/steleofd-print",    version = "0.1.0" }
+steleofd-core     = { path = "crates/steleofd-core",     version = "0.1.0" }
+
+# External dependencies: versions pinned in one place
+zip        = { version = "4", default-features = false, features = ["deflate", "deflate64"] }
+quick-xml  = { version = "0.42", features = ["serialize"] }
+serde      = { version = "1", features = ["derive", "rc"] }
+serde_json = "1"
+thiserror  = "2"
+anyhow     = "1"
+tracing    = "0.1"
+bitflags   = "2"
+uuid       = { version = "1", features = ["v4", "serde"] }
+
+# Internationalization (Fluent)
+fluent      = "0.16"
+fluent-bundle = "0.15"
+fluent-langneg = "0.13"
+unic-langid = { version = "0.9", features = ["macros"] }
+icu_datetime = { version = "2", default-features = false, features = ["compiled_data"] }
+icu_decimal  = { version = "2", default-features = false, features = ["compiled_data"] }
+
+# Graphics and rendering
+tiny-skia  = "0.11"
+kurbo      = { version = "0.12", features = ["serde"] }
+rustybuzz  = "0.20"
+ttf-parser = "0.25"
+fontdue    = "0.9"
+image      = { version = "0.25", default-features = false, features = ["png", "jpeg", "tiff", "bmp"] }
+
+# PDF interop
+pdf        = { version = "0.10", default-features = false }
+lopdf      = "0.36"
+
+# Chinese national cryptography
+sm2        = "0.14"
+sm3        = "0.5"
+sm4        = "0.6"
+x509-parser = "0.18"
+der        = "0.8"
+pkcs12     = "0.1"
+rsa        = "0.9"
+
+# Concurrency and runtime, behind the server feature
+tokio      = { version = "1", features = ["full"] }
+rayon      = "1.11"
+axum       = "0.8"
+
+# Platform integration
+wasm-bindgen       = "0.2"
+wasm-bindgen-futures = "0.4"
+js-sys             = "0.3"
+web-sys            = "0.3"
+
+# Development and testing
+proptest   = "1"
+criterion  = { version = "0.5", features = ["html_reports"] }
+pretty_assertions = "1"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+opt-level = 3
+panic = "abort"
+strip = "symbols"
+
+[profile.bench]
+lto = "thin"
+codegen-units = 1
+
+[profile.wasm-release]
+inherits = "release"
+opt-level = "s"
+strip = true

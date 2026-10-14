@@ -1,0 +1,173 @@
+#!/usr/bin/env python3
+"""Enforce the English-only and comment-density policy. See docs/CONVENTIONS.md."""
+
+from __future__ import annotations
+
+import argparse
+import re
+import sys
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parent.parent
+
+CJK_RANGES = (
+    (0x3000, 0x303F),   # CJK punctuation
+    (0x3040, 0x30FF),   # Hiragana / Katakana
+    (0x3400, 0x4DBF),   # CJK ext A
+    (0x4E00, 0x9FFF),   # CJK unified
+    (0xF900, 0xFAFF),   # CJK compatibility
+    (0xFF00, 0xFFEF),   # fullwidth forms
+    (0x20000, 0x2FA1F), # CJK ext B and beyond
+)
+
+# Paths exempt from the code-language rule, with a one-line reason each.
+ALLOWLIST_FILES = {
+    "README.zh-CN.md": "Chinese README is the point of this file",
+    "docs/README.zh-CN.md": "Chinese README variant",
+    "docs/CONVENTIONS.md": "policy doc quotes the rule in examples",
+    "scripts/check_language.py": "this script matches CJK by definition",
+    "scripts/check_i18n.py": "reports CJK key mismatches",
+    "DESIGN.zh-CN.md": "Chinese design document",
+}
+
+# Files allowed to contain CJK string literals only when they are locale data.
+ALLOWLIST_CJK_LITERALS = {
+    "crates/steleofd-i18n/src/format.rs": "locale date and time markers",
+}
+
+# Lines exempt from the language rule even inside otherwise English files.
+# The bilingual README pair must cross-link using the other language's own name.
+ALLOWLIST_LINE_RE = re.compile(r"\[\u7b80\u4f53\u4e2d\u6587\]\(README\.zh-CN\.md\)")
+
+# Documentation that must stay English. Everything else under docs/ is checked too.
+DOC_SUFFIXES = {".md", ".rst"}
+
+# User-facing locales legitimately contain CJK.
+LOCALE_DIR = "locales"
+
+CODE_SUFFIXES = {".rs", ".toml", ".c", ".h", ".js", ".ts"}
+
+COMMENT_RE = re.compile(r"^\s*(///|//!|//)")
+MAX_COMMENT_BLOCK = 3
+
+
+def first_cjk(text: str) -> tuple[int, str] | None:
+    for idx, ch in enumerate(text):
+        cp = ord(ch)
+        if any(lo <= cp <= hi for lo, hi in CJK_RANGES):
+            return idx, ch
+    return None
+
+
+def is_allowlisted(rel: str) -> bool:
+    if rel in ALLOWLIST_FILES:
+        return True
+    parts = rel.split("/")
+    return any(p in LOCALE_DIR for p in parts)
+
+
+def allows_cjk_literals(rel: str) -> bool:
+    """Locale data files may hold CJK string literals; their comments are exempt too."""
+    return rel in ALLOWLIST_CJK_LITERALS
+
+
+def iter_targets() -> list[Path]:
+    """Every tracked text file the language policy applies to."""
+    out: list[Path] = []
+    for p in REPO.rglob("*"):
+        if not p.is_file():
+            continue
+        rel = p.relative_to(REPO).as_posix()
+        if rel.startswith("target/") or "/target/" in rel:
+            continue
+        if rel.startswith(".git/"):
+            continue
+        if is_allowlisted(rel):
+            continue
+        if p.suffix in CODE_SUFFIXES or p.suffix in DOC_SUFFIXES:
+            out.append(p)
+    return sorted(out)
+
+
+def check_cjk(files: list[Path]) -> list[str]:
+    errors: list[str] = []
+    for p in files:
+        rel = p.relative_to(REPO).as_posix()
+        if allows_cjk_literals(rel):
+            continue
+        try:
+            lines = p.read_text(encoding="utf-8").splitlines()
+        except (UnicodeDecodeError, OSError):
+            continue
+        hits = [
+            (i, l)
+            for i, l in enumerate(lines, 1)
+            if first_cjk(l) and not ALLOWLIST_LINE_RE.search(l)
+        ]
+        if not hits:
+            continue
+        preview = "; ".join(f"L{i}" for i, _ in hits[:6])
+        more = f" (+{len(hits) - 6} more)" if len(hits) > 6 else ""
+        errors.append(f"{rel}: CJK found at {preview}{more}")
+    return errors
+
+
+def check_comment_density(files: list[Path]) -> list[str]:
+    errors: list[str] = []
+    for p in files:
+        if p.suffix != ".rs":
+            continue
+        rel = p.relative_to(REPO).as_posix()
+        lines = p.read_text(encoding="utf-8").splitlines()
+        run = 0
+        start = 0
+        for i, line in enumerate(lines, 1):
+            if COMMENT_RE.match(line):
+                if run == 0:
+                    start = i
+                run += 1
+            else:
+                if run > MAX_COMMENT_BLOCK:
+                    errors.append(
+                        f"{rel}: comment block of {run} lines at L{start}-L{start + run - 1}"
+                    )
+                run = 0
+        if run > MAX_COMMENT_BLOCK:
+            errors.append(f"{rel}: comment block of {run} lines at L{start}")
+    return errors
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--cjk-only", action="store_true", help="skip comment density check")
+    ap.add_argument("--density-only", action="store_true", help="skip CJK check")
+    args = ap.parse_args()
+
+    files = iter_targets()
+    failures: list[str] = []
+
+    print(f"Scanned {len(files)} files\n")
+
+    if not args.density_only:
+        cjk = check_cjk(files)
+        print(f"[language] {len(cjk)} file(s) contain CJK")
+        failures += cjk
+
+    if not args.cjk_only:
+        dense = check_comment_density(files)
+        print(f"[comments] {len(dense)} comment block(s) exceed {MAX_COMMENT_BLOCK} lines")
+        failures += dense
+
+    if not failures:
+        print("\nOK: policy satisfied")
+        return 0
+
+    print(f"\nFAILED: {len(failures)} violation(s)\n")
+    for f in failures:
+        print(f"  {f}")
+    print("\nSee docs/CONVENTIONS.md for the rules.")
+    return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())
