@@ -289,3 +289,219 @@ pub struct ImageObject {
     #[serde(rename = "ImageMask", skip_serializing_if = "Option::is_none")]
     pub image_mask: Option<bool>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn base() -> ObjectBase {
+        ObjectBase {
+            id: Some("7".to_string()),
+            boundary: Rect::new(0.0, 0.0, 10.0, 10.0),
+            ctm: None,
+            draw_param: None,
+            visible: Some(true),
+            name: None,
+        }
+    }
+
+    #[test]
+    fn object_ids_are_reachable_across_variants() {
+        let path = PathObject {
+            base: base(),
+            ..Default::default()
+        };
+        assert_eq!(Object::PathObject(path).id(), Some(&"7".to_string()));
+
+        let img = ImageObject {
+            base: ObjectBase {
+                id: Some("2".to_string()),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        assert_eq!(Object::ImageObject(img).id(), Some(&"2".to_string()));
+
+        assert_eq!(Object::unknown().id(), None);
+    }
+
+    #[test]
+    fn only_known_objects_are_renderable() {
+        let path = PathObject {
+            abbreviated_data: "M 0 0 L 10 10".to_string(),
+            ..Default::default()
+        };
+        assert!(Object::PathObject(path).is_renderable());
+        assert!(!Object::unknown().is_renderable());
+    }
+
+    #[test]
+    fn an_absent_fill_means_filled_but_an_absent_stroke_means_unstroked() {
+        // This asymmetry is mandated by the standard and is easy to invert.
+        let p = PathObject {
+            base: base(),
+            abbreviated_data: "M 0 0 L 10 10".to_string(),
+            ..Default::default()
+        };
+        assert_eq!(p.paints(), (true, false));
+
+        let both = PathObject {
+            fill: Some(false),
+            stroke: Some(true),
+            ..p.clone()
+        };
+        assert_eq!(both.paints(), (false, true));
+    }
+
+    #[test]
+    fn a_path_without_data_is_invalid() {
+        let p = PathObject {
+            base: base(),
+            abbreviated_data: "".to_string(),
+            ..Default::default()
+        };
+        assert!(p.validate().is_err());
+
+        let ok = PathObject {
+            abbreviated_data: "M 0 0 L 1 1".to_string(),
+            ..p
+        };
+        assert!(ok.validate().is_ok());
+    }
+
+    #[test]
+    fn dash_patterns_know_whether_they_are_solid() {
+        assert!(DashPattern::solid().is_solid());
+        let dashed = DashPattern {
+            phase: 0.0,
+            pattern: vec![3.0, 2.0],
+        };
+        assert!(!dashed.is_solid());
+    }
+
+    #[test]
+    fn graphics_units_default_to_millimetres() {
+        let p = DrawParam {
+            id: "1".to_string(),
+            ..Default::default()
+        };
+        assert_eq!(p.relative_units, GraphicsUnit::Millimetre);
+        assert!(p.validate().is_ok());
+    }
+
+    #[test]
+    fn draw_params_validate_their_colours() {
+        let p = DrawParam {
+            id: "1".to_string(),
+            fill_color: Some(ColorRef::from_hex("nonsense")),
+            ..Default::default()
+        };
+        assert!(p.validate().is_err());
+    }
+
+    #[test]
+    fn text_objects_report_whether_they_hold_text() {
+        let empty = TextObject::default();
+        assert!(!empty.has_text());
+
+        let t = TextObject {
+            codes: vec![TextCode {
+                x: 0.0,
+                y: 0.0,
+                delta_x: Vec::new(),
+                text: "hello".to_string(),
+            }],
+            ..Default::default()
+        };
+        assert!(t.has_text());
+    }
+
+    #[test]
+    fn line_styles_have_sensible_defaults() {
+        assert_eq!(LineCapStyle::default(), LineCapStyle::Butt);
+        assert_eq!(LineJoinStyle::default(), LineJoinStyle::Miter);
+    }
+
+    #[test]
+    fn objects_survive_a_serde_round_trip() {
+        let obj = Object::PathObject(PathObject {
+            base: base(),
+            abbreviated_data: "M 0 0 L 10 10 Z".to_string(),
+            fill_color: Some(ColorRef::from_hex("#FF0000")),
+            stroke_color: None,
+            fill: Some(true),
+            stroke: Some(true),
+        });
+
+        let json = serde_json::to_string(&obj).expect("serialize");
+        let back: Object = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(back, obj);
+    }
+
+    #[test]
+    fn image_objects_carry_their_resource_reference() {
+        let img = ImageObject {
+            base: base(),
+            resource_id: "img_1".to_string(),
+            substitution: None,
+            image_mask: Some(false),
+        };
+        assert_eq!(img.resource_id, "img_1");
+    }
+}
+
+#[cfg(test)]
+mod model_round_trip {
+    use super::*;
+
+    #[test]
+    fn object_variants_are_distinguished_by_their_fields() {
+        // The enum tag must match the element name the writer produced.
+        let json =
+            r#"{"ID":"1","Boundary":{"x":0.0,"y":0.0,"w":1.0,"h":1.0},"AbbreviatedData":"M 0 0"}"#;
+        let obj: Object = serde_json::from_str(json).expect("deserialize");
+        match obj {
+            Object::PathObject(p) => {
+                assert_eq!(p.base.id.as_deref(), Some("1"));
+                assert_eq!(p.abbreviated_data, "M 0 0");
+            }
+            other => panic!("unexpected variant: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn an_unknown_element_deserializes_as_unknown_not_an_error() {
+        // A vendor extension must not break loading the page.
+        let json = r#"{"VendorWidget":{"ID":"9"}}"#;
+        let obj: Object = serde_json::from_str(json).expect("deserialize");
+        assert!(!obj.is_renderable());
+        assert_eq!(obj.id(), None);
+    }
+
+    #[test]
+    fn absent_object_level_flags_stay_none() {
+        let json = r#"{"ID":"1","Boundary":{"x":0.0,"y":0.0,"w":1.0,"h":1.0},"Font":"1","Size":3.0,"TextCode":[]}"#;
+        let obj: Object = serde_json::from_str(json).expect("deserialize");
+        match obj {
+            Object::TextObject(t) => {
+                assert_eq!(t.size.value(), 3.0);
+                assert_eq!(t.weight, None);
+                assert!(!t.has_text());
+            }
+            other => panic!("unexpected variant: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn image_objects_round_trip_their_mask_flag() {
+        let json = r#"{"ID":"1","Boundary":{"x":0.0,"y":0.0,"w":1.0,"h":1.0},"ResourceID":"r1","ImageMask":true}"#;
+        let obj: Object = serde_json::from_str(json).expect("deserialize");
+        match obj {
+            Object::ImageObject(i) => {
+                assert_eq!(i.resource_id, "r1");
+                assert_eq!(i.image_mask, Some(true));
+            }
+            other => panic!("unexpected variant: {other:?}"),
+        }
+    }
+}

@@ -296,3 +296,192 @@ pub struct Zones {
     #[serde(rename = "Zone", default)]
     pub items: Vec<Rect>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::object::{DrawParam, GraphicsUnit, Object};
+
+    #[test]
+    fn an_empty_root_is_not_a_valid_ofd() {
+        let root = OfdRoot::default();
+        let err = root.validate().expect_err("must fail");
+        assert!(matches!(err, OfdError::Format(FormatError::NotOfd)));
+    }
+
+    #[test]
+    fn a_body_without_a_root_path_is_rejected() {
+        let root = OfdRoot {
+            version: Version::default(),
+            doc_bodies: vec![DocBody::default()],
+        };
+        let err = root.validate().expect_err("must fail");
+        assert!(matches!(err, OfdError::Format(FormatError::MissingRoot)));
+    }
+
+    #[test]
+    fn a_root_with_a_document_path_is_valid() {
+        let root = OfdRoot {
+            version: Version::default(),
+            doc_bodies: vec![DocBody {
+                doc_root: DocRoot::new("Doc_0/Document.xml"),
+                ..Default::default()
+            }],
+        };
+        assert!(root.validate().is_ok());
+        assert_eq!(
+            root.primary_body().expect("body").doc_root.value,
+            "Doc_0/Document.xml"
+        );
+    }
+
+    #[test]
+    fn a_missing_body_is_reported() {
+        let root = OfdRoot::default();
+        assert!(root.primary_body().is_err());
+    }
+
+    #[test]
+    fn version_defaults_to_major_one() {
+        assert_eq!(Version::default().major, "1");
+        assert_eq!(Version::default().sub, None);
+    }
+
+    #[test]
+    fn locations_convert_from_strings() {
+        let l: Location = "Doc_0/Res/Font_0.ttf".into();
+        assert_eq!(l.value, "Doc_0/Res/Font_0.ttf");
+        assert_eq!(Location::new("a.xml").value, "a.xml");
+    }
+
+    #[test]
+    fn page_lookups_report_out_of_range_by_index() {
+        let pages = Pages {
+            pages: vec![Page::default()],
+        };
+        assert_eq!(pages.len(), 1);
+        assert!(!pages.is_empty());
+        assert!(pages.get(0).is_ok());
+
+        let err = pages.get(5).expect_err("must fail");
+        match err {
+            OfdError::Format(FormatError::PageOutOfRange { index, total }) => {
+                assert_eq!(index, 5);
+                assert_eq!(total, 1);
+            }
+            other => panic!("unexpected error: {other}"),
+        }
+    }
+
+    #[test]
+    fn an_empty_page_list_reports_empty() {
+        let pages = Pages::default();
+        assert!(pages.is_empty());
+        assert_eq!(pages.len(), 0);
+    }
+
+    #[test]
+    fn a_page_knows_whether_it_draws_anything() {
+        let empty = Page::default();
+        assert!(!empty.has_own_content());
+
+        let full = Page {
+            content: Some(PageBlock {
+                layers: vec![Layer {
+                    id: None,
+                    objects: vec![Object::unknown()],
+                }],
+            }),
+            ..Default::default()
+        };
+        assert!(full.has_own_content());
+    }
+
+    #[test]
+    fn page_blocks_count_objects_across_layers() {
+        let block = PageBlock {
+            layers: vec![
+                Layer {
+                    id: Some("1".into()),
+                    objects: vec![Object::unknown(), Object::unknown()],
+                },
+                Layer {
+                    id: Some("2".into()),
+                    objects: vec![Object::unknown()],
+                },
+            ],
+        };
+        assert_eq!(block.object_count(), 3);
+        assert!(block.has_content());
+    }
+
+    #[test]
+    fn a_page_area_wraps_its_box() {
+        let area = PageArea::new(Rect::A4_PORTRAIT);
+        assert_eq!(area.physical_box, Rect::A4_PORTRAIT);
+        assert_eq!(area.application_box, None);
+    }
+
+    #[test]
+    fn templates_and_draw_params_are_optional() {
+        let doc = Document {
+            common_data: CommonData {
+                page_area: PageArea::new(Rect::A4_PORTRAIT),
+                templates: None,
+                draw_params: None,
+            },
+            pages: Pages::default(),
+        };
+        assert!(doc.common_data.templates.is_none());
+        assert!(doc.pages.is_empty());
+    }
+
+    #[test]
+    fn draw_param_lists_hold_records() {
+        let list = DrawParamList {
+            items: vec![DrawParam {
+                id: "1".to_string(),
+                relative_units: GraphicsUnit::Millimetre,
+                ..Default::default()
+            }],
+        };
+        assert_eq!(list.items.len(), 1);
+    }
+
+    #[test]
+    fn documents_survive_a_serde_round_trip() {
+        let doc = Document {
+            common_data: CommonData {
+                page_area: PageArea::new(Rect::A4_PORTRAIT),
+                templates: Some(TemplateList {
+                    items: vec![Template {
+                        id: "1".to_string(),
+                        base_loc: "Tpls/Tpl_0/Content.xml".to_string(),
+                    }],
+                }),
+                draw_params: None,
+            },
+            pages: Pages {
+                pages: vec![Page {
+                    id: "10".to_string(),
+                    area: None,
+                    content: None,
+                    templates: Some(TemplatePageList {
+                        items: vec![TemplateRef {
+                            template_id: "1".to_string(),
+                            z_order: None,
+                        }],
+                    }),
+                }],
+            },
+        };
+
+        let json = serde_json::to_string(&doc).expect("serialize");
+        let back: Document = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(back.pages.len(), 1);
+        assert_eq!(
+            back.common_data.templates.expect("templates").items[0].base_loc,
+            "Tpls/Tpl_0/Content.xml"
+        );
+    }
+}
