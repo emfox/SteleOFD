@@ -56,8 +56,7 @@ impl Sm2KeyPair {
 
 /// Verify an SM2 signature against a 65-byte uncompressed public key.
 ///
-/// Returns `Ok(true)` when the signature is valid, `Ok(false)` when it is
-/// well-formed but wrong, and an error only for malformed inputs.
+/// Returns `Ok(true)` when valid, `Ok(false)` when well-formed but wrong.
 pub fn sm2_verify(
     public_key: &[u8],
     message: &[u8],

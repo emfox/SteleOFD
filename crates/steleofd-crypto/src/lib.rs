@@ -1,7 +1,5 @@
 //! Cryptographic primitives for OFD: SM3 digest, SM4 block cipher, SM2
-//! signatures and X.509 certificate inspection.
-//!
-//! PKCS#12 container loading is tracked as follow-up work.
+//! signatures and X.509 certificate inspection. PKCS#12 is follow-up work.
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
