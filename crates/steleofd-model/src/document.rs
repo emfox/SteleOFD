@@ -218,6 +218,10 @@ pub struct Page {
     /// Reference id.
     #[serde(rename = "ID")]
     pub id: RefId,
+    /// External content file, relative to the document root; large documents
+    /// keep page bodies out of `Document.xml` and point here instead.
+    #[serde(rename = "BaseLoc", skip_serializing_if = "Option::is_none")]
+    pub base_loc: Option<String>,
     /// Extent overriding `CommonData.PageArea`.
     #[serde(rename = "Area", skip_serializing_if = "Option::is_none")]
     pub area: Option<PageArea>,
@@ -464,6 +468,7 @@ mod tests {
             pages: Pages {
                 pages: vec![Page {
                     id: "10".to_string(),
+                    base_loc: None,
                     area: None,
                     content: None,
                     templates: Some(TemplatePageList {
