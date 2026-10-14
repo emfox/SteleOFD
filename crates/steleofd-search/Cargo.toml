@@ -11,3 +11,6 @@ steleofd-error.workspace = true
 steleofd-display.workspace = true
 steleofd-geometry.workspace = true
 tracing.workspace = true
+
+[dev-dependencies]
+steleofd-font.workspace = true

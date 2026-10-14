@@ -2845,6 +2845,7 @@ dependencies = [
  "steleofd-common",
  "steleofd-display",
  "steleofd-error",
+ "steleofd-font",
  "steleofd-geometry",
  "tracing",
 ]
