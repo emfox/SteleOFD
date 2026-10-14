@@ -227,3 +227,174 @@ fn civil_from_unix(secs: i64) -> (i64, u32, u32, u32, u32) {
 
     (y, m, d, hh, mm)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn en() -> LocalizedFormat {
+        LocalizedFormat::new(Locale::en_us())
+    }
+
+    fn zh() -> LocalizedFormat {
+        LocalizedFormat::new(Locale::zh_cn())
+    }
+
+    #[test]
+    fn integers_are_grouped_every_three_digits() {
+        assert_eq!(en().integer(1234567), "1,234,567");
+        assert_eq!(en().integer(999), "999");
+        assert_eq!(en().integer(1000), "1,000");
+    }
+
+    #[test]
+    fn grouping_uses_the_locale_separator() {
+        // German uses a period as the grouping mark.
+        let de = LocalizedFormat::new(Locale::new("de-DE"));
+        assert_eq!(de.integer(1234567), "1.234.567");
+    }
+
+    #[test]
+    fn negative_integers_keep_the_sign_outside_the_grouping() {
+        assert_eq!(en().integer(-1234), "-1,234");
+    }
+
+    #[test]
+    fn zero_and_single_digits_are_not_grouped() {
+        assert_eq!(en().integer(0), "0");
+        assert_eq!(en().integer(7), "7");
+        assert_eq!(en().integer(-7), "-7");
+    }
+
+    #[test]
+    fn decimals_use_the_locale_decimal_mark() {
+        assert_eq!(en().decimal(1234.5, 1), "1,234.5");
+        // German swaps the two marks: grouping dot, decimal comma.
+        let de = LocalizedFormat::new(Locale::new("de-DE"));
+        assert_eq!(de.decimal(1234.5, 1), "1.234,5");
+    }
+
+    #[test]
+    fn decimal_with_zero_fraction_digits_has_no_point() {
+        assert_eq!(en().decimal(12.6, 0), "13");
+    }
+
+    #[test]
+    fn decimal_rounds_to_the_requested_precision() {
+        assert_eq!(en().decimal(1.005, 2), "1.00");
+        assert_eq!(en().decimal(2.345, 2), "2.35");
+    }
+
+    #[test]
+    fn percent_multiplies_by_one_hundred_and_appends_the_sign() {
+        assert_eq!(en().percent(0.5, 0), "50%");
+        assert_eq!(en().percent(0.1234, 1), "12.3%");
+    }
+
+    #[test]
+    fn percent_handles_zero_and_full() {
+        assert_eq!(en().percent(0.0, 0), "0%");
+        assert_eq!(en().percent(1.0, 0), "100%");
+    }
+
+    #[test]
+    fn byte_counts_below_the_base_stay_in_bytes() {
+        assert_eq!(en().file_size(0), "0 B");
+        assert_eq!(en().file_size(512), "512 B");
+        assert_eq!(en().file_size(1023), "1,023 B");
+    }
+
+    #[test]
+    fn binary_file_sizes_use_1024() {
+        assert_eq!(en().file_size(1024), "1.0 KB");
+        assert_eq!(en().file_size(1024 * 1024), "1.0 MB");
+    }
+
+    #[test]
+    fn decimal_file_sizes_use_1000() {
+        let dec = en().with_size_system(SizeUnitSystem::Decimal);
+        assert_eq!(dec.file_size(1000), "1.0 kB");
+        assert_eq!(dec.file_size(1_000_000), "1.0 MB");
+    }
+
+    #[test]
+    fn file_sizes_at_or_above_ten_drop_the_decimal() {
+        // 15 KB prints as a whole number, 1.5 KB keeps one digit.
+        assert_eq!(en().file_size(15 * 1024), "15 KB");
+        assert_eq!(en().file_size(1536), "1.5 KB");
+    }
+
+    #[test]
+    fn file_size_stops_at_the_largest_unit() {
+        let huge = 1024u64.pow(5) * 4;
+        assert!(en().file_size(huge).ends_with(" TB"));
+    }
+
+    #[test]
+    fn english_date_puts_the_month_first() {
+        // 2024-03-05 00:00:00 UTC
+        let ts = 1_709_596_800;
+        assert_eq!(en().date(ts), "Mar 5, 2024");
+    }
+
+    #[test]
+    fn chinese_date_uses_the_year_month_day_markers() {
+        let ts = 1_709_596_800;
+        assert_eq!(zh().date(ts), "2024\u{5e74}3\u{6708}5\u{65e5}");
+    }
+
+    #[test]
+    fn english_datetime_uses_a_twelve_hour_clock() {
+        // 2024-03-05 13:30:00 UTC
+        let ts = 1_709_596_800 + 13 * 3600 + 30 * 60;
+        assert_eq!(en().datetime(ts), "Mar 5, 2024, 1:30 PM");
+    }
+
+    #[test]
+    fn midnight_and_noon_map_to_twelve_on_the_twelve_hour_clock() {
+        let base = 1_709_596_800; // 00:00 UTC
+        assert!(en().datetime(base).contains("12:00 AM"));
+        let noon = base + 12 * 3600;
+        assert!(en().datetime(noon).contains("12:00 PM"));
+    }
+
+    #[test]
+    fn chinese_datetime_uses_chinese_meridiem_markers() {
+        let base = 1_709_596_800;
+        // 09:05 UTC is before noon.
+        let morning = zh().datetime(base + 9 * 3600 + 5 * 60);
+        assert_eq!(
+            morning,
+            "2024\u{5e74}3\u{6708}5\u{65e5} \u{4e0a}\u{5348}9:05"
+        );
+        // 15:00 UTC is after noon.
+        let afternoon = zh().datetime(base + 15 * 3600);
+        assert_eq!(
+            afternoon,
+            "2024\u{5e74}3\u{6708}5\u{65e5} \u{4e0b}\u{5348}3:00"
+        );
+    }
+
+    #[test]
+    fn date_formatting_handles_a_leap_day() {
+        // 2024-02-29 00:00:00 UTC
+        let ts = 1_709_164_800;
+        assert_eq!(en().date(ts), "Feb 29, 2024");
+    }
+
+    #[test]
+    fn page_size_uses_the_multiplication_sign_and_millimetres() {
+        assert_eq!(en().page_size(210.0, 297.0), "210.0 \u{00d7} 297.0 mm");
+    }
+
+    #[test]
+    fn page_size_follows_the_locale_decimal_mark() {
+        let de = LocalizedFormat::new(Locale::new("de-DE"));
+        assert_eq!(de.page_size(210.0, 297.0), "210,0 \u{00d7} 297,0 mm");
+    }
+
+    #[test]
+    fn locale_accessor_returns_what_was_configured() {
+        assert_eq!(zh().locale(), &Locale::zh_cn());
+    }
+}

@@ -147,3 +147,137 @@ fn detect_system_locale() -> Locale {
 fn detect_system_locale() -> Locale {
     Locale::fallback()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn known_tags_are_stored_as_given() {
+        assert_eq!(Locale::new("zh-CN").tag(), "zh-CN");
+        assert_eq!(Locale::new("en-US").tag(), "en-US");
+    }
+
+    #[test]
+    fn malformed_tags_fall_back_to_the_default() {
+        let l = Locale::new("not a language tag!!");
+        assert_eq!(l, Locale::fallback());
+    }
+
+    #[test]
+    fn language_subtag_strips_the_region() {
+        assert_eq!(Locale::new("zh-CN").language(), "zh");
+        assert_eq!(Locale::new("en-US").language(), "en");
+        assert_eq!(Locale::new("zh").language(), "zh");
+    }
+
+    #[test]
+    fn script_subtag_survives_in_the_tag() {
+        let l = Locale::new("zh-Hans-CN");
+        assert_eq!(l.language(), "zh");
+        assert!(l.tag().starts_with("zh"));
+    }
+
+    #[test]
+    fn rtl_languages_are_recognized() {
+        assert!(Locale::new("ar").is_rtl());
+        assert!(Locale::new("he").is_rtl());
+        assert!(!Locale::new("en-US").is_rtl());
+        assert!(!Locale::new("zh-CN").is_rtl());
+    }
+
+    #[test]
+    fn cjk_languages_are_recognized() {
+        assert!(Locale::new("zh-CN").is_cjk());
+        assert!(Locale::new("ja").is_cjk());
+        assert!(Locale::new("ko").is_cjk());
+        assert!(!Locale::new("en-US").is_cjk());
+    }
+
+    #[test]
+    fn builtin_locales_are_reported() {
+        assert!(Locale::en_us().is_builtin());
+        assert!(Locale::zh_cn().is_builtin());
+        assert!(!Locale::new("fr-FR").is_builtin());
+    }
+
+    #[test]
+    fn default_is_the_fallback_locale() {
+        assert_eq!(Locale::default(), Locale::fallback());
+    }
+
+    #[test]
+    fn display_prints_the_tag() {
+        assert_eq!(Locale::zh_cn().to_string(), "zh-CN");
+    }
+
+    #[test]
+    fn fixed_negotiation_picks_the_exact_tag() {
+        let available = [Locale::en_us(), Locale::zh_cn()];
+        let picked = LocaleNegotiation::Fixed(Locale::zh_cn()).negotiate(&available);
+        assert_eq!(picked, Locale::zh_cn());
+    }
+
+    #[test]
+    fn fixed_negotiation_falls_back_when_the_tag_is_absent() {
+        let available = [Locale::en_us()];
+        let picked = LocaleNegotiation::Fixed(Locale::new("fr-FR")).negotiate(&available);
+        assert_eq!(picked, Locale::fallback());
+    }
+
+    #[test]
+    fn negotiation_matches_same_language_when_the_region_differs() {
+        // zh-TW is not available, but zh-CN shares the language subtag.
+        let available = [Locale::en_us(), Locale::zh_cn()];
+        let picked = LocaleNegotiation::Fixed(Locale::new("zh-TW")).negotiate(&available);
+        assert_eq!(picked, Locale::zh_cn());
+    }
+
+    #[test]
+    fn preference_list_walks_in_order() {
+        let available = [Locale::en_us(), Locale::zh_cn()];
+        let list = LocaleNegotiation::PreferenceList(vec![
+            Locale::new("fr-FR"),
+            Locale::zh_cn(),
+            Locale::en_us(),
+        ]);
+        assert_eq!(list.negotiate(&available), Locale::zh_cn());
+    }
+
+    #[test]
+    fn preference_list_falls_through_to_the_next_candidate() {
+        // fr is unavailable, so the list moves on to en-US.
+        let available = [Locale::en_us(), Locale::zh_cn()];
+        let list = LocaleNegotiation::PreferenceList(vec![Locale::new("fr-FR"), Locale::en_us()]);
+        assert_eq!(list.negotiate(&available), Locale::en_us());
+    }
+
+    #[test]
+    fn exact_tag_beats_a_language_only_match() {
+        let available = [Locale::zh_cn(), Locale::new("zh-TW")];
+        let picked = LocaleNegotiation::Fixed(Locale::new("zh-TW")).negotiate(&available);
+        assert_eq!(picked.tag(), "zh-TW");
+    }
+
+    #[test]
+    fn empty_available_list_yields_the_fallback() {
+        let picked = LocaleNegotiation::Fixed(Locale::zh_cn()).negotiate(&[]);
+        assert_eq!(picked, Locale::fallback());
+    }
+
+    #[test]
+    fn system_negotiation_returns_an_available_locale() {
+        let available = [Locale::en_us(), Locale::zh_cn()];
+        let picked = LocaleNegotiation::System.negotiate(&available);
+        assert!(
+            available.contains(&picked),
+            "system negotiation returned {picked}, which is not available"
+        );
+    }
+
+    #[test]
+    fn from_str_never_fails() {
+        let l: Locale = "zh-CN".parse().expect("infallible");
+        assert_eq!(l, Locale::zh_cn());
+    }
+}

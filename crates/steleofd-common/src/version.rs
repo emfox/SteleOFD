@@ -52,3 +52,43 @@ impl SpecVersion {
     /// Archiving specification for electronic official documents.
     pub const GB_T_39362: &'static str = "GB/T 39362-2020";
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn default_version_is_the_national_standard() {
+        assert_eq!(OfdVersion::default(), OfdVersion::V1_0);
+    }
+
+    #[test]
+    fn known_versions_round_trip_through_strings() {
+        for v in [OfdVersion::V1_0, OfdVersion::V1_1] {
+            assert_eq!(OfdVersion::parse(v.as_str()), v);
+        }
+    }
+
+    #[test]
+    fn unknown_versions_keep_their_raw_text() {
+        let v = OfdVersion::parse("2.5");
+        assert_eq!(v, OfdVersion::Other("2.5".to_string()));
+        assert_eq!(v.as_str(), "2.5");
+    }
+
+    #[test]
+    fn empty_and_malformed_versions_are_preserved_verbatim() {
+        assert_eq!(OfdVersion::parse("").as_str(), "");
+        assert_eq!(OfdVersion::parse("not-a-version").as_str(), "not-a-version");
+    }
+
+    #[test]
+    fn spec_constants_use_the_official_standard_numbers() {
+        assert_eq!(SpecVersion::GB_T_33190, "GB/T 33190-2016");
+        assert_eq!(SpecVersion::GB_T_33476_1, "GB/T 33476.1-2016");
+        assert_eq!(SpecVersion::GB_T_33476_2, "GB/T 33476.2-2016");
+        assert_eq!(SpecVersion::GB_T_38540, "GB/T 38540-2020");
+        assert_eq!(SpecVersion::GM_T_0099, "GM/T 0099-2020");
+        assert_eq!(SpecVersion::GB_T_39362, "GB/T 39362-2020");
+    }
+}

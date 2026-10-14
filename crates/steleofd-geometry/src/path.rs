@@ -318,3 +318,189 @@ fn quad_at(p0: (f64, f64), p1: (f64, f64), p2: (f64, f64), t: f64) -> (f64, f64)
         a * p0.1 + b * p1.1 + c * p2.1,
     )
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const EPS: f64 = 1e-9;
+
+    fn assert_rect_eq(actual: Rect, expected: Rect) {
+        assert!(
+            (actual.x - expected.x).abs() < EPS
+                && (actual.y - expected.y).abs() < EPS
+                && (actual.w - expected.w).abs() < EPS
+                && (actual.h - expected.h).abs() < EPS,
+            "expected {expected:?}, got {actual:?}"
+        );
+    }
+
+    #[test]
+    fn empty_path_is_empty() {
+        let p = Path::new();
+        assert!(p.is_empty());
+        assert_eq!(p.len(), 0);
+    }
+
+    #[test]
+    fn builder_records_segments_in_order() {
+        let p = Path::build(|b| {
+            b.move_to(0.0, 0.0).line_to(10.0, 0.0).close();
+        });
+        assert_eq!(p.len(), 3);
+        assert!(matches!(p.segments[0], PathSegment::MoveTo(0.0, 0.0)));
+        assert!(matches!(p.segments[1], PathSegment::LineTo(10.0, 0.0)));
+        assert!(matches!(p.segments[2], PathSegment::Close));
+    }
+
+    #[test]
+    fn rect_builds_a_closed_four_sided_subpath() {
+        let p = Path::build(|b| {
+            b.rect(1.0, 2.0, 3.0, 4.0);
+        });
+        // move + three lines + close
+        assert_eq!(p.len(), 5);
+        assert!(p.is_polygonal());
+        assert_rect_eq(p.bounding_box(), Rect::new(1.0, 2.0, 3.0, 4.0));
+    }
+
+    #[test]
+    fn bounding_box_of_polygon_matches_extents() {
+        let p = Path::build(|b| {
+            b.move_to(5.0, 5.0)
+                .line_to(15.0, 5.0)
+                .line_to(10.0, 20.0)
+                .close();
+        });
+        assert_rect_eq(p.bounding_box(), Rect::new(5.0, 5.0, 10.0, 15.0));
+    }
+
+    #[test]
+    fn bounding_box_includes_bezier_control_points() {
+        let p = Path::build(|b| {
+            b.move_to(0.0, 0.0)
+                .curve_to((10.0, 20.0), (30.0, 20.0), (40.0, 0.0));
+        });
+        // The loose box spans the control envelope, so it is wider than the curve.
+        let loose = p.bounding_box();
+        assert_rect_eq(loose, Rect::new(0.0, 0.0, 40.0, 20.0));
+    }
+
+    #[test]
+    fn tight_bounding_box_is_no_larger_than_loose() {
+        let p = Path::build(|b| {
+            b.move_to(0.0, 0.0)
+                .curve_to((10.0, 20.0), (30.0, 20.0), (40.0, 0.0));
+        });
+        let loose = p.bounding_box();
+        let tight = p.tight_bounding_box();
+        assert!(
+            tight.h <= loose.h + EPS,
+            "tight {tight:?} vs loose {loose:?}"
+        );
+        assert!(
+            tight.w <= loose.w + EPS,
+            "tight {tight:?} vs loose {loose:?}"
+        );
+    }
+
+    #[test]
+    fn tight_bounding_box_of_flat_bezier_is_shallower_than_loose() {
+        // A curve whose control points rise high but whose actual path stays low.
+        let p = Path::build(|b| {
+            b.move_to(0.0, 0.0)
+                .curve_to((0.0, 100.0), (10.0, 100.0), (10.0, 0.0));
+        });
+        let loose = p.bounding_box();
+        let tight = p.tight_bounding_box();
+        assert!(
+            tight.h < loose.h,
+            "tight {tight:?} should beat loose {loose:?}"
+        );
+    }
+
+    #[test]
+    fn empty_path_has_default_bounding_box() {
+        let p = Path::new();
+        assert_eq!(p.bounding_box(), Rect::default());
+    }
+
+    #[test]
+    fn transformed_translates_every_segment() {
+        let p = Path::build(|b| {
+            b.move_to(0.0, 0.0).line_to(1.0, 1.0);
+        });
+        let moved = p.transformed(&Affine::translate(10.0, 20.0));
+        assert!(matches!(moved.segments[0], PathSegment::MoveTo(10.0, 20.0)));
+        assert!(matches!(moved.segments[1], PathSegment::LineTo(11.0, 21.0)));
+    }
+
+    #[test]
+    fn transformed_scales_bezier_control_points() {
+        let p = Path::build(|b| {
+            b.move_to(0.0, 0.0)
+                .curve_to((1.0, 2.0), (3.0, 4.0), (5.0, 6.0));
+        });
+        let scaled = p.transformed(&Affine::scale(2.0, 2.0));
+        match scaled.segments[1] {
+            PathSegment::CurveTo { c1, c2, to } => {
+                assert!((c1.0 - 2.0).abs() < EPS && (c1.1 - 4.0).abs() < EPS);
+                assert!((c2.0 - 6.0).abs() < EPS && (c2.1 - 8.0).abs() < EPS);
+                assert!((to.0 - 10.0).abs() < EPS && (to.1 - 12.0).abs() < EPS);
+            }
+            ref other => panic!("expected CurveTo, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn transformed_scales_arc_radii_by_the_scale_factor() {
+        let p = Path::build(|b| {
+            b.move_to(0.0, 0.0);
+            b.segments.push(PathSegment::Arc {
+                rx: 5.0,
+                ry: 10.0,
+                x_axis_rotation: 0.0,
+                large_arc: false,
+                sweep: true,
+                to: (10.0, 0.0),
+            });
+        });
+        let scaled = p.transformed(&Affine::scale(2.0, 2.0));
+        match scaled.segments[1] {
+            PathSegment::Arc { rx, ry, to, .. } => {
+                assert!((rx - 10.0).abs() < EPS, "rx was {rx}");
+                assert!((ry - 20.0).abs() < EPS, "ry was {ry}");
+                assert!((to.0 - 20.0).abs() < EPS, "to.x was {}", to.0);
+            }
+            ref other => panic!("expected Arc, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn closed_path_is_polygonal_but_bezier_is_not() {
+        let poly = Path::build(|b| {
+            b.move_to(0.0, 0.0).line_to(1.0, 0.0).close();
+        });
+        assert!(poly.is_polygonal());
+
+        let curved = Path::build(|b| {
+            b.move_to(0.0, 0.0)
+                .curve_to((1.0, 1.0), (2.0, 2.0), (3.0, 3.0));
+        });
+        assert!(!curved.is_polygonal());
+    }
+
+    #[test]
+    fn quad_bounding_box_uses_its_control_point() {
+        let p = Path::build(|b| {
+            b.move_to(0.0, 0.0).quad_to((5.0, 10.0), (10.0, 0.0));
+        });
+        assert_rect_eq(p.bounding_box(), Rect::new(0.0, 0.0, 10.0, 10.0));
+    }
+
+    #[test]
+    fn transform_of_empty_path_stays_empty() {
+        let p = Path::new().transformed(&Affine::scale(100.0, 100.0));
+        assert!(p.is_empty());
+    }
+}
