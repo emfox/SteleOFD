@@ -333,7 +333,20 @@ feedback early instead of spinning inside abstraction layers.
 
 ---
 
-## 8. Open decisions
+## 8. Decided
+
+1. **Clipping uses the backend's native support.** The raster backend relies on
+   `tiny-skia` clipping and blending. Blend modes it cannot express degrade to a
+  `RenderError` rather than a silently wrong image. A self-built clip stack is
+   deferred; see the `TODO` in `crates/steleofd-render/src/lib.rs`.
+2. **Fonts are embedded in full.** PDF and SVG export embed the whole font rather
+   than a subset. Subsetting, which can cut output size by an order of magnitude
+   for CJK, is tracked as a separate later item.
+3. **No render cache yet.** Bitmap caching, page-window pruning and eviction stay
+   out of scope until raster rendering works and a real large document can be
+   measured.
+
+## 9. Open decisions
 
 1. **Render backend priority:** raster first (server and CLI images) or canvas first
    (browser)?
