@@ -67,8 +67,10 @@ pub fn read_sign_list(package: &mut Package, loc: &str) -> Result<Vec<SignRef>, 
                     base_loc: base.to_string(),
                 });
             }
+            Event::Start(node) if node.is("Signs") => {}
             Event::Start(other) => cursor.skip_element(&other)?,
-            Event::End(_) | Event::Eof => break,
+            Event::End(_) => {}
+            Event::Eof => break,
             Event::Text(_) => {}
         }
     }
