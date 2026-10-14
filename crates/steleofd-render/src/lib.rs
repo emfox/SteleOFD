@@ -1,9 +1,13 @@
 //! Render backends.
-//! Every backend consumes a [`steleofd_display::PageDisplay`] and translates the
-//! eight [`steleofd_display::DrawOp`] variants into its own drawing model.
+//! Every backend consumes a [`steleofd_display::PageDisplay`] and translates
+//! the [`steleofd_display::DrawOp`] stream into its own drawing model.
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
+
+pub mod raster;
+
+pub use raster::{RasterOutput, RenderOptions, render_page};
 
 // TODO: self-built clip stack, native tiny-skia clipping is enough for now.
 // TODO: font subsetting for PDF and SVG export, currently embedded in full.
