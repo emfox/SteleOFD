@@ -230,6 +230,36 @@ mod tests {
         assert!(ColorRef::from_hex("zzz").validate().is_err());
     }
 
+    // GB/T 33190 clause 8.3.2: `Value` holds one decimal per channel.
+    #[test]
+    fn gb_t_33190_8_3_2_value_is_space_separated_channels() {
+        let c = ColorRef::from_hex("255 0 0");
+        assert_eq!(c.to_rgb().expect("parse"), (255, 0, 0));
+        assert_eq!(c.channels().expect("channels"), vec![255, 0, 0]);
+    }
+
+    #[test]
+    fn gb_t_33190_8_3_2_four_channels_are_cmyk() {
+        // Cyan with no key must land on pure cyan once converted to RGB.
+        let c = ColorRef::from_hex("255 0 0 0");
+        assert_eq!(c.channels().expect("channels"), vec![255, 0, 0, 0]);
+        assert_eq!(c.to_rgb().expect("parse"), (0, 255, 255));
+    }
+
+    #[test]
+    fn gb_t_33190_8_3_2_absent_value_and_index_are_all_zero() {
+        // Both optional, so a colour without either is channel-wise zero.
+        let c = ColorRef::BLACK;
+        assert_eq!(c.channels().expect("channels"), vec![0, 0, 0]);
+        assert_eq!(c.to_rgb().expect("parse"), (0, 0, 0));
+    }
+
+    #[test]
+    fn gb_t_33190_8_3_2_alpha_defaults_to_255() {
+        // Clause 8.3.2: Alpha ranges over 0~255 and defaults to opaque.
+        assert_eq!(ColorRef::from_hex("255 0 0").alpha(), 255);
+    }
+
     #[test]
     fn colours_degrade_gracefully_when_serde_round_trips() {
         let c = ColorRef::from_hex("#123456").with_alpha(10);

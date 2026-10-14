@@ -112,7 +112,13 @@ status = "untested"
 clause = "8.3.2"
 title = "Basic colour"
 status = "verified"
-tests = ["gb_t_33190_8_3_2_colour_is_rgb_with_alpha"]
+tests = [
+    "gb_t_33190_8_3_2_colour_is_rgb_with_alpha",
+    "gb_t_33190_8_3_2_value_is_space_separated_channels",
+    "gb_t_33190_8_3_2_four_channels_are_cmyk",
+    "gb_t_33190_8_3_2_absent_value_and_index_are_all_zero",
+    "gb_t_33190_8_3_2_alpha_defaults_to_255",
+]
 
 [[item]]
 clause = "8.3.4"

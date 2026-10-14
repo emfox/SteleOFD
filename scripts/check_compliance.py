@@ -2,7 +2,10 @@
 """Conformance gate for the GB/T 33190-2016 register.
 
 Checks that every verified clause links to a real test, that no
-`gb_t_33190__*` test is orphaned, and regenerates docs/COMPLIANCE.md.
+`gb_t_33190_*` test is orphaned, and regenerates docs/COMPLIANCE.md.
+
+The register stores bare test names; cargo reports them qualified by module,
+so both sides are compared on the last path segment.
 """
 
 from __future__ import annotations
@@ -21,8 +24,13 @@ KNOWN_STATUS = ("verified", "partial", "untested", "deviation")
 NEEDS_TESTS = ("verified", "partial")
 
 
+def bare(name: str) -> str:
+    """Drop the module path cargo prefixes test names with."""
+    return name.rsplit("::", 1)[-1]
+
+
 def collect_tests(explicit: Path | None) -> set[str]:
-    """Test names, either from a file or by asking cargo."""
+    """Bare test names, either from a file or by asking cargo."""
     if explicit is not None:
         return {line.strip() for line in explicit.read_text(encoding="utf-8").splitlines() if line.strip()}
     proc = subprocess.run(
@@ -39,7 +47,7 @@ def collect_tests(explicit: Path | None) -> set[str]:
     for line in proc.stdout.splitlines():
         line = line.strip()
         if line.endswith(": test") and not line.startswith("Running"):
-            names.add(line[: -len(": test")].strip())
+            names.add(bare(line[: -len(": test")].strip()))
     return names
 
 
