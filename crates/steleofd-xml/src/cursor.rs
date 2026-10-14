@@ -303,3 +303,243 @@ impl<'a> Cursor<'a> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn start_names(xml: &str) -> Vec<String> {
+        let mut c = Cursor::new(xml);
+        let mut out = Vec::new();
+        loop {
+            match c.next_event().expect("parse") {
+                Event::Start(n) => out.push(n.local().to_string()),
+                Event::End(_) => {}
+                Event::Text(_) => {}
+                Event::Eof => break,
+            }
+        }
+        out
+    }
+
+    #[test]
+    fn elements_are_visited_in_document_order() {
+        let xml = r#"<OFD><DocBody><DocRoot>d</DocRoot></DocBody></OFD>"#;
+        assert_eq!(start_names(xml), vec!["OFD", "DocBody", "DocRoot"]);
+    }
+
+    #[test]
+    fn namespace_prefixes_are_stripped_from_element_names() {
+        let xml = r#"<ofd:OFD xmlns:ofd="http://www.ofdspec.org/2016"><ofd:DocBody/></ofd:OFD>"#;
+        assert_eq!(start_names(xml), vec!["OFD", "DocBody"]);
+    }
+
+    #[test]
+    fn attributes_are_decoded_and_localized() {
+        let xml = r#"<ofd:Page ofd:ID="7" Boundary="0 0 210 297"/>"#;
+        let mut c = Cursor::new(xml);
+        let node = c.expect_start("Page").expect("start");
+        assert_eq!(node.attributes().get("ID"), Some("7"));
+        assert_eq!(node.attributes().get("Boundary"), Some("0 0 210 297"));
+    }
+
+    #[test]
+    fn xml_entities_in_attributes_are_unescaped() {
+        let xml = r#"<T BaseLoc="a&amp;b&quot;c"/>"#;
+        let mut c = Cursor::new(xml);
+        let node = c.expect_start("T").expect("start");
+        assert_eq!(node.attributes().get("BaseLoc"), Some("a&b\"c"));
+    }
+
+    #[test]
+    fn self_closing_elements_report_as_start_without_an_end() {
+        let xml = r#"<OFD><Empty/><Next/></OFD>"#;
+        let mut c = Cursor::new(xml);
+        assert!(matches!(c.next_event().expect("e"), Event::Start(_)));
+        assert!(c.expect_start("Empty").is_ok());
+        // No End was emitted for Empty, so the next event is the sibling.
+        let next = c.expect_start("Next").expect("start");
+        assert_eq!(next.local(), "Next");
+    }
+
+    #[test]
+    fn text_is_trimmed_and_returned_verbatim() {
+        let xml = r#"<DocRoot>  Doc_0/Document.xml  </DocRoot>"#;
+        let mut c = Cursor::new(xml);
+        let _ = c.expect_start("DocRoot").expect("start");
+        assert_eq!(c.read_text().expect("text"), "Doc_0/Document.xml");
+    }
+
+    #[test]
+    fn whitespace_only_text_is_skipped() {
+        let xml = "<A>\n   \n  <B/>\n</A>";
+        let mut c = Cursor::new(xml);
+        let _ = c.expect_start("A").expect("start");
+        let b = c.expect_start("B").expect("start");
+        assert_eq!(b.local(), "B");
+    }
+
+    #[test]
+    fn cdata_is_returned_as_text() {
+        let xml = r#"<T><![CDATA[a<b&c]]></T>"#;
+        let mut c = Cursor::new(xml);
+        let _ = c.expect_start("T").expect("start");
+        assert_eq!(c.read_text().expect("text"), "a<b&c");
+    }
+
+    #[test]
+    fn comments_and_declarations_are_skipped() {
+        let xml = r#"<?xml version="1.0"?><!-- note --><OFD><!-- inner --><DocBody/></OFD>"#;
+        assert_eq!(start_names(xml), vec!["OFD", "DocBody"]);
+    }
+
+    #[test]
+    fn nesting_depth_is_tracked() {
+        let xml = "<A><B><C></C></B></A>";
+        let mut c = Cursor::new(xml);
+        let _ = c.expect_start("A").expect("start");
+        assert_eq!(c.depth(), 1);
+        let _ = c.expect_start("B").expect("start");
+        assert_eq!(c.depth(), 2);
+        let _ = c.expect_start("C").expect("start");
+        assert_eq!(c.depth(), 3);
+        assert_eq!(c.next_event().expect("end"), Event::End("C".to_string()));
+        assert_eq!(c.depth(), 2);
+        assert_eq!(c.next_event().expect("end"), Event::End("B".to_string()));
+        assert_eq!(c.depth(), 1);
+    }
+
+    #[test]
+    fn a_self_closing_tag_does_not_change_depth() {
+        let xml = "<A><Empty/></A>";
+        let mut c = Cursor::new(xml);
+        let _ = c.expect_start("A").expect("start");
+        assert_eq!(c.depth(), 1);
+        let empty = c.expect_start("Empty").expect("start");
+        assert!(empty.is_self_closing());
+        // No End follows, so depth stays where the parent left it.
+        assert_eq!(c.depth(), 1);
+        assert_eq!(c.next_event().expect("end"), Event::End("A".to_string()));
+        assert_eq!(c.depth(), 0);
+    }
+
+    #[test]
+    fn excessive_nesting_is_refused() {
+        let mut xml = String::new();
+        for _ in 0..20 {
+            xml.push_str("<A>");
+        }
+        for _ in 0..20 {
+            xml.push_str("</A>");
+        }
+        let mut c = Cursor::with_max_depth(&xml, 5);
+        let mut err = None;
+        loop {
+            match c.next_event() {
+                Ok(Event::Eof) => break,
+                Ok(_) => {}
+                Err(e) => {
+                    err = Some(e);
+                    break;
+                }
+            }
+        }
+        assert!(
+            matches!(
+                err,
+                Some(OfdError::Format(
+                    steleofd_error::FormatError::MaxDepthExceeded(5)
+                ))
+            ),
+            "unexpected result"
+        );
+    }
+
+    #[test]
+    fn malformed_xml_reports_a_syntax_error() {
+        let xml = "<A><B></A>";
+        let mut c = Cursor::new(xml);
+        let mut saw_error = false;
+        for _ in 0..10 {
+            match c.next_event() {
+                Ok(Event::Eof) => break,
+                Ok(_) => {}
+                Err(OfdError::Xml(steleofd_error::XmlError::Syntax { .. })) => {
+                    saw_error = true;
+                    break;
+                }
+                Err(other) => panic!("unexpected error: {other}"),
+            }
+        }
+        assert!(saw_error, "mismatched tags should be reported");
+    }
+
+    #[test]
+    fn unclosed_document_is_reported() {
+        let xml = "<A><B>";
+        let mut c = Cursor::new(xml);
+        let mut saw_error = false;
+        for _ in 0..10 {
+            match c.next_event() {
+                Ok(Event::Eof) => break,
+                Ok(_) => {}
+                Err(_) => {
+                    saw_error = true;
+                    break;
+                }
+            }
+        }
+        assert!(saw_error, "an unterminated document should be reported");
+    }
+
+    #[test]
+    fn expect_start_reports_what_it_found_instead() {
+        let xml = "<A></A>";
+        let mut c = Cursor::new(xml);
+        let _ = c.expect_start("A").expect("start");
+        let err = c.expect_start("B").expect_err("must fail");
+        match err {
+            OfdError::Xml(steleofd_error::XmlError::Syntax { msg, .. }) => {
+                assert!(msg.contains("expected <B>"), "msg was {msg}");
+            }
+            other => panic!("unexpected error: {other}"),
+        }
+    }
+
+    #[test]
+    fn skip_element_discards_a_whole_subtree() {
+        let xml = "<A><Skip><Deep><Deeper/></Deep></Skip><Keep/></A>";
+        let mut c = Cursor::new(xml);
+        let _ = c.expect_start("A").expect("start");
+        let skip = c.expect_start("Skip").expect("start");
+        c.skip_element(&skip).expect("skip");
+        let keep = c.expect_start("Keep").expect("start");
+        assert_eq!(keep.local(), "Keep");
+    }
+
+    #[test]
+    fn node_helpers_match_exact_names_only() {
+        let xml = "<Page/>";
+        let mut c = Cursor::new(xml);
+        let node = c.expect_start("Page").expect("start");
+        assert!(node.is("Page"));
+        assert!(!node.is("Pag"));
+        assert!(node.is_any(&["Page", "Template"]));
+        assert_eq!(node.qualified(), "Page");
+    }
+
+    #[test]
+    fn read_text_ignores_nested_markup() {
+        // A stray child element must not splice its text into the parent value.
+        let xml = "<DocRoot>real<Emphasis>inner</Emphasis></DocRoot>";
+        let mut c = Cursor::new(xml);
+        let _ = c.expect_start("DocRoot").expect("start");
+        assert_eq!(c.read_text().expect("text"), "real");
+    }
+
+    #[test]
+    fn an_empty_document_yields_eof_immediately() {
+        let mut c = Cursor::new("");
+        assert!(matches!(c.next_event().expect("e"), Event::Eof));
+    }
+}

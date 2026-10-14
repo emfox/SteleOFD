@@ -145,3 +145,120 @@ pub fn parse_bool(element: &str, attr: &str, raw: &str) -> steleofd_error::Resul
         })),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn local_name_strips_any_prefix() {
+        assert_eq!(local_name("ofd:Page"), "Page");
+        assert_eq!(local_name("Page"), "Page");
+        // A name containing a colon only in the local part keeps the last segment.
+        assert_eq!(local_name("a:b:Page"), "Page");
+    }
+
+    #[test]
+    fn prefix_of_reports_the_namespace_prefix() {
+        assert_eq!(prefix_of("ofd:Page"), "ofd");
+        assert_eq!(prefix_of("Page"), "");
+    }
+
+    #[test]
+    fn required_attributes_are_parsed_or_reported_missing() {
+        let ok: u32 = parse_required("Page", "ID", Some("7")).expect("parse");
+        assert_eq!(ok, 7);
+
+        let err = parse_required::<u32>("Page", "ID", None).expect_err("must fail");
+        match err {
+            OfdError::Xml(XmlError::MissingAttribute { element, attr }) => {
+                assert_eq!(element, "Page");
+                assert_eq!(attr, "ID");
+            }
+            other => panic!("unexpected error: {other}"),
+        }
+    }
+
+    #[test]
+    fn malformed_required_attributes_name_the_value() {
+        let err = parse_required::<f64>("Page", "BaseLoc", Some("abc")).expect_err("must fail");
+        match err {
+            OfdError::Xml(XmlError::InvalidAttribute {
+                element,
+                attr,
+                value,
+            }) => {
+                assert_eq!(element, "Page");
+                assert_eq!(attr, "BaseLoc");
+                assert_eq!(value, "abc");
+            }
+            other => panic!("unexpected error: {other}"),
+        }
+    }
+
+    #[test]
+    fn optional_attributes_accept_absence_but_not_garbage() {
+        assert_eq!(parse_optional::<u32>("T", "A", None).expect("parse"), None);
+        assert_eq!(
+            parse_optional::<u32>("T", "A", Some("  ")).expect("parse"),
+            None
+        );
+        assert_eq!(
+            parse_optional::<u32>("T", "A", Some("5")).expect("parse"),
+            Some(5)
+        );
+        assert!(parse_optional::<u32>("T", "A", Some("x")).is_err());
+    }
+
+    #[test]
+    fn boundary_lists_are_split_on_whitespace() {
+        let v = parse_number_list::<f64>("Page", "Boundary", "0 0 210 297").expect("parse");
+        assert_eq!(v, vec![0.0, 0.0, 210.0, 297.0]);
+    }
+
+    #[test]
+    fn boundary_lists_tolerate_irregular_spacing() {
+        let v = parse_number_list::<f64>("Page", "Boundary", "  0   0\t210\n297  ").expect("parse");
+        assert_eq!(v, vec![0.0, 0.0, 210.0, 297.0]);
+    }
+
+    #[test]
+    fn fixed_arity_lists_check_the_count() {
+        let v = parse_number_list_n::<4>("Page", "Boundary", "0 0 210 297").expect("parse");
+        assert_eq!(v, [0.0, 0.0, 210.0, 297.0]);
+
+        let err = parse_number_list_n::<4>("Page", "Boundary", "0 0 210").expect_err("must fail");
+        match err {
+            OfdError::Xml(XmlError::InvalidAttribute { value, .. }) => {
+                assert!(value.contains("expected 4"), "value was {value}");
+            }
+            other => panic!("unexpected error: {other}"),
+        }
+    }
+
+    #[test]
+    fn booleans_accept_both_spellings() {
+        assert!(parse_bool("T", "A", "true").expect("parse"));
+        assert!(parse_bool("T", "A", "1").expect("parse"));
+        assert!(!parse_bool("T", "A", "false").expect("parse"));
+        assert!(!parse_bool("T", "A", "0").expect("parse"));
+        assert!(parse_bool("T", "A", "yes").is_err());
+    }
+
+    #[test]
+    fn malformed_lists_report_the_offending_element() {
+        let err = parse_number_list::<f64>("Page", "Boundary", "0 0 x 297").expect_err("must fail");
+        match err {
+            OfdError::Xml(XmlError::InvalidAttribute { element, attr, .. }) => {
+                assert_eq!(element, "Page");
+                assert_eq!(attr, "Boundary");
+            }
+            other => panic!("unexpected error: {other}"),
+        }
+    }
+
+    #[test]
+    fn the_ofd_namespace_constant_matches_the_standard() {
+        assert_eq!(OFD_NS, "http://www.ofdspec.org/2016");
+    }
+}
