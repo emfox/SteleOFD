@@ -183,12 +183,20 @@ rather than the national standards one.
 ## Roadmap
 
 - [x] **P0** Skeleton: layered architecture, error taxonomy, display list IR, i18n layer
-- [ ] **P1** OFD structure parsing (`model`, `xml`, `package`, `parser`)
-- [ ] **P2** Raster render backend, completing the open-to-display path
+- [x] **P1** OFD structure parsing (`model`, `xml`, `package`, `parser`)
+- [x] **P2** Raster render backend, completing the open-to-display path
 - [ ] **P3** Conversion (OFD to PDF, PNG, SVG)
-- [ ] **P4** Signature verification with national algorithms
+- [x] **P4** Signature verification with national algorithms
 - [ ] **P5** CLI, WebAssembly and server delivery
-- [ ] **P6** Document editing with an undo stack
+- [x] **P6** Document editing with an undo stack
+- [x] **P7** Full-text search over the display list (`search`)
+- [x] **P8** Archival readiness auditing (`archive`)
+- [x] **P9** GB/T 33190-2016 conformance harness: annex A schemas rebuilt from the standard, enforced in CI
+
+Next up is `convert` (P3), then the `print` crate and the `core` facade, and
+last the L5 delivery crates. Clause-level coverage lives in
+[`compliance/gb-t-33190.toml`](compliance/gb-t-33190.toml); 18 of 47 clauses
+are covered so far.
 
 ## Contributing
 
