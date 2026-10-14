@@ -26,6 +26,10 @@ const REFERENCING: &[&str] = &[
     "Page",
 ];
 
+/// Resources looked for inside a page. `Page` is left out on purpose: it is
+/// the root element there, and reading its text would swallow the resources.
+const PAGE_RESOURCES: &[&str] = &["PageRes", "FileLoc"];
+
 /// Audit a container for archival readiness.
 pub struct Auditor;
 
@@ -51,6 +55,16 @@ impl Auditor {
 
         let root = read(package, ENTRY_POINT)?;
         let references = references(&root, REFERENCING)?;
+        // Clause 7.4: DocInfo lives under OFD.xml, not under Document.xml.
+        if text_of(&root, "DocID").is_none_or(|id| id.is_empty()) {
+            report.push(Finding::new(
+                "ARCH-005",
+                Severity::Warning,
+                "7.5",
+                ENTRY_POINT,
+                "no DocID, so the archived document carries no durable identifier",
+            ));
+        }
         if !references.iter().any(|r| r.element == "Signatures") {
             report.push(Finding::new(
                 "ARCH-006",
@@ -80,15 +94,6 @@ impl Auditor {
         }
         let xml = read(package, path)?;
         let base = parent_of(path);
-        if text_of(&xml, "DocID").is_none_or(|id| id.is_empty()) {
-            report.push(Finding::new(
-                "ARCH-005",
-                Severity::Warning,
-                "7.5",
-                path,
-                "no DocID, so the archived document carries no durable identifier",
-            ));
-        }
         for reference in references(&xml, REFERENCING)? {
             if reference.element == "DocRoot" {
                 continue;
@@ -105,7 +110,7 @@ impl Auditor {
             }
             let res_base = parent_of(&page_path);
             let page_xml = read(package, &page_path)?;
-            for nested in references(&page_xml, REFERENCING)? {
+            for nested in references(&page_xml, PAGE_RESOURCES)? {
                 if let Some(finding) = self.check(package, &res_base, &page_path, &nested) {
                     report.push(finding);
                 }

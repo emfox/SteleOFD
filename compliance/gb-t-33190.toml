@@ -25,7 +25,12 @@ status = "untested"
 [[item]]
 clause = "6.2"
 title = "File organisation"
-status = "untested"
+status = "verified"
+tests = [
+    "gb_t_33190_6_2_self_contained_document_passes",
+    "gb_t_33190_6_2_reference_outside_the_container_is_rejected",
+    "gb_t_33190_6_2_reference_escaping_the_container_is_rejected",
+]
 
 [[item]]
 clause = "7.1"
@@ -46,19 +51,32 @@ status = "untested"
 clause = "7.4"
 title = "Main entry OFD.xml"
 status = "verified"
-tests = ["gb_t_33190_7_4_main_entry_is_required"]
+tests = [
+    "gb_t_33190_7_4_main_entry_is_required",
+    "gb_t_33190_7_4_missing_entry_point_is_an_error",
+    "gb_t_33190_7_4_unreachable_doc_root_is_reported",
+]
+
 
 [[item]]
 clause = "7.5"
 title = "Document root node"
 status = "verified"
-tests = ["gb_t_33190_7_5_document_root_requires_pages"]
+tests = [
+    "gb_t_33190_7_5_document_root_requires_pages",
+    "gb_t_33190_7_5_missing_doc_id_is_only_a_warning",
+]
+
 
 [[item]]
 clause = "7.6"
 title = "Page tree"
 status = "verified"
-tests = ["gb_t_33190_7_6_page_tree_lists_pages_in_order"]
+tests = [
+    "gb_t_33190_7_6_page_tree_lists_pages_in_order",
+    "gb_t_33190_7_6_unreachable_page_is_reported",
+]
+
 
 [[item]]
 clause = "7.7"
@@ -74,7 +92,11 @@ status = "untested"
 [[item]]
 clause = "7.9"
 title = "Resources"
-status = "untested"
+status = "verified"
+tests = [
+    "gb_t_33190_7_9_unreachable_resource_is_reported",
+    "gb_t_33190_7_9_page_level_resource_is_checked_too",
+]
 
 [[item]]
 clause = "8.1.3"
@@ -231,7 +253,11 @@ status = "untested"
 clause = "18.1"
 title = "Signature list"
 status = "verified"
-tests = ["gb_t_33190_18_1_signature_list_points_at_sign_files"]
+tests = [
+    "gb_t_33190_18_1_signature_list_points_at_sign_files",
+    "gb_t_33190_18_1_missing_signature_list_is_only_a_warning",
+]
+
 
 [[item]]
 clause = "18.2.1"
