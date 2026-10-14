@@ -1,0 +1,277 @@
+//! Archival readiness checks derived from GB/T 33190-2016.
+//! Nothing here claims OFD/A conformance: this reports only what the standard
+//! itself requires of a self-contained document.
+
+use steleofd_error::Result;
+use steleofd_package::{ENTRY_POINT, Package, parent_of, resolve};
+use steleofd_xml::Cursor;
+use steleofd_xml::cursor::Event;
+
+use crate::report::{Finding, Report, Severity};
+
+/// Where a single reference to another entry was found.
+struct Reference {
+    element: String,
+    value: String,
+}
+
+/// Elements whose content or `BaseLoc` points at another container entry.
+const REFERENCING: &[&str] = &[
+    "DocRoot",
+    "Signatures",
+    "PublicRes",
+    "DocumentRes",
+    "PageRes",
+    "FileLoc",
+    "Page",
+];
+
+/// Audit a container for archival readiness.
+pub struct Auditor;
+
+impl Auditor {
+    /// Prepare an auditor with the default checks.
+    pub fn new() -> Self {
+        Self
+    }
+
+    /// Run every check over one container.
+    pub fn audit(&self, package: &mut Package) -> Result<Report> {
+        let mut report = Report::new();
+        if !package.has_entry_point() {
+            report.push(Finding::new(
+                "ARCH-001",
+                Severity::Error,
+                "7.4",
+                ENTRY_POINT,
+                "the container has no main entry, so it is not an OFD document",
+            ));
+            return Ok(report);
+        }
+
+        let root = read(package, ENTRY_POINT)?;
+        let references = references(&root, REFERENCING)?;
+        if !references.iter().any(|r| r.element == "Signatures") {
+            report.push(Finding::new(
+                "ARCH-006",
+                Severity::Warning,
+                "18.1",
+                ENTRY_POINT,
+                "no signature list, so the archive cannot be integrity checked",
+            ));
+        }
+
+        for reference in &references {
+            if let Some(finding) = self.check(package, "", ENTRY_POINT, reference) {
+                report.push(finding);
+            }
+        }
+
+        for document in references.iter().filter(|r| r.element == "DocRoot") {
+            self.audit_document(package, &document.value, &mut report)?;
+        }
+        Ok(report)
+    }
+
+    /// Walk one document: its pages and their resources.
+    fn audit_document(&self, package: &mut Package, path: &str, report: &mut Report) -> Result<()> {
+        if !package.contains(path) {
+            return Ok(());
+        }
+        let xml = read(package, path)?;
+        let base = parent_of(path);
+        if text_of(&xml, "DocID").is_none_or(|id| id.is_empty()) {
+            report.push(Finding::new(
+                "ARCH-005",
+                Severity::Warning,
+                "7.5",
+                path,
+                "no DocID, so the archived document carries no durable identifier",
+            ));
+        }
+        for reference in references(&xml, REFERENCING)? {
+            if reference.element == "DocRoot" {
+                continue;
+            }
+            if let Some(finding) = self.check(package, &base, path, &reference) {
+                report.push(finding);
+            }
+            if reference.element != "Page" {
+                continue;
+            }
+            let page_path = resolve(&base, &reference.value);
+            if !package.contains(&page_path) {
+                continue;
+            }
+            let res_base = parent_of(&page_path);
+            let page_xml = read(package, &page_path)?;
+            for nested in references(&page_xml, REFERENCING)? {
+                if let Some(finding) = self.check(package, &res_base, &page_path, &nested) {
+                    report.push(finding);
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Classify one reference, returning a finding when it is unusable.
+    fn check(
+        &self,
+        package: &Package,
+        base: &str,
+        found_in: &str,
+        reference: &Reference,
+    ) -> Option<Finding> {
+        let value = reference.value.trim();
+        if value.is_empty() {
+            return None;
+        }
+        if is_external(value) {
+            return Some(Finding::new(
+                "ARCH-007",
+                Severity::Error,
+                "6.2",
+                found_in,
+                format!(
+                    "{} points outside the container at {value:?}, so the archive is not self-contained",
+                    reference.element
+                ),
+            ));
+        }
+        if escapes(value) {
+            return Some(Finding::new(
+                "ARCH-008",
+                Severity::Error,
+                "6.2",
+                found_in,
+                format!("{} escapes the container with {value:?}", reference.element),
+            ));
+        }
+        let resolved = resolve(base, value);
+        if package.contains(&resolved) {
+            return None;
+        }
+        let (code, clause) = match reference.element.as_str() {
+            "DocRoot" => ("ARCH-002", "7.4"),
+            "Page" => ("ARCH-003", "7.6"),
+            _ => ("ARCH-004", "7.9"),
+        };
+        Some(Finding::new(
+            code,
+            Severity::Error,
+            clause,
+            resolved,
+            format!(
+                "{} refers to {value:?}, which the container does not hold",
+                reference.element
+            ),
+        ))
+    }
+}
+
+impl Default for Auditor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Audit a container with the default checks.
+pub fn audit(package: &mut Package) -> Result<Report> {
+    Auditor::new().audit(package)
+}
+
+/// A reference is external when it names a scheme or is absolute.
+fn is_external(value: &str) -> bool {
+    value.contains("://") || value.starts_with('/') || value.starts_with('\\')
+}
+
+/// A reference escapes when normalisation leaves a parent step in it.
+fn escapes(value: &str) -> bool {
+    value.split('/').any(|part| part == "..")
+}
+
+/// Read an entry as text, treating a missing one as empty.
+fn read(package: &mut Package, path: &str) -> Result<String> {
+    package.read_string(path)
+}
+
+/// Collect the references the wanted elements make.
+fn references(xml: &str, wanted: &[&str]) -> Result<Vec<Reference>> {
+    let mut found = Vec::new();
+    let mut cursor = Cursor::new(xml);
+    loop {
+        match cursor.next_event()? {
+            Event::Start(node) if wanted.contains(&node.local()) => {
+                let element = node.local().to_string();
+                if let Some(value) = node.attributes().get("BaseLoc") {
+                    found.push(Reference {
+                        element,
+                        value: value.to_string(),
+                    });
+                } else if !node.is_self_closing() {
+                    let value = cursor.read_text()?;
+                    found.push(Reference {
+                        element,
+                        value: value.trim().to_string(),
+                    });
+                }
+            }
+            Event::Eof => break,
+            _ => {}
+        }
+    }
+    Ok(found)
+}
+
+/// Text of the first occurrence of an element, trimmed.
+fn text_of(xml: &str, name: &str) -> Option<String> {
+    let mut cursor = Cursor::new(xml);
+    loop {
+        match cursor.next_event().ok()? {
+            Event::Start(node) if node.is(name) => {
+                if node.is_self_closing() {
+                    return Some(String::new());
+                }
+                return cursor.read_text().ok().map(|t| t.trim().to_string());
+            }
+            Event::Eof => return None,
+            _ => {}
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn external_references_are_detected() {
+        assert!(is_external("http://example.com/a.xml"));
+        assert!(is_external("/etc/passwd"));
+        assert!(!is_external("Doc_0/Document.xml"));
+    }
+
+    #[test]
+    fn parent_steps_are_detected() {
+        assert!(escapes("../outside.xml"));
+        assert!(escapes("Doc_0/../../out.xml"));
+        assert!(!escapes("Doc_0/Pages/Page_0.xml"));
+    }
+
+    #[test]
+    fn references_are_read_from_both_attributes_and_text() {
+        let xml =
+            r#"<Doc><Page BaseLoc="Pages/Page_0.xml"/><DocRoot>Doc_0/Document.xml</DocRoot></Doc>"#;
+        let found = references(xml, REFERENCING).expect("scan");
+        let values: Vec<&str> = found.iter().map(|r| r.value.as_str()).collect();
+        assert!(values.contains(&"Pages/Page_0.xml"));
+        assert!(values.contains(&"Doc_0/Document.xml"));
+    }
+
+    #[test]
+    fn element_text_is_found_by_name() {
+        let xml = r#"<DocInfo><DocID>urn:x</DocID></DocInfo>"#;
+        assert_eq!(text_of(xml, "DocID").as_deref(), Some("urn:x"));
+        assert_eq!(text_of(xml, "Title"), None);
+    }
+}
