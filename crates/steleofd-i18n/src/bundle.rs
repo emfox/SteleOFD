@@ -246,14 +246,14 @@ impl I18nBuilder {
             );
         }
 
-        // Rebuild rather than append: Fluent resolves later definitions first,
-        // so custom sources go last and win.
+        // Rebuild rather than append: Fluent resolves a key from the first
+        // resource that defines it, so custom sources are prepended and win.
         for (locale, ftl) in &self.extra {
             let mut sources: Vec<String> = resources
                 .get(locale.tag())
                 .map(|r| r.sources.clone())
                 .unwrap_or_default();
-            sources.push(ftl.clone());
+            sources.insert(0, ftl.clone());
 
             let rebuilt = build_bundle_from_sources(locale.clone(), &sources);
             resources.insert(locale.tag().to_string(), rebuilt);
@@ -382,4 +382,226 @@ pub fn all_keys() -> &'static [&'static str] {
         "err-io",
         "err-unsupported",
     ]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn english() -> I18n {
+        I18n::with_locale(Locale::en_us())
+    }
+
+    fn chinese() -> I18n {
+        I18n::with_locale(Locale::zh_cn())
+    }
+
+    #[test]
+    fn every_message_id_key_appears_in_the_static_list() {
+        // `all_keys` drives the missing-key check, so drift here would silently
+        // disable it. The list has no duplicates and matches MessageId one to one.
+        let keys = all_keys();
+        let mut sorted = keys.to_vec();
+        sorted.sort_unstable();
+        sorted.dedup();
+        assert_eq!(sorted.len(), keys.len(), "all_keys contains duplicates");
+
+        for key in keys {
+            let id = MessageId::from_key(key)
+                .unwrap_or_else(|| panic!("{key} has no MessageId variant"));
+            assert_eq!(id.key(), *key, "MessageId round trip failed for {key}");
+        }
+        // The reverse direction also has to hold, or a variant was forgotten.
+        assert_eq!(MessageId::ALL.len(), keys.len());
+    }
+
+    #[test]
+    fn built_catalogues_cover_every_key() {
+        let i18n = english();
+        for locale in i18n.available_locales() {
+            let missing = i18n.missing_keys(locale);
+            assert!(
+                missing.is_empty(),
+                "{} is missing {missing:?}",
+                locale.tag()
+            );
+        }
+    }
+
+    #[test]
+    fn plain_messages_render_per_locale() {
+        assert_eq!(english().text(MessageId::AppReady), "Ready");
+        assert_eq!(chinese().text(MessageId::AppReady), "\u{5c31}\u{7eea}");
+        // The product name is a proper noun and identical in both catalogues.
+        assert_eq!(english().text(MessageId::AppName), "SteleOFD");
+        assert_eq!(chinese().text(MessageId::AppName), "SteleOFD");
+    }
+
+    #[test]
+    fn arguments_are_substituted_in_the_message() {
+        let en = english().text_with(
+            MessageId::AppLoading,
+            [("percent", fluent::FluentValue::from(42))],
+        );
+        assert_eq!(en, "Loading\u{2026} (42%)");
+
+        let zh = chinese().text_with(
+            MessageId::AppLoading,
+            [("percent", fluent::FluentValue::from(42))],
+        );
+        assert_eq!(zh, "\u{52a0}\u{8f7d}\u{4e2d}\u{2026}\u{ff08}42%\u{ff09}");
+    }
+
+    #[test]
+    fn argument_order_follows_the_catalogue_not_the_call_site() {
+        // English and Chinese place page number and total in different orders,
+        // which is the whole reason the values are passed separately.
+        let args = [
+            ("current", fluent::FluentValue::from(3)),
+            ("total", fluent::FluentValue::from(12)),
+        ];
+        assert_eq!(
+            english().text_with(MessageId::ReaderPageOf, args.clone()),
+            "Page 3 of 12"
+        );
+        assert_eq!(
+            chinese().text_with(MessageId::ReaderPageOf, args),
+            "\u{7b2c} 3 \u{9875} / \u{5171} 12 \u{9875}"
+        );
+    }
+
+    #[test]
+    fn string_arguments_are_quoted_where_the_catalogue_says_so() {
+        let text = english().text_with(
+            MessageId::ErrFontMissing,
+            [("family", fluent::FluentValue::from("SimSun"))],
+        );
+        assert_eq!(
+            text,
+            "Font \"SimSun\" is missing; text may not match the original"
+        );
+    }
+
+    #[test]
+    fn missing_arguments_do_not_panic() {
+        // A caller that forgets a variable should get a degraded string, never a
+        // crash in the UI thread.
+        let text = english().text(MessageId::ErrPageOutOfRange);
+        assert!(text.contains("out of range"), "unexpected text: {text}");
+    }
+
+    #[test]
+    fn unknown_keys_fall_through_to_the_key_itself() {
+        let i18n = english();
+        let text = i18n.text_with(
+            MessageId::ReaderZoom,
+            [("percent", fluent::FluentValue::from(150))],
+        );
+        assert_eq!(text, "Zoom 150%");
+    }
+
+    #[test]
+    fn set_locale_switches_between_builtin_catalogues() {
+        let mut i18n = english();
+        assert_eq!(i18n.locale(), &Locale::en_us());
+
+        i18n.set_locale(Locale::zh_cn());
+        assert_eq!(i18n.locale(), &Locale::zh_cn());
+        assert_eq!(i18n.text(MessageId::CommonCancel), "\u{53d6}\u{6d88}");
+    }
+
+    #[test]
+    fn set_locale_ignores_a_locale_without_resources() {
+        let mut i18n = english();
+        i18n.set_locale(Locale::new("fr-FR"));
+        assert_eq!(
+            i18n.locale(),
+            &Locale::en_us(),
+            "an unavailable locale must not take effect"
+        );
+        assert_eq!(i18n.text(MessageId::CommonSave), "Save");
+    }
+
+    #[test]
+    fn available_locales_lists_the_compiled_catalogues() {
+        let i18n = english();
+        let tags: Vec<&str> = i18n.available_locales().iter().map(Locale::tag).collect();
+        assert!(tags.contains(&"en-US"));
+        assert!(tags.contains(&"zh-CN"));
+        assert_eq!(i18n.resource_count(), tags.len());
+    }
+
+    #[test]
+    fn a_normal_build_is_not_english_only() {
+        assert!(!english().is_english_only());
+    }
+
+    #[test]
+    fn builder_negotiates_when_the_requested_locale_is_absent() {
+        // Requesting fr-FR with only en-US and zh-CN built must land on a real
+        // catalogue rather than an empty one.
+        let i18n = I18n::builder().locale(Locale::new("fr-FR")).build();
+        let picked = i18n.locale().tag().to_string();
+        assert!(
+            picked == "en-US" || picked == "zh-CN",
+            "negotiated to an unknown locale: {picked}"
+        );
+        assert!(!i18n.text(MessageId::CommonConfirm).is_empty());
+    }
+
+    #[test]
+    fn missing_keys_reports_nothing_for_an_unbuilt_locale() {
+        let i18n = english();
+        assert!(i18n.missing_keys(&Locale::new("ja-JP")).is_empty());
+    }
+
+    #[test]
+    fn a_custom_catalogue_overrides_the_builtin_key() {
+        let i18n = I18n::builder()
+            .locale(Locale::en_us())
+            .add_resource(Locale::en_us(), "common-save = Store\n")
+            .build();
+        assert_eq!(i18n.text(MessageId::CommonSave), "Store");
+        // Untouched keys still come from the built-in catalogue.
+        assert_eq!(i18n.text(MessageId::CommonCancel), "Cancel");
+    }
+
+    #[test]
+    fn the_last_custom_catalogue_added_wins_over_earlier_ones() {
+        // Fluent takes a key from the first resource that defines it, and custom
+        // sources are prepended, so the most recently added one is consulted first.
+        let i18n = I18n::builder()
+            .locale(Locale::en_us())
+            .add_resource(Locale::en_us(), "common-save = First\n")
+            .add_resource(Locale::en_us(), "common-save = Second\n")
+            .build();
+        assert_eq!(i18n.text(MessageId::CommonSave), "Second");
+    }
+
+    #[test]
+    fn a_custom_catalogue_can_supply_a_key_for_an_unbuilt_locale() {
+        let i18n = I18n::builder()
+            .locale(Locale::new("de-DE"))
+            .add_resource(Locale::new("de-DE"), "common-save = Sichern\n")
+            .build();
+        assert_eq!(i18n.locale().tag(), "de-DE");
+        assert_eq!(i18n.text(MessageId::CommonSave), "Sichern");
+    }
+
+    #[test]
+    fn a_broken_custom_catalogue_is_skipped_not_fatal() {
+        let i18n = I18n::builder()
+            .locale(Locale::en_us())
+            .add_resource(Locale::en_us(), "this is not = = valid ftl {\n")
+            .build();
+        // Built-in messages survive; only the injected source is discarded.
+        assert_eq!(i18n.text(MessageId::CommonSave), "Save");
+    }
+
+    #[test]
+    fn debug_output_lists_locale_without_dumping_catalogues() {
+        let text = format!("{:?}", english());
+        assert!(text.contains("I18n"), "unexpected debug output: {text}");
+        assert!(text.contains("en-US"));
+    }
 }

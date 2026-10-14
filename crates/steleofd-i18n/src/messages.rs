@@ -210,6 +210,79 @@ impl MessageId {
         }
     }
 
+    /// The message id for a Fluent key, or `None` when the key is unknown.
+    /// The inverse of [`MessageId::key`]; used to prove the two never drift.
+    pub fn from_key(key: &str) -> Option<Self> {
+        Self::ALL.iter().copied().find(|id| id.key() == key)
+    }
+
+    /// Every message id, in the same order as `bundle::all_keys`.
+    pub const ALL: &'static [Self] = &[
+        // Application level
+        Self::AppName,
+        Self::AppReady,
+        Self::AppLoading,
+        Self::AppCancelled,
+        Self::CommonConfirm,
+        Self::CommonCancel,
+        Self::CommonSave,
+        Self::CommonClose,
+        Self::CommonRetry,
+        Self::CommonDelete,
+        // Reader
+        Self::ReaderOpen,
+        Self::ReaderPageOf,
+        Self::ReaderZoom,
+        Self::ReaderFitWidth,
+        Self::ReaderFitPage,
+        Self::ReaderLayoutSingle,
+        Self::ReaderLayoutDouble,
+        Self::ReaderLayoutContinuous,
+        Self::ReaderBlankPage,
+        Self::ReaderNoMatch,
+        // Conversion
+        Self::ConvertStart,
+        Self::ConvertProgress,
+        Self::ConvertDone,
+        Self::ConvertFailed,
+        Self::ConvertOutputFormat,
+        Self::ConvertPageRange,
+        Self::ConvertDpi,
+        Self::ConvertKeepBookmarks,
+        Self::ConvertKeepSignatures,
+        // Signature
+        Self::SignValid,
+        Self::SignInvalid,
+        Self::SignUnverified,
+        Self::SignExpired,
+        Self::SignIntegrityOk,
+        Self::SignTampered,
+        Self::SignCount,
+        Self::SignSigner,
+        Self::SignSignedAt,
+        Self::SignAlgorithm,
+        Self::SignIssuer,
+        Self::SignExportReport,
+        // Edit
+        Self::EditConfirmDeletePages,
+        Self::EditWarnInvalidateSignature,
+        Self::EditUndo,
+        Self::EditRedo,
+        // Search
+        Self::SearchResultCount,
+        Self::SearchPlaceholder,
+        // Errors
+        Self::ErrNotOfd,
+        Self::ErrPasswordRequired,
+        Self::ErrPageOutOfRange,
+        Self::ErrPackageCorrupted,
+        Self::ErrFontMissing,
+        Self::ErrDanglingReference,
+        Self::ErrResourceLimit,
+        Self::ErrIo,
+        Self::ErrUnsupported,
+    ];
+
     /// Whether the message takes variables, read by the static checker
     pub fn is_parametric(self) -> bool {
         matches!(
