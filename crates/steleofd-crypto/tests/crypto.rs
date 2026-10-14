@@ -126,7 +126,7 @@ fn certificate_parses_der_and_pem() {
         cert.serial_hex(),
         "61802e01fd816a30608c4cd2066e5c98342f2ff6"
     );
-    let pem = include_str!("data/test-cert.pem");
+    let pem = include_str!("data/test-cert.crt.txt");
     let from_pem = Certificate::parse_pem(pem).expect("pem");
     assert_eq!(cert.raw_der(), from_pem.raw_der());
 }
