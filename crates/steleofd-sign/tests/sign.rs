@@ -195,3 +195,55 @@ fn digest_depends_on_reference_order() {
         "digest is stable"
     );
 }
+
+#[test]
+fn gb_t_33190_18_1_signature_list_points_at_sign_files() {
+    let entries = vec![
+        ("Signs/Signs.xml", signs_xml()),
+        (
+            SIG_FILE,
+            descriptor("s", &[("SM3", "Doc_0/Document.xml")]).into_bytes(),
+        ),
+    ];
+    let mut package = open(&entries);
+    let signs = read_sign_list(&mut package, "Signs/Signs.xml").expect("list");
+    assert_eq!(signs.len(), 1);
+    assert_eq!(
+        signs[0].base_loc, SIG_FILE,
+        "each Sign names its descriptor file"
+    );
+    let sig = read_signature(&mut package, &signs[0].base_loc).expect("descriptor");
+    assert_eq!(sig.references.len(), 1);
+}
+
+#[test]
+fn gb_t_33190_18_2_1_digest_covers_every_reference() {
+    let document = b"signed content".to_vec();
+    let entries = vec![
+        ("Signs/Signs.xml", signs_xml()),
+        (
+            SIG_FILE,
+            descriptor("s", &[("SM3", "Doc_0/Document.xml")]).into_bytes(),
+        ),
+        ("Doc_0/Document.xml", document.clone()),
+    ];
+    let mut package = open(&entries);
+    let sig = read_signature(&mut package, SIG_FILE).expect("descriptor");
+    let first = signed_digest(&mut package, &sig).expect("digest");
+    assert_eq!(first.len(), 32, "the SM3 digest is 32 bytes");
+
+    let changed = vec![
+        ("Signs/Signs.xml", signs_xml()),
+        (
+            SIG_FILE,
+            descriptor("s", &[("SM3", "Doc_0/Document.xml")]).into_bytes(),
+        ),
+        ("Doc_0/Document.xml", b"edited content".to_vec()),
+    ];
+    let mut package = open(&changed);
+    let second = signed_digest(&mut package, &sig).expect("digest");
+    assert_ne!(
+        first, second,
+        "changing a referenced file changes the digest"
+    );
+}

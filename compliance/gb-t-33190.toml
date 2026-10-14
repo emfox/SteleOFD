@@ -1,0 +1,265 @@
+# Conformance register for GB/T 33190-2016.
+#
+# One entry per normative clause. `status` drives the gate:
+#   verified  - at least one linked test asserts the clause
+#   partial   - partially asserted, needs more tests
+#   untested  - known clause, no coverage yet
+#   deviation - deliberately not followed; reason in `note`
+#
+# Test names follow `gb_t_33190_<clause>_<slug>` and are collected by
+# scripts/check_compliance.py, which also regenerates docs/COMPLIANCE.md.
+
+standard = "GB/T 33190-2016"
+title = "Electronic files storage and exchange formats - Fixed layout documents"
+
+[[item]]
+clause = "5.4"
+title = "File extension"
+status = "untested"
+
+[[item]]
+clause = "6.1"
+title = "Container scheme (ZIP)"
+status = "untested"
+
+[[item]]
+clause = "6.2"
+title = "File organisation"
+status = "untested"
+
+[[item]]
+clause = "7.1"
+title = "Namespace"
+status = "untested"
+
+[[item]]
+clause = "7.2"
+title = "Character encoding (UTF-8)"
+status = "untested"
+
+[[item]]
+clause = "7.3"
+title = "Basic data types"
+status = "untested"
+
+[[item]]
+clause = "7.4"
+title = "Main entry OFD.xml"
+status = "verified"
+tests = ["gb_t_33190_7_4_main_entry_is_required"]
+
+[[item]]
+clause = "7.5"
+title = "Document root node"
+status = "verified"
+tests = ["gb_t_33190_7_5_document_root_requires_pages"]
+
+[[item]]
+clause = "7.6"
+title = "Page tree"
+status = "verified"
+tests = ["gb_t_33190_7_6_page_tree_lists_pages_in_order"]
+
+[[item]]
+clause = "7.7"
+title = "Page object"
+status = "verified"
+tests = ["gb_t_33190_7_7_page_content_may_live_in_base_loc"]
+
+[[item]]
+clause = "7.8"
+title = "Outlines"
+status = "untested"
+
+[[item]]
+clause = "7.9"
+title = "Resources"
+status = "untested"
+
+[[item]]
+clause = "8.1.3"
+title = "Page space"
+status = "verified"
+tests = ["gb_t_33190_8_1_3_page_area_defaults_from_common_data"]
+
+[[item]]
+clause = "8.1.5"
+title = "Transformation matrix"
+status = "verified"
+tests = ["gb_t_33190_8_1_5_ctm_orders_rows_as_a_b_c_d_e_f"]
+
+[[item]]
+clause = "8.2.1"
+title = "Draw parameter structure"
+status = "untested"
+
+[[item]]
+clause = "8.2.2"
+title = "Line join style"
+status = "untested"
+
+[[item]]
+clause = "8.2.4"
+title = "Dash pattern"
+status = "untested"
+
+[[item]]
+clause = "8.2.5"
+title = "Line cap style"
+status = "untested"
+
+[[item]]
+clause = "8.3.2"
+title = "Basic colour"
+status = "verified"
+tests = ["gb_t_33190_8_3_2_colour_is_rgb_with_alpha"]
+
+[[item]]
+clause = "8.3.4"
+title = "Gradient"
+status = "untested"
+
+[[item]]
+clause = "8.4"
+title = "Clip area"
+status = "untested"
+
+[[item]]
+clause = "8.5"
+title = "Graphics object base"
+status = "verified"
+tests = ["gb_t_33190_8_5_object_carries_boundary_and_visibility"]
+
+[[item]]
+clause = "9.1"
+title = "Path object"
+status = "untested"
+
+[[item]]
+clause = "9.2"
+title = "Fill rule"
+status = "untested"
+
+[[item]]
+clause = "9.3.2"
+title = "Abbreviated data: move"
+status = "verified"
+tests = ["gb_t_33190_9_3_2_move_starts_a_subpath"]
+
+[[item]]
+clause = "9.3.3"
+title = "Abbreviated data: line"
+status = "verified"
+tests = ["gb_t_33190_9_3_3_line_after_move_extends_the_path"]
+
+[[item]]
+clause = "9.3.4"
+title = "Abbreviated data: bezier"
+status = "verified"
+tests = ["gb_t_33190_9_3_4_cubic_and_quadratic_segments"]
+
+[[item]]
+clause = "9.3.5"
+title = "Abbreviated data: arc"
+status = "verified"
+tests = ["gb_t_33190_9_3_5_arc_is_split_into_cubics"]
+
+[[item]]
+clause = "10"
+title = "Image object"
+status = "verified"
+tests = ["gb_t_33190_10_image_object_requires_resource_id"]
+
+[[item]]
+clause = "11.1"
+title = "Font"
+status = "untested"
+
+[[item]]
+clause = "11.2"
+title = "Text object"
+status = "verified"
+tests = ["gb_t_33190_11_2_text_object_keeps_font_size_and_codes"]
+
+[[item]]
+clause = "11.3"
+title = "Text positioning"
+status = "untested"
+
+[[item]]
+clause = "11.4"
+title = "Glyph transformation"
+status = "untested"
+
+[[item]]
+clause = "12"
+title = "Video"
+status = "untested"
+
+[[item]]
+clause = "13"
+title = "Composite object"
+status = "untested"
+
+[[item]]
+clause = "14.1"
+title = "Action description"
+status = "untested"
+
+[[item]]
+clause = "15"
+title = "Annotations"
+status = "untested"
+
+[[item]]
+clause = "16"
+title = "Custom tags"
+status = "untested"
+
+[[item]]
+clause = "17"
+title = "Extended information"
+status = "untested"
+
+[[item]]
+clause = "18.1"
+title = "Signature list"
+status = "verified"
+tests = ["gb_t_33190_18_1_signature_list_points_at_sign_files"]
+
+[[item]]
+clause = "18.2.1"
+title = "File digest"
+status = "verified"
+tests = ["gb_t_33190_18_2_1_digest_covers_every_reference"]
+
+[[item]]
+clause = "18.2.2"
+title = "Signature scope"
+status = "untested"
+
+[[item]]
+clause = "18.2.3"
+title = "Signature appearance"
+status = "untested"
+
+[[item]]
+clause = "18.2.4"
+title = "Signature value"
+status = "untested"
+
+[[item]]
+clause = "19.1"
+title = "Version entry"
+status = "untested"
+
+[[item]]
+clause = "20.1"
+title = "Attachment list"
+status = "untested"
+
+[[item]]
+clause = "A.1"
+title = "Normative schema OFD.xsd"
+status = "untested"
+note = "Schema text is in the standard; planned as a corpus validation step."

@@ -56,3 +56,11 @@ jobs:
 
       - name: Language policy
         run: python3 scripts/check_language.py
+
+      - name: GB/T 33190 conformance register
+        run: python3 scripts/check_compliance.py --check-only
+
+      - name: Compliance matrix is current
+        run: |
+          python3 scripts/check_compliance.py
+          git diff --exit-code docs/COMPLIANCE.md

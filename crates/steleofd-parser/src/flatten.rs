@@ -40,11 +40,25 @@ fn flatten_object(
     params: &HashMap<String, DrawParam>,
     builder: &mut DisplayListBuilder,
 ) -> Result<()> {
+    // GB/T 33190 clause 8.5: Visible defaults to true and false hides the object.
+    if visible_of(object) == Some(false) {
+        return Ok(());
+    }
     match object {
         Object::PathObject(p) => flatten_path(p, params, builder),
         Object::TextObject(t) => flatten_text(t, params, builder),
         Object::ImageObject(i) => flatten_image(i, builder),
         Object::Unknown(_) => Ok(()),
+    }
+}
+
+/// GB/T 33190 clause 8.5: every object exposes the same base attributes.
+fn visible_of(object: &Object) -> Option<bool> {
+    match object {
+        Object::PathObject(o) => o.base.visible,
+        Object::TextObject(o) => o.base.visible,
+        Object::ImageObject(o) => o.base.visible,
+        Object::Unknown(_) => None,
     }
 }
 
