@@ -1,6 +1,6 @@
 //! Colour representation as written in OFD.
-//! The standard writes colours as `#RRGGBB` or `rgb(r,g,b)`, sometimes with an
-//! accompanying alpha; this keeps the text form so a round trip is lossless.
+//! GB/T 33190 clause 8.3.2 writes `Value` as one decimal per channel,
+//! space separated; hex spellings seen in the wild are accepted too.
 
 use serde::{Deserialize, Serialize};
 use steleofd_error::{OfdError, XmlError};
@@ -43,7 +43,19 @@ impl ColorRef {
         self.value.is_empty()
     }
 
-    /// Parse `#RGB`, `#RRGGBB` or `rgb(r,g,b)` into channels.
+    /// The channel values as written, without guessing a colour space.
+    /// GB/T 33190 clause 8.3.2: one decimal per channel, space separated.
+    pub fn channels(&self) -> steleofd_error::Result<Vec<u8>> {
+        let s = self.value.trim();
+        if s.is_empty() {
+            return Ok(vec![0, 0, 0]);
+        }
+        s.split_whitespace()
+            .map(|part| part.parse::<u8>().map_err(|_| invalid(s)))
+            .collect()
+    }
+
+    /// Parse the colour into RGB, converting a four-channel CMYK value.
     pub fn to_rgb(&self) -> steleofd_error::Result<(u8, u8, u8)> {
         if self.is_default() {
             return Ok((0, 0, 0));
@@ -55,6 +67,9 @@ impl ColorRef {
         }
         if let Some(inner) = s.strip_prefix("rgb(").and_then(|v| v.strip_suffix(')')) {
             return parse_triple(inner);
+        }
+        if s.chars().any(char::is_whitespace) {
+            return self.channels().and_then(to_rgb_channels);
         }
         // Written without a prefix at all.
         parse_hex(s)
@@ -91,6 +106,21 @@ fn parse_hex(s: &str) -> steleofd_error::Result<(u8, u8, u8)> {
         }
         _ => Err(invalid(s)),
     }
+}
+
+/// Three channels are RGB; four are CMYK and are converted.
+fn to_rgb_channels(channels: Vec<u8>) -> steleofd_error::Result<(u8, u8, u8)> {
+    match channels.as_slice() {
+        [r, g, b] => Ok((*r, *g, *b)),
+        [c, m, y, k] => Ok((from_cmyk(*c, *k), from_cmyk(*m, *k), from_cmyk(*y, *k))),
+        _ => Err(invalid(&format!("{channels:?}"))),
+    }
+}
+
+/// One CMYK channel to RGB: `255 - (channel * (255 - K) / 255 + K)`.
+fn from_cmyk(channel: u8, key: u8) -> u8 {
+    let ink = u16::from(channel) * u16::from(255 - key) / 255 + u16::from(key);
+    255 - ink.min(255) as u8
 }
 
 /// Parse a comma-separated triple into channels.
