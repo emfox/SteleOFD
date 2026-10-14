@@ -269,3 +269,117 @@ fn arc_to(b: &mut PathBuilder, shape: ArcShape, from: (f64, f64), to: (f64, f64)
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use steleofd_geometry::Affine;
+
+    fn bbox_of(data: &str) -> steleofd_common::Rect {
+        parse_path(data).expect("parse").bounding_box()
+    }
+
+    #[test]
+    fn a_rectangle_round_trips_its_extent() {
+        let bbox = bbox_of("M 10 10 L 30 10 L 30 30 L 10 30 Z");
+        assert!((bbox.x - 10.0).abs() < 1e-9 && (bbox.y - 10.0).abs() < 1e-9);
+        assert!((bbox.w - 20.0).abs() < 1e-9 && (bbox.h - 20.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn move_to_continues_as_line_to() {
+        // SVG-style implicit continuation: extra coordinate pairs after M
+        // are treated as line segments, and OFD inherits that rule.
+        let path = parse_path("M 0 0 10 0 10 10").expect("parse");
+        assert!((path.bounding_box().w - 10.0).abs() < 1e-9);
+        assert!((path.bounding_box().h - 10.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn curves_contribute_their_control_points_to_the_bbox() {
+        // The conservative bounding box includes control points, so it is
+        // allowed to be larger than the tight hull of the drawn curve.
+        let path = parse_path("M 0 0 C 10 -20 20 -20 30 0").expect("parse");
+        let bbox = path.bounding_box();
+        assert!((bbox.y + 20.0).abs() < 1e-9, "control points raise the top");
+        assert!((bbox.w - 30.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn a_quarter_arc_spans_a_square_bbox() {
+        let path = parse_path("M 0 0 A 5 5 0 0 1 10 0").expect("parse");
+        let bbox = path.bounding_box();
+        assert!((bbox.w - 10.0).abs() < 1e-6, "got {bbox:?}");
+        assert!((bbox.h - 5.0).abs() < 1e-6, "got {bbox:?}");
+        assert!(!path.is_polygonal(), "an arc must not flatten to lines");
+    }
+
+    #[test]
+    fn a_semicircle_arc_is_split_into_two_curves() {
+        // Segments count the opening move, so a move plus two quarter arcs.
+        let path = parse_path("M 0 0 A 5 5 0 0 1 0 10").expect("parse");
+        assert_eq!(path.len(), 3, "180 degrees needs two quarter arcs");
+        assert!(!path.is_polygonal());
+    }
+
+    #[test]
+    fn a_degenerate_arc_degrades_to_a_line() {
+        let path = parse_path("M 0 0 A 0 5 0 0 1 10 0").expect("parse");
+        assert!(path.is_polygonal());
+        assert!((path.bounding_box().w - 10.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn close_returns_to_the_subpath_start() {
+        let path = parse_path("M 10 10 L 20 10 L 20 20 Z M 2 2 L 4 4").expect("parse");
+        let bbox = path.bounding_box();
+        assert!(
+            (bbox.x - 2.0).abs() < 1e-9,
+            "the second subpath is leftmost"
+        );
+    }
+
+    #[test]
+    fn signed_and_scientific_numbers_are_accepted() {
+        let bbox = bbox_of("M -1.5 0 L 1e1 0 L 10 2.5E+1 Z");
+        assert!((bbox.x + 1.5).abs() < 1e-9);
+        assert!((bbox.w - 11.5).abs() < 1e-9);
+        assert!((bbox.h - 25.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn an_unknown_command_is_rejected() {
+        let err = parse_path("M 0 0 X 1 2").expect_err("X is not an OFD command");
+        assert!(err.to_string().contains("AbbreviatedData"), "{err}");
+    }
+
+    #[test]
+    fn truncated_operands_are_rejected() {
+        assert!(parse_path("M 0 0 L 10").is_err());
+        assert!(parse_path("L 1 1").is_err(), "must start with M");
+        assert!(parse_path("M 0 0 L 10 10 20").is_err());
+    }
+
+    #[test]
+    fn empty_data_yields_an_empty_path() {
+        let path = parse_path("   ").expect("parse");
+        assert!(path.is_empty());
+    }
+
+    #[test]
+    fn arc_points_track_the_current_position() {
+        // The arc endpoint form needs the current point; verify continuation
+        // after an arc lands exactly on the requested endpoint.
+        let path = parse_path("M 0 0 L 5 0 A 5 5 0 0 1 15 0 L 20 0").expect("parse");
+        let bbox = path.bounding_box();
+        assert!((bbox.w - 20.0).abs() < 1e-6, "got {bbox:?}");
+    }
+
+    #[test]
+    fn transforms_map_the_parsed_geometry() {
+        let path = parse_path("M 0 0 L 10 0 L 10 10 Z").expect("parse");
+        let moved = path.transformed(&Affine::translate(5.0, 7.0));
+        let bbox = moved.bounding_box();
+        assert!((bbox.x - 5.0).abs() < 1e-9 && (bbox.y - 7.0).abs() < 1e-9);
+    }
+}

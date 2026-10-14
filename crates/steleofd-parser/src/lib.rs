@@ -52,8 +52,12 @@ impl<'a> Parser<'a> {
 
     /// Load the entry point and the primary document.
     pub fn open_document(&mut self) -> Result<ParsedDocument> {
-        let entry = self.package.entry_point()?;
-        let xml = self.package.read_string(&entry)?;
+        if !self.package.has_entry_point() {
+            return Err(steleofd_error::OfdError::Format(
+                steleofd_error::FormatError::NotOfd,
+            ));
+        }
+        let xml = self.package.read_string(steleofd_package::ENTRY_POINT)?;
         let ofd = content::read_ofd_root(&xml)?;
         ofd.validate()?;
         let body = ofd.primary_body()?;
@@ -172,4 +176,303 @@ fn template_table(doc: &ParsedDocument) -> HashMap<&str, Template> {
                 .collect()
         })
         .unwrap_or_default()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use steleofd_display::DrawOp;
+    use steleofd_package::build_archive;
+
+    const OFD_XML: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
+<OFD Version="1.0">
+  <DocBody><DocRoot>Doc_0/Document.xml</DocRoot></DocBody>
+</OFD>"#;
+
+    const DOCUMENT_XML: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
+<Document>
+  <CommonData>
+    <PageArea><PhysicalBox Left="0" Top="0" Width="210" Height="297"/></PageArea>
+    <Templates>
+      <Template ID="1" BaseLoc="Tpls/Tpl_0/Content.xml"/>
+    </Templates>
+  </CommonData>
+  <Pages>
+    <Page ID="1">
+      <Content>
+        <Layer>
+          <PathObject ID="10" Boundary="10 10 20 20">
+            <AbbreviatedData>M 10 10 L 30 10 L 30 30 L 10 30 Z</AbbreviatedData>
+          </PathObject>
+        </Layer>
+      </Content>
+    </Page>
+  </Pages>
+</Document>"#;
+
+    const TEMPLATE_XML: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
+<Page>
+  <Content>
+    <Layer>
+      <PathObject ID="1" Boundary="0 0 10 10" CTM="1 0 0 1 5 5">
+        <AbbreviatedData>M 0 0 L 10 0 L 10 10 Z</AbbreviatedData>
+      </PathObject>
+    </Layer>
+  </Content>
+</Page>"#;
+
+    fn archive() -> Vec<u8> {
+        build_archive(&[
+            ("OFD.xml", OFD_XML.as_bytes()),
+            ("Doc_0/Document.xml", DOCUMENT_XML.as_bytes()),
+            ("Doc_0/Tpls/Tpl_0/Content.xml", TEMPLATE_XML.as_bytes()),
+        ])
+        .expect("build fixture")
+    }
+
+    fn open_parser(bytes: Vec<u8>) -> Parser<'static> {
+        // Test-only leak: the package must outlive the parser borrowing it.
+        let package = Box::new(Package::from_bytes(&bytes).expect("open package"));
+        Parser::new(Box::leak(package))
+    }
+
+    #[test]
+    fn a_minimal_document_flattens_its_page() {
+        let mut parser = open_parser(archive());
+        let doc = parser.open_document().expect("open document");
+        assert_eq!(doc.doc_dir, "Doc_0");
+        assert_eq!(doc.document.pages.len(), 1);
+
+        let page = parser.page_display(&doc, 0).expect("page");
+        assert_eq!(page.index, 0);
+        assert_eq!(page.ops.len(), 1);
+        assert!((page.page_box.w - 210.0).abs() < 1e-9);
+        assert!((page.page_box.h - 297.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn a_template_draws_before_the_page_content_with_its_ctm() {
+        let doc_xml = DOCUMENT_XML.replace(
+            "<Page ID=\"1\">",
+            "<Page ID=\"1\"><Template TemplateID=\"1\"/>",
+        );
+        let bytes = build_archive(&[
+            ("OFD.xml", OFD_XML.as_bytes()),
+            ("Doc_0/Document.xml", doc_xml.as_bytes()),
+            ("Doc_0/Tpls/Tpl_0/Content.xml", TEMPLATE_XML.as_bytes()),
+        ])
+        .expect("build fixture");
+        let mut parser = open_parser(bytes);
+        let doc = parser.open_document().expect("open document");
+        let page = parser.page_display(&doc, 0).expect("page");
+
+        // The template object carries a CTM, so it is wrapped in state ops.
+        assert!(matches!(page.ops[0], DrawOp::Save));
+        assert!(matches!(page.ops[1], DrawOp::Transform(_)));
+        assert!(matches!(page.ops[2], DrawOp::Path { .. }));
+        assert!(matches!(page.ops[3], DrawOp::Restore));
+        // The page's own object follows on top, unwrapped.
+        assert!(matches!(page.ops[4], DrawOp::Path { .. }));
+        assert_eq!(page.ops.len(), 5);
+    }
+
+    #[test]
+    fn a_page_area_override_resizes_the_page() {
+        let doc_xml = DOCUMENT_XML.replace(
+            "<Page ID=\"1\">",
+            "<Page ID=\"1\"><Area><PhysicalBox Left=\"0\" Top=\"0\" Width=\"100\" Height=\"50\"/></Area>",
+        );
+        let bytes = build_archive(&[
+            ("OFD.xml", OFD_XML.as_bytes()),
+            ("Doc_0/Document.xml", doc_xml.as_bytes()),
+        ])
+        .expect("build fixture");
+        let mut parser = open_parser(bytes);
+        let doc = parser.open_document().expect("open document");
+        let page = parser.page_display(&doc, 0).expect("page");
+        assert!((page.page_box.w - 100.0).abs() < 1e-9);
+        assert!((page.page_box.h - 50.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn an_external_page_file_is_loaded_through_base_loc() {
+        let page_xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<Page>
+  <Content>
+    <Layer>
+      <PathObject ID="1" Boundary="0 0 5 5">
+        <AbbreviatedData>M 0 0 L 5 5</AbbreviatedData>
+      </PathObject>
+    </Layer>
+  </Content>
+</Page>"#;
+        let doc_xml = DOCUMENT_XML.replace(
+            "<Page ID=\"1\">",
+            "<Page ID=\"1\" BaseLoc=\"Pages/Page_0/Content.xml\">",
+        );
+        let bytes = build_archive(&[
+            ("OFD.xml", OFD_XML.as_bytes()),
+            ("Doc_0/Document.xml", doc_xml.as_bytes()),
+            ("Doc_0/Pages/Page_0/Content.xml", page_xml.as_bytes()),
+        ])
+        .expect("build fixture");
+        let mut parser = open_parser(bytes);
+        let doc = parser.open_document().expect("open document");
+        let page = parser.page_display(&doc, 0).expect("page");
+        assert_eq!(page.ops.len(), 1);
+    }
+
+    #[test]
+    fn a_missing_page_file_is_reported() {
+        let doc_xml = DOCUMENT_XML.replace(
+            "<Page ID=\"1\">",
+            "<Page ID=\"1\" BaseLoc=\"Pages/Page_0/Content.xml\">",
+        );
+        let bytes = build_archive(&[
+            ("OFD.xml", OFD_XML.as_bytes()),
+            ("Doc_0/Document.xml", doc_xml.as_bytes()),
+        ])
+        .expect("build fixture");
+        let mut parser = open_parser(bytes);
+        let doc = parser.open_document().expect("open document");
+        assert!(parser.page_display(&doc, 0).is_err());
+    }
+
+    #[test]
+    fn a_dangling_template_reference_is_reported() {
+        let doc_xml = DOCUMENT_XML.replace(
+            "<Page ID=\"1\">",
+            "<Page ID=\"1\"><Template TemplateID=\"999\"/>",
+        );
+        let bytes = build_archive(&[
+            ("OFD.xml", OFD_XML.as_bytes()),
+            ("Doc_0/Document.xml", doc_xml.as_bytes()),
+        ])
+        .expect("build fixture");
+        let mut parser = open_parser(bytes);
+        let doc = parser.open_document().expect("open document");
+        let err = parser.page_display(&doc, 0).expect_err("must fail");
+        assert!(err.to_string().contains("Template"), "{err}");
+    }
+
+    #[test]
+    fn draw_params_resolve_from_the_document_table() {
+        let doc_xml = DOCUMENT_XML
+            .replace(
+                "</CommonData>",
+                "<DrawParams><DrawParam ID=\"3\"><FillColor Value=\"#0000FF\"/></DrawParam></DrawParams></CommonData>",
+            )
+            .replace("<PathObject ID=\"10\"", "<PathObject ID=\"10\" DrawParam=\"3\"");
+        let bytes = build_archive(&[
+            ("OFD.xml", OFD_XML.as_bytes()),
+            ("Doc_0/Document.xml", doc_xml.as_bytes()),
+        ])
+        .expect("build fixture");
+        let mut parser = open_parser(bytes);
+        let doc = parser.open_document().expect("open document");
+        let page = parser.page_display(&doc, 0).expect("page");
+        let DrawOp::Path {
+            fill: Some(steleofd_display::Paint::Solid(c)),
+            ..
+        } = &page.ops[0]
+        else {
+            panic!("expected a filled path, got {:?}", page.ops[0]);
+        };
+        assert_eq!((c.r, c.g, c.b), (0, 0, 255));
+    }
+
+    #[test]
+    fn a_missing_entry_point_is_rejected() {
+        let bytes = build_archive(&[("Doc_0/Document.xml", DOCUMENT_XML.as_bytes())])
+            .expect("build fixture");
+        let mut parser = open_parser(bytes);
+        assert!(parser.open_document().is_err());
+    }
+
+    #[test]
+    fn an_entry_point_without_a_document_body_is_rejected() {
+        let xml = r#"<OFD Version="1.0"></OFD>"#;
+        let bytes = build_archive(&[("OFD.xml", xml.as_bytes())]).expect("build fixture");
+        let mut parser = open_parser(bytes);
+        let err = match parser.open_document() {
+            Err(e) => e,
+            Ok(_) => panic!("an empty entry point must fail"),
+        };
+        assert!(err.to_string().contains("not a valid OFD"), "{err}");
+    }
+
+    #[test]
+    fn display_list_honours_the_requested_range() {
+        let two_pages = DOCUMENT_XML.replace(
+            "</Pages>",
+            "<Page ID=\"2\"><Content><Layer/></Content></Page></Pages>",
+        );
+        let bytes = build_archive(&[
+            ("OFD.xml", OFD_XML.as_bytes()),
+            ("Doc_0/Document.xml", two_pages.as_bytes()),
+        ])
+        .expect("build fixture");
+        let mut parser = open_parser(bytes);
+        let doc = parser.open_document().expect("open document");
+
+        let list = parser.display_list(&doc, 0, 1).expect("list");
+        assert_eq!(
+            list.page_count, 2,
+            "the total is reported even if not all pages are materialized"
+        );
+        assert_eq!(list.pages.len(), 1);
+        assert!(list.page(1).is_none());
+        assert!(list.page(0).is_some());
+    }
+
+    #[test]
+    fn out_of_range_page_indices_are_reported() {
+        let mut parser = open_parser(archive());
+        let doc = parser.open_document().expect("open document");
+        let err = parser.page_display(&doc, 5).expect_err("must fail");
+        assert!(err.to_string().contains("out of range"), "{err}");
+    }
+
+    #[test]
+    fn a_vendor_extension_object_does_not_break_the_page() {
+        let doc_xml = DOCUMENT_XML.replace(
+            "</Layer>",
+            "<VendorWidget ID=\"99\"/><TextObject ID=\"11\" Boundary=\"0 0 10 5\" Font=\"1\" Size=\"3\"><TextCode X=\"1\" Y=\"2\">Hi</TextCode></TextObject></Layer>",
+        );
+        let bytes = build_archive(&[
+            ("OFD.xml", OFD_XML.as_bytes()),
+            ("Doc_0/Document.xml", doc_xml.as_bytes()),
+        ])
+        .expect("build fixture");
+        let mut parser = open_parser(bytes);
+        let doc = parser.open_document().expect("open document");
+        let page = parser.page_display(&doc, 0).expect("page");
+        // The unknown element is skipped; the text object still renders.
+        assert_eq!(page.ops.len(), 2);
+        assert!(matches!(page.ops[1], DrawOp::Text(_)));
+    }
+
+    #[test]
+    fn colors_decode_from_the_element_form_with_alpha() {
+        let doc_xml = DOCUMENT_XML.replace(
+            "<PathObject ID=\"10\" Boundary=\"10 10 20 20\">",
+            "<PathObject ID=\"10\" Boundary=\"10 10 20 20\"><FillColor Value=\"#00FF00\" Alpha=\"128\"/>",
+        );
+        let bytes = build_archive(&[
+            ("OFD.xml", OFD_XML.as_bytes()),
+            ("Doc_0/Document.xml", doc_xml.as_bytes()),
+        ])
+        .expect("build fixture");
+        let mut parser = open_parser(bytes);
+        let doc = parser.open_document().expect("open document");
+        let page = parser.page_display(&doc, 0).expect("page");
+        let DrawOp::Path {
+            fill: Some(steleofd_display::Paint::Solid(c)),
+            ..
+        } = &page.ops[0]
+        else {
+            panic!("expected a filled path, got {:?}", page.ops[0]);
+        };
+        assert_eq!((c.r, c.g, c.b, c.a), (0, 255, 0, 128));
+    }
 }

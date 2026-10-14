@@ -245,3 +245,208 @@ fn flatten_image(i: &ImageObject, builder: &mut DisplayListBuilder) -> Result<()
         Ok(())
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use steleofd_common::Rect;
+    use steleofd_model::document::{Layer, PageBlock};
+    use steleofd_model::object::{ImageObject, PathObject, TextCode, TextObject};
+
+    fn builder() -> DisplayListBuilder {
+        DisplayListBuilder::new(Rect::A4_PORTRAIT)
+    }
+
+    fn run(objects: Vec<Object>, params: &HashMap<String, DrawParam>) -> Result<Vec<DrawOp>> {
+        let block = PageBlock {
+            layers: vec![Layer { id: None, objects }],
+        };
+        let mut b = builder();
+        flatten_block(&block, params, &mut b)?;
+        Ok(b.finish(0).ops)
+    }
+
+    fn path_object(data: &str) -> PathObject {
+        PathObject {
+            base: ObjectBase {
+                id: Some("1".to_string()),
+                boundary: Rect::new(0.0, 0.0, 10.0, 10.0),
+                ..Default::default()
+            },
+            abbreviated_data: data.to_string(),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn an_absent_fill_means_filled_and_an_absent_stroke_means_not() {
+        let ops = run(
+            vec![Object::PathObject(path_object("M 0 0 L 10 10"))],
+            &HashMap::new(),
+        )
+        .expect("flatten");
+        let DrawOp::Path { fill, stroke, .. } = &ops[0] else {
+            panic!("expected a path op, got {ops:?}");
+        };
+        assert!(fill.is_some());
+        assert!(stroke.is_none());
+    }
+
+    #[test]
+    fn object_colours_default_to_black() {
+        let ops = run(
+            vec![Object::PathObject(path_object("M 0 0 L 10 10"))],
+            &HashMap::new(),
+        )
+        .expect("flatten");
+        let DrawOp::Path {
+            fill: Some(Paint::Solid(c)),
+            ..
+        } = &ops[0]
+        else {
+            panic!("expected a filled path, got {ops:?}");
+        };
+        assert_eq!(*c, Color::BLACK);
+    }
+
+    #[test]
+    fn a_draw_param_supplies_colour_and_width() {
+        let mut params = HashMap::new();
+        params.insert(
+            "7".to_string(),
+            DrawParam {
+                id: "7".to_string(),
+                line_width: Some(0.5),
+                fill_color: Some(ColorRef::from_hex("#FF0000")),
+                ..Default::default()
+            },
+        );
+        let mut p = path_object("M 0 0 L 10 10");
+        p.base.draw_param = Some("7".to_string());
+        let ops = run(vec![Object::PathObject(p)], &params).expect("flatten");
+        let DrawOp::Path {
+            fill, stroke_style, ..
+        } = &ops[0]
+        else {
+            panic!("expected a path op, got {ops:?}");
+        };
+        assert!(matches!(
+            fill,
+            Some(Paint::Solid(Color {
+                r: 255,
+                g: 0,
+                b: 0,
+                a: 255
+            }))
+        ));
+        assert!((stroke_style.width - 0.5).abs() < 1e-9);
+    }
+
+    #[test]
+    fn a_dangling_draw_param_reference_is_reported() {
+        let mut p = path_object("M 0 0 L 10 10");
+        p.base.draw_param = Some("missing".to_string());
+        assert!(run(vec![Object::PathObject(p)], &HashMap::new()).is_err());
+    }
+
+    #[test]
+    fn a_ctm_wraps_the_object_in_save_transform_restore() {
+        let mut p = path_object("M 0 0 L 10 10");
+        p.base.ctm = Some("1 0 0 1 5 5".to_string());
+        let ops = run(vec![Object::PathObject(p)], &HashMap::new()).expect("flatten");
+        assert!(matches!(ops[0], DrawOp::Save));
+        assert!(matches!(ops[1], DrawOp::Transform(t) if t.apply(0.0, 0.0) == (5.0, 5.0)));
+        assert!(matches!(ops[2], DrawOp::Path { .. }));
+        assert!(matches!(ops[3], DrawOp::Restore));
+    }
+
+    #[test]
+    fn path_data_is_required() {
+        let p = path_object("   ");
+        assert!(run(vec![Object::PathObject(p)], &HashMap::new()).is_err());
+    }
+
+    #[test]
+    fn unknown_objects_are_skipped_silently() {
+        let ops = run(vec![Object::unknown()], &HashMap::new()).expect("flatten");
+        assert!(ops.is_empty());
+    }
+
+    #[test]
+    fn each_text_code_becomes_its_own_glyph_run() {
+        let t = TextObject {
+            base: ObjectBase {
+                boundary: Rect::new(1.0, 2.0, 30.0, 4.0),
+                ..Default::default()
+            },
+            size: steleofd_common::Millimeter::new(3.0),
+            codes: vec![
+                TextCode {
+                    x: 0.0,
+                    y: 0.0,
+                    delta_x: Vec::new(),
+                    text: "AB".to_string(),
+                },
+                TextCode {
+                    x: 10.0,
+                    y: 0.0,
+                    delta_x: Vec::new(),
+                    text: String::new(),
+                },
+            ],
+            ..Default::default()
+        };
+        let ops = run(vec![Object::TextObject(t)], &HashMap::new()).expect("flatten");
+        assert_eq!(ops.len(), 1, "the empty TextCode produces no run");
+        let DrawOp::Text(run_out) = &ops[0] else {
+            panic!("expected a text op, got {ops:?}");
+        };
+        assert_eq!(run_out.glyphs, vec![65u16, 66u16]);
+        assert_eq!(run_out.advances, vec![3.0, 3.0]);
+        assert_eq!(run_out.plain_text(), "AB");
+    }
+
+    #[test]
+    fn an_image_object_records_its_resource() {
+        let img = ImageObject {
+            base: ObjectBase {
+                boundary: Rect::new(0.0, 0.0, 40.0, 30.0),
+                ..Default::default()
+            },
+            resource_id: "img_9".to_string(),
+            ..Default::default()
+        };
+        let ops = run(vec![Object::ImageObject(img)], &HashMap::new()).expect("flatten");
+        let DrawOp::Image { image, dst, .. } = &ops[0] else {
+            panic!("expected an image op, got {ops:?}");
+        };
+        assert_eq!(image.id, "img_9");
+        assert_eq!(*dst, Rect::new(0.0, 0.0, 40.0, 30.0));
+    }
+
+    #[test]
+    fn an_image_without_a_resource_is_dropped() {
+        let img = ImageObject::default();
+        let ops = run(vec![Object::ImageObject(img)], &HashMap::new()).expect("flatten");
+        assert!(ops.is_empty());
+    }
+
+    #[test]
+    fn layers_draw_bottom_first_in_order() {
+        let block = PageBlock {
+            layers: vec![
+                Layer {
+                    id: None,
+                    objects: vec![Object::PathObject(path_object("M 0 0 L 1 1"))],
+                },
+                Layer {
+                    id: None,
+                    objects: vec![Object::PathObject(path_object("M 2 2 L 3 3"))],
+                },
+            ],
+        };
+        let mut b = builder();
+        flatten_block(&block, &HashMap::new(), &mut b).expect("flatten");
+        assert_eq!(b.finish(0).ops.len(), 2);
+    }
+}
