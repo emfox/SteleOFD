@@ -83,7 +83,10 @@ impl I18n {
         if self.resources.contains_key(locale.tag()) {
             self.current = locale;
         } else {
-            tracing::warn!(requested = locale.tag(), "locale resources not built in, keeping current");
+            tracing::warn!(
+                requested = locale.tag(),
+                "locale resources not built in, keeping current"
+            );
         }
     }
 
@@ -212,8 +215,13 @@ impl I18nBuilder {
                 build_bundle(
                     Locale::en_us(),
                     &[
-                        EN_US_CORE, EN_US_READER, EN_US_CONVERT, EN_US_SIGN,
-                        EN_US_ERROR, EN_US_EDIT, EN_US_SEARCH,
+                        EN_US_CORE,
+                        EN_US_READER,
+                        EN_US_CONVERT,
+                        EN_US_SIGN,
+                        EN_US_ERROR,
+                        EN_US_EDIT,
+                        EN_US_SEARCH,
                     ],
                 ),
             );
@@ -226,8 +234,13 @@ impl I18nBuilder {
                 build_bundle(
                     Locale::zh_cn(),
                     &[
-                        ZH_CN_CORE, ZH_CN_READER, ZH_CN_CONVERT, ZH_CN_SIGN,
-                        ZH_CN_ERROR, ZH_CN_EDIT, ZH_CN_SEARCH,
+                        ZH_CN_CORE,
+                        ZH_CN_READER,
+                        ZH_CN_CONVERT,
+                        ZH_CN_SIGN,
+                        ZH_CN_ERROR,
+                        ZH_CN_EDIT,
+                        ZH_CN_SEARCH,
                     ],
                 ),
             );
@@ -257,14 +270,21 @@ impl I18nBuilder {
                 if resources.contains_key(l.tag()) {
                     l
                 } else {
-                    tracing::warn!(requested = l.tag(), "requested locale unavailable, negotiating");
+                    tracing::warn!(
+                        requested = l.tag(),
+                        "requested locale unavailable, negotiating"
+                    );
                     self.negotiation.negotiate(&available)
                 }
             }
             None => self.negotiation.negotiate(&available),
         };
 
-        I18n { current, available, resources }
+        I18n {
+            current,
+            available,
+            resources,
+        }
     }
 }
 
@@ -305,23 +325,61 @@ fn build_bundle_from_sources(locale: Locale, sources: &[String]) -> LocaleResour
 /// fails the consistency test.
 pub fn all_keys() -> &'static [&'static str] {
     &[
-        "app-name", "app-ready", "app-loading", "app-cancelled",
-        "common-confirm", "common-cancel", "common-save", "common-close",
-        "common-retry", "common-delete",
-        "reader-open", "reader-page-of", "reader-zoom", "reader-fit-width",
-        "reader-fit-page", "reader-layout-single", "reader-layout-double",
-        "reader-layout-continuous", "reader-blank-page", "reader-no-match",
-        "convert-start", "convert-progress", "convert-done", "convert-failed",
-        "convert-output-format", "convert-page-range", "convert-dpi",
-        "convert-keep-bookmarks", "convert-keep-signatures",
-        "sign-valid", "sign-invalid", "sign-unverified", "sign-expired",
-        "sign-integrity-ok", "sign-tampered", "sign-count", "sign-signer",
-        "sign-signed-at", "sign-algorithm", "sign-issuer", "sign-export-report",
-        "edit-confirm-delete-pages", "edit-warn-invalidate-signature",
-        "edit-undo", "edit-redo",
-        "search-result-count", "search-placeholder",
-        "err-not-ofd", "err-password-required", "err-page-out-of-range",
-        "err-package-corrupted", "err-font-missing", "err-dangling-reference",
-        "err-resource-limit", "err-io", "err-unsupported",
+        "app-name",
+        "app-ready",
+        "app-loading",
+        "app-cancelled",
+        "common-confirm",
+        "common-cancel",
+        "common-save",
+        "common-close",
+        "common-retry",
+        "common-delete",
+        "reader-open",
+        "reader-page-of",
+        "reader-zoom",
+        "reader-fit-width",
+        "reader-fit-page",
+        "reader-layout-single",
+        "reader-layout-double",
+        "reader-layout-continuous",
+        "reader-blank-page",
+        "reader-no-match",
+        "convert-start",
+        "convert-progress",
+        "convert-done",
+        "convert-failed",
+        "convert-output-format",
+        "convert-page-range",
+        "convert-dpi",
+        "convert-keep-bookmarks",
+        "convert-keep-signatures",
+        "sign-valid",
+        "sign-invalid",
+        "sign-unverified",
+        "sign-expired",
+        "sign-integrity-ok",
+        "sign-tampered",
+        "sign-count",
+        "sign-signer",
+        "sign-signed-at",
+        "sign-algorithm",
+        "sign-issuer",
+        "sign-export-report",
+        "edit-confirm-delete-pages",
+        "edit-warn-invalidate-signature",
+        "edit-undo",
+        "edit-redo",
+        "search-result-count",
+        "search-placeholder",
+        "err-not-ofd",
+        "err-password-required",
+        "err-page-out-of-range",
+        "err-package-corrupted",
+        "err-font-missing",
+        "err-dangling-reference",
+        "err-resource-limit",
+        "err-io",
+        "err-unsupported",
     ]
 }

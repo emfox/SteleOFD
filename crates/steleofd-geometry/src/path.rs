@@ -107,13 +107,19 @@ impl Path {
             .iter()
             .map(|s| transform_segment(s, t))
             .collect::<Vec<_>>();
-        Self { segments, bbox: None }
+        Self {
+            segments,
+            bbox: None,
+        }
     }
 
     /// Whether the path is made only of straight segments.
     pub fn is_polygonal(&self) -> bool {
         self.segments.iter().all(|s| {
-            matches!(s, PathSegment::MoveTo(..) | PathSegment::LineTo(..) | PathSegment::Close)
+            matches!(
+                s,
+                PathSegment::MoveTo(..) | PathSegment::LineTo(..) | PathSegment::Close
+            )
         })
     }
 }
@@ -171,7 +177,10 @@ impl PathBuilder {
 
     /// Finish and produce the path.
     pub fn finish(self) -> Path {
-        Path { segments: self.segments, bbox: None }
+        Path {
+            segments: self.segments,
+            bbox: None,
+        }
     }
 }
 
@@ -189,14 +198,28 @@ fn transform_segment(s: &PathSegment, t: &Affine) -> PathSegment {
             let (x1, y1) = t.apply(c1.0, c1.1);
             let (x2, y2) = t.apply(c2.0, c2.1);
             let (xt, yt) = t.apply(to.0, to.1);
-            PathSegment::CurveTo { c1: (x1, y1), c2: (x2, y2), to: (xt, yt) }
+            PathSegment::CurveTo {
+                c1: (x1, y1),
+                c2: (x2, y2),
+                to: (xt, yt),
+            }
         }
         PathSegment::QuadTo { c, to } => {
             let (xc, yc) = t.apply(c.0, c.1);
             let (xt, yt) = t.apply(to.0, to.1);
-            PathSegment::QuadTo { c: (xc, yc), to: (xt, yt) }
+            PathSegment::QuadTo {
+                c: (xc, yc),
+                to: (xt, yt),
+            }
         }
-        PathSegment::Arc { rx, ry, x_axis_rotation, large_arc, sweep, to } => {
+        PathSegment::Arc {
+            rx,
+            ry,
+            x_axis_rotation,
+            large_arc,
+            sweep,
+            to,
+        } => {
             let (xt, yt) = t.apply(to.0, to.1);
             let scale = t.scale_factor();
             PathSegment::Arc {
@@ -290,5 +313,8 @@ fn quad_at(p0: (f64, f64), p1: (f64, f64), p2: (f64, f64), t: f64) -> (f64, f64)
     let a = mt * mt;
     let b = 2.0 * mt * t;
     let c = t * t;
-    (a * p0.0 + b * p1.0 + c * p2.0, a * p0.1 + b * p1.1 + c * p2.1)
+    (
+        a * p0.0 + b * p1.0 + c * p2.0,
+        a * p0.1 + b * p1.1 + c * p2.1,
+    )
 }

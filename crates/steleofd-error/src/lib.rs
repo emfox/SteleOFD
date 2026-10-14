@@ -304,7 +304,9 @@ pub enum ConvertError {
         reason: String,
     },
     /// Result quality fell below the accepted threshold.
-    #[error("conversion quality below threshold: difference ratio {diff_ratio:.4} exceeds {threshold:.4}")]
+    #[error(
+        "conversion quality below threshold: difference ratio {diff_ratio:.4} exceeds {threshold:.4}"
+    )]
     QualityBelowThreshold {
         /// Measured difference ratio.
         diff_ratio: f64,
@@ -326,7 +328,9 @@ pub enum EditError {
     #[error("operation denied by permission policy: {0}")]
     PermissionDenied(String),
     /// Operation would break existing signatures.
-    #[error("this operation would invalidate {count} existing signature(s) and needs explicit confirmation")]
+    #[error(
+        "this operation would invalidate {count} existing signature(s) and needs explicit confirmation"
+    )]
     WouldInvalidateSignature {
         /// Number of signatures affected.
         count: usize,

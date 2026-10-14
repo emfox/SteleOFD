@@ -32,7 +32,11 @@ pub struct Viewport {
 impl Viewport {
     /// A viewport covering the whole page.
     pub fn whole_page(page_box: Rect, dpi: f64) -> Self {
-        Self { area: page_box, dpi, zoom: 1.0 }
+        Self {
+            area: page_box,
+            dpi,
+            zoom: 1.0,
+        }
     }
 
     /// Resolution after zoom is applied.

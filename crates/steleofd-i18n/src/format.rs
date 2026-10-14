@@ -24,7 +24,10 @@ pub struct LocalizedFormat {
 impl LocalizedFormat {
     /// Create a formatter for a locale.
     pub fn new(locale: Locale) -> Self {
-        Self { locale, size_system: SizeUnitSystem::Binary }
+        Self {
+            locale,
+            size_system: SizeUnitSystem::Binary,
+        }
     }
 
     /// Choose the unit system for file sizes.
@@ -157,7 +160,10 @@ fn month_abbr(m: u32) -> &'static str {
     const MONTHS: [&str; 12] = [
         "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
     ];
-    MONTHS.get((m as usize).saturating_sub(1)).copied().unwrap_or("Jan")
+    MONTHS
+        .get((m as usize).saturating_sub(1))
+        .copied()
+        .unwrap_or("Jan")
 }
 
 /// Digit grouping separator for a language.
@@ -196,11 +202,7 @@ fn group_digits(n: i64, sep: char) -> String {
         out.push(ch);
     }
 
-    if neg {
-        format!("-{out}")
-    } else {
-        out
-    }
+    if neg { format!("-{out}") } else { out }
 }
 
 /// Convert a Unix timestamp to a civil date using Howard Hinnant's algorithm.

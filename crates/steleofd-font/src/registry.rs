@@ -99,7 +99,9 @@ impl FontRegistry {
             id,
             family: family.clone(),
             postscript_name: None,
-            source: FontSource::System { family: family.clone() },
+            source: FontSource::System {
+                family: family.clone(),
+            },
             is_cjk: false,
             data: None,
         });

@@ -34,12 +34,7 @@ impl std::fmt::Debug for FontFace {
 impl FontFace {
     /// Validate the font data and precompute metrics.
     /// Invalid fonts fail at load time rather than surfacing during rendering.
-    pub fn new(
-        id: FontId,
-        family: String,
-        data: Arc<Vec<u8>>,
-        is_fallback: bool,
-    ) -> Result<Self> {
+    pub fn new(id: FontId, family: String, data: Arc<Vec<u8>>, is_fallback: bool) -> Result<Self> {
         let (units_per_em, metrics) = {
             let face = ttf_parser::Face::parse(data.as_slice(), 0)
                 .map_err(|e| FontError::Parse(format!("font parse failed: {e:?}")))?;
@@ -61,7 +56,14 @@ impl FontFace {
             (upem, m)
         };
 
-        Ok(Self { id, family, data, is_fallback, metrics, units_per_em })
+        Ok(Self {
+            id,
+            family,
+            data,
+            is_fallback,
+            metrics,
+            units_per_em,
+        })
     }
 
     /// Font identifier.
@@ -173,15 +175,17 @@ struct OutlineBuilder {
 
 impl ttf_parser::OutlineBuilder for OutlineBuilder {
     fn move_to(&mut self, x: f32, y: f32) {
-        self.path
-            .segments
-            .push(PathSegment::MoveTo(x as f64 * self.scale, y as f64 * self.scale));
+        self.path.segments.push(PathSegment::MoveTo(
+            x as f64 * self.scale,
+            y as f64 * self.scale,
+        ));
     }
 
     fn line_to(&mut self, x: f32, y: f32) {
-        self.path
-            .segments
-            .push(PathSegment::LineTo(x as f64 * self.scale, y as f64 * self.scale));
+        self.path.segments.push(PathSegment::LineTo(
+            x as f64 * self.scale,
+            y as f64 * self.scale,
+        ));
     }
 
     fn quad_to(&mut self, x1: f32, y1: f32, x: f32, y: f32) {

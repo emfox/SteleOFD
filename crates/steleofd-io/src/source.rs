@@ -41,7 +41,9 @@ pub struct MemorySource {
 impl MemorySource {
     /// Take ownership of a byte buffer.
     pub fn new(data: Vec<u8>) -> Self {
-        Self { data: Arc::new(data) }
+        Self {
+            data: Arc::new(data),
+        }
     }
 
     /// Share an existing buffer without copying.
@@ -82,7 +84,10 @@ pub struct SliceSource<'a> {
 impl<'a> SliceSource<'a> {
     /// Borrow a slice and give it a name for diagnostics.
     pub fn new(data: &'a [u8], name: impl Into<String>) -> Self {
-        Self { data, name: name.into() }
+        Self {
+            data,
+            name: name.into(),
+        }
     }
 }
 

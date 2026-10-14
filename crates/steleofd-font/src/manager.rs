@@ -61,10 +61,9 @@ impl FontManager {
         let entry = self.registry.get(id)?.clone();
         let (data, is_fallback) = match &entry.source {
             FontSource::Embedded { .. } => {
-                let d = entry
-                    .data
-                    .clone()
-                    .ok_or_else(|| FontError::Missing { family: entry.family.clone() })?;
+                let d = entry.data.clone().ok_or_else(|| FontError::Missing {
+                    family: entry.family.clone(),
+                })?;
                 (d, false)
             }
             FontSource::System { family } => (self.load_system_font(family)?, false),
@@ -152,7 +151,9 @@ impl FontManager {
 
         let handle = source
             .select_best_match(&[FamilyName::Title(family.to_string())], &Properties::new())
-            .map_err(|_| FontError::Missing { family: family.to_string() })?;
+            .map_err(|_| FontError::Missing {
+                family: family.to_string(),
+            })?;
 
         match handle {
             Handle::Path { path, .. } => Ok(Arc::new(std::fs::read(path)?)),
@@ -163,7 +164,10 @@ impl FontManager {
     /// Degraded path when system font lookup is compiled out.
     #[cfg(not(feature = "system-fonts"))]
     fn load_system_font(&self, family: &str) -> Result<Arc<Vec<u8>>> {
-        Err(FontError::Missing { family: family.to_string() }.into())
+        Err(FontError::Missing {
+            family: family.to_string(),
+        }
+        .into())
     }
 }
 

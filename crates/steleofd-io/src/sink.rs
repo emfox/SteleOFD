@@ -71,12 +71,18 @@ impl FileSink {
     pub fn new(path: impl AsRef<Path>) -> Self {
         let path = path.as_ref().to_path_buf();
         let temp = path.with_extension("ofd.tmp");
-        Self { path, temp: Some(temp) }
+        Self {
+            path,
+            temp: Some(temp),
+        }
     }
 
     /// Write directly, without the temporary file.
     pub fn direct(path: impl AsRef<Path>) -> Self {
-        Self { path: path.as_ref().to_path_buf(), temp: None }
+        Self {
+            path: path.as_ref().to_path_buf(),
+            temp: None,
+        }
     }
 
     /// Atomically move the temporary file into place.

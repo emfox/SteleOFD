@@ -29,7 +29,14 @@ impl Default for Affine {
 
 impl Affine {
     /// The identity transform.
-    pub const IDENTITY: Self = Self { a: 1.0, b: 0.0, c: 0.0, d: 1.0, e: 0.0, f: 0.0 };
+    pub const IDENTITY: Self = Self {
+        a: 1.0,
+        b: 0.0,
+        c: 0.0,
+        d: 1.0,
+        e: 0.0,
+        f: 0.0,
+    };
 
     /// Build from raw coefficients.
     pub const fn new(a: f64, b: f64, c: f64, d: f64, e: f64, f: f64) -> Self {
@@ -73,7 +80,10 @@ impl Affine {
 
     /// Transform a point.
     pub fn apply(&self, x: f64, y: f64) -> (f64, f64) {
-        (self.a * x + self.c * y + self.e, self.b * x + self.d * y + self.f)
+        (
+            self.a * x + self.c * y + self.e,
+            self.b * x + self.d * y + self.f,
+        )
     }
 
     /// Transform a direction, ignoring translation.

@@ -15,4 +15,4 @@ pub use face::FontFace;
 pub use manager::FontManager;
 pub use metrics::{FontMetrics, GlyphOutline};
 pub use registry::{FontId, FontRegistry, FontSource};
-pub use shape::{shape_text, ShapeOptions, ShapedGlyph, ShapedRun};
+pub use shape::{ShapeOptions, ShapedGlyph, ShapedRun, shape_text};
