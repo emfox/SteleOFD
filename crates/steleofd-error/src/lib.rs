@@ -157,6 +157,12 @@ pub enum FormatError {
     /// Not a valid OFD file; the entry point is absent.
     #[error("not a valid OFD file (missing OFD.xml entry point)")]
     NotOfd,
+    /// The document declares no root path to its own XML.
+    #[error("document body declares no root path")]
+    MissingRoot,
+    /// A path object carries no drawing commands.
+    #[error("path object declares no drawing data")]
+    MissingPathData,
     /// Document version is not supported.
     #[error("unsupported OFD version: {0}")]
     UnsupportedVersion(String),
