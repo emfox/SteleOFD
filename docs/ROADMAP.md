@@ -128,6 +128,8 @@ disagree now fails a test.
 
 - **N6-b** `[x]` ~~The `coverage` job is in CI: `cargo-llvm-cov` over the whole workspace with every feature on, and the measured baseline is **87.56% lines, 88.16% functions, 88.37% regions** with the floor set at **85%** — low enough that ordinary work never trips it, high enough that losing a module's tests does. The measurement uses the rustup `llvm-tools-preview` component, whose `llvm-cov`/`llvm-profdata` match the toolchain's LLVM; the system copies are LLVM 18 against rustc's LLVM 21 and fail with a raw-profile version mismatch.~~
 
+- **N6-c** `[x]` ~~CI installs a pinned toolchain, **1.99.0**, instead of following `stable`. A rolling `stable` turns every lint upstream ships into a red build nobody asked for: a stricter `dead_code` for fields that are written but never read arrived in 1.94, and `chunks_exact_to_as_chunks` in 1.99. Both reached CI first, and both cost a push to discover, because the local toolchain could not see them. Upgrading is now a deliberate commit that a sandbox can match before it lands. Three related fixes travelled with it: `-D warnings` moved out of the workflow's global `RUSTFLAGS`, where it also applied to every dependency crate, into the clippy invocation that means to carry it; the `third-party-corpus` job compares what opens against a checked-in `KNOWN_UNPARSED` list, so two samples that cannot open are recorded as known instead of failing the build; and a `collapsible_if` in an integration test became a let-chain.~~
+
 ### N7. The desktop reader, first surface (U1-a … U1-c)
 
 The reader is the one thing this project is obviously for, and it does not

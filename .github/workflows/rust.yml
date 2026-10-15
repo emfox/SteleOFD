@@ -20,8 +20,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Pinned rather than `stable`: a rolling toolchain turns every new lint
+      # upstream ships into a red build nobody asked for. Raising the version
+      # here is a deliberate commit, and it is the one the sandbox can match.
       - name: Install toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@1.99.0
         with:
           components: rustfmt, clippy
 
@@ -100,7 +103,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@1.99.0
 
       - name: Install system dependencies
         run: sudo apt-get update && sudo apt-get install -y libfontconfig1-dev pkg-config
@@ -169,7 +172,7 @@ jobs:
           fetch-depth: 0
 
       - name: Install stable toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@1.99.0
 
       - name: Find the latest release tag
         id: baseline
@@ -198,7 +201,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install toolchain with the coverage runtime
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@1.99.0
         with:
           components: llvm-tools-preview
 
