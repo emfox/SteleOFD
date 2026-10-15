@@ -183,50 +183,54 @@ fn stops_of(segments: &[Segment]) -> Result<Vec<GradientStop>> {
 }
 
 /// GB/T 33190 clause 8.4: the clip areas an object narrows its drawing to.
-/// The first area of the first clip wins; areas beyond it are reported rather
-/// than silently dropped.
+/// Every area of every clip contributes and the region is the union of them,
+/// so they are read as one path made of several subpaths.
 fn clip_of(
     base: &ObjectBase,
-    params: &HashMap<String, DrawParam>,
+    _params: &HashMap<String, DrawParam>,
 ) -> Result<Option<(Path, PaintRule)>> {
     let Some(list) = base.clips.as_ref() else {
         return Ok(None);
     };
-    if list.items.len() > 1 {
-        return Err(nested_clips(list.items.len()));
+    let mut joined = Path::default();
+    let mut rule = PaintRule::NonZero;
+    let mut rule_stated = false;
+    for clip in &list.items {
+        for area in &clip.areas {
+            let Some(data) = area.path_data.as_deref().map(str::trim) else {
+                continue;
+            };
+            if data.is_empty() {
+                continue;
+            }
+            let mut path: Path = crate::pathdata::parse_path(data)?;
+            // An area may carry its own CTM, applied to the clip path alone.
+            if let Some(raw) = area.ctm.as_deref() {
+                let v = parse_number_list_n::<6>("Area", "CTM", raw)?;
+                path = path.transformed(&Affine::new(v[0], v[1], v[2], v[3], v[4], v[5]));
+            }
+            // One path carries one fill rule, so where areas disagree the first
+            // one that states a rule decides which side of the outline is in.
+            if !rule_stated && let Some(r) = area.rule.as_deref() {
+                rule = paint_rule(r);
+                rule_stated = true;
+            }
+            joined.segments.extend(path.segments);
+        }
     }
-    let Some(area) = list.items.first() else {
-        return Ok(None);
-    };
-    let Some(data) = area.path_data.as_deref().map(str::trim) else {
-        return Ok(None);
-    };
-    if data.is_empty() {
+    if joined.is_empty() {
         return Ok(None);
     }
-    let mut path: Path = crate::pathdata::parse_path(data)?;
-    // An area may carry its own CTM, applied to the clip path alone.
-    if let Some(raw) = area.ctm.as_deref() {
-        let v = parse_number_list_n::<6>("Area", "CTM", raw)?;
-        path = path.transformed(&Affine::new(v[0], v[1], v[2], v[3], v[4], v[5]));
-    }
-    // A clip area's DrawParam may name the fill rule that decides which side
-    // of the outline is inside the clip.
-    let rule = area
-        .draw_param
-        .as_ref()
-        .and_then(|id| params.get(id))
-        .map(|_| PaintRule::NonZero)
-        .unwrap_or(PaintRule::NonZero);
-    Ok(Some((path, rule)))
+    Ok(Some((joined, rule)))
 }
 
-/// Clip lists with more than one area are valid in principle but not read yet;
-/// saying so beats drawing a page that quietly lost part of its mask.
-fn nested_clips(count: usize) -> OfdError {
-    OfdError::Xml(steleofd_error::XmlError::UnsupportedExtension(format!(
-        "clip list with {count} areas"
-    )))
+/// The fill rule an area names; clause 9.1 allows either spelling.
+fn paint_rule(raw: &str) -> PaintRule {
+    if raw.eq_ignore_ascii_case("even-odd") || raw.eq_ignore_ascii_case("evenodd") {
+        PaintRule::EvenOdd
+    } else {
+        PaintRule::NonZero
+    }
 }
 
 /// Wrap a graphic unit in its clip, so the state stack stays balanced.

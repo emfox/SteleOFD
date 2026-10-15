@@ -216,12 +216,20 @@ pub struct ObjectBase {
 /// The `Clips` container of clause 8.4.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct ClipList {
-    /// Clip areas, each narrowing the region the object may draw in.
+    /// Clips; the region they confine the drawing to is their union.
     #[serde(rename = "Clip", default)]
-    pub items: Vec<ClipArea>,
+    pub items: Vec<Clip>,
 }
 
-/// One clip area: the geometry a drawing is confined to.
+/// One `Clip`: the areas it is made of, whose union it covers.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct Clip {
+    /// Areas in document order.
+    #[serde(rename = "Area", default)]
+    pub areas: Vec<ClipArea>,
+}
+
+/// One `Area`: the geometry one part of a clip is bounded by.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct ClipArea {
     /// The path the clip is bounded by, in abbreviated form.
@@ -230,6 +238,9 @@ pub struct ClipArea {
     /// Placement transform for this area, `a b c d e f`.
     #[serde(rename = "CTM", skip_serializing_if = "Option::is_none")]
     pub ctm: Option<String>,
+    /// Fill rule read off the area's `Path`, `NonZero` unless it says otherwise.
+    #[serde(rename = "Rule", skip_serializing_if = "Option::is_none")]
+    pub rule: Option<String>,
     /// Drawing parameters referenced by this area.
     #[serde(rename = "DrawParam", skip_serializing_if = "Option::is_none")]
     pub draw_param: Option<RefId>,

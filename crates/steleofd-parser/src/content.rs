@@ -10,10 +10,10 @@ use steleofd_model::document::{
     PageArea, PageBlock, Pages, Template, TemplateList, TemplatePageList, TemplateRef, Version,
 };
 use steleofd_model::object::{
-    Action, ActionEvent, ActionKind, Actions, ClipArea, ClipList, CompositeObject, DashPattern,
-    Dest, DrawParam, FillRuleStyle, GotoTarget, GraphicsUnit, ImageObject, LineCapStyle,
-    LineJoinStyle, MovieAction, MovieOperator, Object, ObjectBase, PathObject, Region, RegionArea,
-    SoundAction, TextCode, TextObject, UriAction,
+    Action, ActionEvent, ActionKind, Actions, Clip, ClipArea, ClipList, CompositeObject,
+    DashPattern, Dest, DrawParam, FillRuleStyle, GotoTarget, GraphicsUnit, ImageObject,
+    LineCapStyle, LineJoinStyle, MovieAction, MovieOperator, Object, ObjectBase, PathObject,
+    Region, RegionArea, SoundAction, TextCode, TextObject, UriAction,
 };
 use steleofd_xml::cursor::Event;
 use steleofd_xml::{Cursor, Node, parse_bool, parse_number_list, parse_number_list_n};
@@ -423,8 +423,9 @@ fn parse_position(element: &str, attribute: &str, raw: Option<&str>) -> Result<(
     Ok((v[0], v[1]))
 }
 
-/// `<Clips><Clip><Area><Path .../></Area></Clip></Clips>`; clause 8.4 confines a
-/// drawing to the intersection of its areas.
+/// `<Clips><Clip><Area><Path .../></Area></Clip></Clips>`. Clause 8.4: an area
+/// is one part of a clip, and both a clip and the list of them cover the union
+/// of what they name.
 fn read_clips(cursor: &mut Cursor<'_>) -> Result<ClipList> {
     let mut list = ClipList::default();
     loop {
@@ -438,31 +439,39 @@ fn read_clips(cursor: &mut Cursor<'_>) -> Result<ClipList> {
     Ok(list)
 }
 
-/// One `Clip`: the areas it is made of.
-fn read_clip(cursor: &mut Cursor<'_>) -> Result<ClipArea> {
-    let mut area = ClipArea::default();
+/// One `Clip`: every `Area` it names, in order.
+fn read_clip(cursor: &mut Cursor<'_>) -> Result<Clip> {
+    let mut clip = Clip::default();
     loop {
         match cursor.next_event()? {
-            Event::Start(n) if n.is("Area") => {
-                let a = n.attributes();
-                area.ctm = a.get("CTM").map(str::to_string);
-                area.draw_param = a.get("DrawParam").map(str::to_string);
-                if n.is_self_closing() {
-                    continue;
-                }
-                loop {
-                    match cursor.next_event()? {
-                        Event::Start(p) if p.is("Path") => {
-                            area.path_data = read_clip_path(cursor, &p)?;
-                        }
-                        Event::Start(t) if t.is("Text") => {
-                            return Err(unsupported_shading("text clip area"));
-                        }
-                        Event::Start(other) => cursor.skip_element(&other)?,
-                        Event::End(_) | Event::Eof => break,
-                        Event::Text(_) => {}
-                    }
-                }
+            Event::Start(n) if n.is("Area") => clip.areas.push(read_area(cursor, &n)?),
+            Event::Start(other) => cursor.skip_element(&other)?,
+            Event::End(_) | Event::Eof => break,
+            Event::Text(_) => {}
+        }
+    }
+    Ok(clip)
+}
+
+/// One `Area`: its transform, its draw parameter and the path bounding it.
+fn read_area(cursor: &mut Cursor<'_>, node: &Node) -> Result<ClipArea> {
+    let a = node.attributes();
+    let mut area = ClipArea {
+        ctm: a.get("CTM").map(str::to_string),
+        draw_param: a.get("DrawParam").map(str::to_string),
+        ..ClipArea::default()
+    };
+    if node.is_self_closing() {
+        return Ok(area);
+    }
+    loop {
+        match cursor.next_event()? {
+            Event::Start(p) if p.is("Path") => {
+                area.rule = p.attributes().get("Rule").map(str::to_string);
+                area.path_data = read_clip_path(cursor, &p)?;
+            }
+            Event::Start(t) if t.is("Text") => {
+                return Err(unsupported_shading("text clip area"));
             }
             Event::Start(other) => cursor.skip_element(&other)?,
             Event::End(_) | Event::Eof => break,
