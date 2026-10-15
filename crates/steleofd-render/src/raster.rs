@@ -538,22 +538,14 @@ fn draw_image(
         // A missing resource must not abort the page; leave the area empty.
         return Ok(());
     }
-    let decoded = image::load_from_memory(&image.data).map_err(|e| {
-        OfdError::Render(RenderError::ImageDecode {
-            page: 0,
-            reason: format!("resource {}: {e}", image.id),
-        })
-    })?;
-    let rgba = decoded.to_rgba8();
-    let (iw, ih) = (rgba.width(), rgba.height());
-    let premul: Vec<u8> = rgba.pixels().flat_map(|p| premultiply(p.0)).collect();
+    let (pixels, iw, ih) = decode_resource(image)?;
     let Some(size) = IntSize::from_wh(iw, ih) else {
         return Err(OfdError::Render(RenderError::ImageDecode {
             page: 0,
             reason: format!("resource {}: size {iw}x{ih} rejected", image.id),
         }));
     };
-    let Some(img) = Pixmap::from_vec(premul, size) else {
+    let Some(img) = Pixmap::from_vec(pixels, size) else {
         return Err(OfdError::Render(RenderError::ImageDecode {
             page: 0,
             reason: format!("resource {}: pixmaps of {}x{} rejected", image.id, iw, ih),
@@ -563,8 +555,14 @@ fn draw_image(
     // Pixels map into the destination rect, which the placement transform
     // then positions in page space.
     let pixel_to_page = Affine::new(dst.w / iw as f64, 0.0, 0.0, dst.h / ih as f64, dst.x, dst.y);
-    let total = total_transform(state, &page_box, options.dpi)
-        .pre_concat(to_ts(transform.then(pixel_to_page)));
+    // `pre_concat` multiplies on the right, which would apply the placement
+    // before the millimetre-to-pixel step and scale the rect's offset by it
+    // twice; composing left to right keeps the offset in page units.
+    let total = to_ts(transform.then(pixel_to_page)).pre_concat(total_transform(
+        state,
+        &page_box,
+        options.dpi,
+    ));
     pixmap.draw_pixmap(
         0,
         0,
@@ -574,6 +572,38 @@ fn draw_image(
         state.clip.as_ref(),
     );
     Ok(())
+}
+
+/// Decode a placed resource into RGBA, whichever encoding it uses.
+///
+/// JBIG2 is not one `image` reads, so it takes its own path.
+fn decode_resource(image: &ImageRef) -> Result<(Vec<u8>, u32, u32)> {
+    let fail = |reason: String| {
+        OfdError::Render(RenderError::ImageDecode {
+            page: 0,
+            reason: format!("resource {}: {reason}", image.id),
+        })
+    };
+    if image.codec == steleofd_display::ImageCodec::Jbig2 {
+        let gray = steleofd_display::jbig2::decode_to_gray(&image.data).map_err(fail)?;
+        let (w, h) = (image.pixel_size.0, image.pixel_size.1);
+        if gray.len() != (w * h) as usize {
+            return Err(fail(format!(
+                "JBIG2 declares {w}x{h} but decoded {} bytes",
+                gray.len()
+            )));
+        }
+        if w == 0 || h == 0 {
+            return Err(fail(format!("JBIG2 size {w}x{h} rejected")));
+        }
+        let rgba: Vec<u8> = gray.iter().flat_map(|&v| [v, v, v, u8::MAX]).collect();
+        return Ok((rgba, w, h));
+    }
+    let decoded = image::load_from_memory(&image.data).map_err(|e| fail(e.to_string()))?;
+    let rgba = decoded.to_rgba8();
+    let (w, h) = (rgba.width(), rgba.height());
+    let premul: Vec<u8> = rgba.pixels().flat_map(|p| premultiply(p.0)).collect();
+    Ok((premul, w, h))
 }
 
 fn premultiply(px: [u8; 4]) -> [u8; 4] {
