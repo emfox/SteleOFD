@@ -91,13 +91,14 @@ impl Sm4Key {
             .map_err(|e| OfdError::Crypto(CryptoError::Operation(e.to_string())))?;
         match self.mode {
             Sm4Mode::Ecb => {
-                for block in buf.chunks_exact_mut(SM4_BLOCK_LEN) {
-                    apply_block(&cipher, block, dir);
+                for block in buf.as_chunks_mut::<SM4_BLOCK_LEN>().0 {
+                    apply_block(&cipher, block.as_mut_slice(), dir);
                 }
             }
             Sm4Mode::Cbc => {
                 let mut prev = iv.expect("checked above");
-                for block in buf.chunks_exact_mut(SM4_BLOCK_LEN) {
+                for block in buf.as_chunks_mut::<SM4_BLOCK_LEN>().0 {
+                    let block = block.as_mut_slice();
                     match dir {
                         Direction::Encrypt => {
                             for (b, p) in block.iter_mut().zip(prev.iter()) {

@@ -80,7 +80,7 @@ fn wrapped(placement: Affine, ops: &[DrawOp]) -> Vec<DrawOp> {
 fn finish(raster: RasterOutput, job: &PrintJob) -> RasterPage {
     let mut rgba = raster.rgba_bytes();
     if job.color.is_mono() {
-        for pixel in rgba.chunks_exact_mut(4) {
+        for pixel in rgba.as_chunks_mut::<4>().0 {
             let luma = (0.299 * pixel[0] as f64 + 0.587 * pixel[1] as f64 + 0.114 * pixel[2] as f64)
                 .round() as u8;
             pixel[0] = luma;
