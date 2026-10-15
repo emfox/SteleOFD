@@ -7,6 +7,7 @@ use steleofd_i18n::MessageId;
 
 use crate::app::{App, Canvas, Fit, Verdict};
 use crate::export_worker::ExportFormat;
+use crate::shortcuts;
 use crate::viewer::{DroppedFile, Layout, MAX_DPI, MIN_DPI};
 
 /// The widest a page is drawn, so a large window does not blur a small page.
@@ -38,6 +39,9 @@ pub fn draw(ui: &mut Ui, app: &mut App) -> WindowRequests {
     draw_signatures(ui, app);
     draw_canvas(ui, app);
     draw_status(ui, app);
+    // Shortcuts resolve after every panel has been drawn, because a key the
+    // search box already took must not also turn the page underneath it.
+    take_shortcuts(ui, app, &mut requests);
     if app.wants_quit() {
         requests.quit = true;
     }
@@ -46,6 +50,83 @@ pub fn draw(ui: &mut Ui, app: &mut App) -> WindowRequests {
     // page selection this window does not own.
     requests.export = app.wants_export();
     requests
+}
+
+/// Resolve the keys pressed this frame into intent, after the panels have
+/// declined them, so a query being typed does not page the document. Escape
+/// is read apart: leaving the search box and closing the panel share a key.
+fn take_shortcuts(ui: &mut Ui, app: &mut App, requests: &mut WindowRequests) {
+    let ctx = ui.ctx().clone();
+    let focused = ctx.memory(|memory| memory.has_focus(shortcuts::search_box_id()));
+    let mut escape = None;
+    for key in pressed_keys(&ctx) {
+        let modifiers = ctx.input(|input| input.modifiers);
+        if key == egui::Key::Escape {
+            escape = shortcuts::escape_target(app.search_open(), focused);
+            continue;
+        }
+        let Some(action) = shortcuts::interpret(key, modifiers, app.is_open()) else {
+            continue;
+        };
+        if action == shortcuts::Action::FocusSearch {
+            ctx.memory_mut(|memory| memory.request_focus(shortcuts::search_box_id()));
+            if !app.search_open() {
+                app.set_search_open(true);
+            }
+            continue;
+        }
+        if action == shortcuts::Action::Escape {
+            continue;
+        }
+        act(app, action, requests);
+    }
+    // Escape no panel claimed leaves the search box, because a caret the
+    // reader cannot get out of is this window's one real trap.
+    if let Some(action) = escape {
+        match action {
+            shortcuts::Action::FocusSearch => {
+                ctx.memory_mut(|memory| memory.surrender_focus(shortcuts::search_box_id()));
+            }
+            shortcuts::Action::ToggleSearch => app.set_search_open(false),
+            shortcuts::Action::Escape => {}
+            _ => {}
+        }
+    }
+}
+
+/// Apply one resolved action, routing the ones that need the host.
+fn act(app: &mut App, action: shortcuts::Action, requests: &mut WindowRequests) {
+    if action == shortcuts::Action::Open {
+        app.apply(action);
+        requests.open_dialog = true;
+        return;
+    }
+    if action == shortcuts::Action::ExportPdf {
+        app.apply(action);
+        requests.export = app.wants_export();
+        return;
+    }
+    app.apply(action);
+}
+
+/// Every key pressed this frame, in the order pressed.
+fn pressed_keys(ctx: &egui::Context) -> Vec<egui::Key> {
+    ctx.input(|input| {
+        input
+            .events
+            .iter()
+            .filter_map(|event| match event {
+                egui::Event::Key {
+                    key,
+                    physical_key: None,
+                    pressed: true,
+                    repeat: false,
+                    ..
+                } => Some(*key),
+                _ => None,
+            })
+            .collect()
+    })
 }
 
 /// Consume the open request and anything dropped on the window this frame.
@@ -107,9 +188,23 @@ fn draw_menu(ui: &mut Ui, app: &mut App, requests: &mut WindowRequests) {
             }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 draw_exports(ui, app);
+                draw_locales(ui, app);
             });
         });
     });
+}
+
+/// The language choices, each written in its own language so a reader who
+/// cannot read the menu's current one can still find theirs. A language is a
+/// state rather than a command, so only the one in force is marked selected.
+fn draw_locales(ui: &mut Ui, app: &mut App) {
+    let current = app.locale();
+    for locale in app.locales() {
+        let name = app.locale_name(&locale);
+        if ui.selectable_label(locale == current, name).clicked() {
+            app.set_locale(locale);
+        }
+    }
 }
 
 /// The export actions. Export writes what the reader is looking at, so it
@@ -194,6 +289,7 @@ fn draw_search(ui: &mut Ui, app: &mut App) {
         let placeholder = app.search_placeholder();
         let response = ui.add(
             egui::TextEdit::singleline(&mut query)
+                .id(shortcuts::search_box_id())
                 .hint_text(placeholder)
                 .desired_width(f32::INFINITY),
         );

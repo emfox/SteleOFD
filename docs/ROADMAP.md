@@ -13,11 +13,11 @@ criterion, so it is always obvious whether it is done.
 | Measure | Value |
 | --- | --- |
 | Crates | 26 (L0 foundation through L5 delivery) |
-| Source | 31,741 lines of Rust, measured with `find crates -name '*.rs'` |
-| Tests | 786 passing, plus 13 inline unit-test modules |
+| Source | 32,349 lines of Rust, measured with `find crates -name '*.rs'` |
+| Tests | 806 passing, plus 13 inline unit-test modules |
 | Delivery forms | `cli`, `wasm`, `ffi`, `server`, `reader`, all on the `core` facade |
 | Standard clauses verified | 47 of 47 in GB/T 33190-2016 (46 `verified`, 1 `partial`) |
-| Languages | `en-US` and `zh-CN`, 86 message keys, parity enforced in CI |
+| Languages | `en-US` and `zh-CN`, 88 message keys, parity enforced in CI |
 | CI | fmt, clippy, build, test, all-features test, i18n, language, conformance, XSD validation, corpus freshness, fuzz smoke run |
 
 ## Honest gaps
@@ -168,11 +168,7 @@ page.
 
 - **U3-a** `[x]` ~~A signature panel as zone Z6, drawn before the canvas so the canvas measures the space actually left for pages. It shows one row per signature with its verdict, signer, signing time and algorithm, and verification runs on the document once when the panel first opens rather than per signature, because asking the engine per signature re-reads the package each time. Three verdicts rather than two: the engine can only conclude good or bad and reports a signature it has no certificate for as an error, and flattening that into "tampered" would tell the reader their document was altered when nothing says it was — so an unverifiable signature is amber, not red.~~
 - **U3-b** `[x]` ~~The menu can export what the reader is looking at, as one PDF or as one PNG per page, and the range is the visible selection rather than a span — a spread exports as the two pages shown, because a reader in front of a document is asking about the page in front of them. `document_to_pdf_pages` on the convert capability takes a list for exactly this reason, and repeats are honoured because a caller may want one page twice. The window cannot know where a file belongs, so it writes the request into `App` and reports the format; the host asks the platform, which names a file for PDF and a folder for PNG. Conversion runs on its own thread for the same reason rasterizing does, and unlike a render it is never superseded. One bug worth recording came out of the tests: the status line counted written files, so a two-page PDF announced "1 page", and the two formats are now counted differently — a PDF in pages, PNG in files, because that is what appears on disk.~~
-- **U3-c** Keyboard navigation and focus handling throughout, so the reader is
-  fully operable without a mouse, plus a real locale switch that pulls from the
-  existing catalogues instead of hardcoded strings. `egui` has thin
-  accessibility support, so this task is wider here than it would be in a web
-  reader and is not optional.
+- **U3-c** `[x]` ~~Keyboard navigation throughout, so the reader is fully operable without a mouse, plus a locale switch that pulls from the existing catalogues. The key table is a pure function over key, modifiers and whether a document is open, which is the only way to test a keybinding without a keyboard, and a shortcut reaches the same `App` method the toolbar button does, so the two cannot drift apart — a test asserts they land in the same state. Keys resolve in the last of the ten frame steps, after every panel is drawn, because `egui`'s `TextEdit` consumes keys as it draws and a reader typing a search term would otherwise have the page turn under the cursor on every `s`. `Escape` has two states and which one it means is a pure function too: the search box holds focus first, so the first `Escape` surrenders focus and only the second closes the panel. With no document open, page and zoom keys resolve to nothing rather than to an error, because a reader who has not opened a file is not doing something wrong. Language names are written in their own language and come from the catalogues rather than from a match in the source, and switching keeps the pages already rasterized — the page is pixels, the label is a word.~~
 
 ---
 

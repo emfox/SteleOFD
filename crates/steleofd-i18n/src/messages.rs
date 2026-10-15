@@ -76,6 +76,10 @@ pub enum MessageId {
     ReaderExportPdfTitle,
     /// Title of the platform dialog choosing where the PNG files go
     ReaderExportPngTitle,
+    /// Name of this language, written in itself
+    LocaleNameEn,
+    /// Name of the Chinese locale, written in itself
+    LocaleNameZh,
 
     // Conversion module
     /// Conversion started
@@ -236,6 +240,8 @@ impl MessageId {
             Self::ReaderExportPngDone => "reader-export-png-done",
             Self::ReaderExportPdfTitle => "reader-export-pdf-title",
             Self::ReaderExportPngTitle => "reader-export-png-title",
+            Self::LocaleNameEn => "locale-name-en",
+            Self::LocaleNameZh => "locale-name-zh",
 
             // Conversion
             Self::ConvertStart => "convert-start",
@@ -347,6 +353,8 @@ impl MessageId {
         Self::ReaderExportPngDone,
         Self::ReaderExportPdfTitle,
         Self::ReaderExportPngTitle,
+        Self::LocaleNameEn,
+        Self::LocaleNameZh,
         // Conversion
         Self::ConvertStart,
         Self::ConvertProgress,

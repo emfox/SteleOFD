@@ -1002,3 +1002,287 @@ fn a_dropped_document_still_names_its_export_files() {
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// The keyboard, pressed without a window: what a reader can reach with a key.
+mod keyboard {
+    use super::{App, open_pages};
+    use eframe::egui::{Key, Modifiers};
+    use steleofd_reader::shortcuts::{self, Action};
+
+    /// No modifier at all.
+    fn plain() -> Modifiers {
+        Modifiers::default()
+    }
+
+    /// Ctrl held, as a shortcut uses it.
+    fn ctrl() -> Modifiers {
+        Modifiers {
+            ctrl: true,
+            ..Modifiers::default()
+        }
+    }
+
+    /// Shift held, which is what distinguishes two meanings of one key.
+    fn shift() -> Modifiers {
+        Modifiers {
+            shift: true,
+            ..Modifiers::default()
+        }
+    }
+
+    /// Resolve a key the way the window does, with a document open.
+    fn press(key: Key, modifiers: Modifiers) -> Option<Action> {
+        shortcuts::interpret(key, modifiers, true)
+    }
+
+    #[test]
+    fn the_arrow_keys_and_page_keys_both_page() {
+        // Two keys for one action, because a reader arrives with either habit.
+        assert_eq!(press(Key::ArrowRight, plain()), Some(Action::NextPage));
+        assert_eq!(press(Key::PageDown, plain()), Some(Action::NextPage));
+        assert_eq!(press(Key::ArrowLeft, plain()), Some(Action::PreviousPage));
+        assert_eq!(press(Key::PageUp, plain()), Some(Action::PreviousPage));
+    }
+
+    #[test]
+    fn home_and_end_jump_to_the_ends_of_the_document() {
+        assert_eq!(press(Key::Home, plain()), Some(Action::FirstPage));
+        assert_eq!(press(Key::End, plain()), Some(Action::LastPage));
+        assert_eq!(press(Key::Home, ctrl()), Some(Action::FirstPage));
+        assert_eq!(press(Key::End, ctrl()), Some(Action::LastPage));
+    }
+
+    #[test]
+    fn the_zoom_keys_step_the_resolution_and_reset_it() {
+        assert_eq!(press(Key::Equals, plain()), Some(Action::ZoomIn));
+        assert_eq!(press(Key::Minus, plain()), Some(Action::ZoomOut));
+        assert_eq!(press(Key::Num0, plain()), Some(Action::ZoomReset));
+    }
+
+    #[test]
+    fn f3_walks_the_hits_in_both_directions() {
+        // One key, two meanings, distinguished by shift: the browser habit.
+        assert_eq!(press(Key::F3, plain()), Some(Action::NextHit));
+        assert_eq!(press(Key::F3, shift()), Some(Action::PreviousHit));
+    }
+
+    #[test]
+    fn the_command_keys_reach_the_expensive_actions() {
+        assert_eq!(press(Key::O, ctrl()), Some(Action::Open));
+        assert_eq!(press(Key::S, ctrl()), Some(Action::ExportPdf));
+        assert_eq!(press(Key::F, ctrl()), Some(Action::ToggleSearch));
+        assert_eq!(press(Key::Slash, ctrl()), Some(Action::FocusSearch));
+    }
+
+    #[test]
+    fn a_key_with_no_meaning_is_none_rather_than_a_guess() {
+        assert_eq!(press(Key::Num7, plain()), None);
+        assert_eq!(press(Key::Q, plain()), None);
+        assert_eq!(press(Key::A, plain()), None);
+    }
+
+    #[test]
+    fn page_keys_do_nothing_with_no_document_open() {
+        // Not an error the reader should hear about: there is no page to turn.
+        assert_eq!(shortcuts::interpret(Key::ArrowRight, plain(), false), None);
+        assert_eq!(shortcuts::interpret(Key::End, plain(), false), None);
+    }
+
+    #[test]
+    fn opening_and_searching_still_work_with_nothing_open() {
+        // The two things a reader can do before opening anything.
+        assert_eq!(
+            shortcuts::interpret(Key::O, ctrl(), false),
+            Some(Action::Open)
+        );
+        assert_eq!(
+            shortcuts::interpret(Key::F, ctrl(), false),
+            Some(Action::ToggleSearch)
+        );
+    }
+
+    #[test]
+    fn escape_leaves_the_search_box_before_it_closes_the_panel() {
+        // A caret the reader cannot get out of is the one real trap here.
+        assert_eq!(
+            shortcuts::escape_target(true, true),
+            Some(Action::FocusSearch)
+        );
+        assert_eq!(
+            shortcuts::escape_target(true, false),
+            Some(Action::ToggleSearch)
+        );
+        assert_eq!(shortcuts::escape_target(false, false), None);
+    }
+
+    #[test]
+    fn a_shortcut_and_the_button_it_mirrors_reach_the_same_state() {
+        // The point of resolving intent: a key and a click cannot drift apart.
+        let mut by_key = App::new();
+        let mut by_click = App::new();
+        for app in [&mut by_key, &mut by_click] {
+            *app = open_pages(8);
+        }
+        by_key.apply(Action::NextPage);
+        by_click.next_page();
+        assert_eq!(by_key.current_page(), by_click.current_page());
+
+        by_key.apply(Action::LastPage);
+        by_click.go_to(7);
+        assert_eq!(by_key.current_page(), by_click.current_page());
+
+        by_key.apply(Action::FirstPage);
+        by_click.go_to(0);
+        assert_eq!(by_key.current_page(), by_click.current_page());
+    }
+
+    #[test]
+    fn paging_by_key_steps_by_the_layouts_stride() {
+        // Facing mode advances a spread, so the key must not land mid-spread.
+        let mut app = open_pages(8);
+        app.set_layout(steleofd_reader::viewer::Layout::Facing);
+        app.go_to(2);
+        app.apply(Action::NextPage);
+        assert_eq!(app.current_page(), 4, "a key advances a whole spread");
+    }
+
+    #[test]
+    fn the_zoom_keys_stop_at_the_permitted_ends() {
+        let mut app = open_pages(2);
+        for _ in 0..200 {
+            app.apply(Action::ZoomIn);
+        }
+        assert_eq!(
+            app.dpi(),
+            steleofd_reader::viewer::MAX_DPI,
+            "zooming in forever must stop"
+        );
+        for _ in 0..200 {
+            app.apply(Action::ZoomOut);
+        }
+        assert_eq!(
+            app.dpi(),
+            steleofd_reader::viewer::MIN_DPI,
+            "zooming out forever must stop"
+        );
+        app.apply(Action::ZoomReset);
+        assert_eq!(app.dpi(), steleofd_reader::viewer::DEFAULT_DPI);
+    }
+
+    #[test]
+    fn the_toggle_keys_open_and_close_the_panels() {
+        let mut app = open_pages(2);
+        assert!(!app.search_open());
+        app.apply(Action::ToggleSearch);
+        assert!(app.search_open());
+        app.apply(Action::ToggleSearch);
+        assert!(!app.search_open());
+
+        app.apply(Action::ToggleSignatures);
+        assert!(app.signatures_open());
+        app.apply(Action::ToggleSignatures);
+        assert!(!app.signatures_open());
+    }
+}
+
+/// Switching language, which has to redraw every label from the catalogue.
+mod language {
+    use super::{App, open_pages};
+    use steleofd_i18n::Locale;
+
+    #[test]
+    fn switching_locale_changes_every_label() {
+        // The reader's own strings and the engine's share one catalogue, so a
+        // locale switch that only moved the reader's labels would be a lie.
+        let mut app = App::new();
+        let english = app.page_label();
+        app.set_locale(Locale::zh_cn());
+        let chinese = app.page_label();
+        assert_ne!(english, chinese, "the page label did not follow");
+        // The page counter in Chinese carries the character for "page".
+        assert!(
+            chinese.contains('\u{9875}'),
+            "the label did not follow the catalogue: {chinese}"
+        );
+    }
+
+    #[test]
+    fn both_bundled_languages_are_offered() {
+        let app = App::new();
+        let tags: Vec<String> = app
+            .locales()
+            .iter()
+            .map(|locale| locale.tag().to_string())
+            .collect();
+        assert!(
+            tags.iter().any(|tag| tag == "en-US"),
+            "English is missing: {tags:?}"
+        );
+        assert!(
+            tags.iter().any(|tag| tag == "zh-CN"),
+            "Chinese is missing: {tags:?}"
+        );
+    }
+
+    #[test]
+    fn a_locale_is_named_in_its_own_language() {
+        // Each entry is an endonym, written in the language it names rather
+        // than translated into the current one. Both catalogues carry the same
+        // two names, which is what makes them endonyms rather than labels.
+        let english = App::new();
+        let names: Vec<String> = english
+            .locales()
+            .iter()
+            .map(|locale| english.locale_name(locale))
+            .collect();
+        assert!(names.contains(&"English".to_string()), "{names:?}");
+        let chinese = "\u{7b80}\u{4f53}\u{4e2d}\u{6587}";
+        assert!(
+            names.contains(&chinese.to_string()),
+            "Chinese must be offered in Chinese whatever the menu language is: {names:?}"
+        );
+
+        // Switching the interface language must not translate the names, or a
+        // reader would lose the one entry they were looking for.
+        let mut switched = App::new();
+        switched.set_locale(Locale::zh_cn());
+        for locale in switched.locales() {
+            assert_eq!(
+                switched.locale_name(&locale),
+                english.locale_name(&locale),
+                "the name of {} changed with the interface language",
+                locale.tag()
+            );
+        }
+    }
+
+    #[test]
+    fn switching_to_the_locale_already_in_force_changes_nothing() {
+        let mut app = App::new();
+        let before = app.page_label();
+        let current = app.locale();
+        app.set_locale(current);
+        assert_eq!(app.page_label(), before);
+    }
+
+    #[test]
+    fn switching_language_keeps_the_rendered_pages() {
+        // Pages are pixels and a label is a word: a translated interface does
+        // not make a cached raster wrong, so throwing it away would be waste.
+        let mut app = open_pages(3);
+        app.page_image(0).expect("the request is accepted");
+        for _ in 0..2000 {
+            app.poll();
+            if app.cached(0).is_some() {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(2));
+        }
+        assert!(app.cached(0).is_some(), "the page should have landed");
+        app.set_locale(steleofd_i18n::Locale::zh_cn());
+        assert!(
+            app.cached(0).is_some(),
+            "changing language must not throw away rendered pages"
+        );
+    }
+}

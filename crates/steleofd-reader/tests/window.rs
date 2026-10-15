@@ -454,3 +454,38 @@ fn a_finished_export_is_announced_in_the_status_bar() {
     harness.get_by_label_contains(&label);
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn the_menu_offers_both_languages_in_their_own_names() {
+    // A reader who cannot read the menu's current language still has to be
+    // able to find theirs, so the entries are endonyms rather than translations.
+    let harness = harness(App::new());
+    harness.get_by_label("English");
+    harness.get_by_label(&label(MessageId::LocaleNameZh));
+}
+
+#[test]
+fn choosing_a_language_redraws_the_window_in_it() {
+    let mut app = App::new();
+    let bytes = steleofd_testkit::multipage_archive(3);
+    app.open_bytes(&bytes, Some("many.ofd"))
+        .expect("the fixture opens");
+    let mut harness = harness(app);
+
+    harness
+        .get_by_label(&label(MessageId::LocaleNameZh))
+        .click();
+    harness.run();
+    assert_eq!(harness.state().locale().tag(), "zh-CN");
+
+    // The page counter is a catalogue string, so it follows the language rather
+    // than staying English behind a translated menu.
+    let label = harness.state().page_label();
+    // The catalogue entry for the Chinese page counter carries the character
+    // for "page", written as an escape because the source carries no literal.
+    assert!(
+        label.contains('\u{9875}'),
+        "the page label did not follow: {label}"
+    );
+    harness.get_by_label_contains(&label);
+}

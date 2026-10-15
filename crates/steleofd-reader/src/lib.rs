@@ -7,10 +7,12 @@
 pub mod app;
 pub mod export_worker;
 pub mod render_worker;
+pub mod shortcuts;
 pub mod viewer;
 pub mod window;
 
 pub use app::{App, AppError, Canvas, ExportReport, Fit, Hit, SignatureReport, Verdict};
 pub use export_worker::{ExportFormat, ExportQueue, ExportRequest, ExportResult};
 pub use render_worker::{RenderQueue, RenderRequest, RenderResult};
+pub use shortcuts::Action;
 pub use viewer::{DroppedFile, PageCache, RenderedPage, looks_blank};

@@ -12,3 +12,8 @@ common-save = 保存
 common-close = 关闭
 common-retry = 重试
 common-delete = 删除
+
+# 每种语言用自己的文字书写，而不是翻译：看不懂当前界面的读者，
+# 仍然要能在菜单里找到自己的语言。
+locale-name-en = English
+locale-name-zh = 简体中文

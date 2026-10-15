@@ -362,6 +362,8 @@ pub fn all_keys() -> &'static [&'static str] {
         "reader-export-png-done",
         "reader-export-pdf-title",
         "reader-export-png-title",
+        "locale-name-en",
+        "locale-name-zh",
         "convert-start",
         "convert-progress",
         "convert-done",

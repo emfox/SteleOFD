@@ -130,9 +130,35 @@ of a long document is written in one go and would otherwise drop frames. Unlike
 a render, an export is never superseded — the reader asked for a file, and the
 file either appears or it does not.
 
+**Keyboard.** Every action the reader can reach with a key, and the window is
+fully operable without a mouse — which on `egui` is work rather than a
+checkbox, because its accessibility support is thin. Two rules decide
+everything:
+
+*Shortcuts resolve after the panels are drawn.* A key a text field has already
+taken never reaches the shortcut table, which is what stops a reader typing a
+query from turning pages underneath them. Resolution is a pure function in
+`shortcuts`, so the whole table is testable without a keyboard.
+
+*Keys and buttons reach the same state.* Paging by key calls the same methods
+the toolbar buttons call, so the two cannot drift apart. A test asserts it.
+
+Escape leaves the search box before it closes the search panel: the box takes
+focus first, so one key covers both states and the reader is never trapped in a
+panel they cannot leave. Shortcuts that act on a page do nothing when no
+document is open, which is not a failure worth a message.
+
+**Language.** The two bundled locales are offered in Z1, each written in its own
+language. That is the point of an endonym: a reader who cannot read the menu's
+current language still has to be able to find theirs in it, so translating the
+entries would hide the one they are looking for. The names come from the
+catalogue, because they are text and all of the reader's text lives there.
+Switching the interface keeps the rendered pages: a page is pixels and a label
+is a word, so a translated interface does not make a cached raster wrong.
+
 ## 3. Frame flow
 
-`eframe::App::ui` runs nine steps, always in this order. The order is the
+`eframe::App::ui` runs ten steps, always in this order. The order is the
 specification; a step may not be moved earlier because each one consumes what
 the previous produced.
 
@@ -146,7 +172,12 @@ the previous produced.
 7  draw Z6          signatures    (only when open; before the canvas)
 8  draw Z3          canvas        (the only zone that rasterizes)
 9  draw Z4          status bar    (reads state, error wins the left half)
+10 resolve keys     what the panels did not take (see below)
 ```
+
+Step10 is last on purpose. A shortcut that resolved earlier would fire while a
+reader is typing, because at that point no text field has claimed the key; by
+running after every panel, the only keys left are the ones nobody wanted.
 
 Three consequences worth stating, because each one has been got wrong before:
 

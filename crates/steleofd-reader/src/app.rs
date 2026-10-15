@@ -7,6 +7,7 @@ use steleofd_i18n::{I18n, MessageId};
 
 use crate::export_worker::{ExportFormat, ExportQueue, ExportRequest};
 use crate::render_worker::RenderQueue;
+use crate::shortcuts::{self, ZOOM_STEP};
 use crate::viewer::{self, DroppedFile, Layout, PageCache};
 
 /// A failure the reader shows in its own words.
@@ -427,6 +428,42 @@ impl App {
         &self.i18n
     }
 
+    /// The locale every label is currently drawn in.
+    pub fn locale(&self) -> steleofd_i18n::Locale {
+        self.i18n.locale().clone()
+    }
+
+    /// The locales this build can switch to, from the bundled catalogues.
+    pub fn locales(&self) -> Vec<steleofd_i18n::Locale> {
+        self.i18n.available_locales().to_vec()
+    }
+
+    /// Switch every label to `locale`. The page cache survives, because the
+    /// pages are pixels and a label is a word: a translated interface does not
+    /// make a rendered page wrong.
+    pub fn set_locale(&mut self, locale: steleofd_i18n::Locale) {
+        if self.i18n.locale() == &locale {
+            return;
+        }
+        self.i18n.set_locale(locale);
+        // The description is assembled from labels, so it is rebuilt — but only
+        // while a document is open, because with none there is nothing to say.
+        if self.doc.is_some() {
+            self.info = Some(self.describe());
+        }
+    }
+
+    /// The name of `locale` written in that locale, so a reader who cannot
+    /// read the current language can still find theirs. It comes from the
+    /// catalogue because it is text, and all the reader's text lives there.
+    pub fn locale_name(&self, locale: &steleofd_i18n::Locale) -> String {
+        let key = match locale.tag() {
+            "zh-CN" => MessageId::LocaleNameZh,
+            _ => MessageId::LocaleNameEn,
+        };
+        self.i18n.text(key)
+    }
+
     /// The rendered page if it is cached at the current resolution.
     pub fn cached(&self, page: usize) -> Option<&viewer::RenderedPage> {
         self.cache.get(page, self.dpi)
@@ -478,6 +515,36 @@ impl App {
                 ("total", self.page_count().to_string().into()),
             ],
         )
+    }
+
+    /// Act on a keyboard shortcut. Paging goes through the same methods the
+    /// toolbar buttons call, so a key and a click cannot drift apart, and it
+    /// is all testable without a keyboard.
+    pub fn apply(&mut self, action: shortcuts::Action) {
+        use shortcuts::Action;
+        match action {
+            Action::NextPage => self.next_page(),
+            Action::PreviousPage => self.previous_page(),
+            Action::FirstPage => self.go_to(0),
+            Action::LastPage => self.go_to(self.page_count().saturating_sub(1)),
+            Action::ZoomIn => self.step_zoom(ZOOM_STEP),
+            Action::ZoomOut => self.step_zoom(-ZOOM_STEP),
+            Action::ZoomReset => self.set_dpi(viewer::DEFAULT_DPI),
+            Action::NextHit => self.next_hit(),
+            Action::PreviousHit => self.previous_hit(),
+            Action::ToggleSearch => self.set_search_open(!self.search_open),
+            Action::ToggleSignatures => self.set_signatures_open(!self.signatures_open),
+            // Focus and Escape are the window's business: they are about where
+            // the caret is, which the state does not track.
+            Action::FocusSearch | Action::Escape => {}
+            Action::Open => self.request_open(),
+            Action::ExportPdf => self.request_export(crate::export_worker::ExportFormat::Pdf),
+        }
+    }
+
+    /// Move the resolution by `delta`, staying inside the permitted range.
+    fn step_zoom(&mut self, delta: f32) {
+        self.set_dpi(self.dpi + delta);
     }
 
     /// The zoom label shown in the toolbar.
