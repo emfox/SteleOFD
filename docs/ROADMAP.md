@@ -14,9 +14,9 @@ criterion, so it is always obvious whether it is done.
 | --- | --- |
 | Crates | 26 (L0 foundation through L5 delivery) |
 | Source | 24,904 lines of Rust, measured with `find crates -name '*.rs'` |
-| Tests | 591 passing, plus 13 inline unit-test modules |
+| Tests | 597 passing, plus 13 inline unit-test modules |
 | Delivery forms | `cli`, `wasm`, `ffi`, `server`, `reader`, all on the `core` facade |
-| Standard clauses verified | 32 of 47 in GB/T 33190-2016 |
+| Standard clauses verified | 36 of 47 in GB/T 33190-2016 |
 | Languages | `en-US` and `zh-CN`, 75 message keys, parity enforced in CI |
 | CI | fmt, clippy, build, test, all-features test, i18n, language, conformance, XSD validation |
 
@@ -25,11 +25,11 @@ criterion, so it is always obvious whether it is done.
 These are the things a new contributor would otherwise discover the hard way.
 Each one is a real, verified finding, not a guess.
 
-1. **15 of 47 standard clauses still have no test asserting them**, down from
+1. **11 of 47 standard clauses still have no test asserting them**, down from
    27 before N2. The register in `compliance/gb-t-33190.toml` lists them by
-   name. What remains clusters on gradient and clip geometry (`8.3.4`, `8.4`),
-   text detail (`11.1`, `11.3`, `11.4`, `7.8`) and the feature tail (video,
-   composite objects, actions, annotations, custom tags, extensions,
+   name. What remains is gradient and clip geometry (`8.3.4`, `8.4`), the path
+   object itself (`9.1`) and the feature tail (`12` video, `13` composite, `14.1`
+   actions, `15` annotations, `16` custom tags, `17` extensions, `18.2.2`/`18.2.3`
    signature scope and appearance).
 2. **`proptest` and `criterion` are declared in the workspace but never used.**
    Zero references outside the root `Cargo.toml`. The property and benchmark
@@ -105,8 +105,11 @@ the cheap structural ones land before the expensive rendering ones.
   `LineCap`/`LineJoin`; `DashPattern` is an `ST_Array` attribute with a
   `DashOffset` sibling, not a child element; and the `Rule` attribute on
   `PathObject` was never read, so every path was filled non-zero.
-- **N2-c** Text and font: `11.1` font, `11.3` text positioning, `11.4` glyph
-  transformation, `7.8` outlines.
+- **N2-c** `[x]` Text and font: `11.1` font, `11.3` text positioning, `11.4`
+  glyph transformation, `7.8` outlines. Four more real gaps surfaced here:
+  `DeltaY` was not parsed, `DeltaX` was parsed but never applied, `HScale` was
+  ignored, and `TextObject.Stroke`/`Fill` meant text could never be outlined.
+  All four are now read and flattened.
 - **N2-d** Graphics features: `8.3.4` gradient, `8.4` clip area, `9.1` path
   object.
 - **N2-e** The feature tail: `12` video, `13` composite object, `14.1` action

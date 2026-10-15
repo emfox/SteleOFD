@@ -423,3 +423,102 @@ fn gb_t_33190_9_2_rule_selects_the_fill_rule() {
     assert_eq!(rule_of(r#"Rule="NonZero""#), PaintRule::NonZero);
     assert_eq!(rule_of(""), PaintRule::NonZero);
 }
+
+/// The first `Text` op a page with one text object produces.
+fn glyph_run(object_attrs: &str, code: &str) -> steleofd_display::text::GlyphRun {
+    let page_xml = document_xml(&format!(
+        r#"<Page ID="1"><Content><Layer>
+  <TextObject ID="10" Boundary="0 0 100 30" Font="3" Size="5" {object_attrs}>
+    {code}
+  </TextObject>
+</Layer></Content></Page>"#
+    ));
+    let entries = [
+        ("OFD.xml", OFD_XML.to_string()),
+        ("Doc_0/Document.xml", page_xml),
+    ];
+    let mut parser = open(&entries);
+    let doc = parser.open_document().expect("open document");
+    let page = parser.page_display(&doc, 0).expect("flatten page");
+    page.ops
+        .iter()
+        .find_map(|op| match op {
+            DrawOp::Text(run) => Some(run.clone()),
+            _ => None,
+        })
+        .expect("text run")
+}
+
+#[test]
+fn gb_t_33190_11_1_font_reference_and_size_reach_the_run() {
+    // The Font attribute is a resource id and Size a magnitude in millimetres;
+    // both have to survive into the display list, since the backend looks the
+    // face up by that id.
+    let run = glyph_run("", r#"<TextCode X="0" Y="0">AB</TextCode>"#);
+    assert_eq!(run.font, steleofd_font::FontId(3));
+    assert_eq!(run.size.0, 5.0);
+    assert_eq!(run.glyphs.len(), 2);
+}
+
+#[test]
+fn gb_t_33190_11_3_text_code_origin_becomes_the_run_transform() {
+    // TextCode X/Y is the origin of that line within the object; the run's
+    // transform carries it so the renderer never re-reads the XML.
+    let run = glyph_run("", r#"<TextCode X="12" Y="7">A</TextCode>"#);
+    let (x, y) = run.transform.apply(0.0, 0.0);
+    assert_eq!((x, y), (12.0, 7.0));
+}
+
+#[test]
+fn gb_t_33190_11_3_char_space_widens_the_advance() {
+    let run = glyph_run(r#"CharSpace="2""#, r#"<TextCode X="0" Y="0">AB</TextCode>"#);
+    assert_eq!(run.letter_spacing, 2.0, "CharSpace rides on the run");
+}
+
+#[test]
+fn gb_t_33190_11_3_delta_attributes_adjust_each_advance() {
+    // DeltaX and DeltaY are per-glyph adjustments; the advance of glyph i is
+    // the size plus that glyph's deltas.
+    let run = glyph_run(
+        "",
+        r#"<TextCode X="0" Y="0" DeltaX="1 2 3" DeltaY="0.5 0.5 0.5">ABC</TextCode>"#,
+    );
+    assert_eq!(run.advances.len(), 3);
+    assert_eq!(run.advances[0], 6.5);
+    assert_eq!(run.advances[1], 7.5);
+    assert_eq!(run.advances[2], 8.5);
+}
+
+#[test]
+fn gb_t_33190_11_4_h_scale_is_applied_to_the_run_transform() {
+    // HScale stretches the glyphs horizontally without touching the advance;
+    // it lands in the transform, next to the origin.
+    let run = glyph_run(r#"HScale="2""#, r#"<TextCode X="10" Y="0">A</TextCode>"#);
+    let (x, y) = run.transform.apply(1.0, 0.0);
+    assert_eq!(
+        (x, y),
+        (12.0, 0.0),
+        "a unit of glyph space is twice as wide"
+    );
+    let (ox, oy) = run.transform.apply(0.0, 0.0);
+    assert_eq!((ox, oy), (10.0, 0.0), "the origin itself does not move");
+}
+
+#[test]
+fn gb_t_33190_7_8_text_may_be_stroked_as_an_outline() {
+    // A text object defaults to filled and unstroked; Stroke="true" asks for
+    // the glyph outlines to be drawn as well.
+    let plain = glyph_run("", r#"<TextCode X="0" Y="0">A</TextCode>"#);
+    assert!(plain.fill.is_some(), "text is filled by default");
+    assert!(plain.stroke.is_none(), "and not stroked");
+
+    let outlined = glyph_run(
+        r##"Stroke="true" Fill="false" StrokeColor="#0000FF""##,
+        r#"<TextCode X="0" Y="0">A</TextCode>"#,
+    );
+    assert!(outlined.stroke.is_some(), "Stroke=true outlines the glyphs");
+    assert!(
+        outlined.fill.is_none(),
+        "Fill=false leaves the interiors out"
+    );
+}

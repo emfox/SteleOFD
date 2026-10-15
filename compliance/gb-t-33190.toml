@@ -104,7 +104,10 @@ tests = ["gb_t_33190_7_7_page_content_may_live_in_base_loc"]
 [[item]]
 clause = "7.8"
 title = "Outlines"
-status = "untested"
+status = "verified"
+tests = [
+    "gb_t_33190_7_8_text_may_be_stroked_as_an_outline",
+]
 
 [[item]]
 clause = "7.9"
@@ -233,7 +236,10 @@ tests = ["gb_t_33190_10_image_object_requires_resource_id"]
 [[item]]
 clause = "11.1"
 title = "Font"
-status = "untested"
+status = "verified"
+tests = [
+    "gb_t_33190_11_1_font_reference_and_size_reach_the_run",
+]
 
 [[item]]
 clause = "11.2"
@@ -244,12 +250,20 @@ tests = ["gb_t_33190_11_2_text_object_keeps_font_size_and_codes"]
 [[item]]
 clause = "11.3"
 title = "Text positioning"
-status = "untested"
+status = "verified"
+tests = [
+    "gb_t_33190_11_3_text_code_origin_becomes_the_run_transform",
+    "gb_t_33190_11_3_char_space_widens_the_advance",
+    "gb_t_33190_11_3_delta_attributes_adjust_each_advance",
+]
 
 [[item]]
 clause = "11.4"
 title = "Glyph transformation"
-status = "untested"
+status = "verified"
+tests = [
+    "gb_t_33190_11_4_h_scale_is_applied_to_the_run_transform",
+]
 
 [[item]]
 clause = "12"
