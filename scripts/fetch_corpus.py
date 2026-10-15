@@ -20,6 +20,11 @@ Usage:
 
 `--check` reports which samples are missing without downloading anything, which
 is what CI runs to tell a developer what to fetch before a local run.
+
+`--parse` opens every sample that is present and compares the set that fails
+against `KNOWN_UNPARSED` below. It fails on either side of a mismatch: a sample
+that breaks for a new reason is a regression, and one that starts working means
+the list is stale and should be shortened.
 """
 
 from __future__ import annotations
@@ -72,6 +77,18 @@ SAMPLES: dict[str, str] = {
 }
 
 
+# Samples that do not open yet, and why. A corpus is only useful if a failure in
+# it means something, so the list is short, each entry names a cause, and CI
+# fails when a sample here starts working: that is the signal to remove it.
+KNOWN_UNPARSED = {
+    "intro-数科.ofd": "clip list with more than one area is not read yet",
+    "n.ofd": "the sample itself references a DrawParam it does not contain",
+}
+
+# How `--parse` opens one sample. Built by the caller before this runs.
+PARSE_COMMAND = "cargo run --quiet -p steleofd-cli -- info".split()
+
+
 def _fetch(path: str, timeout: float) -> bytes:
     quoted = urllib.parse.quote(path)
     request = urllib.request.Request(RAW + quoted, headers={"User-Agent": "steleofd-corpus"})
@@ -90,6 +107,40 @@ def _sanity(name: str, blob: bytes) -> str | None:
     return None
 
 
+def _parse(out: Path) -> int:
+    """Open each sample that is present, and hold the failures to the list."""
+    import subprocess
+
+    present = sorted(p for p in out.glob("*.ofd") if p.is_file())
+    if not present:
+        print(f"no samples in {out}", file=sys.stderr)
+        return 1
+    failed: dict[str, str] = {}
+    for path in present:
+        done = subprocess.run(
+            PARSE_COMMAND + [str(path)], capture_output=True, text=True, check=False
+        )
+        if done.returncode == 0:
+            continue
+        # One line of the error, so the report names a cause rather than a code.
+        reason = (done.stderr.strip() or done.stdout.strip()).splitlines()
+        failed[path.name] = reason[-1] if reason else f"exit {done.returncode}"
+    known = set(KNOWN_UNPARSED)
+    actual = set(failed)
+    ok = len(present) - len(failed)
+    print(f"third-party corpus: {ok}/{len(present)} opened")
+    for name in sorted(actual - known):
+        print(f"  REGRESSION {name}: {failed[name]}")
+    for name in sorted(known - actual):
+        print(f"  STALE {name}: listed as broken but now opens")
+    for name in sorted(actual & known):
+        print(f"  known {name}: {KNOWN_UNPARSED[name]}")
+    if actual != known:
+        print("\nthe set of unopened samples changed; update KNOWN_UNPARSED")
+        return 1
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -101,9 +152,13 @@ def main() -> int:
     parser.add_argument("--only", action="append", help="fetch just these samples")
     parser.add_argument("--timeout", type=float, default=120.0)
     parser.add_argument("--check", action="store_true", help="report what is missing and stop")
+    parser.add_argument("--parse", action="store_true", help="open every sample and compare failures")
     args = parser.parse_args()
 
     wanted = args.only or sorted(SAMPLES)
+
+    if args.parse:
+        return _parse(args.out)
 
     if args.check:
         missing = [n for n in wanted if not (args.out / n).is_file()]
