@@ -13,12 +13,12 @@ criterion, so it is always obvious whether it is done.
 | Measure | Value |
 | --- | --- |
 | Crates | 26 (L0 foundation through L5 delivery) |
-| Source | 27,773 lines of Rust, measured with `find crates -name '*.rs'` |
-| Tests | 635 passing, plus 13 inline unit-test modules |
+| Source | 29,302 lines of Rust, measured with `find crates -name '*.rs'` |
+| Tests | 735 passing, plus 13 inline unit-test modules |
 | Delivery forms | `cli`, `wasm`, `ffi`, `server`, `reader`, all on the `core` facade |
 | Standard clauses verified | 47 of 47 in GB/T 33190-2016 (46 `verified`, 1 `partial`) |
 | Languages | `en-US` and `zh-CN`, 75 message keys, parity enforced in CI |
-| CI | fmt, clippy, build, test, all-features test, i18n, language, conformance, XSD validation |
+| CI | fmt, clippy, build, test, all-features test, i18n, language, conformance, XSD validation, fuzz smoke run |
 
 ## Honest gaps
 
@@ -164,22 +164,39 @@ input.
   property also pinned down two behaviours that were previously only implicit —
   whitespace-only text is skipped, and outer whitespace is trimmed — so both are
   now asserted rather than assumed.
-- **N3-c** `cargo-fuzz` targets for the ZIP and XML readers, with the CI job
-  wired to a short deterministic run.
-- **N3-d** A crash-free invariant test that feeds random bytes to every public
-  entry point and asserts only that errors come back.
+- **N3-c** `[x]` `cargo-fuzz` targets for the ZIP and XML readers, in `fuzz/`.
+  `package_open` walks every entry of any archive `Package::from_bytes` accepts;
+  `xml_cursor` drains the event stream and turns a non-terminating walk into a
+  visible failure rather than a stuck process. The crate lives outside the
+  workspace because `cargo-fuzz` requires its own layout, and the hand-written
+  seed corpus is committed while libFuzzer's mutations are not. CI runs both for
+  20,000 runs under nightly.
+- **N3-d** `[x]` A crash-free invariant test that feeds random bytes to every
+  public entry point and asserts only that errors come back
+  (`crates/steleofd-parser/tests/crash_free.rs`). Four properties — arbitrary
+  text, arbitrary bytes decoded lossily, hostile content under a known root, and
+  a document truncated at every offset — all assert the same contract: the
+  readers return, they never crash.
 
 ### N4. Integration tests for the six thin crates (N4-a … N4-f)
 
 One task per crate, each driving the public API as a consumer rather than
-reaching into internals.
+reaching into internals. All six are done, 96 tests in total; each file is a new
+`tests/*.rs` in its crate, so a struct whose fields exist but whose accessors
+disagree now fails a test.
 
-- **N4-a** `convert`: PDF/PNG/SVG output shape, page selection, error paths
-- **N4-b** `xml`: encode/decode round trip against the annex A schemas
-- **N4-c** `model`: document assembly invariants
-- **N4-d** `font`: lookup, fallback, and the missing-font error
-- **N4-e** `display`: list construction and measurement
-- **N4-f** `render`: raster output properties, budget enforcement, dpi clamp
+- **N4-a** `[x]` `convert`: SVG shape and geometry, multi-page and empty PDFs,
+  PNG encoding, and the pixel budget. 11 tests.
+- **N4-b** `[x]` `xml`: namespace prefixes, absent versus malformed attributes,
+  the cursor walk, the depth ceiling and error positions. 21 tests.
+- **N4-c** `[x]` `model`: root validation, page lookup bounds, layer object
+  counts and the out-of-page resource types. 18 tests.
+- **N4-d** `[x]` `font`: face loading, codepoint round trips, shaping,
+  metrics, the fallback chain and the missing-font error. 18 tests.
+- **N4-e** `[x]` `display`: content bounds, blank detection, the state-stack
+  ceiling, viewport sizing and culling. 17 tests.
+- **N4-f** `[x]` `render`: painted pixels for background, fill, clip and
+  transform, plus the pixel budget and the degenerate page box. 11 tests.
 
 ### N5. Documentation and release hygiene (N5-a … N5-d)
 
