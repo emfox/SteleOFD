@@ -181,12 +181,12 @@ pub fn verify_signature(package: &mut Package, sig: &Signature) -> Result<Verify
             "signature carries no certificate".into(),
         ))
     })?;
-    Certificate::parse_der(cert).map_err(|e| {
+    let parsed = Certificate::parse_der(cert).map_err(|e| {
         OfdError::Signature(SignatureError::UnsupportedFormat(format!(
             "embedded certificate unreadable: {e}"
         )))
     })?;
-    verify_with_public_key(package, sig, cert)
+    verify_with_public_key(package, sig, parsed.public_key())
 }
 
 /// Verify a signature against an externally supplied public key.
