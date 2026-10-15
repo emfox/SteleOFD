@@ -19,10 +19,25 @@ pub enum Object {
     TextObject(TextObject),
     /// A raster image placement.
     ImageObject(ImageObject),
+    /// A group of objects that move, hide and clip as one unit.
+    CompositeObject(CompositeObject),
     /// Something unrecognized, skipped at render time.
     Unknown(serde_json::Value),
 }
 
+/// GB/T 33190 clause 13: a composite object places a vector resource on the
+/// page, the way an image object places a raster one. `CT_Composite` adds only
+/// a resource reference to the graphic unit base, so there is no child block.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CompositeObject {
+    /// Attributes common to every object.
+    #[serde(flatten)]
+    pub base: ObjectBase,
+    /// Id of the vector resource inside the document.
+    #[serde(rename = "ResourceID", default)]
+    pub resource_id: RefId,
+}
 impl Object {
     /// Reference id common to every authored object.
     pub fn id(&self) -> Option<&RefId> {
@@ -30,6 +45,7 @@ impl Object {
             Self::PathObject(o) => o.base.id.as_ref(),
             Self::TextObject(o) => o.base.id.as_ref(),
             Self::ImageObject(o) => o.base.id.as_ref(),
+            Self::CompositeObject(o) => o.base.id.as_ref(),
             Self::Unknown(_) => None,
         }
     }
@@ -192,6 +208,9 @@ pub struct ObjectBase {
     /// Miter limit written on the object itself.
     #[serde(rename = "MiterLimit", skip_serializing_if = "Option::is_none")]
     pub miter_limit: Option<f64>,
+    /// What the object does when clicked, hovered or loaded, clause 14.1.
+    #[serde(rename = "Actions", skip_serializing_if = "Option::is_none")]
+    pub actions: Option<Actions>,
 }
 
 /// The `Clips` container of clause 8.4.
@@ -574,4 +593,213 @@ mod model_round_trip {
             other => panic!("unexpected variant: {other:?}"),
         }
     }
+}
+
+/// GB/T 33190 clause 14.1: what a click, hover or load does.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Actions {
+    /// The actions, in the order they are listed.
+    #[serde(rename = "Action", default)]
+    pub items: Vec<Action>,
+}
+
+/// One action, with the event that triggers it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Action {
+    /// What triggers the action.
+    pub event: ActionEvent,
+    /// The region the action is sensitive in, when one is stated.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub region: Option<Region>,
+    /// What the action does.
+    pub kind: ActionKind,
+}
+
+impl Default for Action {
+    fn default() -> Self {
+        Self {
+            event: ActionEvent::Click,
+            region: None,
+            kind: ActionKind::Unknown,
+        }
+    }
+}
+
+/// The event an action listens for; `Event` is required by the schema.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ActionEvent {
+    /// Fires when the object is loaded.
+    Load,
+    /// Fires when the pointer hovers over the object.
+    Hover,
+    /// Fires when the object is clicked.
+    #[default]
+    Click,
+}
+
+impl ActionEvent {
+    /// The spelling the standard uses for this event.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Load => "DO",
+            Self::Hover => "PO",
+            Self::Click => "CLICK",
+        }
+    }
+
+    /// Read one of the three spellings the standard defines.
+    pub fn parse(raw: &str) -> Option<Self> {
+        match raw {
+            "DO" => Some(Self::Load),
+            "PO" => Some(Self::Hover),
+            "CLICK" => Some(Self::Click),
+            _ => None,
+        }
+    }
+}
+
+/// The thing an action does, per the clause.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ActionKind {
+    /// Jump to a destination inside the document.
+    Goto(GotoTarget),
+    /// Open a URI.
+    Uri(UriAction),
+    /// Open an attachment.
+    GotoA {
+        /// Attachment the action opens.
+        attach_id: String,
+        /// Whether a new window is wanted; true unless stated otherwise.
+        new_window: bool,
+    },
+    /// Play a sound resource.
+    Sound(SoundAction),
+    /// Play a movie resource.
+    Movie(MovieAction),
+    /// An action this build does not model.
+    #[default]
+    Unknown,
+}
+
+/// What a `Sound` action does.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SoundAction {
+    /// Resource id of the sound.
+    pub resource_id: String,
+    /// Playback volume as a percentage, when one is stated.
+    pub volume: Option<i32>,
+    /// Whether the sound repeats.
+    pub repeat: Option<bool>,
+    /// Whether playback blocks the reader.
+    pub synchronous: Option<bool>,
+}
+
+/// What a `Movie` action does, and what it does to the movie.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MovieAction {
+    /// Resource id of the movie.
+    pub resource_id: String,
+    /// What to do: `Play`, `Stop`, `Pause` or `Resume`.
+    pub operator: MovieOperator,
+}
+
+impl Default for MovieAction {
+    fn default() -> Self {
+        Self {
+            resource_id: String::new(),
+            operator: MovieOperator::Play,
+        }
+    }
+}
+
+/// The four things a `Movie` action may ask for.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum MovieOperator {
+    /// Start playback.
+    #[default]
+    Play,
+    /// Stop playback.
+    Stop,
+    /// Pause playback.
+    Pause,
+    /// Resume playback.
+    Resume,
+}
+
+impl MovieOperator {
+    /// The spelling the standard uses.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Play => "Play",
+            Self::Stop => "Stop",
+            Self::Pause => "Pause",
+            Self::Resume => "Resume",
+        }
+    }
+
+    /// Read one of the four spellings, defaulting to `Play` like the schema.
+    pub fn parse(raw: &str) -> Self {
+        match raw {
+            "Stop" => Self::Stop,
+            "Pause" => Self::Pause,
+            "Resume" => Self::Resume,
+            _ => Self::Play,
+        }
+    }
+}
+
+/// Where a `Goto` action jumps to.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum GotoTarget {
+    /// A position on a named page.
+    Dest(Dest),
+    /// A named bookmark.
+    Bookmark {
+        /// Bookmark name.
+        name: String,
+    },
+}
+
+/// A destination inside the document.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Dest {
+    /// How the view fits the target: `XYZ`, `Fit`, `FitH`, `FitV` or `FitR`.
+    pub kind: String,
+    /// Page the destination is on.
+    pub page_id: String,
+    /// Left edge, when the fit uses one.
+    pub left: Option<String>,
+    /// Top edge, when the fit uses one.
+    pub top: Option<String>,
+    /// Right edge, for `FitR`.
+    pub right: Option<String>,
+    /// Bottom edge, for `FitR`.
+    pub bottom: Option<String>,
+    /// Zoom factor.
+    pub zoom: Option<String>,
+}
+
+/// The region an action is limited to, `CT_Region`.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Region {
+    /// Areas making up the region.
+    pub areas: Vec<RegionArea>,
+}
+
+/// One area of a region: a clip path expressed as draw commands.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RegionArea {
+    /// The commands that outline the area, in abbreviated form.
+    pub path_data: String,
+}
+
+/// What a `URI` action opens.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct UriAction {
+    /// Target URI.
+    pub uri: String,
+    /// Base URI that `uri` is resolved against.
+    pub base: Option<String>,
+    /// Where the URI opens.
+    pub target: Option<String>,
 }

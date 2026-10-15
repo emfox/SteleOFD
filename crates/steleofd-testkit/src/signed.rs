@@ -7,37 +7,56 @@ use steleofd_sign::{read_signature, signed_digest};
 
 use crate::der::{base64_of, sm2_cert_der};
 use crate::document::{
-    DOCUMENT_ENTRY, OFD_XML, OFD_XML_SIGNED, SIGN_FILE, SIGNS_ENTRY, SIGNS_XML, base_entries,
-    open_package,
+    DOCUMENT_ENTRY, OFD_XML, OFD_XML_SIGNED, SIGN_FILE, SIGN_VALUE_FILE, SIGNS_ENTRY, SIGNS_XML,
+    base_entries, open_package,
 };
 
-/// A descriptor with no proof, as a first pass writes it.
+/// A descriptor with no proof, as a first pass writes it. The method lives on
+/// `References` and each `Reference` carries its own `CheckValue`, which is what
+/// the annex A schema for clause 18.2.2 actually requires.
 pub fn descriptor(id: &str, refs: &[(&str, &str)]) -> String {
-    let mut xml = format!(r#"<Signature ID="{id}">"#);
-    for (method, file) in refs {
+    let mut xml = format!(r#"<Signature ID="{id}"><SignedInfo>"#);
+    if let Some((method, _)) = refs.first() {
+        xml.push_str(&format!(r#"<References CheckMethod="{method}">"#));
+    } else {
+        xml.push_str("<References>");
+    }
+    for (_, file) in refs {
         xml.push_str(&format!(
-            r#"<SignedInfo><Reference CheckMethod="{method}" FileRef="{file}"/></SignedInfo>"#
+            r#"<Reference FileRef="{file}"><CheckValue></CheckValue></Reference>"#
         ));
     }
-    xml.push_str("</Signature>");
+    xml.push_str("</References></SignedInfo></Signature>");
     xml
 }
 
-/// A descriptor carrying its proof, the way a signed document stores it.
+/// A descriptor carrying its proof, the way a signed document stores it. The
+/// proof is not inline: `SignedValue` is a path, so the caller supplies it as a
+/// separate entry.
 pub fn descriptor_with_proof(
     id: &str,
     refs: &[(&str, &str)],
-    check_value: &str,
+    digests: &[Vec<u8>],
+    check_value_ref: &str,
     cert: &str,
 ) -> String {
-    let mut xml = format!(r#"<Signature ID="{id}">"#);
-    for (method, file) in refs {
+    let mut xml = format!(r#"<Signature ID="{id}"><SignedInfo>"#);
+    if let Some((method, _)) = refs.first() {
+        xml.push_str(&format!(r#"<References CheckMethod="{method}">"#));
+    } else {
+        xml.push_str("<References>");
+    }
+    for (i, (_, file)) in refs.iter().enumerate() {
+        // Each Reference carries the digest of the file it protects.
+        let digest = digests.get(i).cloned().unwrap_or_default();
         xml.push_str(&format!(
-            r#"<SignedInfo><Reference CheckMethod="{method}" FileRef="{file}"/></SignedInfo>"#
+            r#"<Reference FileRef="{file}"><CheckValue>{}</CheckValue></Reference>"#,
+            base64_of(&digest)
         ));
     }
-    xml.push_str(&format!("<CheckValue>{check_value}</CheckValue>"));
-    xml.push_str(&format!("<Cert>{cert}</Cert>"));
+    xml.push_str("</References></SignedInfo>");
+    xml.push_str(&format!("<SignedValue>{check_value_ref}</SignedValue>"));
+    xml.push_str(&format!(r#"<Cert>{cert}</Cert>"#));
     xml.push_str("</Signature>");
     xml
 }
@@ -50,26 +69,30 @@ pub fn signed_descriptor_entries(
     signed_entry: &str,
     document: &[u8],
 ) -> (Vec<(&'static str, Vec<u8>)>, Sm2KeyPair) {
+    let refs: &[(&str, &str)] = &[("SM3", signed_entry)];
     let mut entries: Vec<(&'static str, Vec<u8>)> = vec![
         (DOCUMENT_ENTRY, document.to_vec()),
-        (
-            SIGN_FILE,
-            descriptor(id, &[("SM3", signed_entry)]).into_bytes(),
-        ),
+        (SIGN_FILE, descriptor(id, refs).into_bytes()),
     ];
     let pair = Sm2KeyPair::generate().expect("keygen");
+    // The proof is the SM2 signature over the digest of the referenced files.
     let mut package = open_package(&entries);
     let sig = read_signature(&mut package, SIGN_FILE).expect("descriptor");
     let digest = signed_digest(&mut package, &sig).expect("digest");
     let proof = base64_of(&pair.sign(&digest));
     let cert = base64_of(&sm2_cert_der(&pair.public_bytes()));
-    let last = entries.len() - 1;
-    let replacement =
-        descriptor_with_proof(id, &[("SM3", signed_entry)], &proof, &cert).into_bytes();
+    // The descriptor records each protected file's own digest, so a reader can
+    // spot a changed file without holding the signer's key.
+    let file_digests: Vec<Vec<u8>> = refs
+        .iter()
+        .map(|(_, _file)| steleofd_crypto::sm3(document).to_vec())
+        .collect();
     // The document entry only existed so the digest could be computed; it is
     // dropped here so the caller keeps exactly one copy of it.
-    let _ = entries.remove(0);
-    entries[last - 1].1 = replacement;
+    entries.remove(0);
+    entries[0].1 =
+        descriptor_with_proof(id, refs, &file_digests, SIGN_VALUE_FILE, &cert).into_bytes();
+    entries.push((SIGN_VALUE_FILE, proof.into_bytes()));
     (entries, pair)
 }
 

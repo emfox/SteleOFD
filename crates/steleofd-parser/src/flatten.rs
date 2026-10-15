@@ -51,6 +51,7 @@ fn flatten_object(
         Object::PathObject(p) => flatten_path(p, params, builder),
         Object::TextObject(t) => flatten_text(t, params, builder),
         Object::ImageObject(i) => flatten_image(i, builder),
+        Object::CompositeObject(c) => flatten_composite(c, builder),
         Object::Unknown(_) => Ok(()),
     }
 }
@@ -61,6 +62,7 @@ fn visible_of(object: &Object) -> Option<bool> {
         Object::PathObject(o) => o.base.visible,
         Object::TextObject(o) => o.base.visible,
         Object::ImageObject(o) => o.base.visible,
+        Object::CompositeObject(o) => o.base.visible,
         Object::Unknown(_) => None,
     }
 }
@@ -435,6 +437,32 @@ fn flatten_image(i: &ImageObject, builder: &mut DisplayListBuilder) -> Result<()
             b.push(DrawOp::Image {
                 image,
                 dst: i.base.boundary,
+                transform: Affine::IDENTITY,
+            });
+            Ok(())
+        })
+    })
+}
+
+/// GB/T 33190 clause 13: a composite object places a vector resource, so it
+/// emits one placement just as an image object does.
+fn flatten_composite(
+    c: &steleofd_model::object::CompositeObject,
+    builder: &mut DisplayListBuilder,
+) -> Result<()> {
+    if c.resource_id.is_empty() {
+        return Ok(());
+    }
+    with_ctm(&c.base, builder, |b| {
+        with_clip(&c.base, &HashMap::new(), b, |b| {
+            b.push(DrawOp::Image {
+                image: ImageRef::new(
+                    c.resource_id.clone(),
+                    Arc::new(Vec::new()),
+                    (1, 1),
+                    ImageCodec::Png,
+                ),
+                dst: c.base.boundary,
                 transform: Affine::IDENTITY,
             });
             Ok(())

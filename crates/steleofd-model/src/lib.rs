@@ -11,12 +11,15 @@ pub mod object;
 
 pub use color::{ColorRef, Segment, Shading};
 pub use document::{
-    CommonData, DocBody, DocRoot, Document, Location, OfdRoot, Page, PageBlock, Pages, Version,
-    Zones,
+    CommonData, CompositeGraphicUnit, CompositeGraphicUnitList, DocBody, DocRoot, Document,
+    DrawParamList, Location, Multimedia, MultimediaKind, MultimediaList, OfdRoot, Page, PageBlock,
+    Pages, Version, Zones,
 };
 pub use object::{
-    ClipArea, ClipList, DashPattern, DrawParam, FillRuleStyle, GraphicsUnit, ImageObject,
-    LineCapStyle, LineJoinStyle, Object, ObjectRef, PathObject, TextObject,
+    Action, ActionEvent, ActionKind, Actions, ClipArea, ClipList, CompositeObject, DashPattern,
+    Dest, DrawParam, FillRuleStyle, GotoTarget, GraphicsUnit, ImageObject, LineCapStyle,
+    LineJoinStyle, MovieAction, MovieOperator, Object, ObjectRef, PathObject, Region, RegionArea,
+    SoundAction, TextObject, UriAction,
 };
 
 /// Reference attribute (`ID` in the standard) identifying an object or resource.

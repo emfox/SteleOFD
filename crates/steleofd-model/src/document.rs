@@ -182,6 +182,91 @@ pub struct DrawParamList {
     pub items: Vec<crate::object::DrawParam>,
 }
 
+/// GB/T 33190 clause 12: the multimedia resources a document embeds, which is
+/// where video lives. `Res.xsd` types each entry as `Image`, `Audio` or `Video`
+/// and points it at a file inside the package.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MultimediaList {
+    /// One entry per embedded multimedia resource.
+    #[serde(rename = "MultiMedia", default)]
+    pub items: Vec<Multimedia>,
+}
+
+/// One multimedia resource.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Multimedia {
+    /// Resource id, referenced by a `Movie` or `Sound` action.
+    pub id: crate::RefId,
+    /// What kind of media this is.
+    pub kind: MultimediaKind,
+    /// Format hint, such as `mp4` or `wav`, when the writer records one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub format: Option<String>,
+    /// Package-relative path of the media file.
+    pub media_file: String,
+}
+
+/// The three media kinds clause 12 names.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum MultimediaKind {
+    /// A still or animated raster image.
+    #[default]
+    Image,
+    /// A sound.
+    Audio,
+    /// A video, the case clause 12 exists for.
+    Video,
+}
+
+impl MultimediaKind {
+    /// Read the spelling the schema uses, defaulting to `Image`.
+    pub fn parse(raw: &str) -> Self {
+        match raw {
+            "Audio" => Self::Audio,
+            "Video" => Self::Video,
+            _ => Self::Image,
+        }
+    }
+
+    /// The spelling the schema uses.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Image => "Image",
+            Self::Audio => "Audio",
+            Self::Video => "Video",
+        }
+    }
+}
+
+/// GB/T 33190 clause 13: the vector graphics a document embeds. A
+/// `CompositeObject` on a page names one of these by `ResourceID`.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct CompositeGraphicUnitList {
+    /// One entry per embedded vector graphic.
+    #[serde(rename = "CompositeGraphicUnit", default)]
+    pub items: Vec<CompositeGraphicUnit>,
+}
+
+/// One embedded vector graphic, `CT_VectorG`.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct CompositeGraphicUnit {
+    /// Resource id, referenced by a `CompositeObject` on a page.
+    pub id: crate::RefId,
+    /// Natural width of the graphic.
+    pub width: f64,
+    /// Natural height of the graphic.
+    pub height: f64,
+    /// Resource id of a preview image, when one is supplied.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub thumbnail: Option<crate::RefId>,
+    /// Colour to show where the graphic has no coverage.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub substitution: Option<crate::RefId>,
+    /// The drawing itself, a page block like any other.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub content: Option<PageBlock>,
+}
+
 /// The ordered page tree.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Pages {
@@ -263,7 +348,7 @@ pub struct TemplateRef {
 }
 
 /// Content of a page or template; either inline objects or a list of them.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct PageBlock {
     /// Drawing objects of this block.
     #[serde(rename = "Layer", default)]
@@ -283,7 +368,7 @@ impl PageBlock {
 }
 
 /// One layer of drawing objects.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct Layer {
     /// Reference id.
     #[serde(rename = "ID", skip_serializing_if = "Option::is_none")]

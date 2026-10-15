@@ -5,12 +5,15 @@ use steleofd_common::{Millimeter, Rect};
 use steleofd_error::{FormatError, OfdError, Result, XmlError};
 use steleofd_model::color::{ColorRef, Segment, Shading};
 use steleofd_model::document::{
-    CommonData, DocBody, Document as ModelDocument, DrawParamList, Layer, Location, OfdRoot, Page,
+    CommonData, CompositeGraphicUnit, CompositeGraphicUnitList, DocBody, Document as ModelDocument,
+    DrawParamList, Layer, Location, Multimedia, MultimediaKind, MultimediaList, OfdRoot, Page,
     PageArea, PageBlock, Pages, Template, TemplateList, TemplatePageList, TemplateRef, Version,
 };
 use steleofd_model::object::{
-    ClipArea, ClipList, DashPattern, DrawParam, FillRuleStyle, GraphicsUnit, ImageObject,
-    LineCapStyle, LineJoinStyle, Object, ObjectBase, PathObject, TextCode, TextObject,
+    Action, ActionEvent, ActionKind, Actions, ClipArea, ClipList, CompositeObject, DashPattern,
+    Dest, DrawParam, FillRuleStyle, GotoTarget, GraphicsUnit, ImageObject, LineCapStyle,
+    LineJoinStyle, MovieAction, MovieOperator, Object, ObjectBase, PathObject, Region, RegionArea,
+    SoundAction, TextCode, TextObject, UriAction,
 };
 use steleofd_xml::cursor::Event;
 use steleofd_xml::{Cursor, Node, parse_bool, parse_number_list, parse_number_list_n};
@@ -595,6 +598,11 @@ fn read_layer(cursor: &mut Cursor<'_>, node: &Node) -> Result<Layer> {
                         .objects
                         .push(Object::ImageObject(read_image_object(cursor, &n)?));
                 }
+                Event::Start(n) if n.is("CompositeObject") => {
+                    layer
+                        .objects
+                        .push(Object::CompositeObject(read_composite_object(cursor, &n)?));
+                }
                 // Vendor extensions are recorded as unknown and skipped at
                 // render time instead of failing the whole page.
                 Event::Start(other) => {
@@ -645,6 +653,218 @@ fn parse_base(node: &Node) -> Result<ObjectBase> {
         }),
         miter_limit: a.optional_as::<f64>(element, "MiterLimit")?,
         clips: None,
+        actions: None,
+    })
+}
+
+/// GB/T 33190 clause 13: a composite object places a vector resource on the
+/// page, so it only carries a resource reference on top of the object base.
+fn read_composite_object(cursor: &mut Cursor<'_>, node: &Node) -> Result<CompositeObject> {
+    let mut c = CompositeObject {
+        base: parse_base(node)?,
+        // `CT_Composite` names its resource on the element itself.
+        resource_id: node
+            .attributes()
+            .get("ResourceID")
+            .unwrap_or_default()
+            .to_string(),
+    };
+    if !node.is_self_closing() {
+        loop {
+            match cursor.next_event()? {
+                Event::Start(n) if n.is("Actions") => c.base.actions = Some(read_actions(cursor)?),
+                Event::Start(other) => cursor.skip_element(&other)?,
+                Event::End(_) | Event::Eof => break,
+                Event::Text(_) => {}
+            }
+        }
+    }
+    Ok(c)
+}
+
+/// The `Actions` element a graphic unit may carry, clause 14.1.
+fn read_actions(cursor: &mut Cursor<'_>) -> Result<Actions> {
+    let mut actions = Actions::default();
+    loop {
+        match cursor.next_event()? {
+            Event::Start(n) if n.is("Action") => actions.items.push(read_action(cursor, &n)?),
+            Event::Start(other) => cursor.skip_element(&other)?,
+            Event::End(_) | Event::Eof => break,
+            Event::Text(_) => {}
+        }
+    }
+    Ok(actions)
+}
+
+/// One `Action`: the event that fires it, an optional region, and the thing it
+/// does. `Event` is required by the schema, so an unknown spelling is an error
+/// rather than a silent default.
+fn read_action(cursor: &mut Cursor<'_>, node: &Node) -> Result<Action> {
+    let raw = node.attributes().require("Action", "Event")?;
+    let event = ActionEvent::parse(raw).ok_or_else(|| {
+        OfdError::Xml(XmlError::InvalidAttribute {
+            element: "Action".to_string(),
+            attr: "Event".to_string(),
+            value: raw.to_string(),
+        })
+    })?;
+    let mut action = Action {
+        event,
+        region: None,
+        kind: ActionKind::Unknown,
+    };
+    if node.is_self_closing() {
+        return Ok(action);
+    }
+    loop {
+        match cursor.next_event()? {
+            Event::Start(n) if n.is("Region") => action.region = Some(read_region(cursor)?),
+            Event::Start(n) if n.is("Goto") => action.kind = read_goto(cursor)?,
+            Event::Start(n) if n.is("URI") => {
+                let a = n.attributes();
+                action.kind = ActionKind::Uri(UriAction {
+                    uri: a.get("URI").unwrap_or_default().to_string(),
+                    base: a.get("Base").map(str::to_string),
+                    target: a.get("Target").map(str::to_string),
+                });
+                cursor.skip_element(&n)?;
+            }
+            Event::Start(n) if n.is("GotoA") => {
+                let a = n.attributes();
+                action.kind = ActionKind::GotoA {
+                    attach_id: a.get("AttachID").unwrap_or_default().to_string(),
+                    new_window: match a.get("NewWindow") {
+                        Some(raw) => parse_bool("GotoA", "NewWindow", raw)?,
+                        None => true,
+                    },
+                };
+                cursor.skip_element(&n)?;
+            }
+            Event::Start(n) if n.is("Sound") => {
+                let a = n.attributes();
+                action.kind = ActionKind::Sound(SoundAction {
+                    resource_id: a.get("ResourceID").unwrap_or_default().to_string(),
+                    volume: a.optional_as::<i32>("Sound", "Volume")?,
+                    repeat: match a.get("Repeat") {
+                        Some(raw) => Some(parse_bool("Sound", "Repeat", raw)?),
+                        None => None,
+                    },
+                    synchronous: match a.get("Synchronous") {
+                        Some(raw) => Some(parse_bool("Sound", "Synchronous", raw)?),
+                        None => None,
+                    },
+                });
+                cursor.skip_element(&n)?;
+            }
+            Event::Start(n) if n.is("Movie") => {
+                let a = n.attributes();
+                action.kind = ActionKind::Movie(MovieAction {
+                    resource_id: a.get("ResourceID").unwrap_or_default().to_string(),
+                    operator: MovieOperator::parse(a.get("Operator").unwrap_or("Play")),
+                });
+                cursor.skip_element(&n)?;
+            }
+            Event::Start(other) => cursor.skip_element(&other)?,
+            Event::End(_) | Event::Eof => break,
+            Event::Text(_) => {}
+        }
+    }
+    Ok(action)
+}
+
+/// The region an action is sensitive in, `CT_Region`.
+fn read_region(cursor: &mut Cursor<'_>) -> Result<Region> {
+    let mut region = Region::default();
+    loop {
+        match cursor.next_event()? {
+            Event::Start(n) if n.is("Area") => region.areas.push(read_region_area(cursor, &n)?),
+            Event::Start(other) => cursor.skip_element(&other)?,
+            Event::End(_) | Event::Eof => break,
+            Event::Text(_) => {}
+        }
+    }
+    Ok(region)
+}
+
+/// One `Area` of a region, flattened into a path so a hit test can use it.
+fn read_region_area(cursor: &mut Cursor<'_>, node: &Node) -> Result<RegionArea> {
+    let mut area = RegionArea::default();
+    if node.is_self_closing() {
+        return Ok(area);
+    }
+    loop {
+        match cursor.next_event()? {
+            Event::Start(n) if n.is("Move") => {
+                area.path_data.push_str(&command("M", &n, &["Point1"])?);
+                cursor.skip_element(&n)?;
+            }
+            Event::Start(n) if n.is("Line") => {
+                area.path_data.push_str(&command("L", &n, &["Point1"])?);
+                cursor.skip_element(&n)?;
+            }
+            Event::Start(n) if n.is("QuadraticBezier") => {
+                area.path_data
+                    .push_str(&command("Q", &n, &["Point1", "Point2"])?);
+                cursor.skip_element(&n)?;
+            }
+            Event::Start(n) if n.is("CubicBezier") => {
+                area.path_data
+                    .push_str(&command("C", &n, &["Point1", "Point2", "Point3"])?);
+                cursor.skip_element(&n)?;
+            }
+            Event::Start(other) => cursor.skip_element(&other)?,
+            Event::End(_) | Event::Eof => break,
+            Event::Text(_) => {}
+        }
+    }
+    Ok(area)
+}
+
+/// Turn one region command into its abbreviated form, `M x y`, `L x y`, and so on.
+fn command(letter: &str, node: &Node, points: &[&str]) -> Result<String> {
+    let mut out = String::from(letter);
+    for name in points {
+        let raw = node.attributes().get(name).unwrap_or("0 0");
+        let v = steleofd_xml::parse_number_list::<f64>(node.local(), name, raw)?;
+        for n in v {
+            out.push(' ');
+            out.push_str(&n.to_string());
+        }
+    }
+    out.push(' ');
+    Ok(out)
+}
+
+/// What a `Goto` jumps to: a destination on a page, or a bookmark.
+fn read_goto(cursor: &mut Cursor<'_>) -> Result<ActionKind> {
+    let mut target = None;
+    loop {
+        match cursor.next_event()? {
+            Event::Start(n) if n.is("Dest") => {
+                let a = n.attributes();
+                target = Some(GotoTarget::Dest(Dest {
+                    kind: a.get("Type").unwrap_or_default().to_string(),
+                    page_id: a.get("PageID").unwrap_or_default().to_string(),
+                    left: a.get("Left").map(str::to_string),
+                    top: a.get("Top").map(str::to_string),
+                    right: a.get("Right").map(str::to_string),
+                    bottom: a.get("Bottom").map(str::to_string),
+                    zoom: a.get("Zoom").map(str::to_string),
+                }));
+            }
+            Event::Start(n) if n.is("Bookmark") => {
+                target = Some(GotoTarget::Bookmark {
+                    name: n.attributes().get("Name").unwrap_or_default().to_string(),
+                });
+            }
+            Event::Start(other) => cursor.skip_element(&other)?,
+            Event::End(_) | Event::Eof => break,
+            Event::Text(_) => {}
+        }
+    }
+    Ok(match target {
+        Some(t) => ActionKind::Goto(t),
+        None => ActionKind::Unknown,
     })
 }
 
@@ -680,6 +900,7 @@ fn read_path_object(cursor: &mut Cursor<'_>, node: &Node) -> Result<PathObject> 
                     p.stroke_color = Some(read_color(&n, cursor)?)
                 }
                 Event::Start(n) if n.is("Clips") => p.base.clips = Some(read_clips(cursor)?),
+                Event::Start(n) if n.is("Actions") => p.base.actions = Some(read_actions(cursor)?),
                 Event::Start(other) => cursor.skip_element(&other)?,
                 Event::End(_) => break,
                 Event::Eof => break,
@@ -719,6 +940,7 @@ fn read_text_object(cursor: &mut Cursor<'_>, node: &Node) -> Result<TextObject> 
                     t.fill_color = Some(read_color(&n, cursor)?)
                 }
                 Event::Start(n) if n.is("Clips") => t.base.clips = Some(read_clips(cursor)?),
+                Event::Start(n) if n.is("Actions") => t.base.actions = Some(read_actions(cursor)?),
                 Event::Start(other) => cursor.skip_element(&other)?,
                 Event::End(_) => break,
                 Event::Eof => break,
@@ -765,6 +987,7 @@ fn read_image_object(cursor: &mut Cursor<'_>, node: &Node) -> Result<ImageObject
                     i.substitution = Some(read_color(&n, cursor)?)
                 }
                 Event::Start(n) if n.is("Clips") => i.base.clips = Some(read_clips(cursor)?),
+                Event::Start(n) if n.is("Actions") => i.base.actions = Some(read_actions(cursor)?),
                 Event::Start(other) => cursor.skip_element(&other)?,
                 Event::End(_) => break,
                 Event::Eof => break,
@@ -773,4 +996,173 @@ fn read_image_object(cursor: &mut Cursor<'_>, node: &Node) -> Result<ImageObject
         }
     }
     Ok(i)
+}
+
+/// GB/T 33190 clause 12: read a `Res` file's multimedia table. The table is
+/// where video lives, since the schema gives no video graphic unit of its own.
+pub fn read_multimedias(xml: &str) -> Result<MultimediaList> {
+    let mut cursor = Cursor::new(xml);
+    let mut list = MultimediaList::default();
+    let root = cursor.expect_start("Res")?;
+    if !root.is_self_closing() {
+        // The entries sit under a `MultiMedias` container; other resource
+        // tables are skipped whole.
+        loop {
+            match cursor.next_event()? {
+                Event::Start(n) if n.is("MultiMedias") => {
+                    read_multimedia_entries(&mut cursor, &n, &mut list)?
+                }
+                Event::Start(n) if n.is("MultiMedia") => {
+                    push_multimedia(&mut cursor, &n, &mut list)?
+                }
+                Event::Start(other) => cursor.skip_element(&other)?,
+                Event::End(_) | Event::Eof => break,
+                Event::Text(_) => {}
+            }
+        }
+    }
+    Ok(list)
+}
+
+fn read_multimedia_entries(
+    cursor: &mut Cursor<'_>,
+    node: &Node,
+    list: &mut MultimediaList,
+) -> Result<()> {
+    if node.is_self_closing() {
+        return Ok(());
+    }
+    loop {
+        match cursor.next_event()? {
+            Event::Start(n) if n.is("MultiMedia") => push_multimedia(cursor, &n, list)?,
+            Event::Start(other) => cursor.skip_element(&other)?,
+            Event::End(_) | Event::Eof => break,
+            Event::Text(_) => {}
+        }
+    }
+    Ok(())
+}
+
+fn push_multimedia(cursor: &mut Cursor<'_>, node: &Node, list: &mut MultimediaList) -> Result<()> {
+    let a = node.attributes();
+    let media_file = if node.is_self_closing() {
+        String::new()
+    } else {
+        read_child_text(cursor, "MediaFile")?
+    };
+    list.items.push(Multimedia {
+        id: a.require("MultiMedia", "ID")?.to_string(),
+        kind: MultimediaKind::parse(a.get("Type").unwrap_or("Image")),
+        format: a.get("Format").map(str::to_string),
+        media_file,
+    });
+    Ok(())
+}
+
+/// GB/T 33190 clause 13: read a `Res` file's vector graphic table. A page's
+/// `CompositeObject` names one of these by `ResourceID`.
+pub fn read_composite_graphic_units(xml: &str) -> Result<CompositeGraphicUnitList> {
+    let mut cursor = Cursor::new(xml);
+    let mut list = CompositeGraphicUnitList::default();
+    let root = cursor.expect_start("Res")?;
+    if !root.is_self_closing() {
+        loop {
+            match cursor.next_event()? {
+                Event::Start(n) if n.is("CompositeGraphicUnits") => {
+                    read_composite_graphic_entries(&mut cursor, &n, &mut list)?
+                }
+                Event::Start(n) if n.is("CompositeGraphicUnit") => list
+                    .items
+                    .push(read_composite_graphic_unit(&mut cursor, &n)?),
+                Event::Start(other) => cursor.skip_element(&other)?,
+                Event::End(_) | Event::Eof => break,
+                Event::Text(_) => {}
+            }
+        }
+    }
+    Ok(list)
+}
+
+fn read_composite_graphic_entries(
+    cursor: &mut Cursor<'_>,
+    node: &Node,
+    list: &mut CompositeGraphicUnitList,
+) -> Result<()> {
+    if node.is_self_closing() {
+        return Ok(());
+    }
+    loop {
+        match cursor.next_event()? {
+            Event::Start(n) if n.is("CompositeGraphicUnit") => {
+                list.items.push(read_composite_graphic_unit(cursor, &n)?)
+            }
+            Event::Start(other) => cursor.skip_element(&other)?,
+            Event::End(_) | Event::Eof => break,
+            Event::Text(_) => {}
+        }
+    }
+    Ok(())
+}
+
+fn read_composite_graphic_unit(
+    cursor: &mut Cursor<'_>,
+    node: &Node,
+) -> Result<CompositeGraphicUnit> {
+    let a = node.attributes();
+    let mut unit = CompositeGraphicUnit {
+        id: a.require("CompositeGraphicUnit", "ID")?.to_string(),
+        width: a
+            .optional_as::<f64>("CompositeGraphicUnit", "Width")?
+            .unwrap_or(0.0),
+        height: a
+            .optional_as::<f64>("CompositeGraphicUnit", "Height")?
+            .unwrap_or(0.0),
+        ..Default::default()
+    };
+    if node.is_self_closing() {
+        return Ok(unit);
+    }
+    loop {
+        match cursor.next_event()? {
+            Event::Start(n) if n.is("Thumbnail") => {
+                unit.thumbnail = Some(read_element_text(cursor, &n)?)
+            }
+            Event::Start(n) if n.is("Substitution") => {
+                unit.substitution = Some(read_element_text(cursor, &n)?)
+            }
+            Event::Start(n) if n.is("Content") => {
+                unit.content = Some(PageBlock {
+                    layers: read_layers_strict(cursor)?,
+                })
+            }
+            Event::Start(other) => cursor.skip_element(&other)?,
+            Event::End(_) | Event::Eof => break,
+            Event::Text(_) => {}
+        }
+    }
+    Ok(unit)
+}
+
+/// Read the text of the first `name` child of the element the cursor is inside.
+fn read_child_text(cursor: &mut Cursor<'_>, name: &str) -> Result<String> {
+    let mut found = String::new();
+    loop {
+        match cursor.next_event()? {
+            Event::Start(n) if n.is(name) => found = read_element_text(cursor, &n)?,
+            Event::Start(other) => cursor.skip_element(&other)?,
+            Event::End(_) | Event::Eof => break,
+            Event::Text(_) => {}
+        }
+    }
+    Ok(found)
+}
+
+/// Read the text of one element, tolerating a self-closing form.
+fn read_element_text(cursor: &mut Cursor<'_>, node: &Node) -> Result<String> {
+    if node.is_self_closing() {
+        Ok(String::new())
+    } else {
+        let text = cursor.read_text()?;
+        Ok(text.trim().to_string())
+    }
 }

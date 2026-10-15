@@ -6,6 +6,7 @@
 
 pub mod content;
 pub mod flatten;
+pub mod marks;
 pub mod pathdata;
 
 use std::collections::HashMap;
@@ -140,8 +141,13 @@ impl<'a> Parser<'a> {
         })
     }
 
-    /// Pages may live in their own file behind `BaseLoc`; materialize either
-    /// form into an owned page.
+    /// Load one page's authored model, following its `BaseLoc` when the page
+    /// content lives in its own file.
+    pub fn page_model(&mut self, doc: &ParsedDocument, index: usize) -> Result<Page> {
+        let page_ref = doc.document.pages.get(index)?;
+        self.load_page(doc, page_ref)
+    }
+
     fn load_page(&mut self, doc: &ParsedDocument, page: &Page) -> Result<Page> {
         match &page.base_loc {
             None => Ok(page.clone()),

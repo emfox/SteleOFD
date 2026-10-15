@@ -6,6 +6,8 @@ use steleofd_package::{Package, build_archive};
 
 /// Where a signed document keeps its signature descriptor.
 pub const SIGN_FILE: &str = "Doc_0/Signs/Sign_0.xml";
+/// The file the descriptor's `SignedValue` points at, holding the proof.
+pub const SIGN_VALUE_FILE: &str = "Doc_0/Signs/Sign_0.dat";
 
 /// The container entry, with no signature.
 pub const OFD_XML: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
