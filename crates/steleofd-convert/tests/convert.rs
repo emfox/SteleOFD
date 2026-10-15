@@ -1,4 +1,4 @@
-//! N4-a: the convert crate driven as a consumer rather than from inside.
+//! The convert crate driven as a consumer rather than from inside.
 //! Every test uses the public surface and asserts only on what a caller can
 //! observe: the shape of the bytes, the reported stats, and the errors.
 

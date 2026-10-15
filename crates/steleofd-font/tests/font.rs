@@ -1,4 +1,4 @@
-//! N4-d: the font layer driven as a consumer.
+//! The font layer driven as a consumer.
 //! A real face is loaded from the shared fixture, so lookup, shaping, metrics
 //! and outlining run for real, plus the missing-font error a converter checks.
 

@@ -20,3 +20,4 @@ sign-signed-at = Signed at: { $time }
 sign-algorithm = Algorithm: { $algo }
 sign-issuer = Issuer: { $issuer }
 sign-export-report = Export Verification Report
+sign-panel-title = Signatures

@@ -1,4 +1,4 @@
-//! N4-b: the XML layer driven as a consumer.
+//! The XML layer driven as a consumer.
 //! Name stripping across the prefixes real writers emit, typed attribute reads
 //! that tell absent from malformed, and a cursor walk that reports positions.
 

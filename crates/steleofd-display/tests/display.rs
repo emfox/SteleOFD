@@ -1,4 +1,4 @@
-//! N4-e: the display layer driven as a consumer.
+//! The display layer driven as a consumer.
 //! A page is built with the public builder and measured through the public
 //! accessors, so the builder's own contract is what these tests pin down.
 

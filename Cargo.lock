@@ -5022,6 +5022,7 @@ dependencies = [
  "steleofd-i18n",
  "steleofd-render",
  "steleofd-search",
+ "steleofd-sign",
  "steleofd-testkit",
 ]
 

@@ -376,6 +376,7 @@ pub fn all_keys() -> &'static [&'static str] {
         "sign-algorithm",
         "sign-issuer",
         "sign-export-report",
+        "sign-panel-title",
         "edit-confirm-delete-pages",
         "edit-warn-invalidate-signature",
         "edit-undo",

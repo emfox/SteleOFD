@@ -20,3 +20,4 @@ sign-signed-at = 签署时间：{ $time }
 sign-algorithm = 算法：{ $algo }
 sign-issuer = 颁发机构：{ $issuer }
 sign-export-report = 导出验签报告
+sign-panel-title = 签章

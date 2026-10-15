@@ -1,6 +1,6 @@
-//! N3-d: every string-level reader returns `Ok` or `Err`, never panicking and
-//! never hanging on any input. Weaker than correctness, but it is the property
-//! a reader of untrusted files actually depends on.
+//! Every string-level reader returns `Ok` or `Err`, never panicking and never
+//! hanging on any input. Weaker than correctness, but it is the property a
+//! reader of untrusted files actually depends on.
 
 use proptest::prelude::*;
 use steleofd_parser::content;

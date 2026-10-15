@@ -49,6 +49,7 @@ is the layout.
 └────────────────────────────────────────────────────────┘
 
                         Z5  search      fixed width      the query, the hits   Panel::left("search")
+                        Z6  signatures  fixed width      the verdict, per sig   Panel::left("signatures")
 ```
 
 
@@ -100,9 +101,22 @@ Every zone draws a separator line it does not own. `Panel::show_separator_line`
 does this, and it is why zones are panels rather than stacked `horizontal`
 closures.
 
+**Z6 signatures panel.** Present only while it is open. The count, then one
+row per signature carrying its verdict, signer, signing time and algorithm.
+Three verdicts, not two: `Valid`, `Tampered`, and `Unverified`. The engine can
+only conclude that a signature is good or bad, and reports a signature it has no
+certificate for as an error; flattening that into "tampered" tells the reader
+their document was altered when nothing says it was. Unverified is the honest
+answer, and it is shown in amber so it is not mistaken for either verdict.
+Verification runs on the document once, the first time the panel opens, not per
+signature — asking the engine per signature re-reads the package each time.
+
+Like Z5, it is drawn before the canvas so the canvas measures the width that is
+actually left for pages.
+
 ## 3. Frame flow
 
-`eframe::App::ui` runs eight steps, always in this order. The order is the
+`eframe::App::ui` runs nine steps, always in this order. The order is the
 specification; a step may not be moved earlier because each one consumes what
 the previous produced.
 
@@ -113,8 +127,9 @@ the previous produced.
 4  draw Z1          menu bar      (reads state, writes intent)
 5  draw Z2          toolbar       (reads state, writes intent)
 6  draw Z5          search        (only when open; before the canvas)
-7  draw Z3          canvas        (the only zone that rasterizes)
-8  draw Z4          status bar    (reads state, error wins the left half)
+7  draw Z6          signatures    (only when open; before the canvas)
+8  draw Z3          canvas        (the only zone that rasterizes)
+9  draw Z4          status bar    (reads state, error wins the left half)
 ```
 
 Three consequences worth stating, because each one has been got wrong before:

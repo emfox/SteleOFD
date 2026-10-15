@@ -108,6 +108,8 @@ pub enum MessageId {
     SignIssuer,
     /// Export verification report
     SignExportReport,
+    /// Heading on the signature panel in the reader
+    SignPanelTitle,
 
     // Edit module
     /// Confirm page deletion
@@ -238,6 +240,7 @@ impl MessageId {
             Self::SignAlgorithm => "sign-algorithm",
             Self::SignIssuer => "sign-issuer",
             Self::SignExportReport => "sign-export-report",
+            Self::SignPanelTitle => "sign-panel-title",
 
             // Edit
             Self::EditConfirmDeletePages => "edit-confirm-delete-pages",
@@ -339,6 +342,7 @@ impl MessageId {
         Self::SignAlgorithm,
         Self::SignIssuer,
         Self::SignExportReport,
+        Self::SignPanelTitle,
         // Edit
         Self::EditConfirmDeletePages,
         Self::EditWarnInvalidateSignature,

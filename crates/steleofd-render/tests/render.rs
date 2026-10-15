@@ -1,4 +1,4 @@
-//! N4-f: the render layer driven as a consumer.
+//! The render layer driven as a consumer.
 //! A page is rasterized through `render_page` and inspected pixel by pixel, so
 //! the tests assert what reaches the buffer, plus the budget and size guards.
 

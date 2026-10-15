@@ -5,7 +5,7 @@
 use eframe::egui::{self, TextureOptions, Ui};
 use steleofd_i18n::MessageId;
 
-use crate::app::{App, Canvas, Fit};
+use crate::app::{App, Canvas, Fit, Verdict};
 use crate::viewer::{DroppedFile, Layout, MAX_DPI, MIN_DPI};
 
 /// The widest a page is drawn, so a large window does not blur a small page.
@@ -32,6 +32,7 @@ pub fn draw(ui: &mut Ui, app: &mut App) -> WindowRequests {
     draw_menu(ui, app, &mut requests);
     draw_toolbar(ui, app);
     draw_search(ui, app);
+    draw_signatures(ui, app);
     draw_canvas(ui, app);
     draw_status(ui, app);
     if app.wants_quit() {
@@ -77,6 +78,14 @@ fn draw_menu(ui: &mut Ui, app: &mut App, requests: &mut WindowRequests) {
                 .clicked()
             {
                 app.set_search_open(!open);
+            }
+            let signatures = app.signatures_heading();
+            let showing = app.signatures_open();
+            if ui
+                .add_enabled(app.is_open(), egui::Button::selectable(showing, signatures))
+                .clicked()
+            {
+                app.set_signatures_open(!showing);
             }
             ui.separator();
             for (key, layout) in [
@@ -187,6 +196,54 @@ fn draw_search(ui: &mut Ui, app: &mut App) {
                     if ui.selectable_label(selected == Some(index), text).clicked() {
                         app.show_hit(index);
                     }
+                }
+            });
+    });
+}
+
+/// Z6: the signature panel, also on the left while it is open.
+/// It reports what `verify` actually returned rather than a bare valid-or-not,
+/// which is what a reader deciding to trust a document needs to see.
+fn draw_signatures(ui: &mut Ui, app: &mut App) {
+    if !app.signatures_open() || !app.is_open() {
+        return;
+    }
+    egui::Panel::left("signatures").show(ui, |ui| {
+        ui.heading(app.signatures_heading());
+        ui.label(app.signature_count_label());
+        ui.separator();
+        egui::ScrollArea::vertical()
+            .id_salt("signature-list")
+            .show(ui, |ui| {
+                let reports = app.signatures().to_vec();
+                if reports.is_empty() {
+                    // A document with no signatures is not a failure; it is a
+                    // fact, and the count line above already states it.
+                    return;
+                }
+                for report in &reports {
+                    let verdict = app.signature_status_label(report);
+                    // Red for a broken signature, green for one that holds.
+                    // The colour carries the same meaning as the word, so it
+                    // is an extra cue rather than the only one.
+                    let colour = match report.verdict {
+                        Verdict::Valid => egui::Color32::from_rgb(40, 140, 60),
+                        Verdict::Tampered => egui::Color32::from_rgb(180, 40, 40),
+                        // Amber, not red: unknown is not the same as wrong.
+                        Verdict::Unverified => egui::Color32::from_rgb(180, 130, 30),
+                    };
+                    ui.colored_label(colour, verdict);
+                    for line in [
+                        app.signature_signer_label(report),
+                        app.signature_time_label(report),
+                        app.signature_algorithm_label(report),
+                    ]
+                    .into_iter()
+                    .flatten()
+                    {
+                        ui.label(egui::RichText::new(line).weak());
+                    }
+                    ui.separator();
                 }
             });
     });

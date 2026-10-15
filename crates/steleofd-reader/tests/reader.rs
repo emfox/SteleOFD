@@ -661,3 +661,130 @@ fn a_hit_row_names_its_page_counting_from_one() {
         "the row says which page it is on, got {row:?}"
     );
 }
+
+/// A reader over the genuinely signed fixture, whose proof verifies against
+/// the bytes the engine reads. The corpus documents declare signatures they
+/// cannot prove, so they test the other half.
+fn open_signed() -> App {
+    let mut app = App::new();
+    let (bytes, _key) = steleofd_testkit::signed_fixture();
+    app.open_bytes(&bytes, Some("signed.ofd"))
+        .expect("the signed fixture opens");
+    app
+}
+
+#[test]
+fn opening_the_signature_panel_verifies_and_remembers() {
+    let mut app = open_signed();
+    assert!(!app.signatures_open(), "the panel starts closed");
+    assert!(
+        app.signatures().is_empty(),
+        "nothing is verified until the panel is asked for"
+    );
+
+    app.set_signatures_open(true);
+    assert!(app.signatures_open());
+    assert_eq!(
+        app.signature_count(),
+        1,
+        "the fixture carries one signature"
+    );
+    assert_eq!(
+        app.signatures()[0].verdict,
+        steleofd_reader::Verdict::Valid,
+        "and the proof verifies against the document"
+    );
+    assert!(app.error().is_none(), "a good signature is not an error");
+}
+
+#[test]
+fn a_verdict_is_worded_in_the_readers_language() {
+    let mut app = open_signed();
+    app.set_signatures_open(true);
+    let report = app.signatures()[0].clone();
+    let verdict = app.signature_status_label(&report);
+    assert!(!verdict.is_empty(), "the verdict is localized");
+    // A tampered signature must not read the same as a good one: the panel
+    // exists to tell them apart.
+    let broken = steleofd_reader::SignatureReport {
+        verdict: steleofd_reader::Verdict::Tampered,
+        ..report.clone()
+    };
+    assert_ne!(
+        verdict,
+        app.signature_status_label(&broken),
+        "valid and invalid do not read alike"
+    );
+}
+
+#[test]
+fn verification_is_not_repeated_on_every_frame() {
+    let mut app = open_signed();
+    app.set_signatures_open(true);
+    let first = app.signatures().to_vec();
+    // Closing and reopening shows the same answer without re-reading the
+    // package, which is what makes the panel cheap to leave in the toolbar.
+    app.set_signatures_open(false);
+    app.set_signatures_open(true);
+    assert_eq!(app.signatures(), first.as_slice());
+}
+
+#[test]
+fn closing_the_document_forgets_the_verdicts() {
+    let mut app = open_signed();
+    app.set_signatures_open(true);
+    assert!(!app.signatures().is_empty());
+    app.close();
+    assert!(
+        app.signatures().is_empty(),
+        "a new document starts unverified"
+    );
+    assert!(!app.signatures_open(), "and the panel is closed with it");
+}
+
+#[test]
+fn an_unsigned_document_reports_none_rather_than_failing() {
+    // Unsigned is a fact about the document, not a fault in it, so the panel
+    // must not put a red message on every ordinary file.
+    let mut app = open();
+    app.set_signatures_open(true);
+    assert_eq!(app.signature_count(), 0, "the minimal corpus is unsigned");
+    assert!(
+        !app.signature_count_label().is_empty(),
+        "and the count is still worded"
+    );
+    assert!(
+        app.error().is_none(),
+        "an unsigned document is not an error"
+    );
+}
+
+#[test]
+fn a_signature_that_cannot_be_proved_is_shown_rather_than_hidden() {
+    // The features corpus declares a signature but carries no certificate, so
+    // verification fails. A reader deciding whether to trust a document needs
+    // to see that, which is the whole reason the panel exists.
+    let mut app = App::new();
+    let path =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../compliance/corpus/features.ofd");
+    app.open_path(&path).expect("the features corpus opens");
+    app.set_signatures_open(true);
+    assert_eq!(app.signature_count(), 1, "it declares a signature");
+    assert_eq!(
+        app.signatures()[0].verdict,
+        steleofd_reader::Verdict::Unverified,
+        "an unprovable signature is reported, not silently dropped"
+    );
+    assert!(
+        app.error().is_none(),
+        "and it is a verdict, not a failure in the status bar"
+    );
+}
+
+#[test]
+fn verifying_with_nothing_open_is_harmless() {
+    let mut app = App::new();
+    app.set_signatures_open(true);
+    assert_eq!(app.signature_count(), 0);
+    assert!(app.error().is_none());
+}

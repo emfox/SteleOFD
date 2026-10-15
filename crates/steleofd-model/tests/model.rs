@@ -1,4 +1,4 @@
-//! N4-c: the model driven as a consumer, asserting the assembly invariants.
+//! The model driven as a consumer, asserting the assembly invariants.
 //! A model is built here the way the parser builds it, then queried through the
 //! public accessors, so fields and accessors that disagree would fail.
 

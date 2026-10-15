@@ -13,11 +13,11 @@ criterion, so it is always obvious whether it is done.
 | Measure | Value |
 | --- | --- |
 | Crates | 26 (L0 foundation through L5 delivery) |
-| Source | 30,557 lines of Rust, measured with `find crates -name '*.rs'` |
-| Tests | 761 passing, plus 13 inline unit-test modules |
+| Source | 30,943 lines of Rust, measured with `find crates -name '*.rs'` |
+| Tests | 770 passing, plus 13 inline unit-test modules |
 | Delivery forms | `cli`, `wasm`, `ffi`, `server`, `reader`, all on the `core` facade |
 | Standard clauses verified | 47 of 47 in GB/T 33190-2016 (46 `verified`, 1 `partial`) |
-| Languages | `en-US` and `zh-CN`, 75 message keys, parity enforced in CI |
+| Languages | `en-US` and `zh-CN`, 79 message keys, parity enforced in CI |
 | CI | fmt, clippy, build, test, all-features test, i18n, language, conformance, XSD validation, corpus freshness, fuzz smoke run |
 
 ## Honest gaps
@@ -71,71 +71,21 @@ Extract the four copies of the fixture builder into a `steleofd-testkit`
 crate, so a document shape is defined once and each delivery crate pins the
 same bytes.
 
-- **N1-a** `[x]` `crates/steleofd-testkit` carries the OFD zip builder, the
-  base64/DER/SM2-certificate helpers, and the signed and unsigned fixtures.
-  It brings its own two self-tests, one of which verifies the signed fixture
-  with the engine's own `verify_signature`, so the fixture cannot drift from
-  the engine without a red test.
-- **N1-b** `[x]` `sign`, `wasm`, `ffi` and `server` now import from it; about
-  800 lines of duplicated builders were deleted. The suites kept their case
-  counts (`18`/`14`/`7`/`10`), except `sign`, which regained two `18.2.4`
-  cases the migration had dropped in silence — the conformance register is
-  what caught that, and the workspace total moved from 576 to 578.
-- **N1-c** `[x]` It is a `[dev-dependencies]` entry everywhere and declares
-  `publish = false`; `cargo tree -p <crate> -e normal` finds it in none of
-  the four release graphs.
+- **N1-a** `[x]` ~~`crates/steleofd-testkit` carries the OFD zip builder, the base64/DER/SM2-certificate helpers, and the signed and unsigned fixtures. It brings its own two self-tests, one of which verifies the signed fixture with the engine's own `verify_signature`, so the fixture cannot drift from the engine without a red test.~~
+- **N1-b** `[x]` ~~`sign`, `wasm`, `ffi` and `server` now import from it, and about 800 lines of duplicated builders were deleted. The suites kept their case counts, except `sign`, which regained two `18.2.4` cases the migration had dropped in silence — the conformance register is what caught that.~~
+- **N1-c** `[x]` ~~It is a `[dev-dependencies]` entry everywhere and declares `publish = false`; `cargo tree -p <crate> -e normal` finds it in none of the four release graphs.~~
 
 ### N2. Close the untested-clause gap, lowest risk first (N2-a … N2-e)
 
 Twenty-seven clauses, ordered so that each step is independently useful and
 the cheap structural ones land before the expensive rendering ones.
 
-- **N2-a** `[x]` The structural clauses that need no rendering — `5.4` file
-  extension, `6.1` container scheme, `7.1` namespace, `7.2` UTF-8 encoding,
-  `19.1` version entry, `20.1` attachment list, `A.1` the OFD.xsd itself. All
-  seven are asserted in `crates/steleofd-core/tests/structure.rs`; the register
-  moved from 20 to 27 covered clauses. The version clause caught the model's
-  silent default: a document with no `Version` attribute reports `1`, not an
-  error.
-- **N2-b** `[x]` Drawing parameters: `8.2.1` draw parameter structure, `8.2.2`
-  line join, `8.2.4` dash pattern, `8.2.5` line cap, `9.2` fill rule. Writing
-  these against the annex A schemas turned up three real parser bugs, all now
-  fixed: the cap and join attributes are named `Cap` and `Join`, not
-  `LineCap`/`LineJoin`; `DashPattern` is an `ST_Array` attribute with a
-  `DashOffset` sibling, not a child element; and the `Rule` attribute on
-  `PathObject` was never read, so every path was filled non-zero.
-- **N2-c** `[x]` Text and font: `11.1` font, `11.3` text positioning, `11.4`
-  glyph transformation, `7.8` outlines. Four more real gaps surfaced here:
-  `DeltaY` was not parsed, `DeltaX` was parsed but never applied, `HScale` was
-  ignored, and `TextObject.Stroke`/`Fill` meant text could never be outlined.
-  All four are now read and flattened.
-- **N2-d** `[x]` Graphics features: `8.3.4` gradient, `8.4` clip area, `9.1`
-  path object. Gradients meant the parser had to stop skipping `FillColor`
-  children: an `AxialShd`/`RadialShd` is now read into a shading and flattened
-  as its own `LinearGradient`/`RadialGradient` command ahead of the shape, with
-  the shape carrying only a `*GradientRef` marker. Clip areas are read from
-  `Clips`/`Clip`/`Area` and emitted as a `ClipPath` between a `Save`/`Restore`
-  pair. `8.4` stays `partial`: only a `Path` area is read, a `Text` area is
-  rejected with an explicit error rather than silently dropped.
-- **N2-e** `[x]` The feature tail: `12` video, `13` composite object, `14.1`
-  action description, `15` annotations, `16` custom tags, `17` extended
-  information, `18.2.2` signature scope, `18.2.3` signature appearance.
-  Reading the schemas first paid off three times. `18.2.2` was wrong in the
-  fixture as well as the parser: `CheckMethod` belongs on `References`, and the
-  provider name is a `ProviderName` **attribute** on `Provider`. `18.2.3` was
-  wrong about shape: `SignedValue` is an `ST_Loc` *path* to the proof, not the
-  proof inline, so the parser now follows it and the testkit writes it as its
-  own entry. `12` and `13` turned out to be resource clauses, not page-object
-  ones: video has no graphic unit of its own, it is a `MultiMedia` of `Type`
-  `Video`, and a `CompositeObject` on a page is only a `ResourceID` pointing at
-  a `CompositeGraphicUnit` whose `Content` is a page block. All three are now
-  read, and the clause count closes at `47 of 47`.
-- **N2-e extras** `Action` is modelled as the schema declares it: `Event` is a
-  required enumeration (`DO`/`PO`/`CLICK`), so an unknown spelling is a parse
-  error rather than a silent default, and the body is a choice of `Goto`
-  (`Dest` or `Bookmark`), `URI`, `GotoA`, `Sound` or `Movie`, each read into its
-  own shape. `MovieOperator` and `ActionEvent` keep the standard's spelling on
-  one side and a Rust enum on the other, so callers never match on strings.
+- **N2-a** `[x]` ~~The structural clauses that need no rendering — `5.4`, `6.1`, `7.1`, `7.2`, `19.1`, `20.1` and `A.1`. The version clause caught the model's silent default: a document with no `Version` attribute reports `1`, not an error.~~
+- **N2-b** `[x]` ~~Drawing parameters: `8.2.1` draw parameter structure, `8.2.2` line join, `8.2.4` dash pattern, `8.2.5` line cap, `9.2` fill rule. Writing these against the annex A schemas turned up three real parser bugs, all now fixed: the cap and join attributes are named `Cap` and `Join`; `DashPattern` is an `ST_Array` attribute with a `DashOffset` sibling rather than a child element; and the `Rule` attribute on `PathObject` was never read, so every path was filled non-zero.~~
+- **N2-c** `[x]` ~~Text and font: `11.1` font, `11.3` text positioning, `11.4` glyph transformation, `7.8` outlines. Four more real gaps surfaced here — `DeltaY` was not parsed, `DeltaX` was parsed but never applied, `HScale` was ignored, and `TextObject.Stroke`/`Fill` meant text could never be outlined. All four are now read and flattened.~~
+- **N2-d** `[x]` ~~Graphics features: `8.3.4` gradient, `8.4` clip area, `9.1` path object. Gradients meant the parser had to stop skipping `FillColor` children, and clip areas are emitted as a `ClipPath` between a `Save`/`Restore` pair. `8.4` stays `partial`: only a `Path` area is read, and a `Text` area is rejected with an explicit error rather than silently dropped.~~
+- **N2-e** `[x]` ~~The feature tail: `12` video, `13` composite object, `14.1` action description, `15` annotations, `16` custom tags, `17` extended information, `18.2.2` signature scope, `18.2.3` signature appearance. Reading the schemas first paid off three times — `18.2.2` was wrong in the fixture as well as the parser, `18.2.3` was wrong about `SignedValue` being a path rather than the proof inline, and `12`/`13` turned out to be resource clauses rather than page-object ones. All are now read, and the clause count closes at `47 of 47`.~~
+- **N2-e extras** ~~`Action` is modelled as the schema declares it: `Event` is a required enumeration, so an unknown spelling is a parse error rather than a silent default, and the body is a choice of `Goto`, `URI`, `GotoA`, `Sound` or `Movie`, each read into its own shape. `MovieOperator` and `ActionEvent` keep the standard's spelling on one side and a Rust enum on the other, so callers never match on strings.~~
 
 A clause moves to `verified` only when a linked test actually asserts it. The
 gate script stays the single source of truth; `docs/COMPLIANCE.md` is
@@ -146,37 +96,10 @@ regenerated, never hand-edited.
 This is where `proptest` finally gets used, on the parsers that face hostile
 input.
 
-- **N3-a** `[x]` Property tests for `package`, in `crates/steleofd-package/tests/
-  property.rs`. Five invariants: a written archive round-trips, the entry list
-  matches what was written, arbitrary bytes never panic, a truncated archive
-  fails cleanly, and reading an absent path is an error. The round-trip property
-  found a real defect: `build_archive` used to write a name with a leading slash
-  that its own `Package::open` then refused, so a document could be stored and
-  never read back. The writer now validates names the way the reader does, and a
-  regression test pins the five rejected shapes.
-- **N3-b** `[x]` Property tests for `xml` (`crates/steleofd-xml/tests/property.rs`)
-  and `model` (`crates/steleofd-model/tests/property.rs`). The XML cursor is
-  driven with arbitrary text, arbitrary bytes decoded lossily, well-formed
-  documents of varying depth, an unclosed element, and text content; the model
-  is driven with colour spellings from six producer styles plus arbitrary
-  strings. Both assert the same thing: reading may fail, it must never panic,
-  and a value that parses survives a `Display` round trip. Writing the text
-  property also pinned down two behaviours that were previously only implicit —
-  whitespace-only text is skipped, and outer whitespace is trimmed — so both are
-  now asserted rather than assumed.
-- **N3-c** `[x]` `cargo-fuzz` targets for the ZIP and XML readers, in `fuzz/`.
-  `package_open` walks every entry of any archive `Package::from_bytes` accepts;
-  `xml_cursor` drains the event stream and turns a non-terminating walk into a
-  visible failure rather than a stuck process. The crate lives outside the
-  workspace because `cargo-fuzz` requires its own layout, and the hand-written
-  seed corpus is committed while libFuzzer's mutations are not. CI runs both for
-  20,000 runs under nightly.
-- **N3-d** `[x]` A crash-free invariant test that feeds random bytes to every
-  public entry point and asserts only that errors come back
-  (`crates/steleofd-parser/tests/crash_free.rs`). Four properties — arbitrary
-  text, arbitrary bytes decoded lossily, hostile content under a known root, and
-  a document truncated at every offset — all assert the same contract: the
-  readers return, they never crash.
+- **N3-a** `[x]` ~~Property tests for `package`, covering five invariants. The round-trip property found a real defect: `build_archive` used to write a name with a leading slash that its own `Package::open` then refused, so a document could be stored and never read back. The writer now validates names the way the reader does, and a regression test pins the five rejected shapes.~~
+- **N3-b** `[x]` ~~Property tests for `xml` and `model`, asserting the same contract: reading may fail, it must never panic, and a value that parses survives a `Display` round trip. Writing the text property pinned down two behaviours that were previously only implicit — whitespace-only text is skipped, and outer whitespace is trimmed.~~
+- **N3-c** `[x]` ~~`cargo-fuzz` targets for the ZIP and XML readers, in `fuzz/`: `package_open` walks every entry of any archive `Package::from_bytes` accepts, and `xml_cursor` turns a non-terminating walk into a visible failure rather than a stuck process. The crate lives outside the workspace because `cargo-fuzz` requires its own layout, the hand-written seed corpus is committed while libFuzzer's mutations are not, and CI runs both for 20,000 runs under nightly.~~
+- **N3-d** `[x]` ~~A crash-free invariant test that feeds random bytes to every public entry point and asserts only that errors come back (`crates/steleofd-parser/tests/crash_free.rs`).~~
 
 ### N4. Integration tests for the six thin crates (N4-a … N4-f)
 
@@ -185,78 +108,25 @@ reaching into internals. All six are done, 96 tests in total; each file is a new
 `tests/*.rs` in its crate, so a struct whose fields exist but whose accessors
 disagree now fails a test.
 
-- **N4-a** `[x]` `convert`: SVG shape and geometry, multi-page and empty PDFs,
-  PNG encoding, and the pixel budget. 11 tests.
-- **N4-b** `[x]` `xml`: namespace prefixes, absent versus malformed attributes,
-  the cursor walk, the depth ceiling and error positions. 21 tests.
-- **N4-c** `[x]` `model`: root validation, page lookup bounds, layer object
-  counts and the out-of-page resource types. 18 tests.
-- **N4-d** `[x]` `font`: face loading, codepoint round trips, shaping,
-  metrics, the fallback chain and the missing-font error. 18 tests.
-- **N4-e** `[x]` `display`: content bounds, blank detection, the state-stack
-  ceiling, viewport sizing and culling. 17 tests.
-- **N4-f** `[x]` `render`: painted pixels for background, fill, clip and
-  transform, plus the pixel budget and the degenerate page box. 11 tests.
+- **N4-a** `[x]` ~~`convert`: SVG shape and geometry, multi-page and empty PDFs, PNG encoding, and the pixel budget. 11 tests.~~
+- **N4-b** `[x]` ~~`xml`: namespace prefixes, absent versus malformed attributes, the cursor walk, the depth ceiling and error positions. 21 tests.~~
+- **N4-c** `[x]` ~~`model`: root validation, page lookup bounds, layer object counts and the out-of-page resource types. 18 tests.~~
+- **N4-d** `[x]` ~~`font`: face loading, codepoint round trips, shaping, metrics, the fallback chain and the missing-font error. 18 tests.~~
+- **N4-e** `[x]` ~~`display`: content bounds, blank detection, the state-stack ceiling, viewport sizing and culling. 17 tests.~~
+- **N4-f** `[x]` ~~`render`: painted pixels for background, fill, clip and transform, plus the pixel budget and the degenerate page box. 11 tests.~~
 
 ### N5. Documentation and release hygiene (N5-a … N5-d)
 
-- **N5-a** `[x]` `README.zh-CN.md` is level with `README.md` again: the same
-  roadmap including the P3b, P4b and P5a-P5d entries, and the same clause
-  coverage (47 of 47, 46 `verified` and `8.4` `partial`).
-- **N5-b** `[x]` `CHANGELOG.md`, following Keep a Changelog and driven by the
-  conventional-commit history.
-- **N5-c** `[x]` `cargo-semver-checks` in CI so a breaking public-API change
-  fails the build rather than surprising a downstream user. The job compares
-  against the latest `v*` tag; with no tag yet it reports that there is no
-  published API to protect and skips, so it is honest now and active later.
-- **N5-d** `[x]` A release workflow triggered by a `v*` tag, building the
-  `cdylib`, `staticlib` and wasm artefacts and attaching the generated C header
-  and the wasm bindings to the GitHub release. The header check makes a stale
-  committed header fail the release rather than ship.
+- **N5-a** `[x]` ~~`README.zh-CN.md` is level with `README.md` again: the same roadmap and the same clause coverage.~~
+- **N5-b** `[x]` ~~`CHANGELOG.md`, following Keep a Changelog and driven by the conventional-commit history.~~
+- **N5-c** `[x]` ~~`cargo-semver-checks` in CI so a breaking public-API change fails the build rather than surprising a downstream user. The job compares against the latest `v*` tag; with no tag yet it reports that there is no published API to protect and skips, so it is honest now and active later.~~
+- **N5-d** `[x]` ~~A release workflow triggered by a `v*` tag, building the `cdylib`, `staticlib` and wasm artefacts and attaching the generated C header and the wasm bindings to the GitHub release. The header check makes a stale committed header fail the release rather than ship.~~
 
 ### N6. Corpus and CI (N6-a … N6-b)
 
-- **N6-a** `[x]` `compliance/corpus/features/` joins `minimal/`: one eleven-entry
-  document that reaches the parts of annex A the minimal corpus never touched —
-  `Res` (draw params, fonts, multimédia, a composite graphic unit), `Actions`
-  (`URI` and `Goto`), `Bookmarks`, `Annotations`/`PageAnnot`, `CustomTags`,
-  `Extensions` and `Signatures`. All of it conforms to the normative schemas
-  and all of it opens, audits, renders, searches and converts through the CLI.
+- **N6-a** `[x]` ~~`compliance/corpus/features/` joins `minimal/`: one eleven-entry document reaching the parts of annex A the minimal corpus never touched, which conforms to the normative schemas and opens, audits, renders, searches and converts through the CLI. Writing it found two real defects — `scripts/validate_ofd.py` routed a root of `Annotation` to a schema that declares `PageAnnot`, and `features/` pointed four entries at `Doc_0/`-prefixed paths that clause 5 makes relative to the document root — and forced two contract clarifications: `Signatures` identifiers are `xs:ID` so they cannot begin with a digit, and a `Signature`'s `BaseLoc` is a full archive path. A container may carry XML in its own vocabulary, so `validate_ofd.py` grew an explicit `--allow-foreign` opt-in. `scripts/pack_corpus.py --check` runs in CI so a source edit cannot leave the committed archive stale.~~
 
-  Two real defects fell out of writing it, which is the point of a corpus:
-
-  - `scripts/validate_ofd.py` routed a root of `Annotation` to `Annotation.xsd`,
-    but that schema declares **`PageAnnot`** — so annotation descriptors were
-    unroutable. The map now says `PageAnnot`.
-  - `features/` initially pointed `DocumentRes`, `Annotations`, `CustomTags` and
-    `Extensions` at paths prefixed with `Doc_0/`. Clause 5 makes those relative
-    to the document root, so the archive lookup doubled the prefix and `audit`
-    reported ARCH-004. Corrected to `Res/Res.xml`, `Annots/Annotations.xml`,
-    `Tags/CustomTags.xml` and `Extensions.xml`.
-
-  The corpus also forced two contract clarifications rather than code changes.
-  `Signatures`' `MaxSignId`/`@ID` are `xs:ID`, which cannot begin with a digit,
-  so identifiers are names (`Sign_17`); and a `Signature`'s `BaseLoc` is a full
-  archive path, not one relative to the list, matching what `steleofd-sign`
-  reads. A container may carry XML in its own vocabulary (the file a `CustomTag`
-  points at), so `validate_ofd.py` grew an explicit `--allow-foreign` opt-in
-  instead of silently skipping anything annex A does not know.
-
-  `scripts/pack_corpus.py` builds each `<name>.ofd` from the readable
-  `<name>/` sources using the `layout.txt` beside them, and its `--check` mode
-  runs in CI so a source edit cannot leave the committed archive stale.
-
-- **N6-b** `[x]` The `coverage` job is in CI: `cargo-llvm-cov` over the whole
-  workspace with every feature on, a summary written into the run page and the
-  `lcov.info` kept as an artifact. The measured baseline is **87.56% lines,
-  88.16% functions, 88.37% regions** — high because the engine was written
-  test-first and the adapters are thin. The floor is set at **85%**, which is a
-  floor rather than a target: it is low enough that ordinary work never trips
-  it and high enough that losing a module's tests does. It is now a gate, and
-  the measurement no longer depends on this sandbox's slow toolchain mirror:
-  the rustup `llvm-tools-preview` component ships `llvm-cov`/`llvm-profdata`
-  built against the same LLVM the toolchain uses, and the system copies do not
-  (LLVM 18 against rustc's LLVM 21 fails with a raw-profile version mismatch).
+- **N6-b** `[x]` ~~The `coverage` job is in CI: `cargo-llvm-cov` over the whole workspace with every feature on, and the measured baseline is **87.56% lines, 88.16% functions, 88.37% regions** with the floor set at **85%** — low enough that ordinary work never trips it, high enough that losing a module's tests does. The measurement uses the rustup `llvm-tools-preview` component, whose `llvm-cov`/`llvm-profdata` match the toolchain's LLVM; the system copies are LLVM 18 against rustc's LLVM 21 and fail with a raw-profile version mismatch.~~
 
 ### N7. The desktop reader, first surface (U1-a … U1-c)
 
@@ -281,74 +151,22 @@ pure Rust, so the reader is one more workspace member rather than a second
 toolchain, and `cargo build --workspace` keeps working unchanged. Its cost is
 that accessibility has to be wired up by hand in U3-c.
 
-- [x] **U1-a** Stand up `crates/steleofd-reader`: an `eframe` application
-  that depends on `core` directly, with a window, a menu bar and a document
-  area. Builds on a headless runner with no system package beyond the
-  fontconfig headers CI already installs.
-- [x] **U1-b** Open a file through a native file dialog and through drag and drop
-  onto the window, show the document facts, and wire the page counter and
-  navigation to `reader-page-of`, `reader-blank-page` and `reader-open`. The
-  window's zones and per-frame flow are fixed in [UI-SPEC.md](UI-SPEC.md), so
-  the layout is a rule rather than a convention; the four-zone window is drawn
-  from panels and the canvas state is decided in `App`, which keeps it
-  testable without a display.
-- [x] **U1-c** Prove the path in CI: build the reader headlessly and drive one
-  open-and-navigate flow, so the interface cannot silently rot while the
-  engine keeps moving. `tests/window.rs` runs the real widget tree through
-  `egui_kittest` with no display and no X server, clicking the actual toolbar
-  buttons and reading labels out of the catalogue rather than out of the test.
-  It immediately earned its keep: it found a slider labelled with the raw
-  `{ $percent }` template, and a page rasterized wider than the driver's
-  texture limit at high zoom, which `egui` answers with a panic.
+- [x] **U1-a** ~~Stand up `crates/steleofd-reader`: an `eframe` application that depends on `core` directly, with a window, a menu bar and a document area. Builds on a headless runner with no system package beyond the fontconfig headers CI already installs.~~
+- [x] **U1-b** ~~Open a file through a native dialog and through drag and drop, show the document facts, and wire the page counter and navigation to `reader-page-of`, `reader-blank-page` and `reader-open`. The window's zones and per-frame flow are fixed in [UI-SPEC.md](UI-SPEC.md), the four-zone window is drawn from panels, and the canvas state is decided in `App`, which keeps it testable without a display.~~
+- [x] **U1-c** ~~Prove the path in CI: `tests/window.rs` runs the real widget tree through `egui_kittest` with no display and no X server, clicking the actual toolbar buttons and reading labels out of the catalogue. It immediately earned its keep — it found a slider labelled with the raw `{ $percent }` template, and a page rasterized wider than the driver's texture limit at high zoom, which `egui` answers with a panic.~~
 
 Exit criterion: a person can open an `.ofd` in a native window and read every
 page.
 
 ### N8. Layout, zoom and search (U2-a … U2-c)
 
-- **U2-a** `[x]` `reader-layout-*` is live. `viewer::visible_pages` is a pure
-  function from a layout, a current page and a page count to the pages on
-  screen — single shows one, facing shows the fixed pair `(even, even+1)`, and
-  continuous shows a bounded window around the page rather than the whole
-  document, because U2-b's rule is that only a wanted page is rasterized. The
-  canvas draws that list, and paging now steps by the layout's stride so a
-  spread advances a spread. `steleofd-testkit` gained `multipage_archive`,
-  since a one-page fixture has no arrangement to assert.
-- **U2-b** `[x]` Rendering moved off the draw path into `render_worker`, a
-  thread with its own `Document` and a channel pair. A frame asks for what is
-  on screen and paints whatever the cache holds; a page that has not landed is
-  `Canvas::Pending` rather than a stall, and `steleofd_reader::render_worker`
-  is a public module so its contract is testable outside the window. Zoom is
-  real: `Fit::Width`/`Fit::Page` resolve to a resolution through
-  `viewer::fit_dpi` against the space the canvas actually has, and the toolbar
-  shows the mode in force rather than a one-off number. Cancellation is by
-  generation: a newer request for a page makes an older raster for the same
-  page discardable. Writing this exposed three liveness bugs that only a real
-  frame loop produces, all fixed and covered by tests — a superseded request
-  swallowed the queue behind it, a request was skipped when nothing was left to
-  answer it, and restamping the same request every frame kept the worker
-  permanently rendering rasters the next frame had already replaced. The last
-  one is the interesting one: it means "ask once per frame" is only safe if an
-  identical ask is recognised as identical, which is what `RenderQueue::request`
-  now guarantees.
-- **U2-c** `[x]` The search panel is live as zone Z5, drawn before the canvas so
-  the canvas measures the space actually left for pages. A query runs through
-  the existing `steleofd-search` capability; hits are reduced to what a reader
-  needs — page, snippet, rectangle — rather than carrying the run and op
-  indices that matter to editing. Selecting a hit turns to its page, because a
-  hit the reader cannot see is not a hit they found, and the canvas outlines
-  every hit on the pages it draws with the current one stronger than the rest.
-  `reader-no-match` is deliberately narrow: an empty query, or a query made
-  with no document open, is not a failed search, and saying so would blame the
-  reader for an empty window. The panel reuses the existing `search-placeholder`
-  and `search-result-count` catalogue entries, and gained only two of its own —
-  the toggle and the panel heading, which cannot share a word without making
-  the reader guess which they are looking at.
+- **U2-a** `[x]` ~~`reader-layout-*` is live: `viewer::visible_pages` is a pure function from a layout, a current page and a page count to the pages on screen, paging steps by the layout's stride, and `steleofd-testkit` gained `multipage_archive` since a one-page fixture has no arrangement to assert.~~
+- **U2-b** `[x]` ~~Rendering moved off the draw path into `render_worker`, a thread with its own `Document` and a channel pair, so a page that has not landed is `Canvas::Pending` rather than a stall. Zoom is real: `Fit::Width`/`Fit::Page` resolve through `viewer::fit_dpi` against the space the canvas actually has, and cancellation is by generation. Writing this exposed three liveness bugs only a real frame loop produces, all fixed and covered: a superseded request swallowed the queue behind it, a request was skipped when nothing was left to answer it, and restamping the same request every frame kept the worker rendering rasters the next frame had already replaced — so "ask once per frame" is only safe if an identical ask is recognised as identical, which is what `RenderQueue::request` now guarantees.~~
+- **U2-c** `[x]` ~~The search panel is live as zone Z5, drawn before the canvas so the canvas measures the space actually left for pages; hits are reduced to page, snippet and rectangle, selecting a hit turns to its page, and the canvas outlines every hit with the current one stronger. `reader-no-match` is deliberately narrow — an empty query, or one made with no document open, is not a failed search.~~
 
 ### N9. Verification, export and access (U3-a … U3-c)
 
-- **U3-a** A signature panel that shows what `verify` returns, per signature,
-  rather than a bare valid-or-not.
+- **U3-a** `[x]` ~~A signature panel as zone Z6, drawn before the canvas so the canvas measures the space actually left for pages. It shows one row per signature with its verdict, signer, signing time and algorithm, and verification runs on the document once when the panel first opens rather than per signature, because asking the engine per signature re-reads the package each time. Three verdicts rather than two: the engine can only conclude good or bad and reports a signature it has no certificate for as an error, and flattening that into "tampered" would tell the reader their document was altered when nothing says it was — so an unverifiable signature is amber, not red.~~
 - **U3-b** Export to PDF and PNG through the existing `convert` path, using
   the page range the reader is currently showing.
 - **U3-c** Keyboard navigation and focus handling throughout, so the reader is

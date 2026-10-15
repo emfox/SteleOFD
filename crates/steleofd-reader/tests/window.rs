@@ -360,3 +360,39 @@ fn the_search_toggle_is_disabled_until_a_document_is_open() {
         "with nothing open the search toggle does nothing"
     );
 }
+
+#[test]
+fn the_signature_toggle_is_disabled_until_a_document_is_open() {
+    let harness = harness(App::new());
+    let heading = label(MessageId::SignPanelTitle);
+    let button = harness.get_by_label(&heading);
+    assert!(
+        button.accesskit_node().is_disabled(),
+        "there is nothing to verify with no document open"
+    );
+}
+
+#[test]
+fn opening_the_signature_panel_shows_the_count_and_the_verdict() {
+    let mut app = App::new();
+    let (bytes, _key) = steleofd_testkit::signed_fixture();
+    app.open_bytes(&bytes, Some("signed.ofd"))
+        .expect("the signed fixture opens");
+    let mut harness = harness(app);
+
+    let heading = label(MessageId::SignPanelTitle);
+    assert!(
+        harness.query_by_label_contains(&heading).is_some(),
+        "the toggle is in the toolbar"
+    );
+    harness.get_by_label(&heading).click();
+    harness.run();
+    assert!(harness.state().signatures_open(), "the toggle opened it");
+
+    // The count is the catalogue's plural sentence with the number in it.
+    let count = harness.state().signature_count_label();
+    harness.get_by_label(&count);
+    // And the verdict is the word for a signature that holds.
+    let verdict = label(MessageId::SignValid);
+    harness.get_by_label_contains(&verdict);
+}

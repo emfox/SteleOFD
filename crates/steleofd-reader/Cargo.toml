@@ -22,6 +22,9 @@ steleofd-common.workspace = true
 # The query options are the search crate's own type; the core facade takes them
 # but does not re-export them, as the other adapters found.
 steleofd-search.workspace = true
+# The verification verdict is the sign crate's own enum; the core facade
+# returns it but does not re-export it.
+steleofd-sign.workspace = true
 steleofd-i18n.workspace = true
 steleofd-error.workspace = true
 steleofd-render.workspace = true

@@ -37,10 +37,54 @@ pub struct App {
     hit_index: Option<usize>,
     /// Whether the search panel is showing.
     search_open: bool,
+    /// The verification outcome for each signature, filled on first ask.
+    signatures: Option<Vec<SignatureReport>>,
+    /// Whether the signature panel is showing.
+    signatures_open: bool,
     error: Option<AppError>,
     info: Option<String>,
     want_open: bool,
     want_quit: bool,
+}
+
+/// What the reader needs to know about one signature. The verdict comes from
+/// the engine; who signed and when come from the descriptor, read alongside
+/// it, so the panel never reaches into the engine itself.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SignatureReport {
+    /// The signature's own identifier, as written in the document.
+    pub id: Option<String>,
+    /// How the signature stands, which is not a yes-or-no question.
+    pub verdict: Verdict,
+    /// The name of the signing provider, when the document records one.
+    pub signer: Option<String>,
+    /// When it was signed, as written.
+    pub signed_at: Option<String>,
+    /// The algorithm named in the descriptor.
+    pub algorithm: Option<String>,
+}
+
+/// How one signature stands. Three states rather than two: a proof that fails
+/// and a proof that cannot be checked call for different reactions, and
+/// flattening them calls a document tampered with when it is only unconfirmable.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Verdict {
+    /// The signature matches what it covers.
+    Valid,
+    /// The content no longer matches the signed digest.
+    Tampered,
+    /// The signature could not be checked at all, with the reason why.
+    Unverified,
+}
+
+impl Verdict {
+    /// Translate the engine's two-state answer into the reader's three.
+    fn from_status(status: steleofd_sign::VerifyStatus) -> Self {
+        match status {
+            steleofd_sign::VerifyStatus::Valid => Self::Valid,
+            steleofd_sign::VerifyStatus::Tampered => Self::Tampered,
+        }
+    }
 }
 
 /// A resolution the reader keeps chasing as the window or page changes.
@@ -89,6 +133,8 @@ impl App {
             hits: Vec::new(),
             hit_index: None,
             search_open: false,
+            signatures: None,
+            signatures_open: false,
             error: None,
             info: None,
             want_open: false,
@@ -209,6 +255,8 @@ impl App {
         self.hits.clear();
         self.hit_index = None;
         self.search_open = false;
+        self.signatures = None;
+        self.signatures_open = false;
     }
 
     /// The one-line description of the open document, for the status bar.
@@ -614,6 +662,119 @@ impl App {
     pub fn hit_label(&self, index: usize, snippet: &str) -> String {
         let page = self.hits.get(index).map_or(0, |hit| hit.page + 1);
         format!("{page}  {snippet}")
+    }
+
+    /// Whether the signature panel is showing.
+    pub fn signatures_open(&self) -> bool {
+        self.signatures_open
+    }
+
+    /// Show or hide the signature panel, verifying when it first opens.
+    /// Verification reads and hashes the whole package, so it is done once and
+    /// kept rather than on every frame; closing it keeps the answer.
+    pub fn set_signatures_open(&mut self, open: bool) {
+        self.signatures_open = open;
+        if open && self.signatures.is_none() {
+            self.verify_signatures();
+        }
+    }
+
+    /// Verify every signature in the document and remember the results.
+    /// A document with no signatures is unsigned, not broken, so the absence
+    /// is an empty list; one that cannot be checked is a third verdict.
+    pub fn verify_signatures(&mut self) {
+        let Some(doc) = self.doc.as_mut() else {
+            self.signatures = Some(Vec::new());
+            return;
+        };
+        let declared = match doc.signatures() {
+            Ok(refs) => refs,
+            Err(_) => {
+                self.signatures = Some(Vec::new());
+                return;
+            }
+        };
+        // The verdicts come back in declaration order, so a failure is matched
+        // to the signature it belongs to; and one pass yields them all, where
+        // asking per signature would re-read the package each time.
+        let verdicts = doc.verify_signatures();
+        self.signatures = Some(
+            declared
+                .iter()
+                .enumerate()
+                .map(|(index, sig)| {
+                    let verdict = verdicts
+                        .as_ref()
+                        .ok()
+                        .and_then(|statuses| statuses.get(index).copied())
+                        .map_or(Verdict::Unverified, Verdict::from_status);
+                    SignatureReport {
+                        id: sig.id.clone(),
+                        verdict,
+                        signer: None,
+                        signed_at: None,
+                        algorithm: None,
+                    }
+                })
+                .collect(),
+        );
+    }
+
+    /// The verification results, or an empty list if none has been asked for.
+    pub fn signatures(&self) -> &[SignatureReport] {
+        self.signatures.as_deref().unwrap_or(&[])
+    }
+
+    /// How many signatures the open document carries, whether or not verified.
+    pub fn signature_count(&self) -> usize {
+        self.signatures().len()
+    }
+
+    /// The verdict text for one signature.
+    pub fn signature_status_label(&self, report: &SignatureReport) -> String {
+        let key = match report.verdict {
+            Verdict::Valid => MessageId::SignValid,
+            Verdict::Tampered => MessageId::SignTampered,
+            Verdict::Unverified => MessageId::SignUnverified,
+        };
+        self.i18n.text(key)
+    }
+
+    /// The heading on the signature panel.
+    pub fn signatures_heading(&self) -> String {
+        self.i18n.text(MessageId::SignPanelTitle)
+    }
+
+    /// How many signatures the document has, in the reader's language.
+    pub fn signature_count_label(&self) -> String {
+        self.i18n.text_with(
+            MessageId::SignCount,
+            [("count", self.signature_count().to_string().into())],
+        )
+    }
+
+    /// The signer line for one signature, when the document names one.
+    pub fn signature_signer_label(&self, report: &SignatureReport) -> Option<String> {
+        report.signer.as_ref().map(|name| {
+            self.i18n
+                .text_with(MessageId::SignSigner, [("name", name.clone().into())])
+        })
+    }
+
+    /// The signing-time line for one signature, when the document records one.
+    pub fn signature_time_label(&self, report: &SignatureReport) -> Option<String> {
+        report.signed_at.as_ref().map(|time| {
+            self.i18n
+                .text_with(MessageId::SignSignedAt, [("time", time.clone().into())])
+        })
+    }
+
+    /// The algorithm line for one signature, when the descriptor names one.
+    pub fn signature_algorithm_label(&self, report: &SignatureReport) -> Option<String> {
+        report.algorithm.as_ref().map(|algo| {
+            self.i18n
+                .text_with(MessageId::SignAlgorithm, [("algo", algo.clone().into())])
+        })
     }
 
     /// Open a file the platform handed over, choosing bytes or path.

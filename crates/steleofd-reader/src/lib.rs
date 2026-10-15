@@ -9,6 +9,6 @@ pub mod render_worker;
 pub mod viewer;
 pub mod window;
 
-pub use app::{App, AppError, Canvas, Fit};
+pub use app::{App, AppError, Canvas, Fit, Hit, SignatureReport, Verdict};
 pub use render_worker::{RenderQueue, RenderRequest, RenderResult};
 pub use viewer::{DroppedFile, PageCache, RenderedPage, looks_blank};
