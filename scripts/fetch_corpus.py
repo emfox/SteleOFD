@@ -1,0 +1,151 @@
+#!/usr/bin/env python3
+"""Fetch the third-party OFD samples the parser regression suite runs against.
+
+The corpus under `compliance/corpus/` is written by hand, because it exists to
+exercise one clause each and its sources are meant to be read. That is the wrong
+shape for a regression suite: a hand-written corpus only ever covers what its
+author already thought of. These samples come the other way round, from another
+implementation's test suite, so they carry whatever that implementation happened
+to accept -- malformed paths, odd namespaces, signature envelopes and scanned
+images included.
+
+`ofdrw` is the reference Java implementation of the format and is Apache-2.0,
+which makes its test material the one corpus worth taking rather than a
+corpus worth asking permission for twice. Nothing is committed here: the
+samples are large, they are not ours, and a vendored copy would rot against
+upstream. The list below is the pin.
+
+Usage:
+    python3 scripts/fetch_corpus.py [--out DIR] [--only NAME] [--check]
+
+`--check` reports which samples are missing without downloading anything, which
+is what CI runs to tell a developer what to fetch before a local run.
+"""
+
+from __future__ import annotations
+
+import argparse
+import sys
+import urllib.error
+import urllib.parse
+import urllib.request
+from pathlib import Path
+
+REPO = "ofdrw/ofdrw"
+BRANCH = "master"
+RAW = "https://raw.githubusercontent.com/" + REPO + "/" + BRANCH + "/"
+
+# Why each sample is here. A sample nobody can explain is a sample nobody
+# maintains, and the reason a regression appears is almost never "the parser
+# broke" but "the parser never promised this and now must".
+SAMPLES: dict[str, str] = {
+    # Container and structure.
+    "test-ofda.ofd": "ofdrw-archive/src/test/resources/test-ofda.ofd",
+    "helloworld.ofd": "ofdrw-converter/src/test/resources/helloworld.ofd",
+    "1.ofd": "ofdrw-converter/src/test/resources/1.ofd",
+    "999.ofd": "ofdrw-converter/src/test/resources/999.ofd",
+    "h.ofd": "ofdrw-converter/src/test/resources/h.ofd",
+    "n.ofd": "ofdrw-converter/src/test/resources/n.ofd",
+    "y.ofd": "ofdrw-converter/src/test/resources/y.ofd",
+    "z.ofd": "ofdrw-converter/src/test/resources/z.ofd",
+    "20240531141733.ofd": "ofdrw-converter/src/test/resources/20240531141733.ofd",
+    "draw_param_ref.ofd": "ofdrw-converter/src/test/resources/draw_param_ref.ofd",
+    "V4RideRight.ofd": "ofdrw-converter/src/test/resources/V4RideRight.ofd",
+    # Images, clipping and transparency.
+    "containsJPEG.ofd": "ofdrw-converter/src/test/resources/containsJPEG.ofd",
+    "testPathClip.ofd": "ofdrw-converter/src/test/resources/testPathClip.ofd",
+    "testPathFillOpacity.ofd": "ofdrw-converter/src/test/resources/testPathFillOpacity.ofd",
+    "testImageNotFound.ofd": "ofdrw-converter/src/test/resources/testImageNotFound.ofd",
+    "testImageOverridePage.ofd": "ofdrw-converter/src/test/resources/testImageOverridePage.ofd",
+    "zsbk.ofd": "ofdrw-converter/src/test/resources/zsbk.ofd",
+    # Things the specification does not quite cover.
+    "ano.ofd": "ofdrw-converter/src/test/resources/ano.ofd",
+    "SignScaleError.ofd": "ofdrw-converter/src/test/resources/SignScaleError.ofd",
+    "signout.ofd": "ofdrw-converter/src/test/resources/signout.ofd",
+    "pattern-type.ofd": "ofdrw-converter/src/test/resources/pattern类型.ofd",
+    # A real seven-megabyte scanned invoice: the shape a government office
+    # actually receives, and the reason JBIG2 is not optional.
+    "intro-invoice.ofd": "ofdrw-converter/src/test/resources/intro-数科.ofd",
+}
+
+# The two names above are renamed on the way in. A CJK path is a portability
+# trap on Windows and a policy violation in this repository's own source, and
+# the rename costs nothing because the reason string carries the origin.
+RENAME_FROM = {
+    "pattern-type.ofd": "pattern类型.ofd",
+    "intro-invoice.ofd": "intro-数科.ofd",
+}
+
+
+def _fetch(path: str, timeout: float) -> bytes:
+    quoted = urllib.parse.quote(path)
+    request = urllib.request.Request(RAW + quoted, headers={"User-Agent": "steleofd-corpus"})
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        return response.read()
+
+
+def _sanity(name: str, blob: bytes) -> str | None:
+    """Reject anything that is not an OFD package before it reaches a test."""
+    if len(blob) < 22:
+        return "too short to be a zip"
+    if blob[:2] != b"PK":
+        return "does not start with a zip signature"
+    if b"OFD.xml" not in blob and b"ofd.xml" not in blob:
+        return "no OFD.xml entry point in the central directory"
+    return None
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--out",
+        type=Path,
+        default=Path(__file__).resolve().parent.parent / "tests" / "fixtures" / "ofdrw",
+        help="where the samples land",
+    )
+    parser.add_argument("--only", action="append", help="fetch just these samples")
+    parser.add_argument("--timeout", type=float, default=120.0)
+    parser.add_argument("--check", action="store_true", help="report what is missing and stop")
+    args = parser.parse_args()
+
+    wanted = args.only or sorted(SAMPLES)
+
+    if args.check:
+        missing = [n for n in wanted if not (args.out / n).is_file()]
+        present = len(wanted) - len(missing)
+        print(f"third-party corpus: {present}/{len(wanted)} present in {args.out}")
+        for name in missing:
+            print(f"  missing {name}")
+        if missing:
+            print("run: python3 scripts/fetch_corpus.py")
+        return 1 if missing else 0
+
+    args.out.mkdir(parents=True, exist_ok=True)
+    failures = 0
+    for name in wanted:
+        source = SAMPLES.get(name)
+        if source is None:
+            print(f"unknown sample {name}", file=sys.stderr)
+            failures += 1
+            continue
+        try:
+            blob = _fetch(source, args.timeout)
+        except (urllib.error.URLError, TimeoutError, OSError) as error:
+            print(f"FAIL {name}: {error}", file=sys.stderr)
+            failures += 1
+            continue
+        problem = _sanity(name, blob)
+        if problem is not None:
+            print(f"FAIL {name}: {problem}", file=sys.stderr)
+            failures += 1
+            continue
+        (args.out / name).write_bytes(blob)
+        origin = RENAME_FROM.get(name, source.rsplit("/", 1)[-1])
+        print(f"ok   {name:<28} {len(blob):>9,} bytes  <- {origin}")
+
+    print(f"\n{len(wanted) - failures}/{len(wanted)} fetched into {args.out}")
+    return 1 if failures else 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
