@@ -282,7 +282,11 @@ status = "untested"
 [[item]]
 clause = "18.2.4"
 title = "Signature value"
-status = "untested"
+status = "verified"
+tests = [
+    "gb_t_33190_18_2_4_certificate_key_verifies_the_check_value",
+    "gb_t_33190_18_2_4_tampered_content_fails_the_check_value",
+]
 
 [[item]]
 clause = "19.1"

@@ -198,7 +198,7 @@ rather than the national standards one.
 
 Next up are the remaining L5 delivery crates (`wasm`, `ffi`, `server`), all
 built on the `core` facade. Clause-level coverage lives in
-[`compliance/gb-t-33190.toml`](compliance/gb-t-33190.toml); 19 of 47 clauses
+[`compliance/gb-t-33190.toml`](compliance/gb-t-33190.toml); 20 of 47 clauses
 are covered so far.
 
 ## Contributing
