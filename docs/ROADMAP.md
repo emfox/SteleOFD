@@ -13,8 +13,8 @@ criterion, so it is always obvious whether it is done.
 | Measure | Value |
 | --- | --- |
 | Crates | 26 (L0 foundation through L5 delivery) |
-| Source | 33,401 lines of Rust, measured with `find crates -name '*.rs'` |
-| Tests | 828 passing, plus 13 inline unit-test modules |
+| Source | 33,515 lines of Rust, measured with `find crates -name '*.rs'` |
+| Tests | 831 passing, plus 13 inline unit-test modules |
 | Delivery forms | `cli`, `wasm`, `ffi`, `server`, `reader`, all on the `core` facade |
 | Standard clauses verified | 47 of 47 in GB/T 33190-2016 (46 `verified`, 1 `partial`) |
 | Languages | `en-US` and `zh-CN`, 88 message keys, parity enforced in CI |
@@ -180,7 +180,7 @@ author already thought of. Opening another implementation's test documents is
 the cheapest way to find the constructs nobody thought of, and it found six.
 
 - **S1-a** `[x]` ~~`scripts/fetch_corpus.py` pins a list of documents from the reference Java implementation, which is Apache-2.0 and so the one corpus worth taking rather than one worth asking about twice. Nothing is committed: the samples are large, they are not ours to redistribute, and a vendored copy rots against upstream. Each entry carries the reason it is in the list, because a sample nobody can explain is a sample nobody maintains, and a sample keeps the name its producer gave it, CJK included, because a renamed sample loses the only link back to where it came from — the corpus directory is exempt from the language policy for that reason, and it is fetched rather than committed, so none of it is source and none of it is built.~~
-- **S1-b** `[x]` ~~Twenty-eight documents opened, twelve of which failed, and every failure was a hard parse error rather than a page that looked slightly wrong — which is why none of them surfaced earlier. Six constructs were wrong: `DeltaX` accepts `g` for "the adjustment the glyph before had", which is how a Chinese invoice spaces a whole run; `TemplatePage` hangs off `CommonData` with no wrapper element, so every templated document was refused; `B` is a cubic Bezier from the current point and draws the supervisory seal; `DocRoot` may carry a leading slash; `<Color>` may write `#ee #20 #25`, hex channels that each carry their own marker, and reading that as one six-digit string refused a coloured invoice while the same document's `#0 #0 #0` passed, which is how the bug hid; and a colour carrying a gradient has no flat value, so a gradient-filled text run read as an invalid colour. All six are covered by `tests/third_party.rs`. What is left is one document whose zip is truncated, two that reference a resource they do not contain — one of them named for it — and one with a clip list this parser does not read yet.~~
+- **S1-b** `[x]` ~~Twenty-eight documents opened, twelve of which failed, and every failure was a hard parse error rather than a page that looked slightly wrong — which is why none of them surfaced earlier. Six constructs were wrong: `DeltaX` accepts `g` for "the adjustment the glyph before had", which is how a Chinese invoice spaces a whole run; `TemplatePage` hangs off `CommonData` with no wrapper element, so every templated document was refused; `B` is a cubic Bezier from the current point and draws the supervisory seal; `DocRoot` may carry a leading slash; `<Color>` may write `#ee #20 #25`, hex channels that each carry their own marker, and reading that as one six-digit string refused a coloured invoice while the same document's `#0 #0 #0` passed, which is how the bug hid; and a colour carrying a gradient has no flat value, so a gradient-filled text run read as an invalid colour. All six are covered by `tests/third_party.rs`. What is left is one document whose zip is truncated and two that reference a resource they do not contain — one of them named for it. The clip list that this parser could not read is read now, in S1-f, which is what opened the scanned invoice; that document then meets a different wall, described under M2-a.~~
 
 ### N11. Image resources reach the page (S1-c, S1-d, S1-e)
 
@@ -192,6 +192,7 @@ happen, and all three were true at once.
 
 - **S1-c** `[x]` ~~`read_multimedias` parsed the `MultiMedia` table correctly and nothing ever called it, so the bytes never left the archive. The table is now read when the document opens, the media files are resolved against its `BaseLoc`, and each placement is filled in with the bytes and the encoding its file name implies. `ResolvedResources` was an empty shell with no consumer and is gone. An entry that names audio or video is left out: they share the table, and their bytes are not something a backend can paint.~~
 - **S1-d** `[x]` ~~Even with the bytes attached, nothing appeared, because the placement transform was composed on the wrong side: the offset was scaled by the rectangle's own width, putting the picture about 27,000 pixels off the page. Two more defects sat behind it. A package stores `Doc_0/Document.xml` beside `DOC_0/Res/Image_4.JPEG` in one real sample, so entries are now matched case-insensitively when nothing matches exactly, exact first. And `page_display` reported a page size of 0 for a document with no `PageArea`, which silently scaled everything to fill the page; that one is the sample's own doing and is left alone.~~
+- **S1-f** `[x]` ~~A clip is not one area. Clause 8.4 builds `Clips` from `Clip` elements and each `Clip` from `Area` elements, and both levels cover the **union** of what they name — the standard says so in the note to `Clips` in table 34, and again for the areas of one clip. This parser had read only the first area of the first clip and refused the rest with an error, which cost it a 42-page scanned invoice. It now reads every area of every clip into one path of several subpaths, each keeping its own `CTM`, and takes the fill rule from the first area that states one. The union is what the areas mean, and a single path is how a backend expresses it: `tiny-skia`'s clip intersects, so the areas have to arrive together or the second would eat the first.~~
 - **S1-e** `[x]` ~~JBIG2 is the encoding a scanned invoice carries and `image` does not read it, so it takes a separate path through `hayro-jbig2` with the `simd` feature off: that leaves `hayro-jbig2` and `hayro-ccitt` as the only things in the tree, both of which forbid unsafe code. The sample in the corpus decodes to a 100x100 QR code, which is now a test fixture. Taking that crate is why `rust-version` moves from 1.85 to 1.92, which in turn is why six existing `if` statements became let-chains and two modulo tests became `is_multiple_of`: a newer toolchain lints the code it did not used to.~~
 
 ---
@@ -218,7 +219,15 @@ explicitly documented as a deviation.
 Fonts are where a document engine most often meets reality.
 
 - **M2-a** Broaden the embedded and system font coverage, and test against a
-  documented matrix of CJK, Latin and right-to-left faces.
+  documented matrix of CJK, Latin and right-to-left faces. A bare CFF face is
+  the first thing to add: the real 42-page scanned invoice in the corpus opens
+  once the multi-area clip above is read, and then fails to rasterize
+  **eighteen of its pages** because three of its twelve embedded faces are raw CFF
+  (`01 00 04 02` / `01 00 04 03`: version 1, header size 4, offset size 2 or 3)
+  rather than sfnt, and `ttf-parser` reads only sfnt. Two of the three even
+  carry `.ttf` and `.otf` names, so the file name cannot be used to tell. A
+  page that cannot load a face currently fails as a whole, which is honest but
+  makes a document half readable.
 - **M2-b** Subset embedded fonts instead of carrying whole faces.
 - **M2-c** Make font fallback deterministic and observable, so the same input
   always produces the same glyphs.
