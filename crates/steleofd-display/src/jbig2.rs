@@ -42,10 +42,6 @@ pub fn dimensions_for(data: &[u8], codec: ImageCodec) -> Option<(u32, u32)> {
 struct Grayscale {
     width: u32,
     height: u32,
-    /// Rows completed so far, which is how the trait reports line breaks.
-    lines: u32,
-    /// Pixels pushed into the current line, less than the width.
-    column: u32,
     /// The line under construction; pushed pixels are appended here.
     row: Vec<u8>,
     /// Every finished line, in order.
@@ -59,8 +55,6 @@ impl Grayscale {
         Self {
             width,
             height,
-            lines: 0,
-            column: 0,
             row: Vec::new(),
             rows: Vec::new(),
         }
@@ -68,7 +62,6 @@ impl Grayscale {
 
     fn push(&mut self, black: bool) {
         self.row.push(if black { 0 } else { u8::MAX });
-        self.column += 1;
     }
 
     fn end_line(&mut self) {
@@ -79,8 +72,6 @@ impl Grayscale {
             self.row.resize(width, u8::MAX);
         }
         self.rows.append(&mut self.row);
-        self.lines += 1;
-        self.column = 0;
     }
 
     fn finish(mut self) -> Vec<u8> {
@@ -105,7 +96,6 @@ impl Decoder for Grayscale {
             self.row.len() + chunk_count as usize * 8,
             if black { 0 } else { u8::MAX },
         );
-        self.column += chunk_count * 8;
     }
 
     fn next_line(&mut self) {
