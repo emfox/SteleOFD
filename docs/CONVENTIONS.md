@@ -99,11 +99,16 @@ The rules it enforces are the ones above: an allowed type, a subject of at
 most 75 bytes with no trailing period, a body of at most two non-blank lines,
 and no CJK anywhere in the message.
 
-`scripts/commit-baseline.txt` lists the five commits that already break these
-rules. They predate the checker and are already published, so rewriting them
-would break every existing clone. The file is append-only in practice: adding
-a line to it is a deliberate decision to accept a violation, and it should
-carry a reason.
+`scripts/commit-baseline.txt` exists to exempt commits that already break
+these rules and cannot be rewritten without breaking existing clones. **It is
+currently empty**, and the whole history passes without it: the three
+over-long messages were rewritten in place once the checker landed.
+
+Adding a line to it is a deliberate decision to accept a violation, and it
+should carry a reason. Prefer rewriting the commit — a published message is
+the only thing in this repository that cannot be fixed later, and
+`git push --force-with-lease` is a small price for a history that needs no
+exemption list at all.
 
 ### 4.1 Exemptions from the language policy
 

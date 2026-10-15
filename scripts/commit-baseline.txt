@@ -10,10 +10,8 @@
 #
 # This list is meant to shrink. Each entry is a debt someone accepted, and
 # removing an entry is a small celebration.
-
-# 60ea933 body runs to 13 lines, where the rule allows 2.
-60ea933
-# 8cffd09 body runs to 9 lines, where the rule allows 2.
-8cffd09
-# e01d170 body runs to 10 lines, where the rule allows 2.
-e01d170
+#
+# It is currently empty: the three over-long messages were rewritten in place,
+# so the whole history is clean and nothing needs exempting. CI passes this
+# file either way, which is deliberate -- a stale entry must not be able to
+# hide a new violation.
