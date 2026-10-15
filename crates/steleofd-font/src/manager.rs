@@ -10,14 +10,13 @@ use steleofd_error::{FontError, Result};
 use crate::face::FontFace;
 use crate::registry::{FontId, FontRegistry, FontSource};
 
-/// Owns the registry and the cache of loaded faces.
+/// Owns the registry and the cache of loaded faces. The system source is a
+/// thread-local: font-kit's fontconfig pointer is neither Send nor Sync.
 pub struct FontManager {
     registry: FontRegistry,
     faces: RwLock<HashMap<FontId, Arc<FontFace>>>,
     fallback_chain: RwLock<Vec<FontId>>,
     default_cjk_family: RwLock<String>,
-    #[cfg(feature = "system-fonts")]
-    system: RwLock<Option<font_kit::source::SystemSource>>,
 }
 
 impl std::fmt::Debug for FontManager {
@@ -37,8 +36,6 @@ impl FontManager {
             faces: RwLock::new(HashMap::new()),
             fallback_chain: RwLock::new(Vec::new()),
             default_cjk_family: RwLock::new("Noto Sans CJK SC".to_string()),
-            #[cfg(feature = "system-fonts")]
-            system: RwLock::new(None),
         }
     }
 
@@ -143,22 +140,22 @@ impl FontManager {
         use font_kit::handle::Handle;
         use font_kit::properties::Properties;
 
-        let mut guard = self
-            .system
-            .write()
-            .map_err(|_| FontError::Parse("system font lock poisoned".to_string()))?;
-        let source = guard.get_or_insert_with(font_kit::source::SystemSource::new);
-
-        let handle = source
-            .select_best_match(&[FamilyName::Title(family.to_string())], &Properties::new())
-            .map_err(|_| FontError::Missing {
-                family: family.to_string(),
-            })?;
-
-        match handle {
-            Handle::Path { path, .. } => Ok(Arc::new(std::fs::read(path)?)),
-            Handle::Memory { bytes, .. } => Ok(Arc::new((*bytes).clone())),
+        // One source per thread: fontconfig configs are per-thread anyway, and
+        // this keeps the raw pointer inside font-kit off the shared struct.
+        thread_local! {
+            static SYSTEM: font_kit::source::SystemSource = font_kit::source::SystemSource::new();
         }
+        SYSTEM.with(|source| {
+            let handle = source
+                .select_best_match(&[FamilyName::Title(family.to_string())], &Properties::new())
+                .map_err(|_| FontError::Missing {
+                    family: family.to_string(),
+                })?;
+            match handle {
+                Handle::Path { path, .. } => Ok(Arc::new(std::fs::read(path)?)),
+                Handle::Memory { bytes, .. } => Ok(Arc::new((*bytes).clone())),
+            }
+        })
     }
 
     /// Degraded path when system font lookup is compiled out.

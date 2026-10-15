@@ -66,7 +66,7 @@ steleofd-parser   = { path = "crates/steleofd-parser",   version = "0.1.0" }
 steleofd-render   = { path = "crates/steleofd-render",   version = "0.1.0" }
 steleofd-sign     = { path = "crates/steleofd-sign",     version = "0.1.0" }
 steleofd-crypto   = { path = "crates/steleofd-crypto",   version = "0.1.0" }
-steleofd-convert  = { path = "crates/steleofd-convert",  version = "0.1.0" }
+steleofd-convert  = { path = "crates/steleofd-convert",  version = "0.1.0", default-features = false }
 steleofd-edit     = { path = "crates/steleofd-edit",     version = "0.1.0" }
 steleofd-search   = { path = "crates/steleofd-search",   version = "0.1.0" }
 steleofd-archive  = { path = "crates/steleofd-archive",  version = "0.1.0" }

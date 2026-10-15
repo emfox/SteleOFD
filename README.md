@@ -185,7 +185,9 @@ rather than the national standards one.
 - [x] **P0** Skeleton: layered architecture, error taxonomy, display list IR, i18n layer
 - [x] **P1** OFD structure parsing (`model`, `xml`, `package`, `parser`)
 - [x] **P2** Raster render backend, completing the open-to-display path
-- [ ] **P3** Conversion (OFD to PDF, PNG, SVG)
+- [x] **P3** Conversion (OFD to PDF, PNG, SVG)
+- [x] **P3b** Printing: task planning and rasterization (`print`)
+- [x] **P4b** The `core` facade: one handle, features per delivery form
 - [x] **P4** Signature verification with national algorithms
 - [ ] **P5** CLI, WebAssembly and server delivery
 - [x] **P6** Document editing with an undo stack
@@ -193,8 +195,8 @@ rather than the national standards one.
 - [x] **P8** Archival readiness auditing (`archive`)
 - [x] **P9** GB/T 33190-2016 conformance harness: annex A schemas rebuilt from the standard, enforced in CI
 
-Next up is `convert` (P3), then the `print` crate and the `core` facade, and
-last the L5 delivery crates. Clause-level coverage lives in
+Next up are the L5 delivery crates (`cli`, `wasm`, `ffi`, `server`), all built
+on the `core` facade. Clause-level coverage lives in
 [`compliance/gb-t-33190.toml`](compliance/gb-t-33190.toml); 18 of 47 clauses
 are covered so far.
 

@@ -286,15 +286,14 @@ impl<'a> PdfSink<'a> {
                 offset += run.advances.get(i - 1).copied().unwrap_or(0.0);
             }
             offset += run.letter_spacing;
-            let Some(outline) = face.outline(gid) else {
+            let Some(outline) = face.outline_for_codepoint(u32::from(gid)) else {
                 continue;
             };
-            // Outlines are normalized to 1/1000 em with y pointing up, so the
-            // glyph matrix scales by size/1000 and flips the y axis.
-            let glyph = run
-                .transform
+            // Outlines are normalized to 1/1000 em with y pointing up: scale
+            // to millimetres first, then position, or the origin gets scaled.
+            let glyph = Affine::new(k, 0.0, 0.0, -k, 0.0, 0.0)
                 .then(Affine::translate(offset, 0.0))
-                .then(Affine::new(k, 0.0, 0.0, -k, 0.0, 0.0));
+                .then(run.transform);
             let total = self.to_pt(glyph);
             self.write_path(&outline, total);
             let mut setup = match fill {

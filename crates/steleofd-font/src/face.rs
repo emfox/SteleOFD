@@ -161,6 +161,14 @@ impl FontFace {
         }
     }
 
+    /// Outline for a Unicode code point, mapped through the cmap first.
+    /// Display lists carry code points in place of glyph ids until shaping
+    /// lands, so consumers must not treat the raw value as a glyph index.
+    pub fn outline_for_codepoint(&self, codepoint: u32) -> Option<Path> {
+        let glyph = self.glyph_id(codepoint)?;
+        self.outline(glyph)
+    }
+
     /// Whether the face covers a code point.
     pub fn has_codepoint(&self, codepoint: u32) -> bool {
         self.glyph_id(codepoint).is_some()

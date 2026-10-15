@@ -2523,7 +2523,6 @@ dependencies = [
  "steleofd-render",
  "steleofd-search",
  "steleofd-sign",
- "tokio",
  "tracing",
 ]
 

@@ -192,6 +192,9 @@ pub enum FormatError {
         /// Total pages available.
         total: usize,
     },
+    /// The document declares no signature list at all.
+    #[error("document declares no signatures")]
+    MissingSignatures,
     /// Recursion went deeper than allowed.
     #[error("parse recursion depth exceeded: {0}")]
     MaxDepthExceeded(usize),

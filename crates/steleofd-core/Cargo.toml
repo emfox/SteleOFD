@@ -16,7 +16,7 @@ steleofd-geometry.workspace = true
 steleofd-font.workspace = true
 steleofd-display.workspace = true
 steleofd-parser.workspace = true
-steleofd-render.workspace = true
+steleofd-render = { workspace = true, optional = true }
 steleofd-crypto = { workspace = true, optional = true }
 steleofd-sign = { workspace = true, optional = true }
 steleofd-convert = { workspace = true, optional = true }
@@ -25,22 +25,23 @@ steleofd-search = { workspace = true, optional = true }
 steleofd-archive = { workspace = true, optional = true }
 steleofd-print = { workspace = true, optional = true }
 tracing.workspace = true
-tokio = { version = "1", features = ["rt-multi-thread", "macros"], optional = true }
 rayon = { version = "1.11", optional = true }
 
 [features]
-default = ["render", "sign", "convert"]
+default = ["render", "sign", "convert", "pdf"]
 
 # Capability features, to trim binary size per delivery form.
-render   = ["steleofd-render/backend-raster"]
-canvas   = ["steleofd-render/backend-canvas"]
+render   = ["dep:steleofd-render", "steleofd-render/backend-raster"]
+canvas   = ["dep:steleofd-render", "steleofd-render/backend-canvas"]
 print    = ["dep:steleofd-print"]
 sign     = ["dep:steleofd-sign", "dep:steleofd-crypto"]
-convert  = ["dep:steleofd-convert"]
+# Convert pulls in the raster backend anyway (PNG output goes through it),
+# so naming the dependency here costs no extra compilation.
+convert  = ["dep:steleofd-convert", "dep:steleofd-render"]
 pdf      = ["convert", "steleofd-convert/pdf"]
 office   = ["convert", "steleofd-convert/office"]
 ocr      = ["convert", "steleofd-convert/ocr"]
 edit     = ["dep:steleofd-edit"]
 search   = ["dep:steleofd-search"]
 archive  = ["dep:steleofd-archive"]
-async    = ["dep:tokio", "dep:rayon"]
+async    = ["dep:rayon"]

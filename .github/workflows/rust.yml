@@ -51,6 +51,9 @@ jobs:
       - name: Test
         run: cargo test --workspace
 
+      - name: Test with every feature on
+        run: cargo test --workspace --all-features
+
       - name: Message catalogues
         run: python3 scripts/check_i18n.py --strict
 

@@ -181,17 +181,19 @@ Features trim binary size per delivery form:
 
 ```toml
 [features]
-default  = ["render", "sign", "convert"]
-render   = ["steleofd-render/backend-raster"]
-canvas   = ["steleofd-render/backend-canvas"]
+default  = ["render", "sign", "convert", "pdf"]
+render   = ["dep:steleofd-render", "steleofd-render/backend-raster"]
+canvas   = ["dep:steleofd-render", "steleofd-render/backend-canvas"]
 print    = ["dep:steleofd-print"]
 sign     = ["dep:steleofd-sign", "dep:steleofd-crypto"]
-convert  = ["dep:steleofd-convert"]
+convert  = ["dep:steleofd-convert", "dep:steleofd-render"]
 pdf      = ["convert", "steleofd-convert/pdf"]
+office   = ["convert", "steleofd-convert/office"]
+ocr      = ["convert", "steleofd-convert/ocr"]
 edit     = ["dep:steleofd-edit"]
 search   = ["dep:steleofd-search"]
 archive  = ["dep:steleofd-archive"]
-async    = ["dep:tokio", "dep:rayon"]
+async    = ["dep:rayon"]
 ```
 
 Typical combinations:
@@ -322,7 +324,9 @@ opt-level = "s"         # size first for WASM
 | **P0 skeleton** | 24-crate layering, error taxonomy, display list IR, i18n layer | Done |
 | **P1 parsing** | `model`, `xml`, `package`, `parser` implementing OFD structure parsing | Done |
 | **P2 rendering** | Raster backend in `render`, completing open-to-display | Done |
-| **P3 conversion** | `convert`: OFD to PDF, PNG, SVG | Pending |
+| **P3 conversion** | `convert`: OFD to PDF, PNG, SVG | Done |
+| **P3b printing** | `print`: task planning and rasterization | Done |
+| **P4b facade** | `core`: the feature-trimmed public surface | Done |
 | **P4 verification** | Signature verification in `crypto` and `sign` | Done |
 | **P5 delivery** | CLI, WebAssembly and server delivery paths | Pending |
 | **P6 editing** | Command pattern and undo stack in `edit` | Done |
@@ -334,11 +338,11 @@ opt-level = "s"         # size first for WASM
 displaying a single OFD page, then broaden capabilities. That yields end-to-end
 feedback early instead of spinning inside abstraction layers.
 
-**Still to build:** `convert` (P3) is the next capability crate, then `print` and the
-`core` facade, and last the L5 delivery crates (`cli`, `wasm`, `ffi`, `server`).
-Clause-level conformance is tracked in `compliance/gb-t-33190.toml`; 18 of 47
-clauses are covered so far, and the register is the single source of truth that
-`scripts/check_compliance.py` gates on.
+**Still to build:** the L5 delivery crates (`cli`, `wasm`, `ffi`, `server`), all
+of which sit on the `core` facade. Clause-level conformance is tracked in
+`compliance/gb-t-33190.toml`; 18 of 47 clauses are covered so far, and the
+register is the single source of truth that `scripts/check_compliance.py` gates
+on.
 
 ---
 
