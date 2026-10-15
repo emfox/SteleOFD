@@ -127,7 +127,9 @@ impl DisplayListBuilder {
     /// Append a command and fold its extent into the content bounds.
     pub fn push(&mut self, op: DrawOp) {
         if let Some(b) = op_bbox(&op) {
-            self.content_bbox = self.content_bbox.union(b);
+            // Geometry is recorded in object space, so the bounds must pass
+            // through the transform in scope to land in page coordinates.
+            self.content_bbox = self.content_bbox.union(transformed_rect(b, &self.current));
         }
         self.ops.push(op);
     }
@@ -167,6 +169,21 @@ fn op_bbox(op: &DrawOp) -> Option<Rect> {
         }
         _ => None,
     }
+}
+
+/// The bounding box of a rectangle pushed through an affine map. Rotation and
+/// shear grow the box; mirroring keeps it the same size.
+fn transformed_rect(r: Rect, t: &Affine) -> Rect {
+    let (mut min_x, mut min_y) = t.apply(r.x, r.y);
+    let (mut max_x, mut max_y) = (min_x, min_y);
+    for (x, y) in [(r.x + r.w, r.y), (r.x, r.y + r.h), (r.x + r.w, r.y + r.h)] {
+        let (px, py) = t.apply(x, y);
+        min_x = min_x.min(px);
+        min_y = min_y.min(py);
+        max_x = max_x.max(px);
+        max_y = max_y.max(py);
+    }
+    Rect::new(min_x, min_y, max_x - min_x, max_y - min_y)
 }
 
 #[cfg(test)]

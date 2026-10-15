@@ -195,6 +195,15 @@ happen, and all three were true at once.
 - **S1-f** `[x]` ~~A clip is not one area. Clause 8.4 builds `Clips` from `Clip` elements and each `Clip` from `Area` elements, and both levels cover the **union** of what they name — the standard says so in the note to `Clips` in table 34, and again for the areas of one clip. This parser had read only the first area of the first clip and refused the rest with an error, which cost it a 42-page scanned invoice. It now reads every area of every clip into one path of several subpaths, each keeping its own `CTM`, and takes the fill rule from the first area that states one. The union is what the areas mean, and a single path is how a backend expresses it: `tiny-skia`'s clip intersects, so the areas have to arrive together or the second would eat the first.~~
 - **S1-e** `[x]` ~~JBIG2 is the encoding a scanned invoice carries and `image` does not read it, so it takes a separate path through `hayro-jbig2` with the `simd` feature off: that leaves `hayro-jbig2` and `hayro-ccitt` as the only things in the tree, both of which forbid unsafe code. The sample in the corpus decodes to a 100x100 QR code, which is now a test fixture. Taking that crate is why `rust-version` moves from 1.85 to 1.92, which in turn is why six existing `if` statements became let-chains and two modulo tests became `is_multiple_of`: a newer toolchain lints the code it did not used to.~~
 
+### N12. Where an object's content lands (S2-a)
+
+Opening the scanned invoice above turned out to be the easy half. Of its 42
+pages, 23 rasterize and 19 do not, and several of the 23 are plainly wrong:
+four come out as a single flat colour covering the page, where the same pages
+with the clip taken out carry 180 colours of real content.
+
+- **S2-a** `[x]` ~~An object's clip and its content are not drawn in one coordinate space yet. The corpus settles it once the samples are counted rather than argued about. Across 16 documents, an `ImageObject`'s CTM scale equals its `Boundary` width and height almost without exception — 119 of 121 in the scanned invoice, 4 of 4 in the QR sample, 2 of 2 in the JPEG one — while a `PathObject` follows no such rule in any of them. So the content space is **the unit square plus a CTM that scales it onto the boundary**, not a rectangle placed and then scaled again: image `dst` is now `(0, 0, 1, 1)` and the CTM does the sizing, while path and text data are already millimetres from the boundary corner and the CTM carries a factor instead (0.3528 throughout, points to millimetres). The page position is the boundary translation applied *after* that CTM, not before — the other order scales the offset by 123 and puts the picture 21,000 pixels off the page. Clips disagree in a third way: `Clips/@TransFlag` is `true` by default, meaning the region follows the CTM, but real producers write `false` on nearly every clip because their areas are already boundary millimetres — folding the image's unit-square CTM in once more shrinks the region to nothing. A `false` clip is therefore pulled back through the CTM inverse and shares the object's scope. Two further defects fell out. `tiny-skia`'s `Mask::new` hands back a fully transparent buffer and `intersect_path` only multiplies into it, so every clip this parser built was empty and clipped its object out of existence; the mask now starts opaque and reuses the mask already in scope, which nests clips as intersections. And a path whose abbreviated data ends on a bare `C` leaves an unclosed subpath that encloses nothing when it becomes a mask, so clips close theirs. Verified against the corpus: `helloworld`, `containsJPEG` and `zsbk` now render their picture, photograph and QR code at the boundary the document states.~~
+
 ---
 
 ## Mid term: make it fast and complete
@@ -220,9 +229,10 @@ Fonts are where a document engine most often meets reality.
 
 - **M2-a** Broaden the embedded and system font coverage, and test against a
   documented matrix of CJK, Latin and right-to-left faces. A bare CFF face is
-  the first thing to add: the real 42-page scanned invoice in the corpus opens
-  once the multi-area clip above is read, and then fails to rasterize
-  **eighteen of its pages** because three of its twelve embedded faces are raw CFF
+  the first thing to add, and it is now the only thing between the 42-page
+  scanned invoice and a full render: with the coordinate spaces of N12 settled,
+  its failures are all `font parse failed: UnknownMagic` — **eighteen of its
+  pages**, because three of its twelve embedded faces are raw CFF
   (`01 00 04 02` / `01 00 04 03`: version 1, header size 4, offset size 2 or 3)
   rather than sfnt, and `ttf-parser` reads only sfnt. Two of the three even
   carry `.ttf` and `.otf` names, so the file name cannot be used to tell. A

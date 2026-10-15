@@ -426,8 +426,13 @@ fn parse_position(element: &str, attribute: &str, raw: Option<&str>) -> Result<(
 /// `<Clips><Clip><Area><Path .../></Area></Clip></Clips>`. Clause 8.4: an area
 /// is one part of a clip, and both a clip and the list of them cover the union
 /// of what they name.
-fn read_clips(cursor: &mut Cursor<'_>) -> Result<ClipList> {
-    let mut list = ClipList::default();
+fn read_clips(cursor: &mut Cursor<'_>, node: &Node) -> Result<ClipList> {
+    let mut list = ClipList {
+        trans_flag: node
+            .attributes()
+            .optional_as::<bool>("Clips", "TransFlag")?,
+        ..Default::default()
+    };
     loop {
         match cursor.next_event()? {
             Event::Start(n) if n.is("Clip") => list.items.push(read_clip(cursor)?),
@@ -928,7 +933,7 @@ fn read_path_object(cursor: &mut Cursor<'_>, node: &Node) -> Result<PathObject> 
                 Event::Start(n) if n.is("StrokeColor") => {
                     p.stroke_color = Some(read_color(&n, cursor)?)
                 }
-                Event::Start(n) if n.is("Clips") => p.base.clips = Some(read_clips(cursor)?),
+                Event::Start(n) if n.is("Clips") => p.base.clips = Some(read_clips(cursor, &n)?),
                 Event::Start(n) if n.is("Actions") => p.base.actions = Some(read_actions(cursor)?),
                 Event::Start(other) => cursor.skip_element(&other)?,
                 Event::End(_) => break,
@@ -968,7 +973,7 @@ fn read_text_object(cursor: &mut Cursor<'_>, node: &Node) -> Result<TextObject> 
                 Event::Start(n) if n.is("FillColor") => {
                     t.fill_color = Some(read_color(&n, cursor)?)
                 }
-                Event::Start(n) if n.is("Clips") => t.base.clips = Some(read_clips(cursor)?),
+                Event::Start(n) if n.is("Clips") => t.base.clips = Some(read_clips(cursor, &n)?),
                 Event::Start(n) if n.is("Actions") => t.base.actions = Some(read_actions(cursor)?),
                 Event::Start(other) => cursor.skip_element(&other)?,
                 Event::End(_) => break,
@@ -1035,7 +1040,7 @@ fn read_image_object(cursor: &mut Cursor<'_>, node: &Node) -> Result<ImageObject
                 Event::Start(n) if n.is("Substitution") => {
                     i.substitution = Some(read_color(&n, cursor)?)
                 }
-                Event::Start(n) if n.is("Clips") => i.base.clips = Some(read_clips(cursor)?),
+                Event::Start(n) if n.is("Clips") => i.base.clips = Some(read_clips(cursor, &n)?),
                 Event::Start(n) if n.is("Actions") => i.base.actions = Some(read_actions(cursor)?),
                 Event::Start(other) => cursor.skip_element(&other)?,
                 Event::End(_) => break,

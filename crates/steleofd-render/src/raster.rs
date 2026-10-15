@@ -117,8 +117,20 @@ pub fn render_page(
             DrawOp::ClipPath { path, rule } => {
                 let total = total_transform(&state, &page.page_box, options.dpi);
                 let ts_path = to_ts_path(path, total)?;
-                let mut mask =
-                    Mask::new(width, height).ok_or(OfdError::Render(RenderError::InvalidSize {
+                // A fresh mask starts transparent and `intersect_path` only
+                // multiplies into it, so it must start opaque. Reusing the
+                // current mask also nests clips into an intersection.
+                let mut mask = state
+                    .clip
+                    .clone()
+                    .filter(|m| m.width() == width && m.height() == height)
+                    .or_else(|| {
+                        Mask::new(width, height).map(|mut m| {
+                            m.data_mut().fill(255);
+                            m
+                        })
+                    })
+                    .ok_or(OfdError::Render(RenderError::InvalidSize {
                         w: width,
                         h: height,
                     }))?;
@@ -688,6 +700,7 @@ fn fill_with_shader(
 mod tests {
     use super::*;
     use steleofd_display::ops::GradientStop as DisplayStop;
+
     use steleofd_display::{
         DisplayListBuilder, DrawOp, ImageCodec, ImageRef, Paint, PaintRule, StrokeStyle,
     };
@@ -826,13 +839,24 @@ mod tests {
             10.0,
             5.0,
             5.0,
-            Color::rgba(255, 0, 0, 255),
+            Color::rgba(255, 0, 255, 255),
         ));
+        // 5 mm and 10 mm on a 96 DPI page land near 19 px and 38 px.
         let out = render(&b.finish(0), &manager);
         assert_eq!(
-            pixel_at(&out, 10, 10),
+            pixel_at(&out, 40, 40),
+            [255, 0, 255, 255],
+            "the restored state has no clip, so the fill lands"
+        );
+        assert_eq!(
+            pixel_at(&out, 2, 2),
+            [0, 0, 255, 255],
+            "the clipped fill stayed inside its region"
+        );
+        assert_eq!(
+            pixel_at(&out, 25, 25),
             [255, 255, 255, 255],
-            "clipped away by the saved clip"
+            "outside the clip region nothing was painted"
         );
         assert_eq!(
             pixel_at(&out, 50, 50)[0],
@@ -986,6 +1010,37 @@ mod tests {
         let huge = DisplayListBuilder::new(Rect::new(0.0, 0.0, 100000.0, 100000.0)).finish(0);
         let err = render_page(&huge, &manager, &options).expect_err("must fail");
         assert!(err.to_string().contains("budget"), "{err}");
+    }
+
+    /// The mask a clip builds starts opaque: `Mask::new` hands back a fully
+    /// transparent buffer and `intersect_path` multiplies into it, so an
+    /// unseeded mask would clip every pixel away.
+    #[test]
+    fn a_clip_keeps_the_pixels_inside_its_region() {
+        let manager = FontManager::new();
+        let mut b = DisplayListBuilder::new(small_box());
+        b.save().expect("save");
+        b.push(DrawOp::ClipPath {
+            path: rect_path(10.0, 10.0, 20.0, 20.0),
+            rule: PaintRule::NonZero,
+        });
+        b.push(fill_rect_op(
+            0.0,
+            0.0,
+            40.0,
+            40.0,
+            Color::rgba(255, 0, 0, 255),
+        ));
+        b.restore().expect("restore");
+        let out = render(&b.finish(0), &manager);
+        let inside = pixel_at(&out, 38, 38);
+        let outside = pixel_at(&out, 5, 5);
+        assert_ne!(inside, [255, 255, 255, 255], "inside the clip is painted");
+        assert_eq!(
+            outside,
+            [255, 255, 255, 255],
+            "outside the clip stays blank"
+        );
     }
 
     #[test]

@@ -5,7 +5,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use steleofd_common::Point;
+use steleofd_common::{Point, Rect};
 use steleofd_display::ops::{Color, GradientStop, LineCap, LineJoin};
 use steleofd_display::{
     DisplayListBuilder, DrawOp, GlyphRun, ImageCodec, ImageRef, Paint, PaintRule, StrokeStyle,
@@ -92,23 +92,54 @@ fn ctm_of(base: &ObjectBase) -> Result<Option<Affine>> {
     }
 }
 
-/// Emit an object under its own CTM, keeping the state stack balanced even
-/// when the body fails so later objects start from a clean state.
-fn with_ctm(
+/// Place an object into the page. Content space starts at the boundary's
+/// top-left corner and the CTM maps from there into page space; the corpus
+/// agrees on this for every producer sampled.
+fn with_object_space(
     base: &ObjectBase,
+    params: &HashMap<String, DrawParam>,
     builder: &mut DisplayListBuilder,
     body: impl FnOnce(&mut DisplayListBuilder) -> Result<()>,
 ) -> Result<()> {
-    match ctm_of(base)? {
-        Some(t) => {
-            builder.save()?;
-            builder.transform(t);
-            let result = body(builder);
-            builder.restore()?;
-            result
-        }
-        None => body(builder),
+    let ctm = ctm_of(base)?;
+    let origin = Affine::translate(base.boundary.x, base.boundary.y);
+    let clip = clip_of(base, params)?;
+    // One scope carries both matrices: the CTM takes the content into
+    // millimetres measured from the boundary corner, and the boundary then
+    // moves that corner onto the page.
+    let single = match ctm {
+        Some(t) => t.then(origin),
+        None => origin,
+    };
+    // A clip that opts out of the CTM is stated in boundary space, so pull it
+    // back through `ctm` alone: that is the space `single` maps from.
+    let clip = clip.map(|(path, rule, follows)| match (follows, ctm) {
+        (true, _) | (_, None) => (path, rule),
+        (false, Some(t)) => match t.inverse() {
+            Some(inv) => (path.transformed(&inv), rule),
+            // A singular CTM draws nothing at all, so where its clip lands
+            // cannot be observed.
+            None => (path, rule),
+        },
+    });
+    if single.is_identity() && clip.is_none() {
+        return body(builder);
     }
+    // Keep the state stack balanced even when the body fails so later objects
+    // start from a clean state.
+    builder.save()?;
+    if !single.is_identity() {
+        builder.transform(single);
+    }
+    let result = match clip {
+        None => body(builder),
+        Some((path, rule)) => {
+            builder.push(DrawOp::ClipPath { path, rule });
+            body(builder)
+        }
+    };
+    builder.restore()?;
+    result
 }
 
 fn solid(color: &ColorRef) -> Result<Paint> {
@@ -183,12 +214,12 @@ fn stops_of(segments: &[Segment]) -> Result<Vec<GradientStop>> {
 }
 
 /// GB/T 33190 clause 8.4: the clip areas an object narrows its drawing to.
-/// Every area of every clip contributes and the region is the union of them,
-/// so they are read as one path made of several subpaths.
+/// The region is the union of every area of every clip, so they are read as
+/// one path. Also reports whether the clip follows the object's CTM.
 fn clip_of(
     base: &ObjectBase,
     _params: &HashMap<String, DrawParam>,
-) -> Result<Option<(Path, PaintRule)>> {
+) -> Result<Option<(Path, PaintRule, bool)>> {
     let Some(list) = base.clips.as_ref() else {
         return Ok(None);
     };
@@ -221,7 +252,7 @@ fn clip_of(
     if joined.is_empty() {
         return Ok(None);
     }
-    Ok(Some((joined, rule)))
+    Ok(Some((joined, rule, list.trans_flag != Some(false))))
 }
 
 /// The fill rule an area names; clause 9.1 allows either spelling.
@@ -230,25 +261,6 @@ fn paint_rule(raw: &str) -> PaintRule {
         PaintRule::EvenOdd
     } else {
         PaintRule::NonZero
-    }
-}
-
-/// Wrap a graphic unit in its clip, so the state stack stays balanced.
-fn with_clip(
-    base: &ObjectBase,
-    params: &HashMap<String, DrawParam>,
-    builder: &mut DisplayListBuilder,
-    body: impl FnOnce(&mut DisplayListBuilder) -> Result<()>,
-) -> Result<()> {
-    match clip_of(base, params)? {
-        None => body(builder),
-        Some((path, rule)) => {
-            builder.save()?;
-            builder.push(DrawOp::ClipPath { path, rule });
-            let result = body(builder);
-            builder.restore()?;
-            result
-        }
     }
 }
 
@@ -320,27 +332,25 @@ fn flatten_path(
         .as_ref()
         .or(param.and_then(|d| d.stroke_color.as_ref()))
         .unwrap_or(&black);
-    with_ctm(&p.base, builder, |b| {
-        with_clip(&p.base, params, b, |b| {
-            let fill = if fill_on {
-                Some(paint_of(fill_color, &path, b)?)
-            } else {
-                None
-            };
-            let stroke = if stroke_on {
-                Some(paint_of(stroke_color, &path, b)?)
-            } else {
-                None
-            };
-            b.push(DrawOp::Path {
-                path,
-                fill,
-                stroke,
-                stroke_style: style,
-                rule: fill_rule(p.rule),
-            });
-            Ok(())
-        })
+    with_object_space(&p.base, params, builder, |b| {
+        let fill = if fill_on {
+            Some(paint_of(fill_color, &path, b)?)
+        } else {
+            None
+        };
+        let stroke = if stroke_on {
+            Some(paint_of(stroke_color, &path, b)?)
+        } else {
+            None
+        };
+        b.push(DrawOp::Path {
+            path,
+            fill,
+            stroke,
+            stroke_style: style,
+            rule: fill_rule(p.rule),
+        });
+        Ok(())
     })
 }
 
@@ -382,39 +392,39 @@ fn flatten_text(
     let h_scale = t.h_scale.unwrap_or(1.0);
     let letter_spacing = t.char_space.unwrap_or(0.0);
     let font = FontId(t.font.parse::<u32>().unwrap_or(0));
-    with_ctm(&t.base, builder, |b| {
-        with_clip(&t.base, params, b, |b| {
-            for code in &t.codes {
-                if code.text.is_empty() {
-                    continue;
-                }
-                // Glyph ids are placeholders until font shaping lands; the raw
-                // code points keep text extraction working in the meantime.
-                let glyphs: Vec<u16> = code.text.chars().map(|c| u32::from(c) as u16).collect();
-                let advances = advances_of(code, size);
-                let place = Affine::translate(code.x, code.y);
-                let transform = if h_scale == 1.0 {
-                    place
-                } else {
-                    Affine::new(h_scale, 0.0, 0.0, 1.0, 0.0, 0.0).then(place)
-                };
-                b.push(DrawOp::Text(GlyphRun {
-                    font,
-                    size: t.size,
-                    glyphs,
-                    advances,
-                    text: Some(code.text.clone()),
-                    cluster_map: None,
-                    transform,
-                    fill: fill.clone(),
-                    stroke: stroke.clone(),
-                    letter_spacing,
-                    word_spacing: 0.0,
-                    bbox: t.base.boundary,
-                }));
+    with_object_space(&t.base, params, builder, |b| {
+        for code in &t.codes {
+            if code.text.is_empty() {
+                continue;
             }
-            Ok(())
-        })
+            // Glyph ids are placeholders until font shaping lands; the raw
+            // code points keep text extraction working in the meantime.
+            let glyphs: Vec<u16> = code.text.chars().map(|c| u32::from(c) as u16).collect();
+            let advances = advances_of(code, size);
+            let place = Affine::translate(code.x, code.y);
+            let transform = if h_scale == 1.0 {
+                place
+            } else {
+                Affine::new(h_scale, 0.0, 0.0, 1.0, 0.0, 0.0).then(place)
+            };
+            b.push(DrawOp::Text(GlyphRun {
+                font,
+                size: t.size,
+                glyphs,
+                advances,
+                text: Some(code.text.clone()),
+                cluster_map: None,
+                transform,
+                fill: fill.clone(),
+                stroke: stroke.clone(),
+                letter_spacing,
+                word_spacing: 0.0,
+                // Text codes address the object space, so the box lives
+                // at its origin too.
+                bbox: Rect::new(0.0, 0.0, t.base.boundary.w, t.base.boundary.h),
+            }));
+        }
+        Ok(())
     })
 }
 
@@ -443,15 +453,16 @@ fn flatten_image(i: &ImageObject, builder: &mut DisplayListBuilder) -> Result<()
         (1, 1),
         ImageCodec::Png,
     );
-    with_ctm(&i.base, builder, |b| {
-        with_clip(&i.base, &HashMap::new(), b, |b| {
-            b.push(DrawOp::Image {
-                image,
-                dst: i.base.boundary,
-                transform: Affine::IDENTITY,
-            });
-            Ok(())
-        })
+    with_object_space(&i.base, &HashMap::new(), builder, |b| {
+        // Image content fills the unit square of the object space; the
+        // CTM inside the scope above scales it onto the boundary. Feeding
+        // the boundary here as well would scale the placement twice.
+        b.push(DrawOp::Image {
+            image,
+            dst: Rect::new(0.0, 0.0, 1.0, 1.0),
+            transform: Affine::IDENTITY,
+        });
+        Ok(())
     })
 }
 
@@ -464,20 +475,18 @@ fn flatten_composite(
     if c.resource_id.is_empty() {
         return Ok(());
     }
-    with_ctm(&c.base, builder, |b| {
-        with_clip(&c.base, &HashMap::new(), b, |b| {
-            b.push(DrawOp::Image {
-                image: ImageRef::new(
-                    c.resource_id.clone(),
-                    Arc::new(Vec::new()),
-                    (1, 1),
-                    ImageCodec::Png,
-                ),
-                dst: c.base.boundary,
-                transform: Affine::IDENTITY,
-            });
-            Ok(())
-        })
+    with_object_space(&c.base, &HashMap::new(), builder, |b| {
+        b.push(DrawOp::Image {
+            image: ImageRef::new(
+                c.resource_id.clone(),
+                Arc::new(Vec::new()),
+                (1, 1),
+                ImageCodec::Png,
+            ),
+            dst: Rect::new(0.0, 0.0, 1.0, 1.0),
+            transform: Affine::IDENTITY,
+        });
+        Ok(())
     })
 }
 
@@ -587,10 +596,13 @@ mod tests {
     #[test]
     fn a_ctm_wraps_the_object_in_save_transform_restore() {
         let mut p = path_object("M 0 0 L 10 10");
-        p.base.ctm = Some("1 0 0 1 5 5".to_string());
+        p.base.boundary = Rect::new(20.0, 30.0, 10.0, 10.0);
+        p.base.ctm = Some("2 0 0 2 5 5".to_string());
         let ops = run(vec![Object::PathObject(p)], &HashMap::new()).expect("flatten");
+        // Origin and CTM fold into one matrix: the origin lands at the
+        // boundary corner and the CTM applies inside it.
         assert!(matches!(ops[0], DrawOp::Save));
-        assert!(matches!(ops[1], DrawOp::Transform(t) if t.apply(0.0, 0.0) == (5.0, 5.0)));
+        assert!(matches!(ops[1], DrawOp::Transform(t) if t.apply(0.0, 0.0) == (25.0, 35.0)));
         assert!(matches!(ops[2], DrawOp::Path { .. }));
         assert!(matches!(ops[3], DrawOp::Restore));
     }
@@ -632,9 +644,13 @@ mod tests {
             ..Default::default()
         };
         let ops = run(vec![Object::TextObject(t)], &HashMap::new()).expect("flatten");
-        assert_eq!(ops.len(), 1, "the empty TextCode produces no run");
-        let DrawOp::Text(run_out) = &ops[0] else {
-            panic!("expected a text op, got {ops:?}");
+        let drawn: Vec<_> = ops
+            .iter()
+            .filter(|op| !matches!(op, DrawOp::Save | DrawOp::Restore | DrawOp::Transform(_)))
+            .collect();
+        assert_eq!(drawn.len(), 1, "the empty TextCode produces no run");
+        let DrawOp::Text(run_out) = drawn[0] else {
+            panic!("expected a text op, got {drawn:?}");
         };
         assert_eq!(run_out.glyphs, vec![65u16, 66u16]);
         assert_eq!(run_out.advances, vec![3.0, 3.0]);
@@ -656,7 +672,9 @@ mod tests {
             panic!("expected an image op, got {ops:?}");
         };
         assert_eq!(image.id, "img_9");
-        assert_eq!(*dst, Rect::new(0.0, 0.0, 40.0, 30.0));
+        // Images fill the unit square of the object space; the transform op
+        // above carries them onto the boundary.
+        assert_eq!(*dst, Rect::new(0.0, 0.0, 1.0, 1.0));
     }
 
     #[test]

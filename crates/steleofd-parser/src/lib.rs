@@ -199,6 +199,15 @@ mod tests {
     use steleofd_display::DrawOp;
     use steleofd_package::build_archive;
 
+    /// The drawing commands of a page, without the save/transform/restore
+    /// brackets that place each object in its own space.
+    fn drawn(page: &steleofd_display::PageDisplay) -> Vec<&DrawOp> {
+        page.ops
+            .iter()
+            .filter(|op| !matches!(op, DrawOp::Save | DrawOp::Restore | DrawOp::Transform(_)))
+            .collect()
+    }
+
     const OFD_XML: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
 <OFD Version="1.0">
   <DocBody><DocRoot>Doc_0/Document.xml</DocRoot></DocBody>
@@ -260,7 +269,7 @@ mod tests {
 
         let page = parser.page_display(&doc, 0).expect("page");
         assert_eq!(page.index, 0);
-        assert_eq!(page.ops.len(), 1);
+        assert_eq!(drawn(&page).len(), 1);
         assert!((page.page_box.w - 210.0).abs() < 1e-9);
         assert!((page.page_box.h - 297.0).abs() < 1e-9);
     }
@@ -281,14 +290,18 @@ mod tests {
         let doc = parser.open_document().expect("open document");
         let page = parser.page_display(&doc, 0).expect("page");
 
-        // The template object carries a CTM, so it is wrapped in state ops.
+        // The template object sits at the page origin and carries a CTM, so
+        // only the CTM enters the state stack.
         assert!(matches!(page.ops[0], DrawOp::Save));
-        assert!(matches!(page.ops[1], DrawOp::Transform(_)));
+        assert!(matches!(page.ops[1], DrawOp::Transform(t) if t.apply(0.0, 0.0) == (5.0, 5.0)));
         assert!(matches!(page.ops[2], DrawOp::Path { .. }));
         assert!(matches!(page.ops[3], DrawOp::Restore));
-        // The page's own object follows on top, unwrapped.
-        assert!(matches!(page.ops[4], DrawOp::Path { .. }));
-        assert_eq!(page.ops.len(), 5);
+        // The page's own object follows on top, entering its boundary origin.
+        assert!(matches!(page.ops[4], DrawOp::Save));
+        assert!(matches!(page.ops[5], DrawOp::Transform(t) if t.apply(0.0, 0.0) == (10.0, 10.0)));
+        assert!(matches!(page.ops[6], DrawOp::Path { .. }));
+        assert!(matches!(page.ops[7], DrawOp::Restore));
+        assert_eq!(drawn(&page).len(), 2);
     }
 
     #[test]
@@ -386,12 +399,13 @@ mod tests {
         let mut parser = open_parser(bytes);
         let doc = parser.open_document().expect("open document");
         let page = parser.page_display(&doc, 0).expect("page");
+        let drawn_ops = drawn(&page);
         let DrawOp::Path {
             fill: Some(steleofd_display::Paint::Solid(c)),
             ..
-        } = &page.ops[0]
+        } = drawn_ops[0]
         else {
-            panic!("expected a filled path, got {:?}", page.ops[0]);
+            panic!("expected a filled path, got {:?}", drawn_ops[0]);
         };
         assert_eq!((c.r, c.g, c.b), (0, 0, 255));
     }
@@ -463,8 +477,9 @@ mod tests {
         let doc = parser.open_document().expect("open document");
         let page = parser.page_display(&doc, 0).expect("page");
         // The unknown element is skipped; the text object still renders.
-        assert_eq!(page.ops.len(), 2);
-        assert!(matches!(page.ops[1], DrawOp::Text(_)));
+        let drawn_ops = drawn(&page);
+        assert_eq!(drawn_ops.len(), 2);
+        assert!(matches!(drawn_ops[1], DrawOp::Text(_)));
     }
 
     #[test]
@@ -481,12 +496,13 @@ mod tests {
         let mut parser = open_parser(bytes);
         let doc = parser.open_document().expect("open document");
         let page = parser.page_display(&doc, 0).expect("page");
+        let drawn_ops = drawn(&page);
         let DrawOp::Path {
             fill: Some(steleofd_display::Paint::Solid(c)),
             ..
-        } = &page.ops[0]
+        } = drawn_ops[0]
         else {
-            panic!("expected a filled path, got {:?}", page.ops[0]);
+            panic!("expected a filled path, got {:?}", drawn_ops[0]);
         };
         assert_eq!((c.r, c.g, c.b, c.a), (0, 255, 0, 128));
     }

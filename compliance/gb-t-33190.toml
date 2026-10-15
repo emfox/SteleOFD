@@ -193,6 +193,7 @@ tests = [
   "gb_t_33190_8_4_a_clipped_object_does_not_clip_its_neighbour",
   "gb_t_33190_8_4_several_clips_cover_the_union_of_their_areas",
   "gb_t_33190_8_4_one_clip_may_hold_several_areas",
+  "gb_t_33190_8_4_trans_flag_decides_whether_the_clip_follows_the_ctm",
 ]
 note = "Only a Path area is read; a Text area is rejected."
 
@@ -247,7 +248,10 @@ tests = ["gb_t_33190_9_3_5_arc_is_split_into_cubics"]
 clause = "10"
 title = "Image object"
 status = "verified"
-tests = ["gb_t_33190_10_image_object_requires_resource_id"]
+tests = [
+  "gb_t_33190_10_image_object_requires_resource_id",
+  "gb_t_33190_10_an_image_object_fills_the_unit_square_of_its_ctm",
+]
 
 [[item]]
 clause = "11.1"

@@ -113,6 +113,37 @@ impl Path {
         }
     }
 
+    /// Close every subpath that is still open. Abbreviated data often ends on
+    /// a bare `C` with no coordinates to read: filling closes implicitly, but
+    /// a mask built from the outline does not.
+    pub fn closed(self) -> Self {
+        let mut out = Vec::with_capacity(self.segments.len() + 1);
+        let mut open = false;
+        for s in self.segments {
+            match s {
+                PathSegment::MoveTo(..) => {
+                    if open {
+                        out.push(PathSegment::Close);
+                    }
+                    open = true;
+                    out.push(s);
+                }
+                PathSegment::Close => {
+                    open = false;
+                    out.push(s);
+                }
+                _ => out.push(s),
+            }
+        }
+        if open {
+            out.push(PathSegment::Close);
+        }
+        Self {
+            segments: out,
+            bbox: None,
+        }
+    }
+
     /// Whether the path is made only of straight segments.
     pub fn is_polygonal(&self) -> bool {
         self.segments.iter().all(|s| {

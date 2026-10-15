@@ -764,10 +764,104 @@ fn gb_t_33190_8_4_a_clipped_object_does_not_clip_its_neighbour() {
         .filter(|op| matches!(op, DrawOp::ClipPath { .. }))
         .count();
     assert_eq!(clips, 1, "only the first object is clipped");
-    let DrawOp::Path { path, .. } = ops.last().expect("second path") else {
-        panic!("expected the unclipped path last, got {ops:?}");
+    let last_path = ops
+        .iter()
+        .rev()
+        .find_map(|op| match op {
+            DrawOp::Path { path, .. } => Some(path),
+            _ => None,
+        })
+        .expect("second path");
+    assert_eq!(last_path.bounding_box(), Rect::new(20.0, 20.0, 10.0, 10.0));
+}
+
+#[test]
+fn gb_t_33190_8_4_trans_flag_decides_whether_the_clip_follows_the_ctm() {
+    // Clause 8.4 gives Clips a TransFlag, true by default: the region travels
+    // with the CTM. False means the area is already boundary millimetres,
+    // which is what real producers write; the CTM must then come off.
+    let body = r##"<ImageObject ID="10" Boundary="10 10 20 20" CTM="20 0 0 20 0 0" ResourceID="5">
+  %CLIP%
+</ImageObject>"##;
+    let with = |flag: &str| page_ops(&body.replace("%CLIP%", flag), "");
+    let transform_of = |ops: &[DrawOp]| {
+        ops.iter()
+            .find_map(|op| match op {
+                DrawOp::Transform(t) => Some(*t),
+                _ => None,
+            })
+            .expect("object scope")
     };
-    assert_eq!(path.bounding_box(), Rect::new(20.0, 20.0, 10.0, 10.0));
+    let clip_bbox = |ops: &[DrawOp]| {
+        ops.iter()
+            .find_map(|op| match op {
+                DrawOp::ClipPath { path, .. } => Some(path.bounding_box()),
+                _ => None,
+            })
+            .expect("clip")
+    };
+    let following = with(
+        r##"<Clips><Clip><Area>
+      <Path><AbbreviatedData>M 2 2 L 6 2 L 6 6 L 2 6 Z</AbbreviatedData></Path>
+    </Area></Clip></Clips>"##,
+    );
+    let detached = with(
+        r#"<Clips TransFlag="false"><Clip><Area>
+      <Path><AbbreviatedData>M 2 2 L 6 2 L 6 6 L 2 6 Z</AbbreviatedData></Path>
+    </Area></Clip></Clips>"#,
+    );
+    // The path is kept in object space and the CTM rides on the scope, so a
+    // following clip is left exactly as written.
+    assert_eq!(
+        clip_bbox(&following),
+        Rect::new(2.0, 2.0, 4.0, 4.0),
+        "a following clip is stated in the unit square, as written"
+    );
+    let detached_bbox = clip_bbox(&detached);
+    assert!(
+        (detached_bbox.x - 0.1).abs() < 1e-9
+            && (detached_bbox.y - 0.1).abs() < 1e-9
+            && (detached_bbox.w - 0.2).abs() < 1e-9
+            && (detached_bbox.h - 0.2).abs() < 1e-9,
+        "a detached clip is in boundary millimetres, so the CTM comes off: {detached_bbox:?}"
+    );
+    assert_eq!(
+        transform_of(&following),
+        transform_of(&detached),
+        "both live in the same object scope, so the difference is the path"
+    );
+}
+
+#[test]
+fn gb_t_33190_10_an_image_object_fills_the_unit_square_of_its_ctm() {
+    // The CTM scale equals the boundary size for 119 of the 121 image objects
+    // in the 42-page invoice, so the content space is the unit square and the
+    // CTM both positions and sizes the picture.
+    let ops = page_ops(
+        r##"<ImageObject ID="10" Boundary="31.743 25.6484 145.3829 109.0266" CTM="145.3829 0 0 109.0266 0 0" ResourceID="5"/>"##,
+        "",
+    );
+    let DrawOp::Image { dst, .. } = ops
+        .iter()
+        .find(|op| matches!(op, DrawOp::Image { .. }))
+        .expect("image op")
+    else {
+        panic!("expected an image, got {ops:?}");
+    };
+    assert_eq!(*dst, Rect::new(0.0, 0.0, 1.0, 1.0), "the unit square");
+    let DrawOp::Transform(t) = &ops[1] else {
+        panic!("expected the object scope, got {ops:?}");
+    };
+    assert_eq!(
+        t.apply(0.0, 0.0),
+        (31.743, 25.6484),
+        "the boundary moves the scaled corner onto the page"
+    );
+    assert_eq!(
+        t.apply(1.0, 1.0),
+        (177.1259, 134.675),
+        "and the far corner lands on the boundary's own far side"
+    );
 }
 
 #[test]
@@ -1004,7 +1098,9 @@ fn gb_t_33190_13_a_composite_object_places_a_vector_resource() {
     match ops.iter().find(|op| matches!(op, DrawOp::Image { .. })) {
         Some(DrawOp::Image { image, dst, .. }) => {
             assert_eq!(image.id, "5", "the placement names the resource");
-            assert_eq!(*dst, Rect::new(10.0, 10.0, 50.0, 30.0));
+            // The placement fills the object's unit square; the transform ops
+            // in the list carry it onto the boundary.
+            assert_eq!(*dst, Rect::new(0.0, 0.0, 1.0, 1.0));
         }
         other => panic!("expected an image placement, got {other:?}"),
     }
