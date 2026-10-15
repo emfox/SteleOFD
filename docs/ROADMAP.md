@@ -246,8 +246,14 @@ disagree now fails a test.
   `<name>/` sources using the `layout.txt` beside them, and its `--check` mode
   runs in CI so a source edit cannot leave the committed archive stale.
 
-- **N6-b** `[ ]` Add a coverage report (`cargo-llvm-cov`) to CI as a non-blocking
-  signal, then make it blocking once the number is good enough to defend.
+- **N6-b** `[~]` The `coverage` job is in CI: `cargo-llvm-cov` over the whole
+  workspace with every feature on, a summary written into the run page and the
+  `lcov.info` kept as an artifact. It is deliberately **non-blocking**
+  (`continue-on-error`), because a threshold chosen before the figure is known
+  only teaches people to ignore it. Turning it into a gate is the remaining
+  half, and needs a real baseline first — measuring this sandbox is blocked on
+  the same slow toolchain mirror that stalled N3-c, so the number is still to be
+  recorded here.
 
 ### N7. The desktop reader, first surface (U1-a … U1-c)
 
