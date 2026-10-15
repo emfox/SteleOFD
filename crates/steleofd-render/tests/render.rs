@@ -297,7 +297,8 @@ fn a_jbig2_image_is_decoded_and_painted() {
     }]);
     let output = render_page(&page, &fonts, &RenderOptions::default()).expect("render");
     let bytes = output.rgba_bytes();
-    let dark = bytes.chunks_exact(4).filter(|p| p[0] < 128).count();
+    let (pixels, _) = bytes.as_chunks::<4>();
+    let dark = pixels.iter().filter(|p| p[0] < 128).count();
     assert!(
         dark > 1000,
         "the QR code paints {dark} dark pixels, not none"
