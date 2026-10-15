@@ -167,14 +167,14 @@ pure Rust, so the reader is one more workspace member rather than a second
 toolchain, and `cargo build --workspace` keeps working unchanged. Its cost is
 that accessibility has to be wired up by hand in U3-c.
 
-- **U1-a** Stand up `crates/steleofd-reader`: an `eframe` application that
-  depends on `core` directly, with a window, a menu bar and an empty
-  document area. It must build on a headless runner with no system packages
-  beyond what the workspace already needs.
-- **U1-b** Open a file through a native file dialog and through drag and drop
+- [x] **U1-a** Stand up `crates/steleofd-reader`: an `eframe` application
+  that depends on `core` directly, with a window, a menu bar and a document
+  area. Builds on a headless runner with no system package beyond the
+  fontconfig headers CI already installs.
+- [ ] **U1-b** Open a file through a native file dialog and through drag and drop
   onto the window, show the document facts, and wire the page counter and
   navigation to `reader-page-of`, `reader-blank-page` and `reader-open`.
-- **U1-c** Prove the path in CI: build the reader headlessly and drive one
+- [ ] **U1-c** Prove the path in CI: build the reader headlessly and drive one
   open-and-navigate flow, so the interface cannot silently rot while the
   engine keeps moving.
 
