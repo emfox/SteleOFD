@@ -4,8 +4,8 @@
 
 use std::path::PathBuf;
 
-use steleofd_reader::App;
-use steleofd_reader::viewer::{Layout, MAX_DPI, MIN_DPI, PageCache};
+use steleofd_reader::viewer::{DroppedFile, Layout, MAX_DPI, MIN_DPI, PageCache};
+use steleofd_reader::{App, Canvas};
 
 /// The real minimal document from the conformance corpus.
 fn corpus() -> PathBuf {
@@ -189,4 +189,127 @@ fn opening_another_document_replaces_the_first() {
         .expect("the corpus opens a second time");
     assert_eq!(app.page_count(), first, "the same document, the same pages");
     assert_eq!(app.current_page(), 0, "reading starts at the first page");
+}
+
+#[test]
+fn an_empty_reader_asks_for_a_document_rather_than_a_page() {
+    let mut app = App::new();
+    assert_eq!(app.canvas(), Canvas::Empty, "no document, nothing to paint");
+    assert!(
+        !app.drop_hint().is_empty(),
+        "the hint is written in the reader's language"
+    );
+    assert!(
+        !app.title().contains(".ofd"),
+        "the title names no document yet"
+    );
+}
+
+#[test]
+fn an_open_reader_paints_its_page() {
+    let mut app = open();
+    let canvas = app.canvas();
+    assert!(
+        matches!(canvas, Canvas::Page | Canvas::Blank),
+        "the corpus rasterizes to something paintable, got {canvas:?}"
+    );
+}
+
+#[test]
+fn a_blank_page_is_still_drawn() {
+    let mut app = open();
+    app.canvas();
+    let blank = app.current_page_is_blank();
+    assert_eq!(
+        app.canvas(),
+        if blank { Canvas::Blank } else { Canvas::Page },
+        "a blank page is a page, so the canvas stays in the drawing branch"
+    );
+    assert!(
+        !app.blank_notice().is_empty(),
+        "and the notice is localized"
+    );
+}
+
+#[test]
+fn an_error_alone_does_not_displace_the_empty_state() {
+    let mut app = App::new();
+    app.set_error("the page would not render");
+    assert_eq!(
+        app.canvas(),
+        Canvas::Empty,
+        "the canvas checks for a document before it checks for a failure"
+    );
+    assert_eq!(
+        app.error().map(|e| e.message.as_str()),
+        Some("the page would not render"),
+        "the status bar still shows it"
+    );
+}
+
+#[test]
+fn an_unreadable_page_is_reported_rather_than_left_blank() {
+    let mut app = open();
+    app.go_to(app.page_count() + 10);
+    assert_eq!(
+        app.canvas(),
+        Canvas::Page,
+        "a page past the end clamps back into the document"
+    );
+}
+
+#[test]
+fn a_failed_open_leaves_the_previous_document_open() {
+    let mut app = open();
+    let pages = app.page_count();
+    let err = app.open_bytes(b"not an ofd container", Some("broken.ofd"));
+    assert!(err.is_err(), "the broken document is refused");
+    assert_eq!(app.page_count(), pages, "and the good one is still open");
+    assert!(app.path().is_some(), "the reader keeps its place");
+}
+
+#[test]
+fn a_dropped_path_opens_like_a_chosen_one() {
+    let mut app = App::new();
+    app.open_dropped(DroppedFile::Path(corpus()))
+        .expect("the corpus opens from a drop");
+    assert!(app.page_count() >= 1);
+    assert_eq!(app.file_name().as_deref(), Some("minimal.ofd"));
+}
+
+#[test]
+fn a_dropped_payload_opens_and_keeps_its_name() {
+    let bytes = std::fs::read(corpus()).unwrap();
+    let mut app = App::new();
+    app.open_dropped(DroppedFile::Bytes {
+        name: "dropped.ofd".to_string(),
+        bytes,
+    })
+    .expect("the corpus opens from dropped bytes");
+    assert!(app.page_count() >= 1);
+    assert_eq!(app.file_name().as_deref(), Some("dropped.ofd"));
+}
+
+#[test]
+fn the_window_title_names_the_open_document() {
+    let mut app = App::new();
+    assert_eq!(app.title(), "SteleOFD Reader");
+    app.open_path(&corpus()).unwrap();
+    assert!(
+        app.title().starts_with("minimal.ofd"),
+        "got {}",
+        app.title()
+    );
+}
+
+#[test]
+fn the_info_line_is_written_in_the_readers_language() {
+    let mut app = App::new();
+    assert!(app.info_label().is_empty(), "no document, no line");
+    app.open_path(&corpus()).unwrap();
+    assert!(
+        app.info_label().contains("minimal.ofd"),
+        "got {}",
+        app.info_label()
+    );
 }

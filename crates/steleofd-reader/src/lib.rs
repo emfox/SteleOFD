@@ -7,5 +7,5 @@
 pub mod app;
 pub mod viewer;
 
-pub use app::{App, AppError};
-pub use viewer::{PageCache, RenderedPage};
+pub use app::{App, AppError, Canvas};
+pub use viewer::{DroppedFile, PageCache, RenderedPage, looks_blank};

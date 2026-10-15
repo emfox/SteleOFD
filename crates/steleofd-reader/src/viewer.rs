@@ -96,6 +96,48 @@ impl PageCache {
     }
 }
 
+/// How close to white every pixel has to be before a page counts as blank.
+const BLANK_THRESHOLD: u8 = 8;
+
+/// A file the platform handed to the window, as a drop or a paste.
+///
+/// Desktops differ: some deliver a path, others only the bytes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DroppedFile {
+    /// A path on disk the reader may read.
+    Path(std::path::PathBuf),
+    /// The file contents, with a name for display.
+    Bytes {
+        /// The file name, if the platform reported one.
+        name: String,
+        /// The whole file.
+        bytes: Vec<u8>,
+    },
+}
+
+impl DroppedFile {
+    /// The file name, if there is one to show.
+    pub fn name(&self) -> Option<String> {
+        match self {
+            Self::Path(path) => path.file_name().map(|n| n.to_string_lossy().into_owned()),
+            Self::Bytes { name, .. } => Some(name.clone()),
+        }
+    }
+}
+
+/// Whether a rendered page carries no visible ink.
+///
+/// It reads the raster, because a page may hold nothing but a background.
+pub fn looks_blank(image: &egui::ColorImage) -> bool {
+    let pixels = image.pixels.as_slice();
+    !pixels.is_empty()
+        && pixels.iter().all(|p| {
+            p.r() >= 255 - BLANK_THRESHOLD
+                && p.g() >= 255 - BLANK_THRESHOLD
+                && p.b() >= 255 - BLANK_THRESHOLD
+        })
+}
+
 /// Rasterize one page at the given resolution.
 pub fn render_page(
     doc: &Document,

@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use steleofd_core::Document;
 use steleofd_i18n::{I18n, MessageId};
 
-use crate::viewer::{self, Layout, PageCache};
+use crate::viewer::{self, DroppedFile, Layout, PageCache};
 
 /// A failure the reader shows in its own words.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -66,6 +66,11 @@ impl App {
     /// The page the reader is showing.
     pub fn current_page(&self) -> usize {
         self.current
+    }
+
+    /// Whether a document is open.
+    pub fn is_open(&self) -> bool {
+        self.doc.is_some()
     }
 
     /// How many pages the open document has.
@@ -166,6 +171,19 @@ impl App {
             ],
         );
         format!("{} · {pages}", doc.version())
+    }
+
+    /// The description captured when the document was opened, if one is open.
+    pub fn info(&self) -> Option<&str> {
+        self.info.as_deref()
+    }
+
+    /// The file name of the open document, for the window title.
+    pub fn file_name(&self) -> Option<String> {
+        self.path
+            .as_ref()
+            .and_then(|p| p.file_name())
+            .map(|n| n.to_string_lossy().into_owned())
     }
 
     /// Show a page, clamped to the pages that exist.
@@ -269,4 +287,105 @@ impl App {
             [("percent", (self.dpi as i32).to_string().into())],
         )
     }
+
+    /// The document line shown in the toolbar, localized.
+    pub fn info_label(&self) -> String {
+        match self.file_name() {
+            Some(name) => self
+                .i18n
+                .text_with(MessageId::ReaderInfo, [("name", name.into())]),
+            None => String::new(),
+        }
+    }
+
+    /// Whether the current page holds no visible ink.
+    ///
+    /// It rasterizes first, so a caller that paints anyway does not pay twice.
+    pub fn current_page_is_blank(&mut self) -> bool {
+        if self.page_count() == 0 {
+            return true;
+        }
+        let page = self.current;
+        if self.page_image(page).is_err() {
+            return false;
+        }
+        self.cache
+            .get(page, self.dpi)
+            .is_some_and(|rendered| viewer::looks_blank(&rendered.image))
+    }
+
+    /// The notice shown when the current page has nothing on it.
+    pub fn blank_notice(&self) -> String {
+        self.i18n.text(MessageId::ReaderBlankPage)
+    }
+
+    /// The hint shown on the empty window, where a file can be dropped.
+    pub fn drop_hint(&self) -> String {
+        self.i18n.text(MessageId::ReaderDropHint)
+    }
+
+    /// The label on the button that closes the document.
+    pub fn close_label(&self) -> String {
+        self.i18n.text(MessageId::ReaderClose)
+    }
+
+    /// Open a file the platform handed over, choosing bytes or path.
+    ///
+    /// Some desktops send bytes and others a path; the path is cheaper.
+    pub fn open_dropped(&mut self, dropped: DroppedFile) -> Result<(), AppError> {
+        match dropped {
+            DroppedFile::Path(path) => self.open_path(&path),
+            DroppedFile::Bytes { name, bytes } => self.open_bytes(&bytes, Some(&name)),
+        }
+    }
+
+    /// What the canvas should draw, decided here so it can be tested.
+    ///
+    /// This is zone Z3: the window paints the answer and forms no opinion.
+    pub fn canvas(&mut self) -> Canvas {
+        if self.page_count() == 0 {
+            return Canvas::Empty;
+        }
+        let page = self.current;
+        if self.page_image(page).is_err() {
+            let message = self
+                .error
+                .as_ref()
+                .map_or_else(String::new, |e| e.message.clone());
+            return Canvas::Failed { message };
+        }
+        match self.cache.get(page, self.dpi) {
+            Some(rendered) if viewer::looks_blank(&rendered.image) => Canvas::Blank,
+            Some(_) => Canvas::Page,
+            None => Canvas::Pending,
+        }
+    }
+
+    /// The window title for the current document.
+    pub fn title(&self) -> String {
+        match self.file_name() {
+            Some(name) => format!("{name} — SteleOFD Reader"),
+            None => "SteleOFD Reader".to_string(),
+        }
+    }
+}
+
+/// The four states of the canvas, in the order the window checks them.
+///
+/// A blank page is content, so it is painted like a page and only annotated.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Canvas {
+    /// No document is open, so the drop hint is shown instead.
+    Empty,
+    /// The page would not rasterize; the message is the engine's own.
+    Failed {
+        /// The message shown to the reader.
+        message: String,
+    },
+    /// The page is rasterizing and has not landed in the cache yet.
+    Pending,
+    /// The page rasterized to nothing but white.
+    Blank,
+    /// The page is ready to paint.
+    Page,
 }
