@@ -13,8 +13,8 @@ criterion, so it is always obvious whether it is done.
 | Measure | Value |
 | --- | --- |
 | Crates | 26 (L0 foundation through L5 delivery) |
-| Source | 27,417 lines of Rust, measured with `find crates -name '*.rs'` |
-| Tests | 620 passing, plus 13 inline unit-test modules |
+| Source | 27,773 lines of Rust, measured with `find crates -name '*.rs'` |
+| Tests | 635 passing, plus 13 inline unit-test modules |
 | Delivery forms | `cli`, `wasm`, `ffi`, `server`, `reader`, all on the `core` facade |
 | Standard clauses verified | 47 of 47 in GB/T 33190-2016 (46 `verified`, 1 `partial`) |
 | Languages | `en-US` and `zh-CN`, 75 message keys, parity enforced in CI |
@@ -30,9 +30,9 @@ Each one is a real, verified finding, not a guess.
    because only a `Path` clip area is read and a `Text` area is rejected with an
    explicit error. The register in `compliance/gb-t-33190.toml` is the source of
    truth and lists the status of each by name.
-2. **`proptest` and `criterion` are declared in the workspace but never used.**
-   Zero references outside the root `Cargo.toml`. The property and benchmark
-   testing that was planned does not exist yet. This is the next step, N3.
+2. **`criterion` is declared in the workspace but never used.** `proptest` is
+   now in use (N3-a/N3-b), but benchmarks still do not exist: zero references to
+   `criterion` outside the root `Cargo.toml`.
 3. **The OFD corpus is one file.** `compliance/corpus/minimal.ofd` is the only
    document the XSD validation and the test suites actually read.
 4. ~~**The signed-fixture builder is duplicated four times** across the `sign`,
@@ -146,10 +146,24 @@ regenerated, never hand-edited.
 This is where `proptest` finally gets used, on the parsers that face hostile
 input.
 
-- **N3-a** Property tests for `package`: any ZIP that `open` accepts must
-  round-trip; a truncated one must error, never panic.
-- **N3-b** Property tests for `xml` and `model`: no input may panic; every
-  `Display` output must re-parse.
+- **N3-a** `[x]` Property tests for `package`, in `crates/steleofd-package/tests/
+  property.rs`. Five invariants: a written archive round-trips, the entry list
+  matches what was written, arbitrary bytes never panic, a truncated archive
+  fails cleanly, and reading an absent path is an error. The round-trip property
+  found a real defect: `build_archive` used to write a name with a leading slash
+  that its own `Package::open` then refused, so a document could be stored and
+  never read back. The writer now validates names the way the reader does, and a
+  regression test pins the five rejected shapes.
+- **N3-b** `[x]` Property tests for `xml` (`crates/steleofd-xml/tests/property.rs`)
+  and `model` (`crates/steleofd-model/tests/property.rs`). The XML cursor is
+  driven with arbitrary text, arbitrary bytes decoded lossily, well-formed
+  documents of varying depth, an unclosed element, and text content; the model
+  is driven with colour spellings from six producer styles plus arbitrary
+  strings. Both assert the same thing: reading may fail, it must never panic,
+  and a value that parses survives a `Display` round trip. Writing the text
+  property also pinned down two behaviours that were previously only implicit —
+  whitespace-only text is skipped, and outer whitespace is trimmed — so both are
+  now asserted rather than assumed.
 - **N3-c** `cargo-fuzz` targets for the ZIP and XML readers, with the CI job
   wired to a short deterministic run.
 - **N3-d** A crash-free invariant test that feeds random bytes to every public
