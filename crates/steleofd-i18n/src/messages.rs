@@ -32,6 +32,12 @@ pub enum MessageId {
     // Reader module
     /// Open a document
     ReaderOpen,
+    /// Close the open document
+    ReaderClose,
+    /// Shown where a file can be dropped
+    ReaderDropHint,
+    /// The document description line
+    ReaderInfo,
     /// Page N of M
     ReaderPageOf,
     /// Zoom level
@@ -186,6 +192,9 @@ impl MessageId {
 
             // Reader
             Self::ReaderOpen => "reader-open",
+            Self::ReaderClose => "reader-close",
+            Self::ReaderDropHint => "reader-drop-hint",
+            Self::ReaderInfo => "reader-info",
             Self::ReaderPageOf => "reader-page-of",
             Self::ReaderZoom => "reader-zoom",
             Self::ReaderFitWidth => "reader-fit-width",
@@ -283,6 +292,9 @@ impl MessageId {
         Self::CommonDelete,
         // Reader
         Self::ReaderOpen,
+        Self::ReaderClose,
+        Self::ReaderDropHint,
+        Self::ReaderInfo,
         Self::ReaderPageOf,
         Self::ReaderZoom,
         Self::ReaderFitWidth,
@@ -357,6 +369,7 @@ impl MessageId {
         matches!(
             self,
             Self::AppLoading
+                | Self::ReaderInfo
                 | Self::ReaderPageOf
                 | Self::ReaderZoom
                 | Self::ConvertProgress
