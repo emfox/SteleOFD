@@ -13,7 +13,7 @@ criterion, so it is always obvious whether it is done.
 | Measure | Value |
 | --- | --- |
 | Crates | 26 (L0 foundation through L5 delivery) |
-| Source | 33,409 lines of Rust, measured with `find crates -name '*.rs'` |
+| Source | 33,401 lines of Rust, measured with `find crates -name '*.rs'` |
 | Tests | 828 passing, plus 13 inline unit-test modules |
 | Delivery forms | `cli`, `wasm`, `ffi`, `server`, `reader`, all on the `core` facade |
 | Standard clauses verified | 47 of 47 in GB/T 33190-2016 (46 `verified`, 1 `partial`) |
@@ -128,7 +128,7 @@ disagree now fails a test.
 
 - **N6-b** `[x]` ~~The `coverage` job is in CI: `cargo-llvm-cov` over the whole workspace with every feature on, and the measured baseline is **87.56% lines, 88.16% functions, 88.37% regions** with the floor set at **85%** — low enough that ordinary work never trips it, high enough that losing a module's tests does. The measurement uses the rustup `llvm-tools-preview` component, whose `llvm-cov`/`llvm-profdata` match the toolchain's LLVM; the system copies are LLVM 18 against rustc's LLVM 21 and fail with a raw-profile version mismatch.~~
 
-- **N6-c** `[x]` ~~CI installs a pinned toolchain, **1.99.0**, instead of following `stable`. A rolling `stable` turns every lint upstream ships into a red build nobody asked for: a stricter `dead_code` for fields that are written but never read arrived in 1.94, and `chunks_exact_to_as_chunks` in 1.99. Both reached CI first, and both cost a push to discover, because the local toolchain could not see them. Upgrading is now a deliberate commit that a sandbox can match before it lands. Three related fixes travelled with it: `-D warnings` moved out of the workflow's global `RUSTFLAGS`, where it also applied to every dependency crate, into the clippy invocation that means to carry it; the `third-party-corpus` job compares what opens against a checked-in `KNOWN_UNPARSED` list, so two samples that cannot open are recorded as known instead of failing the build; and a `collapsible_if` in an integration test became a let-chain.~~
+- **N6-c** `[x]` ~~CI installs a pinned toolchain, **1.99.0**, rather than following `stable`. A rolling `stable` turns every lint upstream ships into a red build nobody asked for: a stricter `dead_code` for fields that are written but never read arrived in 1.94, and `chunks_exact_to_as_chunks` in 1.99. Both reached CI first and both cost a push to discover, because no local toolchain could see them; upgrading is now a deliberate commit a sandbox can match before it lands. Four fixes travelled with the pin. `-D warnings` moved off the workflow's global `RUSTFLAGS`, where it also applied to every dependency crate, onto the clippy invocation that means to carry it — and had to be restored a second time, because zeroing `RUSTFLAGS` took it away from a clippy line that had never passed it itself, which left the gate quietly open. The step that turns findings into commit annotations ended in a `grep` whose exit status fails the step under `bash -e`, so a clean run was the one that went red; it now tolerates matching nothing. The `third-party-corpus` job compares what opens against a checked-in `KNOWN_UNPARSED` list, so the two samples that cannot open are recorded as known instead of failing the build. And four `chunks_exact`/`chunks_exact_mut` loops became `as_chunks`/`as_chunks_mut` — two of them in crates a cached result had been hiding from clippy, which is why they surfaced one push at a time.~~
 
 ### N7. The desktop reader, first surface (U1-a … U1-c)
 
