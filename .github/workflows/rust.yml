@@ -42,8 +42,13 @@ jobs:
       - name: Format
         run: cargo fmt --all --check
 
+      # `-D warnings` is passed to clippy rather than through RUSTFLAGS, which
+      # would apply to every dependency too and let someone else's crate fail
+      # this build. Only this workspace's code is held to the standard.
       - name: Clippy
-        run: cargo clippy --workspace --all-targets
+        env:
+          RUSTFLAGS: ""
+        run: cargo clippy --workspace --all-targets -- -D warnings
 
       - name: Build
         run: cargo build --workspace
