@@ -195,24 +195,30 @@ impl App {
         self.current = page.min(self.page_count() - 1);
     }
 
-    /// Step forward one page.
+    /// Step forward one screen, by the layout's stride.
     pub fn next_page(&mut self) {
-        self.go_to(self.current + 1);
+        self.go_to(self.current + self.layout.stride());
     }
 
-    /// Step back one page.
+    /// Step back one screen, by the layout's stride.
     pub fn previous_page(&mut self) {
-        self.current = self.current.saturating_sub(1);
+        self.current = self.current.saturating_sub(self.layout.stride());
     }
 
-    /// Whether there is a page after the current one.
+    /// The pages the canvas should show, given the layout. This is zone Z3's
+    /// input: the window paints these and forms no opinion about which they are.
+    pub fn visible(&self) -> Vec<usize> {
+        viewer::visible_pages(self.layout, self.current, self.page_count())
+    }
+
+    /// Whether there is a screen after the current one.
     pub fn has_next(&self) -> bool {
-        self.current + 1 < self.page_count()
+        self.current + self.layout.stride() < self.page_count()
     }
 
-    /// Whether there is a page before the current one.
+    /// Whether there is a screen before the current one.
     pub fn has_previous(&self) -> bool {
-        self.current > 0
+        self.current >= self.layout.stride()
     }
 
     /// Set the resolution, clamped to the range a reader can use.

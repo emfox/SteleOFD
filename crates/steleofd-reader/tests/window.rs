@@ -7,6 +7,7 @@ use std::path::PathBuf;
 use egui_kittest::Harness;
 use egui_kittest::kittest::{NodeT, Queryable};
 use steleofd_i18n::{I18n, Locale, MessageId};
+use steleofd_reader::viewer::Layout;
 use steleofd_reader::window;
 use steleofd_reader::{App, Canvas};
 
@@ -185,4 +186,57 @@ fn the_fit_buttons_move_the_resolution() {
     harness.get_by_label(&fit_width).click();
     harness.run();
     assert_eq!(harness.state().dpi(), window::FIT_WIDTH_DPI);
+}
+
+#[test]
+fn facing_layout_draws_both_pages_of_the_spread() {
+    // Two pages on screen means two images; single layout means one. Counting
+    // image nodes is what proves the layout reaches the canvas, since the
+    // canvas is the only zone allowed to paint a page.
+    let bytes = steleofd_testkit::multipage_archive(4);
+    let mut app = App::new();
+    app.open_bytes(&bytes, Some("many.ofd"))
+        .expect("the fixture opens");
+    let mut harness = harness(app);
+
+    let images = |harness: &Harness<'static, App>| {
+        harness
+            .query_all_by(|node| node.role() == egui::accesskit::Role::Image)
+            .count()
+    };
+
+    harness.state_mut().set_layout(Layout::Single);
+    harness.state_mut().page_image(0).expect("page 0 renders");
+    harness.run();
+    assert_eq!(images(&harness), 1, "single layout shows one page");
+
+    harness.state_mut().set_layout(Layout::Facing);
+    harness.state_mut().set_dpi(96.0);
+    for page in [0, 1] {
+        harness.state_mut().page_image(page).expect("page renders");
+    }
+    harness.run();
+    assert_eq!(images(&harness), 2, "facing layout shows the whole spread");
+}
+
+#[test]
+fn the_continuous_layout_stacks_more_than_one_page() {
+    let bytes = steleofd_testkit::multipage_archive(9);
+    let mut app = App::new();
+    app.open_bytes(&bytes, Some("many.ofd"))
+        .expect("the fixture opens");
+    let mut harness = harness(app);
+    harness.state_mut().set_layout(Layout::Continuous);
+    harness.state_mut().go_to(4);
+    for page in harness.state().visible() {
+        harness.state_mut().page_image(page).expect("page renders");
+    }
+    harness.run();
+    let images = harness
+        .query_all_by(|node| node.role() == egui::accesskit::Role::Image)
+        .count();
+    assert!(
+        images > 1,
+        "a continuous view shows its window, got {images}"
+    );
 }

@@ -134,34 +134,63 @@ fn draw_canvas(ui: &mut Ui, app: &mut App) {
         Canvas::Failed { message } => {
             ui.colored_label(egui::Color32::from_rgb(180, 40, 40), &message);
         }
-        Canvas::Pending => {}
-        Canvas::Blank | Canvas::Page => draw_page(ui, app),
+        // The pages on screen are already rasterized or are on their way, so
+        // both cases draw the same thing; the pending page is simply absent
+        // from the cache this frame.
+        Canvas::Pending | Canvas::Blank | Canvas::Page => draw_pages(ui, app),
     }
 }
 
-/// Paint the cached page, then note it if the page turned out to be blank.
-fn draw_page(ui: &mut Ui, app: &mut App) {
-    let page = app.current_page();
-    let blank = app.canvas() == Canvas::Blank;
-    let Some(rendered) = app.cached(page) else {
+/// Paint every page the layout puts on screen, side by side or stacked.
+fn draw_pages(ui: &mut Ui, app: &mut App) {
+    let pages = app.visible();
+    if pages.is_empty() {
         return;
-    };
-    let image = rendered.image.clone();
-    let aspect = image.height() as f32 / image.width().max(1) as f32;
-    let width = ui.available_width().min(MAX_PAGE_WIDTH);
-    let size = egui::vec2(width, width * aspect);
-    let texture = ui.ctx().load_texture("page", image, TextureOptions::LINEAR);
-    let source = egui::load::SizedTexture::new(texture.id(), size);
+    }
+    let horizontal = app.layout() == Layout::Facing;
+    let blank = app.canvas() == Canvas::Blank;
     egui::ScrollArea::both()
         .id_salt("canvas")
         .auto_shrink([false, false])
         .show(ui, |ui| {
-            ui.image(source);
+            let layout = if horizontal {
+                egui::Layout::left_to_right(egui::Align::Min)
+            } else {
+                egui::Layout::top_down(egui::Align::Center)
+            };
+            ui.with_layout(layout, |ui| {
+                for page in pages {
+                    draw_one_page(ui, app, page, horizontal);
+                }
+            });
         });
     if blank {
         let notice = app.blank_notice();
         ui.label(egui::RichText::new(notice).weak());
     }
+}
+
+/// Paint a single cached page, sized to the space a spread leaves for it.
+fn draw_one_page(ui: &mut Ui, app: &mut App, page: usize, horizontal: bool) {
+    let Some(rendered) = app.cached(page) else {
+        return;
+    };
+    let image = rendered.image.clone();
+    let aspect = image.height() as f32 / image.width().max(1) as f32;
+    let available = if horizontal {
+        // Two pages share the row, minus the item spacing between them.
+        (ui.available_width() - ui.spacing().item_spacing.x) / 2.0
+    } else {
+        ui.available_width()
+    };
+    let width = available.clamp(1.0, MAX_PAGE_WIDTH);
+    let size = egui::vec2(width, width * aspect);
+    // One texture per page and resolution; the name carries both so the cache
+    // and the texture cannot disagree.
+    let name = format!("page-{page}");
+    let texture = ui.ctx().load_texture(name, image, TextureOptions::LINEAR);
+    let source = egui::load::SizedTexture::new(texture.id(), size);
+    ui.image(source);
 }
 
 /// Z4: document and page on the left, and a failure when there is one.

@@ -29,3 +29,6 @@ egui.workspace = true
 # Drives the real widget tree without a display, which is how the window's
 # layout is proven in CI rather than only in the state machine below it.
 egui_kittest = { version = "0.35", features = ["eframe"] }
+# Layout has nothing to arrange in a one-page document, so the arrangement
+# tests need a fixture with several pages.
+steleofd-testkit.workspace = true

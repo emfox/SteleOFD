@@ -62,6 +62,44 @@ pub const DOCUMENT_ENTRY: &str = "Doc_0/Document.xml";
 /// The path to the signature list entry inside the archive.
 pub const SIGNS_ENTRY: &str = "Doc_0/Signs/Signs.xml";
 
+/// The document entry for a file with `pages` pages, each pointing at its own
+/// content entry. Layout has nothing to arrange in a one-page document, so a
+/// reader test that cares about arrangement needs one of these.
+pub fn multipage_document_xml(pages: usize) -> String {
+    let mut xml = String::from(
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<Document>\n  <CommonData>\n    <PageArea><PhysicalBox>0 0 210 297</PhysicalBox></PageArea>\n  </CommonData>\n  <Pages>\n",
+    );
+    for page in 0..pages {
+        xml.push_str(&format!(
+            "    <Page ID=\"{id}\" BaseLoc=\"Pages/Page_{page}/Content.xml\"/>\n",
+            id = page + 1,
+        ));
+    }
+    xml.push_str("  </Pages>\n</Document>");
+    xml
+}
+
+/// The archive bytes of an unsigned document with `pages` pages.
+pub fn multipage_archive(pages: usize) -> Vec<u8> {
+    let mut entries: Vec<(String, Vec<u8>)> =
+        vec![("OFD.xml".to_string(), OFD_XML.as_bytes().to_vec())];
+    entries.push((
+        DOCUMENT_ENTRY.to_string(),
+        multipage_document_xml(pages).into_bytes(),
+    ));
+    for page in 0..pages {
+        entries.push((
+            format!("Doc_0/Pages/Page_{page}/Content.xml"),
+            CONTENT_XML.as_bytes().to_vec(),
+        ));
+    }
+    let borrowed: Vec<(&str, &[u8])> = entries
+        .iter()
+        .map(|(path, data)| (path.as_str(), data.as_slice()))
+        .collect();
+    build_archive(&borrowed).expect("archive")
+}
+
 /// A real face, so glyph outlining runs for real rather than degrading.
 pub fn font_bytes() -> Vec<u8> {
     let path = concat!(

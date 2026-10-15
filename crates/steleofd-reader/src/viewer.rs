@@ -43,6 +43,45 @@ impl Layout {
             Self::Continuous => "reader-layout-continuous",
         }
     }
+
+    /// How far the toolbar's next/previous buttons move. A spread advances a
+    /// spread: stepping one page would leave the reader on the back of it.
+    pub fn stride(self) -> usize {
+        match self {
+            Self::Single => 1,
+            Self::Facing => 2,
+            Self::Continuous => 1,
+        }
+    }
+}
+
+/// How many pages a continuous view keeps around the current one. Only a
+/// wanted page is rasterized, so "continuous" means enough context to scroll
+/// through and no more, never the whole document.
+pub const CONTINUOUS_WINDOW: usize = 3;
+
+/// The pages a layout shows for a given current page and page count. Pure, so
+/// the arrangement can be asserted without a window; an empty document yields
+/// nothing and every index is clamped to the pages that exist.
+pub fn visible_pages(layout: Layout, current: usize, count: usize) -> Vec<usize> {
+    if count == 0 {
+        return Vec::new();
+    }
+    let current = current.min(count - 1);
+    match layout {
+        Layout::Single => vec![current],
+        // A spread is a fixed pair, so page 0 is always on the right of an
+        // empty left half and the pairing stays stable as the reader moves.
+        Layout::Facing => {
+            let start = current - (current % 2);
+            (start..=start + 1).filter(|page| *page < count).collect()
+        }
+        Layout::Continuous => {
+            let first = current.saturating_sub(CONTINUOUS_WINDOW);
+            let last = (current + CONTINUOUS_WINDOW).min(count - 1);
+            (first..=last).collect()
+        }
+    }
 }
 
 /// Keeps the pages a reader has already rasterized, because rendering is the

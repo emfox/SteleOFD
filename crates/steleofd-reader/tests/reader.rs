@@ -18,6 +18,15 @@ fn open() -> App {
     app
 }
 
+/// A reader over a document with `pages` pages, so arrangements have room.
+fn open_pages(pages: usize) -> App {
+    let mut app = App::new();
+    let bytes = steleofd_testkit::multipage_archive(pages);
+    app.open_bytes(&bytes, Some("many.ofd"))
+        .expect("the fixture opens");
+    app
+}
+
 #[test]
 fn a_fresh_reader_has_nothing_open() {
     let app = App::new();
@@ -354,4 +363,122 @@ fn a_small_page_may_use_the_full_zoom_range() {
         MAX_DPI,
         "a small page is not penalised for the limit"
     );
+}
+
+#[test]
+fn single_page_layout_shows_exactly_the_current_page() {
+    let mut app = open_pages(5);
+    app.set_layout(Layout::Single);
+    for page in 0..5 {
+        app.go_to(page);
+        assert_eq!(app.visible(), vec![page], "single shows only page {page}");
+    }
+}
+
+#[test]
+fn facing_layout_pairs_pages_and_keeps_the_pairing_stable() {
+    let mut app = open_pages(6);
+    app.set_layout(Layout::Facing);
+
+    // A spread is the fixed pair (even, even+1), so page 0 always sits with 1
+    // and the pairing does not change as the reader moves through it.
+    app.go_to(0);
+    assert_eq!(app.visible(), vec![0, 1]);
+    app.go_to(1);
+    assert_eq!(app.visible(), vec![0, 1], "1 stays with 0, not with 2");
+    app.go_to(2);
+    assert_eq!(app.visible(), vec![2, 3]);
+    app.go_to(3);
+    assert_eq!(app.visible(), vec![2, 3], "3 stays with 2");
+    app.go_to(5);
+    assert_eq!(app.visible(), vec![4, 5]);
+}
+
+#[test]
+fn a_trailing_odd_page_is_a_spread_of_one() {
+    let mut app = open_pages(5);
+    app.set_layout(Layout::Facing);
+    app.go_to(4);
+    assert_eq!(app.visible(), vec![4], "the last page has no partner");
+}
+
+#[test]
+fn continuous_layout_shows_a_bounded_window_around_the_current_page() {
+    let mut app = open_pages(20);
+    app.set_layout(Layout::Continuous);
+
+    app.go_to(10);
+    let window = app.visible();
+    assert!(
+        window.contains(&10),
+        "the current page is always in the window"
+    );
+    assert!(
+        window.len() < 20,
+        "continuous must not rasterize the whole document, got {} pages",
+        window.len()
+    );
+    assert_eq!(window.first(), Some(&7), "three pages of lead-in");
+    assert_eq!(window.last(), Some(&13), "three pages of look-ahead");
+
+    app.go_to(0);
+    assert_eq!(
+        app.visible().first(),
+        Some(&0),
+        "the window clamps at the start"
+    );
+    app.go_to(19);
+    assert_eq!(app.visible().last(), Some(&19), "and at the end");
+}
+
+#[test]
+fn a_layout_with_no_pages_shows_nothing() {
+    let mut app = App::new();
+    for layout in [Layout::Single, Layout::Facing, Layout::Continuous] {
+        app.set_layout(layout);
+        assert!(app.visible().is_empty(), "{layout:?} on an empty reader");
+    }
+}
+
+#[test]
+fn facing_layout_steps_a_spread_at_a_time() {
+    let mut app = open_pages(6);
+    app.set_layout(Layout::Facing);
+
+    app.go_to(0);
+    app.next_page();
+    assert_eq!(
+        app.current_page(),
+        2,
+        "a spread advances to the next spread"
+    );
+    app.previous_page();
+    assert_eq!(app.current_page(), 0, "and back again");
+
+    app.go_to(4);
+    assert!(!app.has_next(), "the last spread has nothing after it");
+    assert!(app.has_previous());
+}
+
+#[test]
+fn single_page_layout_still_steps_one_page() {
+    let mut app = open_pages(3);
+    app.set_layout(Layout::Single);
+    app.go_to(0);
+    app.next_page();
+    assert_eq!(app.current_page(), 1);
+    app.previous_page();
+    assert_eq!(app.current_page(), 0);
+    assert!(!app.has_previous(), "page 0 has nothing before it");
+}
+
+#[test]
+fn changing_layout_keeps_the_page_the_reader_was_on() {
+    let mut app = open_pages(6);
+    app.go_to(3);
+    app.set_layout(Layout::Facing);
+    // Page 3 belongs to the spread [2, 3], so it is still on screen.
+    assert!(app.visible().contains(&3), "the reader keeps its place");
+    app.set_layout(Layout::Single);
+    assert_eq!(app.current_page(), 3);
 }

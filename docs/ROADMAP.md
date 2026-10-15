@@ -13,8 +13,8 @@ criterion, so it is always obvious whether it is done.
 | Measure | Value |
 | --- | --- |
 | Crates | 26 (L0 foundation through L5 delivery) |
-| Source | 29,302 lines of Rust, measured with `find crates -name '*.rs'` |
-| Tests | 735 passing, plus 13 inline unit-test modules |
+| Source | 29,595 lines of Rust, measured with `find crates -name '*.rs'` |
+| Tests | 745 passing, plus 13 inline unit-test modules |
 | Delivery forms | `cli`, `wasm`, `ffi`, `server`, `reader`, all on the `core` facade |
 | Standard clauses verified | 47 of 47 in GB/T 33190-2016 (46 `verified`, 1 `partial`) |
 | Languages | `en-US` and `zh-CN`, 75 message keys, parity enforced in CI |
@@ -303,14 +303,19 @@ page.
 
 ### N8. Layout, zoom and search (U2-a … U2-c)
 
-- **U2-a** Layout modes wired to the strings that already exist: single page,
-  facing pages, continuous. This is where `reader-layout-*` stops being dead
-  text.
-- **U2-b** Zoom, fit width and fit page, with the zoom percentage coming from
-  `reader-zoom`. Render on demand per page rather than eagerly, and cancel
+- **U2-a** `[x]` `reader-layout-*` is live. `viewer::visible_pages` is a pure
+  function from a layout, a current page and a page count to the pages on
+  screen — single shows one, facing shows the fixed pair `(even, even+1)`, and
+  continuous shows a bounded window around the page rather than the whole
+  document, because U2-b's rule is that only a wanted page is rasterized. The
+  canvas draws that list, and paging now steps by the layout's stride so a
+  spread advances a spread. `steleofd-testkit` gained `multipage_archive`,
+  since a one-page fixture has no arrangement to assert.
+- **U2-b** `[ ]` Zoom, fit width and fit page, with the zoom percentage coming
+  from `reader-zoom`. Render on demand per page rather than eagerly, and cancel
   in-flight renders when the reader moves faster than the rasterizer.
-- **U2-c** A search panel over the existing `search` capability, listing hits
-  by page, jumping to a hit, and showing `reader-no-match` when there is
+- **U2-c** `[ ]` A search panel over the existing `search` capability, listing
+  hits by page, jumping to a hit, and showing `reader-no-match` when there is
   none.
 
 ### N9. Verification, export and access (U3-a … U3-c)
