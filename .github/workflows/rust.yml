@@ -54,6 +54,15 @@ jobs:
       - name: Test with every feature on
         run: cargo test --workspace --all-features
 
+      # The reader's window is a real widget tree, so this drives it without a
+      # display and without an X server: labels come from the catalogue and
+      # clicks reach `App`. Without this step the layout could rot while the
+      # engine keeps passing.
+      - name: Reader window, driven headlessly
+        run: |
+          unset DISPLAY WAYLAND_DISPLAY
+          cargo test -p steleofd-reader --test window
+
       - name: Message catalogues
         run: python3 scripts/check_i18n.py --strict
 
