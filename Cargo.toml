@@ -102,7 +102,7 @@ image      = { version = "0.25", default-features = false, features = ["png", "j
 
 # PDF interop
 pdf        = { version = "0.10", default-features = false }
-lopdf      = "0.36"
+lopdf      = { version = "0.36", default-features = false }
 
 # Chinese national cryptography
 cipher     = "0.5"

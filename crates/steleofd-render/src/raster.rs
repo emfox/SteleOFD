@@ -363,12 +363,13 @@ fn to_ts_path(path: &Path, transform: Transform) -> Result<TsPath> {
 }
 
 /// One cubic segment of a flattened arc: two control points and the endpoint.
-type Cubic = ((f64, f64), (f64, f64), (f64, f64));
+pub type Cubic = ((f64, f64), (f64, f64), (f64, f64));
 
 /// Convert one elliptical arc into cubic segments, following the same
 /// endpoint-to-centre conversion the SVG standard prescribes.
+/// Shared with the PDF writer so both backends flatten arcs identically.
 #[allow(clippy::too_many_arguments)]
-fn arc_cubics(
+pub fn arc_cubics(
     rx_in: f64,
     ry_in: f64,
     rot_deg: f64,

@@ -220,6 +220,14 @@ pub enum RenderError {
         /// What went wrong.
         reason: String,
     },
+    /// Image encoding failed.
+    #[error("image encode failed on page {page}: {reason}")]
+    ImageEncode {
+        /// Page index.
+        page: usize,
+        /// What went wrong.
+        reason: String,
+    },
     /// Render was aborted after exceeding its budget, degrading to partial output.
     #[error("render aborted after exceeding budget: {0}")]
     BudgetExceeded(String),
