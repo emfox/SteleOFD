@@ -14,6 +14,70 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  # The desktop reader is the one artefact a person can actually use, so it is
+  # built for all three desktop systems from one job per system. Windows and
+  # macOS builders have their fontconfig story solved differently on Linux, so
+  # the dependency step is not shared.
+  reader:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            name: linux
+          - os: windows-latest
+            name: windows
+          - os: macos-latest
+            name: macos
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      # font-kit needs fontconfig headers to build its sys crate; Linux calls
+      # them fontconfig, macOS and Windows builders use the same headers but the
+      # vcpkg toolchain the Windows one reaches them through.
+      - name: Install system dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libfontconfig1-dev pkg-config
+      - name: Install system dependencies
+        if: runner.os == 'macOS'
+        run: brew install fontconfig pkg-config
+      - name: Install system dependencies
+        if: runner.os == 'Windows'
+        run: choco install -y pkgconfiglite
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-reader-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-reader-
+
+      - name: Build the reader
+        run: cargo build --release -p steleofd-reader
+
+      - name: Collect the executable
+        shell: bash
+        run: |
+          mkdir -p dist
+          case "${{ runner.os }}" in
+            Linux)   cp target/release/steleofd-reader dist/steleofd-reader-linux ;;
+            Windows) cp target/release/steleofd-reader.exe dist/steleofd-reader-windows.exe ;;
+            macOS)   cp target/release/steleofd-reader dist/steleofd-reader-macos ;;
+          esac
+          ls -la dist
+
+      - name: Attach the executable to the release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/steleofd-reader-*
+
   artefacts:
     runs-on: ubuntu-latest
     steps:
