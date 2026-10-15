@@ -6,6 +6,7 @@
 
 pub mod app;
 pub mod viewer;
+pub mod window;
 
 pub use app::{App, AppError, Canvas};
 pub use viewer::{DroppedFile, PageCache, RenderedPage, looks_blank};

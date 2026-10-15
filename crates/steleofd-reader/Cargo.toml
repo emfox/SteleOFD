@@ -26,3 +26,6 @@ image.workspace = true
 
 [dev-dependencies]
 egui.workspace = true
+# Drives the real widget tree without a display, which is how the window's
+# layout is proven in CI rather than only in the state machine below it.
+egui_kittest = { version = "0.35", features = ["eframe"] }
