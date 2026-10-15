@@ -249,13 +249,12 @@ locales/
 └── zh-CN/          <- same structure
 ```
 
-`reader.ftl` is currently the one module with no consumer: the reader
-interface it was written for is scheduled in
-[`ROADMAP.md`](ROADMAP.md) under N7, and the other modules are reachable
-through the CLI today. The catalogues are the specification for the reader,
-so they are kept complete and bilingual even ahead of the code.
+`reader.ftl` is consumed by `crates/steleofd-reader`, the native desktop
+reader, whose layout and per-frame flow are fixed in
+[`UI-SPEC.md`](UI-SPEC.md). The other modules are reachable through the CLI
+today.
 
-**Current state:** 56 message keys across 2 locales, with identical key sets.
+**Current state:** 75 message keys across 2 locales, with identical key sets.
 
 ### 5.4 Conventions and safeguards
 
@@ -270,6 +269,13 @@ so they are kept complete and bilingual even ahead of the code.
 **A real defect the checker caught:** the first run found `edit-*` (4 keys) and
 `search-*` (2 keys) missing from the FTL catalogues. Leaked to runtime, users
 would have seen raw key names instead of text.
+
+### 5.5 Reader window rules
+
+The desktop reader keeps its layout zones and its per-frame flow in
+[`UI-SPEC.md`](UI-SPEC.md), which also records why the window draws nothing it
+cannot test. It is a separate document because the rules are about behaviour
+over time, not about the shape of a layer.
 
 ---
 

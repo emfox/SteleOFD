@@ -182,8 +182,8 @@ GB/T 33476 分为三个部分，本项目遵循的是第 1、2 部分。GM/T 009
 - [x] **P8** 归档就绪度检查（`archive`）
 - [x] **P9** GB/T 33190-2016 合规闭环：从标准正文重建附录 A 的 Schema 并在 CI 强制校验
 
-25 个 crate 已全部就位，四种交付形态（`cli` / `wasm` / `ffi` / `server`）
-共用同一个 `core` 门面。后续规划见
+26 个 crate 已全部就位，五种交付形态（`cli` / `wasm` / `ffi` / `server` /
+`reader`）共用同一个 `core` 门面。后续规划见
 [`docs/ROADMAP.md`](docs/ROADMAP.md)，按近期 / 中期 / 远期三个阶段组织。
 条款级覆盖情况见
 [`compliance/gb-t-33190.toml`](compliance/gb-t-33190.toml)，目前覆盖 47 条中的

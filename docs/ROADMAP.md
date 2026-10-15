@@ -1,6 +1,6 @@
 # Roadmap
 
-SteleOFD has all 25 crates of the original plan built, tested and pushed. The
+SteleOFD has all 26 crates of the original plan built, tested and pushed. The
 original P0-P9 sequence is finished; this document is what comes after it.
 
 The plan is organised by horizon rather than by layer, because the remaining
@@ -12,12 +12,12 @@ criterion, so it is always obvious whether it is done.
 
 | Measure | Value |
 | --- | --- |
-| Crates | 25 (L0 foundation through L5 delivery) |
-| Source | ~19,400 lines of Rust |
-| Tests | 539 passing, plus 13 inline unit-test modules |
-| Delivery forms | `cli`, `wasm`, `ffi`, `server`, all on the `core` facade |
+| Crates | 26 (L0 foundation through L5 delivery) |
+| Source | 24,626 lines of Rust, measured with `find crates -name '*.rs'` |
+| Tests | 563 passing, plus 13 inline unit-test modules |
+| Delivery forms | `cli`, `wasm`, `ffi`, `server`, `reader`, all on the `core` facade |
 | Standard clauses verified | 20 of 47 in GB/T 33190-2016 |
-| Languages | `en-US` and `zh-CN`, 72 message keys, parity enforced in CI |
+| Languages | `en-US` and `zh-CN`, 75 message keys, parity enforced in CI |
 | CI | fmt, clippy, build, test, all-features test, i18n, language, conformance, XSD validation |
 
 ## Honest gaps
@@ -48,15 +48,14 @@ Each one is a real, verified finding, not a guess.
 7. **No release automation.** No `CHANGELOG`, no version-bump or publish
    workflow, no `cargo-semver-checks` gate. `Cargo.toml` declares `0.1.0`
    everywhere and nothing tracks whether a change breaks a public API.
-8. **There is no reader.** The engine can open, render, search, verify and
-   annotate, but nothing assembles those calls into a native window a person
-   can read a document with. `locales/*/reader.ftl` already holds ten
-   interface strings — page counter,
-   zoom, fit width, fit page, single page, facing pages, continuous, blank
-   page, no matches — and **no code references them**. The strings were
-   designed; the surface they were designed for was never built. This is the
-   largest single omission in the project, and it is deliberate work rather
-   than engine work: everything a reader needs already exists below.
+8. **The reader exists but is barely a reader.** `crates/steleofd-reader`
+   (U1-a, U1-b) opens a document, rasterizes pages, navigates and caches, and
+   consumes the `locales/*/reader.ftl` strings. What is still missing is
+   everything below the surface: search, signatures, annotations, export,
+   keyboard shortcuts, accessibility, and a layout that actually honours the
+   facing and continuous choices in the menu. The window's zones and frame
+   flow are specified in [`UI-SPEC.md`](UI-SPEC.md); the rules there are what
+   the remaining reader work will be built against.
 
 ---
 
@@ -171,9 +170,13 @@ that accessibility has to be wired up by hand in U3-c.
   that depends on `core` directly, with a window, a menu bar and a document
   area. Builds on a headless runner with no system package beyond the
   fontconfig headers CI already installs.
-- [ ] **U1-b** Open a file through a native file dialog and through drag and drop
+- [x] **U1-b** Open a file through a native file dialog and through drag and drop
   onto the window, show the document facts, and wire the page counter and
-  navigation to `reader-page-of`, `reader-blank-page` and `reader-open`.
+  navigation to `reader-page-of`, `reader-blank-page` and `reader-open`. The
+  window's zones and per-frame flow are fixed in [UI-SPEC.md](UI-SPEC.md), so
+  the layout is a rule rather than a convention; the four-zone window is drawn
+  from panels and the canvas state is decided in `App`, which keeps it
+  testable without a display.
 - [ ] **U1-c** Prove the path in CI: build the reader headlessly and drive one
   open-and-navigate flow, so the interface cannot silently rot while the
   engine keeps moving.
