@@ -7,10 +7,12 @@ use steleofd_render::RenderOptions;
 
 /// The resolution bounds the reader will rasterize at.
 pub const MIN_DPI: f32 = 24.0;
-/// The resolution bounds the reader will rasterize at.
+/// The upper bound the reader asks for; the page size may cap it lower.
 pub const MAX_DPI: f32 = 300.0;
 /// The resolution a freshly opened document is shown at.
 pub const DEFAULT_DPI: f32 = 96.0;
+/// The pixels per millimetre at a given resolution, used to size a page.
+pub const PIXELS_PER_MM: f64 = 25.4;
 
 /// A rasterized page, decoded and ready to paint.
 pub struct RenderedPage {
@@ -138,14 +140,35 @@ pub fn looks_blank(image: &egui::ColorImage) -> bool {
         })
 }
 
-/// Rasterize one page at the given resolution.
+/// The largest texture `egui` will accept, matched to the smallest limit a
+/// desktop driver imposes; a larger page is refused, so the resolution is
+/// reduced in `render_page` until both sides fit.
+pub const MAX_TEXTURE_SIDE: u32 = 2048;
+
+/// The resolution a page can be rasterized at within the texture limit. A zoom
+/// request is only a request: A4 at 300 dpi is 3,480 px wide, so the ceiling
+/// here is arithmetic rather than preference.
+pub fn dpi_that_fits(size_mm: (f32, f32)) -> f32 {
+    let longest = size_mm.0.max(size_mm.1).max(1.0);
+    let fit = f64::from(MAX_TEXTURE_SIDE) * PIXELS_PER_MM / f64::from(longest);
+    (fit as f32).clamp(MIN_DPI, MAX_DPI)
+}
+
+/// Rasterize one page, within what the texture limit can hold.
+///
+/// The asked-for resolution is honoured only as far as the page size allows.
 pub fn render_page(
     doc: &Document,
     page: usize,
     dpi: f32,
 ) -> Result<RenderedPage, steleofd_error::OfdError> {
+    let size_mm = doc
+        .page(page)
+        .map(|p| (p.page_box.w as f32, p.page_box.h as f32))
+        .unwrap_or((210.0, 297.0));
+    let effective = dpi.clamp(MIN_DPI, MAX_DPI).min(dpi_that_fits(size_mm));
     let options = RenderOptions {
-        dpi: f64::from(dpi.clamp(MIN_DPI, MAX_DPI)),
+        dpi: f64::from(effective),
         ..RenderOptions::default()
     };
     let png = doc.to_png(page, &options)?;
@@ -156,10 +179,6 @@ pub fn render_page(
                 reason: reason.to_string(),
             })
         })?;
-    let size_mm = doc
-        .page(page)
-        .map(|p| (p.page_box.w as f32, p.page_box.h as f32))
-        .unwrap_or((210.0, 297.0));
     let image = egui::ColorImage::from_rgba_unmultiplied(
         [decoded.width() as usize, decoded.height() as usize],
         decoded.to_rgba8().as_raw(),

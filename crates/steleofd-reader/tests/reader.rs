@@ -313,3 +313,45 @@ fn the_info_line_is_written_in_the_readers_language() {
         app.info_label()
     );
 }
+
+#[test]
+fn a_page_never_rasterizes_past_the_texture_limit() {
+    // A4 at the reader's highest zoom would be 3,480 px wide, which no driver
+    // will hold, so the resolution has to fall back to what actually fits.
+    let a4 = (210.0, 297.0);
+    let capped = steleofd_reader::viewer::dpi_that_fits(a4);
+    assert!(
+        capped < MAX_DPI,
+        "A4 must be capped below the requested ceiling, got {capped}"
+    );
+    let side = f64::from(capped) / 25.4 * 297.0;
+    assert!(
+        side <= f64::from(steleofd_reader::viewer::MAX_TEXTURE_SIDE),
+        "the long side is {side:.0} px, past the limit"
+    );
+}
+
+#[test]
+fn a_rendered_page_is_small_enough_to_upload() {
+    let mut app = open();
+    app.set_dpi(MAX_DPI);
+    app.page_image(0).expect("the page rasterizes");
+    let rendered = app.cached(0).expect("and lands in the cache");
+    let (w, h) = (rendered.image.width(), rendered.image.height());
+    let limit = steleofd_reader::viewer::MAX_TEXTURE_SIDE as usize;
+    assert!(
+        w <= limit && h <= limit,
+        "rasterized {w}x{h}, limit {limit}"
+    );
+}
+
+#[test]
+fn a_small_page_may_use_the_full_zoom_range() {
+    // Nothing is capped for a page small enough to fit at the top zoom.
+    let postage_stamp = (20.0, 20.0);
+    assert_eq!(
+        steleofd_reader::viewer::dpi_that_fits(postage_stamp),
+        MAX_DPI,
+        "a small page is not penalised for the limit"
+    );
+}
