@@ -329,7 +329,8 @@ opt-level = "s"         # size first for WASM
 | **P4b facade** | `core`: the feature-trimmed public surface | Done |
 | **P4 verification** | Signature verification in `crypto` and `sign` | Done |
 | **P5a delivery** | `cli`: the `steleofd` command line tool | Done |
-| **P5b delivery** | WebAssembly, C ABI and HTTP service paths | Pending |
+| **P5b delivery** | `wasm`: browser bindings over the `core` facade | Done |
+| **P5c delivery** | C ABI and HTTP service paths | Pending |
 | **P6 editing** | Command pattern and undo stack in `edit` | Done |
 | **P7 search** | Full-text search over the display list in `search` | Done |
 | **P8 archival** | Archival readiness auditing in `archive` | Done |

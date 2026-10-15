@@ -190,13 +190,14 @@ rather than the national standards one.
 - [x] **P4b** The `core` facade: one handle, features per delivery form
 - [x] **P4** Signature verification with national algorithms
 - [x] **P5a** The `steleofd` command line tool
-- [ ] **P5b** WebAssembly, C ABI and HTTP service delivery
+- [x] **P5b** WebAssembly bindings for the browser
+- [ ] **P5c** C ABI and HTTP service delivery
 - [x] **P6** Document editing with an undo stack
 - [x] **P7** Full-text search over the display list (`search`)
 - [x] **P8** Archival readiness auditing (`archive`)
 - [x] **P9** GB/T 33190-2016 conformance harness: annex A schemas rebuilt from the standard, enforced in CI
 
-Next up are the remaining L5 delivery crates (`wasm`, `ffi`, `server`), all
+Next up are the remaining L5 delivery crates (`ffi`, `server`), all
 built on the `core` facade. Clause-level coverage lives in
 [`compliance/gb-t-33190.toml`](compliance/gb-t-33190.toml); 20 of 47 clauses
 are covered so far.
