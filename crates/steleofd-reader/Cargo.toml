@@ -1,0 +1,28 @@
+[package]
+name = "steleofd-reader"
+description = "Native desktop reader for OFD documents"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "steleofd-reader"
+path = "src/main.rs"
+
+[lib]
+name = "steleofd_reader"
+path = "src/lib.rs"
+
+[dependencies]
+steleofd-core = { workspace = true, features = ["render", "search"] }
+steleofd-i18n.workspace = true
+steleofd-error.workspace = true
+steleofd-render.workspace = true
+egui.workspace = true
+eframe.workspace = true
+rfd = "0.17"
+image.workspace = true
+
+[dev-dependencies]
+egui.workspace = true

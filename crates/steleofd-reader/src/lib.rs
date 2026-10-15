@@ -1,0 +1,11 @@
+//! Native desktop reader for OFD documents. The engine is linked directly, so
+//! a document is opened, rendered and searched on the machine that holds it;
+//! nothing is uploaded anywhere.
+
+#![warn(missing_docs)]
+
+pub mod app;
+pub mod viewer;
+
+pub use app::{App, AppError};
+pub use viewer::{PageCache, RenderedPage};

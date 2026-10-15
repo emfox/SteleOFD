@@ -39,6 +39,9 @@ members = [
     "crates/steleofd-wasm",
     "crates/steleofd-ffi",
     "crates/steleofd-server",
+
+    # L5 adapters: the native desktop reader
+    "crates/steleofd-reader",
 ]
 default-members = ["crates/steleofd-core", "crates/steleofd-cli"]
 
@@ -122,6 +125,10 @@ rsa        = "0.9"
 tokio      = { version = "1", features = ["full"] }
 rayon      = "1.11"
 axum       = "0.8"
+
+# Desktop GUI for the native reader. Pinned below 0.36, which needs Rust 1.95.
+egui = "0.35"
+eframe = "0.35"
 
 # Platform integration
 wasm-bindgen       = "0.2"
