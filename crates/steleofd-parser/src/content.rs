@@ -43,12 +43,19 @@ pub fn read_ofd_root(xml: &str) -> Result<OfdRoot> {
     Ok(ofd)
 }
 
+/// Drop a leading `/` from a package-root-relative path.
+fn trim_leading_slash(raw: &str) -> &str {
+    raw.trim().strip_prefix('/').unwrap_or_else(|| raw.trim())
+}
+
 fn read_doc_body(cursor: &mut Cursor<'_>, _node: &Node) -> Result<DocBody> {
     let mut body = DocBody::default();
     loop {
         match cursor.next_event()? {
             Event::Start(n) if n.is("DocRoot") => {
-                body.doc_root = Location::new(cursor.read_text()?)
+                // `DocRoot` is package-root relative and producers write it
+                // with or without a leading slash; both name the same entry.
+                body.doc_root = Location::new(trim_leading_slash(&cursor.read_text()?))
             }
             Event::Start(n) if n.is("Signatures") => {
                 let loc = base_loc_or_text(&n, cursor)?;
@@ -118,6 +125,19 @@ fn read_common_data(cursor: &mut Cursor<'_>) -> Result<CommonData> {
     loop {
         match cursor.next_event()? {
             Event::Start(n) if n.is("PageArea") => data.page_area = read_page_area(cursor)?,
+            // The standard puts `TemplatePage` straight into `CommonData`
+            // with no wrapper; only the wrapped form was accepted before.
+            Event::Start(n) if n.is("TemplatePage") => {
+                let a = n.attributes();
+                data.templates
+                    .get_or_insert_with(TemplateList::default)
+                    .items
+                    .push(Template {
+                        id: a.require("TemplatePage", "ID")?.to_string(),
+                        base_loc: a.require("TemplatePage", "BaseLoc")?.to_string(),
+                    });
+                cursor.skip_element(&n)?;
+            }
             Event::Start(n) if n.is("Templates") => data.templates = Some(read_templates(cursor)?),
             Event::Start(n) if n.is("DrawParams") => {
                 data.draw_params = Some(read_draw_params(cursor)?);
@@ -185,11 +205,11 @@ fn read_templates(cursor: &mut Cursor<'_>) -> Result<TemplateList> {
     let mut list = TemplateList::default();
     loop {
         match cursor.next_event()? {
-            Event::Start(n) if n.is("Template") => {
+            Event::Start(n) if n.is("Template") || n.is("TemplatePage") => {
                 let a = n.attributes();
                 list.items.push(Template {
-                    id: a.require("Template", "ID")?.to_string(),
-                    base_loc: a.require("Template", "BaseLoc")?.to_string(),
+                    id: a.require(n.local(), "ID")?.to_string(),
+                    base_loc: a.require(n.local(), "BaseLoc")?.to_string(),
                 });
                 cursor.skip_element(&n)?;
             }
@@ -951,17 +971,37 @@ fn read_text_object(cursor: &mut Cursor<'_>, node: &Node) -> Result<TextObject> 
     Ok(t)
 }
 
+/// Parse a `DeltaX`/`DeltaY` per-glyph adjustment list, where `g` stands for
+/// "the adjustment the glyph before had"; a leading `g` means none at all.
+fn parse_delta_list(element: &str, attr: &str, raw: &str) -> Result<Vec<f64>> {
+    let mut out: Vec<f64> = Vec::new();
+    for token in raw.split_whitespace() {
+        if token.eq_ignore_ascii_case("g") {
+            out.push(out.last().copied().unwrap_or(0.0));
+            continue;
+        }
+        out.push(token.parse::<f64>().map_err(|_| {
+            OfdError::Xml(steleofd_error::XmlError::InvalidAttribute {
+                element: element.to_string(),
+                attr: attr.to_string(),
+                value: raw.to_string(),
+            })
+        })?);
+    }
+    Ok(out)
+}
+
 fn read_text_code(cursor: &mut Cursor<'_>, node: &Node) -> Result<TextCode> {
     let a = node.attributes();
     let code = TextCode {
         x: a.optional_as::<f64>("TextCode", "X")?.unwrap_or(0.0),
         y: a.optional_as::<f64>("TextCode", "Y")?.unwrap_or(0.0),
         delta_x: match a.get("DeltaX") {
-            Some(raw) => parse_number_list::<f64>("TextCode", "DeltaX", raw)?,
+            Some(raw) => parse_delta_list("TextCode", "DeltaX", raw)?,
             None => Vec::new(),
         },
         delta_y: match a.get("DeltaY") {
-            Some(raw) => parse_number_list::<f64>("TextCode", "DeltaY", raw)?,
+            Some(raw) => parse_delta_list("TextCode", "DeltaY", raw)?,
             None => Vec::new(),
         },
         text: if node.is_self_closing() {

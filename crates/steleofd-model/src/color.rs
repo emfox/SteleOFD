@@ -109,8 +109,10 @@ impl ColorRef {
     }
 
     /// Whether the colour text is absent, meaning the OFD default applies.
+    /// Alpha does not count: a `<Color>` without a `Value` picks up a default
+    /// alpha, and counting it made an omitted value parse as an invalid one.
     pub fn is_default(&self) -> bool {
-        self.value.is_empty() && self.shading.is_none()
+        self.value.trim().is_empty() && self.shading.is_none()
     }
 
     /// The shading this colour carries, if it is a gradient rather than a flat
@@ -126,8 +128,15 @@ impl ColorRef {
         if s.is_empty() {
             return Ok(vec![0, 0, 0]);
         }
+        // The marker decides the base: `#ee #20 #25` is hex, the form the
+        // standard writes, while a bare `156 82 35` is decimal.
+        let marked = s.split_whitespace().all(|part| part.starts_with('#'));
         s.split_whitespace()
-            .map(|part| part.parse::<u8>().map_err(|_| invalid(s)))
+            .map(|part| {
+                let digits = part.strip_prefix('#').unwrap_or(part);
+                let radix = if marked { 16 } else { 10 };
+                u8::from_str_radix(digits, radix).map_err(|_| invalid(s))
+            })
             .collect()
     }
 
@@ -138,8 +147,13 @@ impl ColorRef {
         }
 
         let s = self.value.trim();
-        if s.starts_with('#') {
-            return parse_hex(s.trim_start_matches('#'));
+        if let Some(rest) = s.strip_prefix('#') {
+            // `#` introduces either a hex triple (`#RGB`, `#RRGGBB`) or the
+            // standard's own `#R #G #B`, each channel carrying its marker.
+            if rest.contains(char::is_whitespace) {
+                return parse_marked_channels(rest);
+            }
+            return parse_hex(rest);
         }
         if let Some(inner) = s.strip_prefix("rgb(").and_then(|v| v.strip_suffix(')')) {
             return parse_triple(inner);
@@ -197,6 +211,21 @@ fn to_rgb_channels(channels: Vec<u8>) -> steleofd_error::Result<(u8, u8, u8)> {
 fn from_cmyk(channel: u8, key: u8) -> u8 {
     let ink = u16::from(channel) * u16::from(255 - key) / 255 + u16::from(key);
     255 - ink.min(255) as u8
+}
+
+/// Parse the standard's `#`-marked channel list, e.g. `#ee #20 #25`: each
+/// token drops its `#` and is one hex channel. A longer token is rejected
+/// rather than truncated, since guessing paints the page the wrong colour.
+fn parse_marked_channels(inner: &str) -> steleofd_error::Result<(u8, u8, u8)> {
+    let mut channels: Vec<u8> = Vec::with_capacity(3);
+    for token in inner.split_whitespace() {
+        let digits = token.strip_prefix('#').unwrap_or(token);
+        if digits.is_empty() || digits.len() > 2 {
+            return Err(invalid(inner));
+        }
+        channels.push(u8::from_str_radix(digits, 16).map_err(|_| invalid(inner))?);
+    }
+    to_rgb_channels(channels)
 }
 
 /// Parse a comma-separated triple into channels.

@@ -112,7 +112,14 @@ fn with_ctm(
 }
 
 fn solid(color: &ColorRef) -> Result<Paint> {
-    let (r, g, b) = color.to_rgb()?;
+    // A colour carrying a shading has no flat value: the gradient is the
+    // colour. Text reaches here without going through `paint_of`, so such a
+    // run read as invalid and took the document with it.
+    let (r, g, b) = if color.shading.is_some() {
+        (0, 0, 0)
+    } else {
+        color.to_rgb()?
+    };
     let alpha = color.clone().alpha();
     Ok(Paint::Solid(Color::rgba(r, g, b, alpha)))
 }
