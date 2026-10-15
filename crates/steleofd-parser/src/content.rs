@@ -509,12 +509,27 @@ fn read_text_object(cursor: &mut Cursor<'_>, node: &Node) -> Result<TextObject> 
         font: a.get("Font").unwrap_or("").to_string(),
         size: Millimeter::new(a.optional_as::<f64>("TextObject", "Size")?.unwrap_or(3.0)),
         char_space: a.optional_as::<f64>("TextObject", "CharSpace")?,
+        h_scale: a.optional_as::<f64>("TextObject", "HScale")?,
+        stroke: match a.get("Stroke") {
+            Some(raw) => Some(parse_bool("TextObject", "Stroke", raw)?),
+            None => None,
+        },
+        fill: match a.get("Fill") {
+            Some(raw) => Some(parse_bool("TextObject", "Fill", raw)?),
+            None => None,
+        },
         ..Default::default()
     };
     if !node.is_self_closing() {
         loop {
             match cursor.next_event()? {
                 Event::Start(n) if n.is("TextCode") => t.codes.push(read_text_code(cursor, &n)?),
+                Event::Start(n) if n.is("StrokeColor") => {
+                    t.stroke_color = Some(read_color(&n, cursor)?)
+                }
+                Event::Start(n) if n.is("FillColor") => {
+                    t.fill_color = Some(read_color(&n, cursor)?)
+                }
                 Event::Start(n) if n.is("FillColor") => {
                     t.fill_color = Some(read_color(&n, cursor)?)
                 }
@@ -535,6 +550,10 @@ fn read_text_code(cursor: &mut Cursor<'_>, node: &Node) -> Result<TextCode> {
         y: a.optional_as::<f64>("TextCode", "Y")?.unwrap_or(0.0),
         delta_x: match a.get("DeltaX") {
             Some(raw) => parse_number_list::<f64>("TextCode", "DeltaX", raw)?,
+            None => Vec::new(),
+        },
+        delta_y: match a.get("DeltaY") {
+            Some(raw) => parse_number_list::<f64>("TextCode", "DeltaY", raw)?,
             None => Vec::new(),
         },
         text: if node.is_self_closing() {

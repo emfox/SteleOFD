@@ -208,13 +208,33 @@ fn flatten_text(
         return Ok(());
     }
     let param = resolve_param(&t.base, params)?;
-    let fill = solid(
-        t.fill_color
-            .as_ref()
-            .or(param.and_then(|d| d.fill_color.as_ref()))
-            .unwrap_or(&default_color()),
-    )?;
+    let fill_on = t.fill.or(param.and_then(|d| d.fill)).unwrap_or(true);
+    // Text is filled by default and stroked only when asked, which is the
+    // opposite of a path's defaults.
+    let stroke_on = t.stroke.or(param.and_then(|d| d.stroke)).unwrap_or(false);
+    let fill = if fill_on {
+        Some(solid(
+            t.fill_color
+                .as_ref()
+                .or(param.and_then(|d| d.fill_color.as_ref()))
+                .unwrap_or(&default_color()),
+        )?)
+    } else {
+        None
+    };
+    let stroke = if stroke_on {
+        Some(solid(
+            t.stroke_color
+                .as_ref()
+                .or(param.and_then(|d| d.stroke_color.as_ref()))
+                .unwrap_or(&default_color()),
+        )?)
+    } else {
+        None
+    };
     let size = t.size.value();
+    // HScale widens or narrows the glyphs without changing their advance.
+    let h_scale = t.h_scale.unwrap_or(1.0);
     let letter_spacing = t.char_space.unwrap_or(0.0);
     let font = FontId(t.font.parse::<u32>().unwrap_or(0));
     with_ctm(&t.base, builder, |b| {
@@ -225,7 +245,13 @@ fn flatten_text(
             // Glyph ids are placeholders until font shaping lands; the raw
             // code points keep text extraction working in the meantime.
             let glyphs: Vec<u16> = code.text.chars().map(|c| u32::from(c) as u16).collect();
-            let advances = vec![size; glyphs.len()];
+            let advances = advances_of(code, size);
+            let place = Affine::translate(code.x, code.y);
+            let transform = if h_scale == 1.0 {
+                place
+            } else {
+                Affine::new(h_scale, 0.0, 0.0, 1.0, 0.0, 0.0).then(place)
+            };
             b.push(DrawOp::Text(GlyphRun {
                 font,
                 size: t.size,
@@ -233,9 +259,9 @@ fn flatten_text(
                 advances,
                 text: Some(code.text.clone()),
                 cluster_map: None,
-                transform: Affine::translate(code.x, code.y),
-                fill: Some(fill.clone()),
-                stroke: None,
+                transform,
+                fill: fill.clone(),
+                stroke: stroke.clone(),
                 letter_spacing,
                 word_spacing: 0.0,
                 bbox: t.base.boundary,
@@ -243,6 +269,19 @@ fn flatten_text(
         }
         Ok(())
     })
+}
+
+/// Per-glyph advances: the font size, plus the `DeltaX`/`DeltaY` adjustments
+/// the standard lets a run carry.
+fn advances_of(code: &steleofd_model::object::TextCode, size: f64) -> Vec<f64> {
+    let count = code.text.chars().count();
+    (0..count)
+        .map(|i| {
+            let dx = code.delta_x.get(i).copied().unwrap_or(0.0);
+            let dy = code.delta_y.get(i).copied().unwrap_or(0.0);
+            size + dx + dy
+        })
+        .collect()
 }
 
 fn flatten_image(i: &ImageObject, builder: &mut DisplayListBuilder) -> Result<()> {
@@ -405,14 +444,14 @@ mod tests {
                 TextCode {
                     x: 0.0,
                     y: 0.0,
-                    delta_x: Vec::new(),
                     text: "AB".to_string(),
+                    ..Default::default()
                 },
                 TextCode {
                     x: 10.0,
                     y: 0.0,
-                    delta_x: Vec::new(),
                     text: String::new(),
+                    ..Default::default()
                 },
             ],
             ..Default::default()

@@ -243,6 +243,9 @@ pub struct TextCode {
     /// Extra advance applied after each glyph.
     #[serde(rename = "DeltaX", default)]
     pub delta_x: Vec<f64>,
+    /// Vertical offset applied after each glyph.
+    #[serde(rename = "DeltaY", default)]
+    pub delta_y: Vec<f64>,
     /// Raw text; either glyph ids or Unicode, depending on `CGTransform`.
     #[serde(rename = "$text", default)]
     pub text: String,
@@ -270,6 +273,18 @@ pub struct TextObject {
     /// Extra spacing between glyphs.
     #[serde(rename = "CharSpace", skip_serializing_if = "Option::is_none")]
     pub char_space: Option<f64>,
+    /// Horizontal glyph scale; `1.0` is unscaled.
+    #[serde(rename = "HScale", skip_serializing_if = "Option::is_none")]
+    pub h_scale: Option<f64>,
+    /// Whether the glyph outlines are stroked.
+    #[serde(rename = "Stroke", skip_serializing_if = "Option::is_none")]
+    pub stroke: Option<bool>,
+    /// Whether the glyph interiors are filled.
+    #[serde(rename = "Fill", skip_serializing_if = "Option::is_none")]
+    pub fill: Option<bool>,
+    /// Stroke colour, overriding any draw parameter.
+    #[serde(rename = "StrokeColor", skip_serializing_if = "Option::is_none")]
+    pub stroke_color: Option<ColorRef>,
     /// Fill colour of the glyphs.
     #[serde(rename = "FillColor", skip_serializing_if = "Option::is_none")]
     pub fill_color: Option<ColorRef>,
@@ -419,10 +434,8 @@ mod tests {
 
         let t = TextObject {
             codes: vec![TextCode {
-                x: 0.0,
-                y: 0.0,
-                delta_x: Vec::new(),
                 text: "hello".to_string(),
+                ..Default::default()
             }],
             ..Default::default()
         };
