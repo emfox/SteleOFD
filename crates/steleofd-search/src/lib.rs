@@ -130,10 +130,10 @@ impl SearchIndex {
                         rect: run.rect_for(start, end),
                         snippet: snippet(&run.text, start, end),
                     });
-                    if let Some(limit) = options.max_hits {
-                        if hits.len() >= limit {
-                            return hits;
-                        }
+                    if let Some(limit) = options.max_hits
+                        && hits.len() >= limit
+                    {
+                        return hits;
                     }
                 }
             }

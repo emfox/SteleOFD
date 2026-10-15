@@ -117,10 +117,10 @@ pub fn read_annotations_index(package: &mut Package, loc: &str) -> Result<Annota
             Event::End(_) => {
                 if in_file_loc {
                     in_file_loc = false;
-                } else if let Some(page) = pending.take() {
-                    if !page.file_loc.is_empty() {
-                        index.pages.push(page);
-                    }
+                } else if let Some(page) = pending.take()
+                    && !page.file_loc.is_empty()
+                {
+                    index.pages.push(page);
                 }
             }
             Event::Eof => break,
@@ -250,10 +250,10 @@ pub fn read_custom_tags(package: &mut Package, loc: &str) -> Result<CustomTags> 
                     in_schema = false;
                 } else if in_file {
                     in_file = false;
-                } else if let Some(done) = current.take() {
-                    if !done.file_loc.is_empty() {
-                        tags.tags.push(done);
-                    }
+                } else if let Some(done) = current.take()
+                    && !done.file_loc.is_empty()
+                {
+                    tags.tags.push(done);
                 }
             }
             Event::Eof => break,
@@ -288,10 +288,10 @@ pub fn read_extensions(package: &mut Package, loc: &str) -> Result<Extensions> {
                     in_property = Some(a.get("Name").unwrap_or_default().to_string());
                 } else if n.is("ExtendData") {
                     in_extend_data = true;
-                } else if n.is("Data") {
-                    if let Some(cur) = current.as_mut() {
-                        cur.has_data = true;
-                    }
+                } else if n.is("Data")
+                    && let Some(cur) = current.as_mut()
+                {
+                    cur.has_data = true;
                 }
             }
             Event::Text(t) => {
@@ -300,10 +300,8 @@ pub fn read_extensions(package: &mut Package, loc: &str) -> Result<Extensions> {
                     if let Some(cur) = current.as_mut() {
                         cur.properties.push((name, t.to_string()));
                     }
-                } else if in_extend_data {
-                    if let Some(cur) = current.as_mut() {
-                        cur.extend_data.push(t.to_string());
-                    }
+                } else if in_extend_data && let Some(cur) = current.as_mut() {
+                    cur.extend_data.push(t.to_string());
                 }
             }
             Event::End(_) => {

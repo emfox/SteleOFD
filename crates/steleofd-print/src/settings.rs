@@ -178,10 +178,10 @@ impl PrintSettings {
         if self.copies == 0 {
             return Err(OfdError::Print(PrintError::InvalidCopies { copies: 0 }));
         }
-        if let ScaleMode::Custom(pct) = self.scale {
-            if !pct.is_finite() || pct <= 0.0 {
-                return Err(OfdError::Print(PrintError::InvalidScale { scale: pct }));
-            }
+        if let ScaleMode::Custom(pct) = self.scale
+            && (!pct.is_finite() || pct <= 0.0)
+        {
+            return Err(OfdError::Print(PrintError::InvalidScale { scale: pct }));
         }
         if !self.dpi.is_finite() || self.dpi <= 0.0 {
             return Err(OfdError::Print(PrintError::InvalidScale {

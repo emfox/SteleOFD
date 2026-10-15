@@ -187,10 +187,10 @@ impl PageSink for SvgSink<'_> {
         match shape.fill {
             Some(paint) => {
                 let _ = write!(attrs, " fill=\"{}\"", self.paint_ref(paint));
-                if let Paint::Solid(c) = paint {
-                    if c.a != 255 {
-                        let _ = write!(attrs, " fill-opacity=\"{}\"", opacity(c));
-                    }
+                if let Paint::Solid(c) = paint
+                    && c.a != 255
+                {
+                    let _ = write!(attrs, " fill-opacity=\"{}\"", opacity(c));
                 }
             }
             None => attrs.push_str(" fill=\"none\""),
@@ -201,10 +201,10 @@ impl PageSink for SvgSink<'_> {
         match shape.stroke {
             Some(paint) => {
                 let _ = write!(attrs, " stroke=\"{}\"", self.paint_ref(paint));
-                if let Paint::Solid(c) = paint {
-                    if c.a != 255 {
-                        let _ = write!(attrs, " stroke-opacity=\"{}\"", opacity(c));
-                    }
+                if let Paint::Solid(c) = paint
+                    && c.a != 255
+                {
+                    let _ = write!(attrs, " stroke-opacity=\"{}\"", opacity(c));
                 }
                 attrs.push_str(&stroke_attrs(shape.stroke_style));
             }
@@ -329,10 +329,10 @@ impl SvgSink<'_> {
                 path_data(&path),
                 self.paint_ref(fill)
             );
-            if let Paint::Solid(c) = fill {
-                if c.a != 255 {
-                    let _ = write!(attrs, " fill-opacity=\"{}\"", opacity(c));
-                }
+            if let Paint::Solid(c) = fill
+                && c.a != 255
+            {
+                let _ = write!(attrs, " fill-opacity=\"{}\"", opacity(c));
             }
             self.line(format!("<path {attrs}/>"));
             drawn += 1;

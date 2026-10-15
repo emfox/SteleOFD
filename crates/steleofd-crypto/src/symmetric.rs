@@ -53,7 +53,7 @@ impl Sm4Key {
 
     /// Decrypt ciphertext; CBC additionally needs a 16-byte IV.
     pub fn decrypt(&self, ciphertext: &[u8], iv: Option<&[u8]>) -> Result<Vec<u8>, OfdError> {
-        if ciphertext.is_empty() || ciphertext.len() % SM4_BLOCK_LEN != 0 {
+        if ciphertext.is_empty() || !ciphertext.len().is_multiple_of(SM4_BLOCK_LEN) {
             return Err(OfdError::Crypto(CryptoError::Operation(format!(
                 "ciphertext length must be a positive multiple of {SM4_BLOCK_LEN}"
             ))));

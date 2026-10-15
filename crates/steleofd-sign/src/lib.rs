@@ -219,10 +219,10 @@ impl Signature {
     /// Read the signed value the descriptor points at, if it has one. The proof
     /// lives in its own file rather than inline, so it takes a second read.
     pub fn read_check_value(&mut self, package: &mut Package) -> Result<(), OfdError> {
-        if let Some(loc) = self.signed_value_ref.clone() {
-            if let Some(bytes) = package.read_optional(&loc)? {
-                self.check_value = b64_ish(&bytes);
-            }
+        if let Some(loc) = self.signed_value_ref.clone()
+            && let Some(bytes) = package.read_optional(&loc)?
+        {
+            self.check_value = b64_ish(&bytes);
         }
         Ok(())
     }
@@ -264,10 +264,8 @@ fn absorb_text(
     signed_value: bool,
 ) {
     if let Some(index) = pending {
-        if ref_digest {
-            if let Some(bytes) = base64_decode(text) {
-                signature.references[index].check_value = bytes;
-            }
+        if ref_digest && let Some(bytes) = base64_decode(text) {
+            signature.references[index].check_value = bytes;
         }
         return;
     }

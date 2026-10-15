@@ -337,10 +337,10 @@ fn is_font_path(path: &str) -> bool {
 fn remap_fonts(list: &mut DisplayList, map: &HashMap<u32, FontId>) {
     for page in &mut list.pages {
         for op in &mut page.ops {
-            if let DrawOp::Text(run) = op {
-                if let Some(&id) = map.get(&run.font.0) {
-                    run.font = id;
-                }
+            if let DrawOp::Text(run) = op
+                && let Some(&id) = map.get(&run.font.0)
+            {
+                run.font = id;
             }
         }
     }

@@ -145,12 +145,12 @@ impl EditSession {
     pub fn apply(&mut self, mut command: impl Command + 'static) -> Result<(), OfdError> {
         self.check_signatures()?;
         for target in command.targets() {
-            if let Some(policy) = &self.options.permissions {
-                if !policy.allows(target) {
-                    return Err(OfdError::Edit(EditError::PermissionDenied(format!(
-                        "{target:?}"
-                    ))));
-                }
+            if let Some(policy) = &self.options.permissions
+                && !policy.allows(target)
+            {
+                return Err(OfdError::Edit(EditError::PermissionDenied(format!(
+                    "{target:?}"
+                ))));
             }
         }
         command.apply(&mut self.document)?;
