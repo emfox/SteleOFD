@@ -175,8 +175,13 @@ GB/T 33476 分为三个部分，本项目遵循的是第 1、2 部分。GM/T 009
 - [x] **P1** OFD 结构解析（`model` / `xml` / `package` / `parser`）
 - [x] **P2** 光栅渲染后端，打通「打开 → 显示」链路
 - [x] **P3** 格式转换（OFD → PDF / PNG / SVG）
+- [x] **P3b** 打印：任务编排与光栅化（`print`）
+- [x] **P4b** `core` 门面：单一入口，按交付形态开关特性
 - [x] **P4** 国密验签
-- [x] **P5** CLI / WASM / C ABI / HTTP Server 四形态交付
+- [x] **P5a** `steleofd` 命令行工具
+- [x] **P5b** 面向浏览器的 WASM 绑定
+- [x] **P5c** 面向 OA / ERP 集成的 C ABI 动态库（`ffi`）
+- [x] **P5d** 面向 OA / ERP 后端的 HTTP 服务（`server`）
 - [x] **P6** 文档编辑与撤销栈
 - [x] **P7** 基于显示列表的全文检索（`search`）
 - [x] **P8** 归档就绪度检查（`archive`）
@@ -186,8 +191,8 @@ GB/T 33476 分为三个部分，本项目遵循的是第 1、2 部分。GM/T 009
 `reader`）共用同一个 `core` 门面。后续规划见
 [`docs/ROADMAP.md`](docs/ROADMAP.md)，按近期 / 中期 / 远期三个阶段组织。
 条款级覆盖情况见
-[`compliance/gb-t-33190.toml`](compliance/gb-t-33190.toml)，目前覆盖 47 条中的
-20 条。
+[`compliance/gb-t-33190.toml`](compliance/gb-t-33190.toml)，47 条已全部覆盖，
+其中 46 条为 `verified`，1 条（`8.4`，部分裁剪区域）为 `partial`。
 
 ## 贡献
 
