@@ -42,6 +42,9 @@ members = [
 
     # L5 adapters: the native desktop reader
     "crates/steleofd-reader",
+
+    # Testing support: fixtures shared by the suites, never released
+    "crates/steleofd-testkit",
 ]
 default-members = ["crates/steleofd-core", "crates/steleofd-cli"]
 
@@ -75,6 +78,7 @@ steleofd-search   = { path = "crates/steleofd-search",   version = "0.1.0" }
 steleofd-archive  = { path = "crates/steleofd-archive",  version = "0.1.0" }
 steleofd-print    = { path = "crates/steleofd-print",    version = "0.1.0" }
 steleofd-core     = { path = "crates/steleofd-core",     version = "0.1.0" }
+steleofd-testkit  = { path = "crates/steleofd-testkit",  version = "0.1.0" }
 
 # External dependencies: versions pinned in one place
 zip        = { version = "4", default-features = false, features = ["deflate", "deflate64"] }

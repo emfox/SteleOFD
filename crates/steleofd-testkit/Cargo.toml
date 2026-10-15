@@ -1,0 +1,14 @@
+[package]
+name = "steleofd-testkit"
+description = "Shared fixtures for the SteleOFD test suites"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+steleofd-crypto.workspace = true
+steleofd-error.workspace = true
+steleofd-package.workspace = true
+steleofd-sign.workspace = true

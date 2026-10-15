@@ -4834,13 +4834,12 @@ version = "0.1.0"
 dependencies = [
  "cbindgen",
  "steleofd-core",
- "steleofd-crypto",
  "steleofd-error",
  "steleofd-font",
- "steleofd-package",
  "steleofd-render",
  "steleofd-search",
  "steleofd-sign",
+ "steleofd-testkit",
 ]
 
 [[package]]
@@ -4987,13 +4986,12 @@ dependencies = [
  "serde",
  "serde_json",
  "steleofd-core",
- "steleofd-crypto",
  "steleofd-error",
  "steleofd-font",
- "steleofd-package",
  "steleofd-render",
  "steleofd-search",
  "steleofd-sign",
+ "steleofd-testkit",
  "tokio",
  "tower",
  "tower-http",
@@ -5013,8 +5011,19 @@ dependencies = [
  "steleofd-geometry",
  "steleofd-model",
  "steleofd-package",
+ "steleofd-testkit",
  "steleofd-xml",
  "tracing",
+]
+
+[[package]]
+name = "steleofd-testkit"
+version = "0.1.0"
+dependencies = [
+ "steleofd-crypto",
+ "steleofd-error",
+ "steleofd-package",
+ "steleofd-sign",
 ]
 
 [[package]]
@@ -5025,13 +5034,12 @@ dependencies = [
  "serde",
  "serde-wasm-bindgen",
  "steleofd-core",
- "steleofd-crypto",
  "steleofd-error",
  "steleofd-font",
- "steleofd-package",
  "steleofd-render",
  "steleofd-search",
  "steleofd-sign",
+ "steleofd-testkit",
  "tracing-wasm",
  "wasm-bindgen",
 ]
