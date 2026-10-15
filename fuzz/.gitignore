@@ -1,0 +1,12 @@
+# Build output and generated corpora stay local.
+target
+artifacts
+coverage
+
+# The seed corpus is small and hand-written, so it is committed; the mutations
+# libFuzzer generates next to it are not.
+corpus/*/.state
+
+# The root ignore rule hides `*.ofd` as a build artefact, but a fuzz seed is
+# source, so it is re-included here.
+!corpus/package_open/minimal.ofd

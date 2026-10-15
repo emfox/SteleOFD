@@ -1,0 +1,40 @@
+[package]
+name = "steleofd-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+description = "Fuzz targets for the OFD readers"
+license = "Apache-2.0"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+
+[dependencies.steleofd-package]
+path = "../crates/steleofd-package"
+
+[dependencies.steleofd-xml]
+path = "../crates/steleofd-xml"
+
+# This crate sits outside the workspace because cargo-fuzz requires its own
+# layout, so it declares an empty one to keep its target directory separate.
+[workspace]
+
+[profile.release]
+debug = 1
+
+[[bin]]
+name = "package_open"
+path = "fuzz_targets/package_open.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "xml_cursor"
+path = "fuzz_targets/xml_cursor.rs"
+test = false
+doc = false
+bench = false

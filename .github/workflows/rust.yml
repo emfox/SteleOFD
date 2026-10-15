@@ -81,3 +81,33 @@ jobs:
         run: |
           python3 -m pip install --quiet lxml
           python3 scripts/validate_ofd.py $(find compliance/corpus -name '*.ofd' -o -name '*.xml' | sort)
+
+  fuzz:
+    runs-on: ubuntu-latest
+    # A short, deterministic smoke run: enough to catch a crash on the seeds
+    # and a handful of mutations without spending a runner's afternoon. The
+    # real campaign runs locally with `cargo +nightly fuzz run <target>`.
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install nightly toolchain
+        uses: dtolnay/rust-toolchain@nightly
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            fuzz/target
+          key: ${{ runner.os }}-fuzz-${{ hashFiles('fuzz/Cargo.toml') }}
+          restore-keys: ${{ runner.os }}-fuzz-
+
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz --locked
+
+      - name: Fuzz the ZIP reader
+        run: cargo +nightly fuzz run package_open -- -runs=20000 -max_len=4096
+
+      - name: Fuzz the XML cursor
+        run: cargo +nightly fuzz run xml_cursor -- -runs=20000 -max_len=4096
