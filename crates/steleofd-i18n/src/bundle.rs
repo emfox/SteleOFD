@@ -352,6 +352,8 @@ pub fn all_keys() -> &'static [&'static str] {
         "reader-layout-continuous",
         "reader-blank-page",
         "reader-error-label",
+        "reader-search-title",
+        "reader-search-panel-title",
         "reader-no-match",
         "convert-start",
         "convert-progress",

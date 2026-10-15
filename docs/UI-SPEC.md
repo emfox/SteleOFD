@@ -47,7 +47,10 @@ is the layout.
 ├────────────────────────────────────────────────────────┤
 │ Z4  status bar    fixed      document · page · error   │  Panel::bottom("status")
 └────────────────────────────────────────────────────────┘
+
+                        Z5  search      fixed width      the query, the hits   Panel::left("search")
 ```
+
 
 **Z1 menu bar.** Document-level actions only: open, close, and the layout
 choice. Anything that acts on the current page belongs in Z2. The close button
@@ -83,13 +86,23 @@ zoom slider. On failure the message takes the left half and stays until it is
 dismissed or the next document opens — a message that flickers away is a message
 that will be missed.
 
+**Z5 search panel.** Present only while it is open. A query box, previous and
+next buttons, the result count, and the hits as a list. `reader-no-match` shows
+only when a real search found nothing — an empty query, or a query made with no
+document open, is not a failed search and does not accuse the reader of one.
+Selecting a hit turns to its page, because a hit the reader cannot see is not a
+hit they found. The canvas outlines every hit on the pages it draws, with the
+current one stronger than the rest, so "where am I" and "where are the others"
+are both answerable at once. It is drawn before the canvas, so the canvas
+measures the space that is actually left for pages.
+
 Every zone draws a separator line it does not own. `Panel::show_separator_line`
 does this, and it is why zones are panels rather than stacked `horizontal`
 closures.
 
 ## 3. Frame flow
 
-`eframe::App::ui` runs seven steps, always in this order. The order is the
+`eframe::App::ui` runs eight steps, always in this order. The order is the
 specification; a step may not be moved earlier because each one consumes what
 the previous produced.
 
@@ -99,8 +112,9 @@ the previous produced.
 3  sync window      push the document name into the title bar
 4  draw Z1          menu bar      (reads state, writes intent)
 5  draw Z2          toolbar       (reads state, writes intent)
-6  draw Z3          canvas        (the only zone that rasterizes)
-7  draw Z4          status bar    (reads state, error wins the left half)
+6  draw Z5          search        (only when open; before the canvas)
+7  draw Z3          canvas        (the only zone that rasterizes)
+8  draw Z4          status bar    (reads state, error wins the left half)
 ```
 
 Three consequences worth stating, because each one has been got wrong before:
@@ -119,7 +133,7 @@ raced by a stray drag.
 
 ## 4. Rules
 
-- **No literal user-facing text in `main.rs`.** Every string comes from
+- **No literal user-facing text in the window.** Every string comes from
   `locales/<tag>/reader.ftl` through `MessageId`. Symbols that are not language
   (`◀`, `▶`) may be written inline; they carry no meaning a translator can lose.
 - **Errors are shown, never swallowed.** A failure reaches the status bar as the
@@ -129,10 +143,12 @@ raced by a stray drag.
   with a broken one loses the reader's place for no reason.
 - **Every `id_salt` is a literal.** Widget identity must be stable across
   builds; an interpolated salt silently resets scroll position and focus.
-- **One texture per canvas.** The page is uploaded once per resolution and
-  reused from the cache, so the canvas must not reload it under a new name.
+- **One texture per page and resolution.** The name carries both so the
+  texture and the cache cannot disagree.
 - **Blocking work stays off the draw path.** `rfd` and `std::fs` run in step 1
-  or in the intent handler, never inside Z3.
+  or in the intent handler, never inside Z3, and rasterizing runs on the worker.
+- **Two controls never wear the same word.** A toggle and the panel it opens
+  need different labels, or the reader has to guess which one they are on.
 
 ## 5. Testing
 

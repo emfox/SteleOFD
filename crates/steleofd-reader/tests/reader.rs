@@ -529,3 +529,135 @@ fn changing_layout_keeps_the_page_the_reader_was_on() {
     app.set_layout(Layout::Single);
     assert_eq!(app.current_page(), 3);
 }
+
+#[test]
+fn a_query_finds_the_text_in_the_document() {
+    let mut app = open();
+    app.set_query("SteleOFD");
+    assert!(!app.hits().is_empty(), "the corpus contains its own name");
+    assert_eq!(
+        app.hit_index(),
+        Some(0),
+        "the reader lands on the first hit rather than none"
+    );
+    assert!(!app.no_match());
+}
+
+#[test]
+fn an_empty_query_finds_nothing_rather_than_everything() {
+    let mut app = open();
+    app.set_query("SteleOFD");
+    assert!(!app.hits().is_empty());
+    app.set_query("");
+    assert!(app.hits().is_empty(), "an emptied box means done searching");
+    assert_eq!(app.hit_index(), None);
+    assert!(!app.no_match(), "no query is not the same as no match");
+}
+
+#[test]
+fn a_query_with_no_match_says_so() {
+    let mut app = open();
+    app.set_query("zzzz-not-in-this-document");
+    assert!(app.hits().is_empty());
+    assert!(
+        app.no_match(),
+        "a query that found nothing is the case the notice is for"
+    );
+    assert!(!app.no_match_label().is_empty(), "and it is localized");
+}
+
+#[test]
+fn searching_before_a_document_is_open_is_harmless() {
+    let mut app = App::new();
+    app.set_query("anything");
+    assert!(app.hits().is_empty());
+    assert!(!app.no_match(), "nothing to search is not a failed search");
+}
+
+#[test]
+fn stepping_through_hits_wraps_around() {
+    let mut app = open();
+    app.set_query("SteleOFD");
+    let count = app.hits().len();
+    assert!(count >= 1);
+    app.next_hit();
+    assert_eq!(app.hit_index(), Some(1 % count), "next moves on");
+    app.previous_hit();
+    assert_eq!(app.hit_index(), Some(0), "previous comes back");
+    app.previous_hit();
+    assert_eq!(
+        app.hit_index(),
+        Some(count - 1),
+        "and stepping back from the first wraps to the last"
+    );
+}
+
+#[test]
+fn jumping_to_a_hit_turns_to_its_page() {
+    let mut app = open();
+    app.set_query("SteleOFD");
+    let page = app.hits()[0].page;
+    app.go_to(0);
+    app.show_hit(0);
+    assert_eq!(
+        app.current_page(),
+        page,
+        "a hit the reader cannot see is not a hit they found"
+    );
+    assert_eq!(app.hit_index(), Some(0));
+}
+
+#[test]
+fn the_canvas_gets_rectangles_for_the_hits_on_a_page() {
+    let mut app = open();
+    app.set_query("SteleOFD");
+    let page = app.hits()[0].page;
+    let rects = app.hit_rects_on(page);
+    assert!(!rects.is_empty(), "the page with the hit has rectangles");
+    assert_eq!(
+        rects.iter().filter(|(_, current)| *current).count(),
+        1,
+        "exactly one hit is the current one"
+    );
+    assert!(
+        app.hit_rects_on(page + 999).is_empty(),
+        "a page with no hits has none"
+    );
+}
+
+#[test]
+fn showing_a_hit_that_does_not_exist_changes_nothing() {
+    let mut app = open();
+    app.set_query("SteleOFD");
+    let before = app.current_page();
+    app.show_hit(9999);
+    assert_eq!(app.current_page(), before, "an out-of-range hit is ignored");
+}
+
+#[test]
+fn hiding_the_search_panel_keeps_the_results() {
+    let mut app = open();
+    app.set_query("SteleOFD");
+    let count = app.hits().len();
+    app.set_search_open(true);
+    assert!(app.search_open());
+    app.set_search_open(false);
+    assert!(!app.search_open(), "the panel is hidden");
+    assert_eq!(
+        app.hits().len(),
+        count,
+        "reopening should not make the reader type it again"
+    );
+}
+
+#[test]
+fn a_hit_row_names_its_page_counting_from_one() {
+    let mut app = open();
+    app.set_query("SteleOFD");
+    let row = app.hit_label(0, "SteleOFD");
+    let page = app.hits()[0].page + 1;
+    assert!(
+        row.starts_with(&page.to_string()),
+        "the row says which page it is on, got {row:?}"
+    );
+}

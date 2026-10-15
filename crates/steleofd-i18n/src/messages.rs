@@ -56,6 +56,10 @@ pub enum MessageId {
     ReaderBlankPage,
     /// The canvas says a page failed; the status bar says why
     ReaderErrorLabel,
+    /// Label on the toolbar toggle that opens the search panel
+    ReaderSearchTitle,
+    /// Heading inside the search panel, distinct from the toggle
+    ReaderSearchPanelTitle,
     /// No match found
     ReaderNoMatch,
 
@@ -206,6 +210,8 @@ impl MessageId {
             Self::ReaderLayoutContinuous => "reader-layout-continuous",
             Self::ReaderBlankPage => "reader-blank-page",
             Self::ReaderErrorLabel => "reader-error-label",
+            Self::ReaderSearchTitle => "reader-search-title",
+            Self::ReaderSearchPanelTitle => "reader-search-panel-title",
             Self::ReaderNoMatch => "reader-no-match",
 
             // Conversion
@@ -307,6 +313,8 @@ impl MessageId {
         Self::ReaderLayoutContinuous,
         Self::ReaderBlankPage,
         Self::ReaderErrorLabel,
+        Self::ReaderSearchTitle,
+        Self::ReaderSearchPanelTitle,
         Self::ReaderNoMatch,
         // Conversion
         Self::ConvertStart,

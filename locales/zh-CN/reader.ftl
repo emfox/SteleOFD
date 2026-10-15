@@ -13,4 +13,6 @@ reader-layout-double = 双页
 reader-layout-continuous = 连续滚动
 reader-blank-page = 本页为空白页
 reader-error-label = 本页无法显示
+reader-search-panel-title = 搜索结果
+reader-search-title = 搜索
 reader-no-match = 未找到匹配内容

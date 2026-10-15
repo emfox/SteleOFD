@@ -31,6 +31,7 @@ pub fn draw(ui: &mut Ui, app: &mut App) -> WindowRequests {
     take_drops(ui, app);
     draw_menu(ui, app, &mut requests);
     draw_toolbar(ui, app);
+    draw_search(ui, app);
     draw_canvas(ui, app);
     draw_status(ui, app);
     if app.wants_quit() {
@@ -64,6 +65,18 @@ fn draw_menu(ui: &mut Ui, app: &mut App, requests: &mut WindowRequests) {
                 .clicked()
             {
                 app.close();
+            }
+            ui.separator();
+            let search = app.search_heading();
+            let open = app.search_open();
+            // There is nothing to search with no document open, so the toggle
+            // is disabled rather than hidden: it is a page-level action and the
+            // bar must not reflow as the document comes and goes.
+            if ui
+                .add_enabled(app.is_open(), egui::Button::selectable(open, search))
+                .clicked()
+            {
+                app.set_search_open(!open);
             }
             ui.separator();
             for (key, layout) in [
@@ -124,6 +137,58 @@ fn draw_toolbar(ui: &mut Ui, app: &mut App) {
                 }
             });
         });
+    });
+}
+
+/// Z5: the search panel, on the left because results are a list.
+/// It is drawn before the canvas, so the canvas measures the space left for
+/// pages rather than the whole window.
+fn draw_search(ui: &mut Ui, app: &mut App) {
+    if !app.search_open() || !app.is_open() {
+        return;
+    }
+    egui::Panel::left("search").show(ui, |ui| {
+        ui.heading(app.search_panel_title());
+        let mut query = app.query().to_string();
+        let placeholder = app.search_placeholder();
+        let response = ui.add(
+            egui::TextEdit::singleline(&mut query)
+                .hint_text(placeholder)
+                .desired_width(f32::INFINITY),
+        );
+        if response.changed() {
+            app.set_query(&query);
+        }
+        ui.add_enabled_ui(!app.hits().is_empty(), |ui| {
+            ui.horizontal(|ui| {
+                if ui.button("◀").clicked() {
+                    app.previous_hit();
+                }
+                if ui.button("▶").clicked() {
+                    app.next_hit();
+                }
+                ui.label(app.search_count_label());
+            });
+        });
+        if app.no_match() {
+            let notice = app.no_match_label();
+            ui.label(egui::RichText::new(notice).weak());
+        }
+        ui.separator();
+        // The hit list, so a reader can see where they all are rather than
+        // stepping blind. The selected one is the one the canvas outlines.
+        egui::ScrollArea::vertical()
+            .id_salt("search-hits")
+            .show(ui, |ui| {
+                let selected = app.hit_index();
+                let hits = app.hits().to_vec();
+                for (index, hit) in hits.iter().enumerate() {
+                    let text = app.hit_label(index, &hit.snippet);
+                    if ui.selectable_label(selected == Some(index), text).clicked() {
+                        app.show_hit(index);
+                    }
+                }
+            });
     });
 }
 
@@ -202,7 +267,57 @@ fn draw_one_page(ui: &mut Ui, app: &mut App, page: usize, horizontal: bool) {
     let name = format!("page-{page}");
     let texture = ui.ctx().load_texture(name, image, TextureOptions::LINEAR);
     let source = egui::load::SizedTexture::new(texture.id(), size);
-    ui.image(source);
+    let response = ui.image(source);
+    // Highlights are painted over the page, in the rectangle the page occupies
+    // on screen. They are between the image and the next page, so a spread
+    // draws its highlights on the correct page rather than the last one.
+    draw_highlights(ui, app, page, response.rect, size);
+}
+
+/// Outline every hit on one page, in the space the page was drawn.
+/// The hit rectangles are in page space, so they are scaled by the ratio the
+/// page was drawn at, and the current hit is drawn stronger than the rest.
+fn draw_highlights(ui: &Ui, app: &App, page: usize, area: egui::Rect, drawn: egui::Vec2) {
+    let hits = app.hit_rects_on(page);
+    if hits.is_empty() {
+        return;
+    }
+    let Some(page_box) = app.page_size_mm(page) else {
+        return;
+    };
+    let painter = ui.painter();
+    for (rect, current) in hits {
+        let colour = if current {
+            egui::Color32::from_rgb(255, 150, 0)
+        } else {
+            egui::Color32::from_rgb(255, 220, 120)
+        };
+        let scaled = scale_hit(rect, page_box, area, drawn);
+        painter.rect_filled(scaled, 0.0, colour.gamma_multiply(0.35));
+        painter.rect_stroke(
+            scaled,
+            0.0,
+            egui::Stroke::new(1.0, colour),
+            egui::StrokeKind::Inside,
+        );
+    }
+}
+
+/// Map a hit rectangle from page space onto the space the page was drawn in.
+fn scale_hit(
+    hit: steleofd_common::Rect,
+    page_box: (f32, f32),
+    area: egui::Rect,
+    drawn: egui::Vec2,
+) -> egui::Rect {
+    let sx = drawn.x / page_box.0.max(1.0);
+    let sy = drawn.y / page_box.1.max(1.0);
+    let x = area.min.x + hit.x as f32 * sx;
+    let y = area.min.y + hit.y as f32 * sy;
+    egui::Rect::from_min_size(
+        egui::pos2(x, y),
+        egui::vec2(hit.w as f32 * sx, hit.h as f32 * sy),
+    )
 }
 
 /// Z4: document and page on the left, and a failure when there is one.

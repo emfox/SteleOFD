@@ -5016,10 +5016,12 @@ dependencies = [
  "egui_kittest",
  "image",
  "rfd",
+ "steleofd-common",
  "steleofd-core",
  "steleofd-error",
  "steleofd-i18n",
  "steleofd-render",
+ "steleofd-search",
  "steleofd-testkit",
 ]
 

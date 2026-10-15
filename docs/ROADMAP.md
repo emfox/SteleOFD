@@ -13,8 +13,8 @@ criterion, so it is always obvious whether it is done.
 | Measure | Value |
 | --- | --- |
 | Crates | 26 (L0 foundation through L5 delivery) |
-| Source | 30,043 lines of Rust, measured with `find crates -name '*.rs'` |
-| Tests | 747 passing, plus 13 inline unit-test modules |
+| Source | 30,557 lines of Rust, measured with `find crates -name '*.rs'` |
+| Tests | 761 passing, plus 13 inline unit-test modules |
 | Delivery forms | `cli`, `wasm`, `ffi`, `server`, `reader`, all on the `core` facade |
 | Standard clauses verified | 47 of 47 in GB/T 33190-2016 (46 `verified`, 1 `partial`) |
 | Languages | `en-US` and `zh-CN`, 75 message keys, parity enforced in CI |
@@ -328,9 +328,19 @@ page.
   one is the interesting one: it means "ask once per frame" is only safe if an
   identical ask is recognised as identical, which is what `RenderQueue::request`
   now guarantees.
-- **U2-c** `[ ]` A search panel over the existing `search` capability, listing
-  hits by page, jumping to a hit, and showing `reader-no-match` when there is
-  none.
+- **U2-c** `[x]` The search panel is live as zone Z5, drawn before the canvas so
+  the canvas measures the space actually left for pages. A query runs through
+  the existing `steleofd-search` capability; hits are reduced to what a reader
+  needs — page, snippet, rectangle — rather than carrying the run and op
+  indices that matter to editing. Selecting a hit turns to its page, because a
+  hit the reader cannot see is not a hit they found, and the canvas outlines
+  every hit on the pages it draws with the current one stronger than the rest.
+  `reader-no-match` is deliberately narrow: an empty query, or a query made
+  with no document open, is not a failed search, and saying so would blame the
+  reader for an empty window. The panel reuses the existing `search-placeholder`
+  and `search-result-count` catalogue entries, and gained only two of its own —
+  the toggle and the panel heading, which cannot share a word without making
+  the reader guess which they are looking at.
 
 ### N9. Verification, export and access (U3-a … U3-c)
 

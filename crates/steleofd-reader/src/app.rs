@@ -29,6 +29,14 @@ pub struct App {
     dpi: f32,
     fit: Option<Fit>,
     layout: Layout,
+    /// The text being looked for, empty when nothing is.
+    query: String,
+    /// Every hit for `query`, in page order.
+    hits: Vec<Hit>,
+    /// Which hit the reader is on, if any.
+    hit_index: Option<usize>,
+    /// Whether the search panel is showing.
+    search_open: bool,
     error: Option<AppError>,
     info: Option<String>,
     want_open: bool,
@@ -42,6 +50,19 @@ pub enum Fit {
     Width,
     /// Show the whole page inside the available area.
     Page,
+}
+
+/// One search result, reduced to what the reader needs to show and jump to.
+/// The engine's hit also carries run and op indices and byte offsets, which
+/// matter to whoever edits the text rather than to a highlight.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Hit {
+    /// Page the match is on.
+    pub page: usize,
+    /// The text around the match, for the result list.
+    pub snippet: String,
+    /// Where the match is on the page, in page space.
+    pub rect: steleofd_common::Rect,
 }
 
 impl Default for App {
@@ -64,6 +85,10 @@ impl App {
             dpi: viewer::DEFAULT_DPI,
             fit: None,
             layout: Layout::Single,
+            query: String::new(),
+            hits: Vec::new(),
+            hit_index: None,
+            search_open: false,
             error: None,
             info: None,
             want_open: false,
@@ -180,6 +205,10 @@ impl App {
         self.current = 0;
         self.fit = None;
         self.info = None;
+        self.query.clear();
+        self.hits.clear();
+        self.hit_index = None;
+        self.search_open = false;
     }
 
     /// The one-line description of the open document, for the status bar.
@@ -273,12 +302,7 @@ impl App {
         let Some(fit) = self.fit else {
             return;
         };
-        let size_mm = self
-            .doc
-            .as_ref()
-            .and_then(|doc| doc.page(self.current))
-            .map(|page| (page.page_box.w as f32, page.page_box.h as f32));
-        let Some(size_mm) = size_mm else {
+        let Some(size_mm) = self.page_size_mm(self.current) else {
             return;
         };
         let dpi = viewer::fit_dpi(fit, size_mm, available);
@@ -288,6 +312,15 @@ impl App {
                 queue.rezoom();
             }
         }
+    }
+
+    /// The physical size of one page in millimetres, if it has one. The canvas
+    /// needs it to turn a hit rectangle in page space into one on screen.
+    pub fn page_size_mm(&self, page: usize) -> Option<(f32, f32)> {
+        self.doc
+            .as_ref()
+            .and_then(|doc| doc.page(page))
+            .map(|page| (page.page_box.w as f32, page.page_box.h as f32))
     }
 
     /// Choose how pages are laid out.
@@ -423,6 +456,164 @@ impl App {
     /// The label on the button that closes the document.
     pub fn close_label(&self) -> String {
         self.i18n.text(MessageId::ReaderClose)
+    }
+
+    /// Whether the search panel is showing.
+    pub fn search_open(&self) -> bool {
+        self.search_open
+    }
+
+    /// Show or hide the search panel. Hiding it keeps the query and the hits,
+    /// so reopening the panel does not make the reader type it all again.
+    pub fn set_search_open(&mut self, open: bool) {
+        self.search_open = open;
+    }
+
+    /// The text being looked for.
+    pub fn query(&self) -> &str {
+        &self.query
+    }
+
+    /// Replace the query and search for it. An empty query clears the results
+    /// rather than matching everything: the reader who emptied the box is done
+    /// searching, not asking for the whole document.
+    pub fn set_query(&mut self, query: &str) {
+        if self.query == query {
+            return;
+        }
+        self.query = query.to_string();
+        self.run_search();
+    }
+
+    /// Search for the current query, replacing the hits.
+    pub fn run_search(&mut self) {
+        self.hits.clear();
+        self.hit_index = None;
+        if self.query.is_empty() {
+            return;
+        }
+        let Some(doc) = self.doc.as_ref() else {
+            return;
+        };
+        let options = steleofd_search::SearchOptions::default();
+        self.hits = doc
+            .search(&self.query, options)
+            .into_iter()
+            .map(|hit| Hit {
+                page: hit.page,
+                snippet: hit.snippet,
+                rect: hit.rect,
+            })
+            .collect();
+        if !self.hits.is_empty() {
+            self.hit_index = Some(0);
+        }
+    }
+
+    /// Every hit, in page order.
+    pub fn hits(&self) -> &[Hit] {
+        &self.hits
+    }
+
+    /// Which hit the reader is on, if any.
+    pub fn hit_index(&self) -> Option<usize> {
+        self.hit_index
+    }
+
+    /// The hit the reader is on, if any.
+    pub fn current_hit(&self) -> Option<&Hit> {
+        self.hit_index.and_then(|index| self.hits.get(index))
+    }
+
+    /// Whether a real search ran and found nothing. An empty query is not a
+    /// search, and neither is a query made before a document was open, so
+    /// neither reports "no matches".
+    pub fn no_match(&self) -> bool {
+        !self.query.is_empty() && self.doc.is_some() && self.hits.is_empty()
+    }
+
+    /// Move to the next hit, wrapping to the first.
+    pub fn next_hit(&mut self) {
+        if self.hits.is_empty() {
+            return;
+        }
+        let next = match self.hit_index {
+            Some(index) => (index + 1) % self.hits.len(),
+            None => 0,
+        };
+        self.show_hit(next);
+    }
+
+    /// Move to the previous hit, wrapping to the last.
+    pub fn previous_hit(&mut self) {
+        if self.hits.is_empty() {
+            return;
+        }
+        let previous = match self.hit_index {
+            Some(0) | None => self.hits.len() - 1,
+            Some(index) => index - 1,
+        };
+        self.show_hit(previous);
+    }
+
+    /// Jump to a hit, turning to its page: a hit the reader cannot see is not
+    /// a hit they found, so this moves the document as well as the selection.
+    pub fn show_hit(&mut self, index: usize) {
+        let Some(hit) = self.hits.get(index) else {
+            return;
+        };
+        self.hit_index = Some(index);
+        self.go_to(hit.page);
+    }
+
+    /// The hits on one page, and which of them is the current one. The canvas
+    /// paints rectangles from this, so it is derived state rather than
+    /// something the window works out for itself.
+    pub fn hit_rects_on(&self, page: usize) -> Vec<(steleofd_common::Rect, bool)> {
+        self.hits
+            .iter()
+            .enumerate()
+            .filter(|(_, hit)| hit.page == page)
+            .map(|(index, hit)| (hit.rect, Some(index) == self.hit_index))
+            .collect()
+    }
+
+    /// The label on the toolbar toggle that opens the search panel.
+    pub fn search_heading(&self) -> String {
+        self.i18n.text(MessageId::ReaderSearchTitle)
+    }
+
+    /// The heading inside the search panel. Distinct from the toggle: two
+    /// controls wearing the same word on one screen make the reader guess
+    /// which one they are looking at.
+    pub fn search_panel_title(&self) -> String {
+        self.i18n.text(MessageId::ReaderSearchPanelTitle)
+    }
+
+    /// The placeholder in the search box.
+    pub fn search_placeholder(&self) -> String {
+        self.i18n.text(MessageId::SearchPlaceholder)
+    }
+
+    /// How many results the current query found, in the reader's language.
+    pub fn search_count_label(&self) -> String {
+        self.i18n.text_with(
+            MessageId::SearchResultCount,
+            [("count", self.hits.len().to_string().into())],
+        )
+    }
+
+    /// The notice shown when a query found nothing.
+    pub fn no_match_label(&self) -> String {
+        self.i18n.text(MessageId::ReaderNoMatch)
+    }
+
+    /// One row of the hit list: its page and the text around the match.
+    /// The row says which page it is on because the list spans the document,
+    /// and a row without a page number is a hit the reader must go find.
+    pub fn hit_label(&self, index: usize, snippet: &str) -> String {
+        let page = self.hits.get(index).map_or(0, |hit| hit.page + 1);
+        format!("{page}  {snippet}")
     }
 
     /// Open a file the platform handed over, choosing bytes or path.

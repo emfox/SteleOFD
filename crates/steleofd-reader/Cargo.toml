@@ -16,6 +16,12 @@ path = "src/lib.rs"
 
 [dependencies]
 steleofd-core = { workspace = true, features = ["render", "search"] }
+# Search hits carry a page-space rectangle, and `Rect` is defined here. The
+# reader does not otherwise reach below the core facade.
+steleofd-common.workspace = true
+# The query options are the search crate's own type; the core facade takes them
+# but does not re-export them, as the other adapters found.
+steleofd-search.workspace = true
 steleofd-i18n.workspace = true
 steleofd-error.workspace = true
 steleofd-render.workspace = true

@@ -294,3 +294,69 @@ fn the_continuous_layout_stacks_more_than_one_page() {
         "a continuous view shows its window, got {images}"
     );
 }
+
+#[test]
+fn the_search_panel_is_closed_until_it_is_asked_for() {
+    let mut app = App::new();
+    app.open_path(&corpus()).expect("the corpus opens");
+    let mut harness = harness(app);
+
+    // The toggle exists, because the bar does not reflow; the panel does not,
+    // because it would take space the page needs.
+    let title = label(MessageId::ReaderSearchTitle);
+    harness.get_by_label(&title);
+    assert!(!harness.state().search_open(), "closed on open");
+
+    harness.get_by_label(&title).click();
+    harness.run();
+    assert!(harness.state().search_open(), "the toggle opened it");
+
+    harness.get_by_label(&title).click();
+    harness.run();
+    assert!(!harness.state().search_open(), "and closes it again");
+}
+
+#[test]
+fn typing_a_query_shows_the_hits_and_the_count() {
+    let mut app = App::new();
+    app.open_path(&corpus()).expect("the corpus opens");
+    app.set_search_open(true);
+    let mut harness = harness(app);
+
+    // The count comes from the catalogue with the number substituted, so the
+    // test asserts on the localized sentence rather than on a literal.
+    harness.state_mut().set_query("SteleOFD");
+    harness.run();
+    assert!(
+        !harness.state().hits().is_empty(),
+        "the corpus has the word"
+    );
+
+    let count = harness.state().search_count_label();
+    harness.get_by_label_contains(&count);
+}
+
+#[test]
+fn a_query_with_no_match_offers_the_no_match_notice() {
+    let mut app = App::new();
+    app.open_path(&corpus()).expect("the corpus opens");
+    app.set_search_open(true);
+    app.set_query("zzzz-not-in-this-document");
+    let harness = harness(app);
+
+    let notice = label(MessageId::ReaderNoMatch);
+    harness.get_by_label_contains(&notice);
+}
+
+#[test]
+fn the_search_toggle_is_disabled_until_a_document_is_open() {
+    // There is nothing to search with no document open, so the toggle is
+    // disabled rather than hidden. This mirrors the close button's rule.
+    let harness = harness(App::new());
+    let title = label(MessageId::ReaderSearchTitle);
+    let button = harness.get_by_label(&title);
+    assert!(
+        button.accesskit_node().is_disabled(),
+        "with nothing open the search toggle does nothing"
+    );
+}

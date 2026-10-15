@@ -13,4 +13,6 @@ reader-layout-double = Facing Pages
 reader-layout-continuous = Continuous
 reader-blank-page = This page is blank
 reader-error-label = This page could not be drawn
+reader-search-panel-title = Results
+reader-search-title = Search
 reader-no-match = No matches found
