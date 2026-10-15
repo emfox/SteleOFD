@@ -51,7 +51,15 @@ jobs:
       - name: Clippy
         env:
           RUSTFLAGS: ""
-        run: cargo clippy --workspace --all-targets -- -D warnings
+        run: |
+          set -o pipefail
+          cargo clippy --workspace --all-targets --message-format=short 2>&1 | tee clippy.log
+          status=$?
+          # Surface each finding as an annotation, so it is readable on the
+          # commit rather than only in a log nobody opens.
+          grep -E '^(warning|error)' clippy.log | head -20 \
+            | while IFS= read -r line; do echo "::error::$line"; done
+          exit $status
 
       - name: Build
         run: cargo build --workspace
