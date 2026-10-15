@@ -25,8 +25,4 @@ tracing-wasm = "0.2"
 wasm-opt = ["-Oz", "--enable-mutable-globals"]
 
 [dev-dependencies]
-steleofd-core.workspace = true
-steleofd-crypto.workspace = true
-steleofd-package.workspace = true
-steleofd-search.workspace = true
-steleofd-sign.workspace = true
+steleofd-testkit.workspace = true

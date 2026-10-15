@@ -31,5 +31,4 @@ uuid.workspace = true
 
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }
-steleofd-crypto.workspace = true
-steleofd-package.workspace = true
+steleofd-testkit.workspace = true

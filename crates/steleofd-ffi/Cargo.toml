@@ -22,5 +22,4 @@ steleofd-sign.workspace = true
 cbindgen = "0.29"
 
 [dev-dependencies]
-steleofd-crypto.workspace = true
-steleofd-package.workspace = true
+steleofd-testkit.workspace = true

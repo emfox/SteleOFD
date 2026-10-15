@@ -7,6 +7,10 @@ use steleofd_sign::{
     Reference, Signature, VerifyStatus, read_sign_list, read_signature, signed_digest,
     verify_signature, verify_with_public_key,
 };
+use steleofd_testkit::{
+    DOCUMENT_ENTRY, OFD_XML_SIGNED, SIGN_FILE, SIGNS_ENTRY, SIGNS_XML, descriptor, open_package,
+    open_package_bytes, signed_descriptor_entries, signed_fixture,
+};
 
 const SIG_FILE: &str = "Signs/Sign_0.xml";
 
@@ -14,21 +18,8 @@ fn signs_xml() -> Vec<u8> {
     br#"<Signs><Sign BaseLoc="Signs/Sign_0.xml"/></Signs>"#.to_vec()
 }
 
-fn descriptor(id: &str, refs: &[(&str, &str)]) -> String {
-    let mut xml = format!(r#"<Signature ID="{id}">"#);
-    for (method, file) in refs {
-        xml.push_str(&format!(
-            r#"<SignedInfo><Reference CheckMethod="{method}" FileRef="{file}"/></SignedInfo>"#
-        ));
-    }
-    xml.push_str("</Signature>");
-    xml
-}
-
 fn open(entries: &[(&str, Vec<u8>)]) -> Package {
-    let borrowed: Vec<(&str, &[u8])> = entries.iter().map(|(p, d)| (*p, d.as_slice())).collect();
-    let bytes = steleofd_package::build_archive(&borrowed).expect("archive");
-    Package::from_bytes(&bytes).expect("package")
+    open_package(entries)
 }
 
 fn make_signature(entries: &[(&str, Vec<u8>)], _refs: &[(&str, &str)]) -> (Signature, Sm2KeyPair) {
@@ -248,131 +239,11 @@ fn gb_t_33190_18_2_1_digest_covers_every_reference() {
     );
 }
 
-/// Base64, the encoding CheckValue and Cert use on the wire.
-fn base64_of(bytes: &[u8]) -> String {
-    const TABLE: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let mut out = String::new();
-    for chunk in bytes.chunks(3) {
-        let mut group = [0u8; 3];
-        group[..chunk.len()].copy_from_slice(chunk);
-        let bits = u32::from_be_bytes([group[0], group[1], group[2], 0]);
-        out.push(TABLE[(bits >> 26) as usize & 0x3f] as char);
-        out.push(TABLE[(bits >> 20) as usize & 0x3f] as char);
-        out.push(if chunk.len() > 1 {
-            TABLE[(bits >> 14) as usize & 0x3f] as char
-        } else {
-            '='
-        });
-        out.push(if chunk.len() > 2 {
-            TABLE[(bits >> 8) as usize & 0x3f] as char
-        } else {
-            '='
-        });
-    }
-    out
-}
-
-/// One DER tag-length-value triple.
-fn tlv(tag: u8, content: &[u8]) -> Vec<u8> {
-    let mut out = vec![tag];
-    let len = content.len();
-    if len < 0x80 {
-        out.push(len as u8);
-    } else {
-        let be = len.to_be_bytes();
-        let first = be.iter().position(|b| *b != 0).unwrap_or(be.len() - 1);
-        out.push((be.len() - first) as u8 | 0x80);
-        out.extend_from_slice(&be[first..]);
-    }
-    out.extend_from_slice(content);
-    out
-}
-
-/// A DER object identifier from its arcs.
-fn oid(arcs: &[u64]) -> Vec<u8> {
-    let mut content = vec![(arcs[0] * 40 + arcs[1]) as u8];
-    for &arc in &arcs[2..] {
-        let mut stack = vec![(arc & 0x7f) as u8];
-        let mut rest = arc >> 7;
-        while rest > 0 {
-            stack.push(((rest & 0x7f) as u8) | 0x80);
-            rest >>= 7;
-        }
-        stack.reverse();
-        content.extend(stack);
-    }
-    tlv(0x06, &content)
-}
-
-/// A minimal X.509 certificate carrying one SM2 public key: just enough
-/// structure for a parser to read the SubjectPublicKeyInfo back out.
-fn sm2_cert_der(public_key: &[u8]) -> Vec<u8> {
-    let ec_public_key = oid(&[1, 2, 840, 10045, 2, 1]);
-    let sm2_curve = oid(&[1, 2, 156, 10197, 1, 301]);
-    let algorithm = tlv(0x30, &[ec_public_key, sm2_curve].concat());
-    let empty_name = tlv(0x30, &[]);
-    let validity = tlv(
-        0x30,
-        &[tlv(0x17, b"260101000000Z"), tlv(0x17, b"991231235959Z")].concat(),
-    );
-    let mut bit_string = vec![0x00];
-    bit_string.extend_from_slice(public_key);
-    let spki = tlv(0x30, &[algorithm.clone(), tlv(0x03, &bit_string)].concat());
-
-    let mut tbs = tlv(0xA0, &tlv(0x02, &[0x02]));
-    tbs.extend(tlv(0x02, &[0x01]));
-    tbs.extend(&algorithm);
-    tbs.extend(&empty_name);
-    tbs.extend(&validity);
-    tbs.extend(&empty_name);
-    tbs.extend(&spki);
-
-    let mut cert = tlv(0x30, &tbs);
-    cert.extend(&algorithm);
-    cert.extend(tlv(0x03, &[0x00]));
-    tlv(0x30, &cert)
-}
-
-/// A descriptor carrying its proof, the way a signed document stores it.
-fn descriptor_with_proof(id: &str, refs: &[(&str, &str)], check_value: &str, cert: &str) -> String {
-    let mut xml = format!(r#"<Signature ID="{id}">"#);
-    for (method, file) in refs {
-        xml.push_str(&format!(
-            r#"<SignedInfo><Reference CheckMethod="{method}" FileRef="{file}"/></SignedInfo>"#
-        ));
-    }
-    xml.push_str(&format!("<CheckValue>{check_value}</CheckValue>"));
-    xml.push_str(&format!("<Cert>{cert}</Cert>"));
-    xml.push_str("</Signature>");
-    xml
-}
-
-/// Entries for a document whose single signature carries a certificate.
-fn signed_entries(document: &[u8]) -> Vec<(&'static str, Vec<u8>)> {
-    let mut entries = vec![
-        ("Doc_0/Document.xml", document.to_vec()),
-        (
-            SIG_FILE,
-            descriptor("s", &[("SM3", "Doc_0/Document.xml")]).into_bytes(),
-        ),
-    ];
-    // The digest only covers the referenced file, so it can be computed
-    // against the placeholder and the archive rebuilt with the real proof.
-    let pair = Sm2KeyPair::generate().expect("keygen");
-    let mut package = open(&entries);
-    let sig = read_signature(&mut package, SIG_FILE).expect("descriptor");
-    let digest = signed_digest(&mut package, &sig).expect("digest");
-    let proof = base64_of(&pair.sign(&digest));
-    let cert = base64_of(&sm2_cert_der(&pair.public_bytes()));
-    entries[1].1 =
-        descriptor_with_proof("s", &[("SM3", "Doc_0/Document.xml")], &proof, &cert).into_bytes();
-    entries
-}
-
 #[test]
 fn gb_t_33190_18_2_4_certificate_key_verifies_the_check_value() {
-    let mut package = open(&signed_entries(b"document bytes"));
-    let sig = read_signature(&mut package, SIG_FILE).expect("descriptor");
+    let (bytes, _pair) = signed_fixture();
+    let mut package = open_package_bytes(&bytes);
+    let sig = read_signature(&mut package, SIGN_FILE).expect("descriptor");
     assert_eq!(
         verify_signature(&mut package, &sig).expect("verify"),
         VerifyStatus::Valid
@@ -381,10 +252,18 @@ fn gb_t_33190_18_2_4_certificate_key_verifies_the_check_value() {
 
 #[test]
 fn gb_t_33190_18_2_4_tampered_content_fails_the_check_value() {
-    let mut entries = signed_entries(b"document bytes");
-    entries[0].1 = b"document BYTES".to_vec();
+    let (mut extra, _key) = signed_descriptor_entries(
+        "sig1",
+        DOCUMENT_ENTRY,
+        steleofd_testkit::DOCUMENT_XML.as_bytes(),
+    );
+    let mut entries = steleofd_testkit::base_entries(OFD_XML_SIGNED);
+    entries.push((SIGNS_ENTRY, SIGNS_XML.as_bytes().to_vec()));
+    let doc = entries.iter().position(|(n, _)| *n == DOCUMENT_ENTRY);
+    entries[doc.expect("document entry")].1 = b"tampered".to_vec();
+    entries.append(&mut extra);
     let mut package = open(&entries);
-    let sig = read_signature(&mut package, SIG_FILE).expect("descriptor");
+    let sig = read_signature(&mut package, SIGN_FILE).expect("descriptor");
     assert_eq!(
         verify_signature(&mut package, &sig).expect("verify"),
         VerifyStatus::Tampered
