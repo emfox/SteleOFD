@@ -14,9 +14,9 @@ criterion, so it is always obvious whether it is done.
 | --- | --- |
 | Crates | 26 (L0 foundation through L5 delivery) |
 | Source | 24,904 lines of Rust, measured with `find crates -name '*.rs'` |
-| Tests | 578 passing, plus 13 inline unit-test modules |
+| Tests | 586 passing, plus 13 inline unit-test modules |
 | Delivery forms | `cli`, `wasm`, `ffi`, `server`, `reader`, all on the `core` facade |
-| Standard clauses verified | 20 of 47 in GB/T 33190-2016 |
+| Standard clauses verified | 27 of 47 in GB/T 33190-2016 |
 | Languages | `en-US` and `zh-CN`, 75 message keys, parity enforced in CI |
 | CI | fmt, clippy, build, test, all-features test, i18n, language, conformance, XSD validation |
 
@@ -25,12 +25,13 @@ criterion, so it is always obvious whether it is done.
 These are the things a new contributor would otherwise discover the hard way.
 Each one is a real, verified finding, not a guess.
 
-1. **27 of 47 standard clauses have no test asserting them.** The register in
-   `compliance/gb-t-33190.toml` lists them by name; they are not yet covered.
-   The untested set is not random: it clusters on drawing details (line joins,
-   dash patterns, caps, gradients, clipping), text detail (positioning, glyph
-   transformation, font selection), and the whole feature tail (video,
-   composite objects, actions, annotations, custom tags, extensions).
+1. **20 of 47 standard clauses still have no test asserting them**, down from
+   27 after N2-a closed the structural group. The register in
+   `compliance/gb-t-33190.toml` lists them by name. What remains clusters on
+   drawing details (line joins, dash patterns, caps, gradients, clipping), text
+   detail (positioning, glyph transformation, font selection), and the feature
+   tail (video, composite objects, actions, annotations, custom tags,
+   extensions).
 2. **`proptest` and `criterion` are declared in the workspace but never used.**
    Zero references outside the root `Cargo.toml`. The property and benchmark
    testing that was planned does not exist yet.
@@ -91,9 +92,13 @@ same bytes.
 Twenty-seven clauses, ordered so that each step is independently useful and
 the cheap structural ones land before the expensive rendering ones.
 
-- **N2-a** The structural clauses that need no rendering: `5.4` file
+- **N2-a** `[x]` The structural clauses that need no rendering — `5.4` file
   extension, `6.1` container scheme, `7.1` namespace, `7.2` UTF-8 encoding,
-  `19.1` version entry, `20.1` attachment list, `A.1` the OFD.xsd itself.
+  `19.1` version entry, `20.1` attachment list, `A.1` the OFD.xsd itself. All
+  seven are asserted in `crates/steleofd-core/tests/structure.rs`; the register
+  moved from 20 to 27 covered clauses. The version clause caught the model's
+  silent default: a document with no `Version` attribute reports `1`, not an
+  error.
 - **N2-b** Drawing parameters: `8.2.1` draw parameter structure, `8.2.2` line
   join, `8.2.4` dash pattern, `8.2.5` line cap, `9.2` fill rule.
 - **N2-c** Text and font: `11.1` font, `11.3` text positioning, `11.4` glyph

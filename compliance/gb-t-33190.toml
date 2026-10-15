@@ -15,12 +15,19 @@ title = "Electronic files storage and exchange formats - Fixed layout documents"
 [[item]]
 clause = "5.4"
 title = "File extension"
-status = "untested"
+status = "verified"
+tests = [
+    "gb_t_33190_5_4_the_delivered_file_extension_is_ofd",
+]
 
 [[item]]
 clause = "6.1"
 title = "Container scheme (ZIP)"
-status = "untested"
+status = "verified"
+tests = [
+    "gb_t_33190_6_1_container_is_a_zip_archive",
+    "gb_t_33190_6_1_entry_point_sits_at_the_root",
+]
 
 [[item]]
 clause = "6.2"
@@ -35,12 +42,18 @@ tests = [
 [[item]]
 clause = "7.1"
 title = "Namespace"
-status = "untested"
+status = "verified"
+tests = [
+    "gb_t_33190_7_1_the_document_namespace_is_the_ofd_namespace",
+]
 
 [[item]]
 clause = "7.2"
 title = "Character encoding (UTF-8)"
-status = "untested"
+status = "verified"
+tests = [
+    "gb_t_33190_7_2_xml_is_utf8_with_a_declaration",
+]
 
 [[item]]
 clause = "7.3"
@@ -291,15 +304,23 @@ tests = [
 [[item]]
 clause = "19.1"
 title = "Version entry"
-status = "untested"
+status = "verified"
+tests = [
+    "gb_t_33190_19_1_version_is_declared_and_read_back",
+]
 
 [[item]]
 clause = "20.1"
 title = "Attachment list"
-status = "untested"
+status = "verified"
+tests = [
+    "gb_t_33190_20_1_attachment_list_is_optional",
+]
 
 [[item]]
 clause = "A.1"
 title = "Normative schema OFD.xsd"
-status = "untested"
-note = "Schema text is in the standard; planned as a corpus validation step."
+status = "verified"
+tests = [
+    "gb_t_33190_a_1_the_normative_schemas_are_vendored",
+]
