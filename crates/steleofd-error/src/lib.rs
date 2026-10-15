@@ -50,6 +50,10 @@ pub enum OfdError {
     #[error("edit error: {0}")]
     Edit(#[from] EditError),
 
+    /// Printing failure.
+    #[error("print error: {0}")]
+    Print(#[from] PrintError),
+
     /// Document is encrypted and needs a password.
     #[error("document is encrypted, password required")]
     PasswordRequired,
@@ -352,4 +356,51 @@ pub enum EditError {
     /// Undo stack is empty.
     #[error("nothing to undo")]
     NothingToUndo,
+}
+
+/// Printing errors.
+#[derive(Debug, Error)]
+pub enum PrintError {
+    /// The page selection string could not be understood.
+    #[error("cannot parse page selection: {spec}")]
+    InvalidSelection {
+        /// The offending selection string.
+        spec: String,
+    },
+    /// A page range runs backwards or is empty.
+    #[error("invalid page range {start}-{end}")]
+    InvalidRange {
+        /// First page of the range.
+        start: usize,
+        /// Last page of the range.
+        end: usize,
+    },
+    /// A selected page does not exist in the document.
+    #[error("page {page} is out of range: document has {count} pages")]
+    PageOutOfRange {
+        /// The requested one-based page number.
+        page: usize,
+        /// Pages available in the document.
+        count: usize,
+    },
+    /// Zero copies is not a printable job.
+    #[error("copies must be at least one, got {copies}")]
+    InvalidCopies {
+        /// The requested copy count.
+        copies: usize,
+    },
+    /// A scale factor that cannot produce output.
+    #[error("scale factor must be positive and finite, got {scale}")]
+    InvalidScale {
+        /// The offending scale factor.
+        scale: f64,
+    },
+    /// A paper size with no area.
+    #[error("paper size must be positive, got {w}x{h} mm")]
+    InvalidPaper {
+        /// Paper width in millimetres.
+        w: f64,
+        /// Paper height in millimetres.
+        h: f64,
+    },
 }
