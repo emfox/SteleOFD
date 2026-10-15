@@ -209,8 +209,10 @@ disagree now fails a test.
   fails the build rather than surprising a downstream user. The job compares
   against the latest `v*` tag; with no tag yet it reports that there is no
   published API to protect and skips, so it is honest now and active later.
-- **N5-d** Add a publish workflow for the `cdylib`, `staticlib` and `wasm`
-  artefacts, with the C header and wasm bindings attached.
+- **N5-d** `[x]` A release workflow triggered by a `v*` tag, building the
+  `cdylib`, `staticlib` and wasm artefacts and attaching the generated C header
+  and the wasm bindings to the GitHub release. The header check makes a stale
+  committed header fail the release rather than ship.
 
 ### N6. Corpus and CI (N6-a … N6-b)
 
