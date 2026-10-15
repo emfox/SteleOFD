@@ -1,0 +1,244 @@
+//! N4-f: the render layer driven as a consumer.
+//! A page is rasterized through `render_page` and inspected pixel by pixel, so
+//! the tests assert what reaches the buffer, plus the budget and size guards.
+
+use std::sync::Arc;
+
+use steleofd_common::{Millimeter, Rect};
+use steleofd_display::ops::{Color, Paint, PaintRule, StrokeStyle};
+use steleofd_display::text::GlyphRun;
+use steleofd_display::{DisplayListBuilder, DrawOp, PageDisplay};
+use steleofd_font::{FontId, FontManager};
+use steleofd_geometry::{Affine, Path};
+use steleofd_render::{RenderOptions, render_page};
+
+fn rect(x: f64, y: f64, w: f64, h: f64) -> Path {
+    Path::build(|b| {
+        b.rect(x, y, w, h);
+    })
+}
+
+fn page_with(ops: Vec<DrawOp>) -> PageDisplay {
+    let mut builder = DisplayListBuilder::new(Rect::A4_PORTRAIT);
+    for op in ops {
+        builder.push(op);
+    }
+    builder.finish(0)
+}
+
+fn filled(path: Path, color: Color) -> DrawOp {
+    DrawOp::Path {
+        path,
+        fill: Some(Paint::Solid(color)),
+        stroke: None,
+        stroke_style: StrokeStyle::default(),
+        rule: PaintRule::NonZero,
+    }
+}
+
+/// The RGBA pixel at (x, y) in a rasterization.
+fn pixel(output: &steleofd_render::RasterOutput, x: u32, y: u32) -> [u8; 4] {
+    let bytes = output.rgba_bytes();
+    let base = ((y * output.width + x) * 4) as usize;
+    [
+        bytes[base],
+        bytes[base + 1],
+        bytes[base + 2],
+        bytes[base + 3],
+    ]
+}
+
+/// The fixture face, registered under id 0.
+fn manager_with_fixture() -> (FontManager, FontId) {
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/Orbitron-Bold.ttf");
+    let data = std::fs::read(path).expect("font fixture");
+    let mut manager = FontManager::new();
+    let id = manager.registry_mut().register_embedded(
+        "Res/Orbitron-Bold.ttf",
+        "Orbitron",
+        Arc::new(data),
+    );
+    (manager, id)
+}
+
+#[test]
+fn a_blank_page_rasterizes_to_the_requested_size() {
+    let fonts = FontManager::new();
+    let output =
+        render_page(&page_with(Vec::new()), &fonts, &RenderOptions::default()).expect("render");
+    // A4 at 96 DPI is about 794x1123 pixels.
+    assert!(
+        (output.width as i64 - 794).abs() <= 2,
+        "width {}",
+        output.width
+    );
+    assert!(
+        (output.height as i64 - 1123).abs() <= 2,
+        "height {}",
+        output.height
+    );
+    // The default background is white, so a blank page is uniformly white.
+    assert_eq!(pixel(&output, 10, 10), [255, 255, 255, 255]);
+}
+
+#[test]
+fn the_background_colour_is_applied_before_the_content() {
+    let fonts = FontManager::new();
+    let options = RenderOptions {
+        background: Some(Color::rgba(10, 20, 30, 255)),
+        ..Default::default()
+    };
+    let output = render_page(&page_with(Vec::new()), &fonts, &options).expect("render");
+    assert_eq!(pixel(&output, 5, 5), [10, 20, 30, 255]);
+}
+
+#[test]
+fn a_transparent_background_leaves_the_page_clear() {
+    let fonts = FontManager::new();
+    let options = RenderOptions {
+        background: None,
+        ..Default::default()
+    };
+    let output = render_page(&page_with(Vec::new()), &fonts, &options).expect("render");
+    assert_eq!(pixel(&output, 5, 5), [0, 0, 0, 0], "alpha must be zero");
+}
+
+#[test]
+fn a_filled_rectangle_paints_the_pixels_it_covers() {
+    let fonts = FontManager::new();
+    let page = page_with(vec![filled(
+        rect(10.0, 10.0, 50.0, 50.0),
+        Color::rgba(255, 0, 0, 255),
+    )]);
+    let output = render_page(&page, &fonts, &RenderOptions::default()).expect("render");
+
+    // 10mm at 96 DPI is about 38px, so (100, 100) is well inside the rectangle
+    // and (600, 600) is well outside it.
+    let inside = pixel(&output, 100, 100);
+    assert_eq!(inside[0], 255, "red channel inside: {inside:?}");
+    assert!(
+        inside[1] < 60 && inside[2] < 60,
+        "should be red, got {inside:?}"
+    );
+
+    // A point outside the rectangle stays white.
+    assert_eq!(pixel(&output, 600, 600), [255, 255, 255, 255]);
+}
+
+#[test]
+fn the_pixel_budget_is_enforced_before_the_raster_is_allocated() {
+    let fonts = FontManager::new();
+    let options = RenderOptions {
+        // Far too small for an A4 page at 96 DPI.
+        max_pixels: 1024,
+        ..Default::default()
+    };
+    let err = render_page(&page_with(Vec::new()), &fonts, &options).expect_err("budget");
+    assert!(err.to_string().contains("budget"), "{err}");
+}
+
+#[test]
+fn a_higher_dpi_produces_a_larger_raster() {
+    let fonts = FontManager::new();
+    let page = page_with(Vec::new());
+    let low = render_page(&page, &fonts, &RenderOptions::default()).expect("96");
+    let high = render_page(
+        &page,
+        &fonts,
+        &RenderOptions {
+            dpi: 192.0,
+            ..Default::default()
+        },
+    )
+    .expect("192");
+    assert!(high.width > low.width);
+    assert!(high.height > low.height);
+}
+
+#[test]
+fn an_unbalanced_restore_is_reported_rather_than_panicking() {
+    let fonts = FontManager::new();
+    // A hand-built page can carry a restore with no save; the renderer must
+    // report it instead of indexing into an empty stack.
+    let page = page_with(vec![DrawOp::Restore]);
+    let err = render_page(&page, &fonts, &RenderOptions::default()).expect_err("unbalanced");
+    assert!(err.to_string().contains("restore"), "{err}");
+}
+
+#[test]
+fn a_transform_moves_the_painted_pixels() {
+    let fonts = FontManager::new();
+    // A small square at the origin, translated right by 100mm.
+    let page = page_with(vec![
+        DrawOp::Transform(Affine::translate(100.0, 100.0)),
+        filled(rect(0.0, 0.0, 20.0, 20.0), Color::rgba(0, 0, 255, 255)),
+    ]);
+    let output = render_page(&page, &fonts, &RenderOptions::default()).expect("render");
+    // The translated square covers around (100mm, 100mm), not the origin.
+    let moved = pixel(&output, 400, 400);
+    assert!(
+        moved[2] > 200,
+        "expected blue where the square moved, got {moved:?}"
+    );
+    assert_eq!(
+        pixel(&output, 10, 10),
+        [255, 255, 255, 255],
+        "origin stays clear"
+    );
+}
+
+#[test]
+fn a_clip_confines_the_painted_pixels() {
+    let fonts = FontManager::new();
+    // A large red rectangle clipped to a small square at the origin.
+    let page = page_with(vec![
+        DrawOp::ClipPath {
+            path: rect(0.0, 0.0, 20.0, 20.0),
+            rule: PaintRule::NonZero,
+        },
+        filled(rect(0.0, 0.0, 200.0, 200.0), Color::rgba(255, 0, 0, 255)),
+    ]);
+    let output = render_page(&page, &fonts, &RenderOptions::default()).expect("render");
+    // Inside the clip is painted; well outside it is not, even though the path
+    // covered it.
+    assert_eq!(pixel(&output, 30, 30)[0], 255);
+    assert_eq!(pixel(&output, 300, 300), [255, 255, 255, 255]);
+}
+
+#[test]
+fn a_run_with_no_glyphs_paints_nothing() {
+    let (fonts, id) = manager_with_fixture();
+    // An empty run is a legitimate input — a blank line in a text block — and
+    // must leave the page untouched rather than fail.
+    let run = GlyphRun {
+        font: id,
+        size: Millimeter(20.0),
+        glyphs: Vec::new(),
+        advances: Vec::new(),
+        text: Some(String::new()),
+        cluster_map: None,
+        transform: Affine::IDENTITY,
+        fill: Some(Paint::Solid(Color::BLACK)),
+        stroke: None,
+        letter_spacing: 0.0,
+        word_spacing: 0.0,
+        bbox: Rect::new(0.0, 0.0, 0.0, 0.0),
+    };
+    let page = page_with(vec![DrawOp::Text(run)]);
+    let output = render_page(&page, &fonts, &RenderOptions::default()).expect("render");
+    assert_eq!(pixel(&output, 50, 50), [255, 255, 255, 255]);
+}
+
+#[test]
+fn a_degenerate_page_box_still_yields_one_pixel() {
+    let fonts = FontManager::new();
+    // A zero-size box is degenerate but not fatal: the size helper floors at a
+    // single pixel rather than producing a zero-dimension raster that no
+    // encoder could write.
+    let mut builder = DisplayListBuilder::new(Rect::new(0.0, 0.0, 0.0, 0.0));
+    builder.push(filled(rect(0.0, 0.0, 1.0, 1.0), Color::BLACK));
+    let page = builder.finish(0);
+    let output = render_page(&page, &fonts, &RenderOptions::default()).expect("render");
+    assert_eq!((output.width, output.height), (1, 1));
+    assert_eq!(output.rgba_bytes().len(), 4, "one RGBA pixel");
+}
