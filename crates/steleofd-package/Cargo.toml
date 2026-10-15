@@ -11,3 +11,6 @@ steleofd-io.workspace = true
 steleofd-xml.workspace = true
 zip.workspace = true
 tracing.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true

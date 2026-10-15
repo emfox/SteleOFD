@@ -9,3 +9,6 @@ license.workspace = true
 steleofd-error.workspace = true
 quick-xml.workspace = true
 serde.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true

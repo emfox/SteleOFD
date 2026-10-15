@@ -296,11 +296,20 @@ fn map_zip_error(e: zip::result::ZipError) -> OfdError {
     PackageError::Corrupted { reason }.into()
 }
 
-/// Build a container in memory, used by tests and by the writer path.
-/// Kept here so fixtures share one definition of a well-formed archive instead
-/// of every test re-deriving the ZIP layout.
+/// Build a ZIP container from named entries, for tests and the writer path.
+/// Every name is checked the way the reader checks it, so this never writes an
+/// archive its own `Package::open` would reject.
 pub fn build_archive(entries: &[(&str, &[u8])]) -> Result<Vec<u8>> {
     use std::io::Write;
+
+    for (name, _) in entries {
+        if !is_safe_entry_name(name) {
+            return Err(PackageError::IllegalPath {
+                path: (*name).to_string(),
+            }
+            .into());
+        }
+    }
 
     let mut cursor = std::io::Cursor::new(Vec::new());
     {
@@ -320,6 +329,21 @@ pub fn build_archive(entries: &[(&str, &[u8])]) -> Result<Vec<u8>> {
         })?;
     }
     Ok(cursor.into_inner())
+}
+
+/// Whether a name is a relative path with no traversal and no root, which is
+/// exactly what the reader requires of an entry before it will accept it.
+fn is_safe_entry_name(name: &str) -> bool {
+    if name.is_empty() || name.starts_with('/') || name.starts_with('\\') {
+        return false;
+    }
+    // A Windows drive prefix is not a container path either.
+    let bytes = name.as_bytes();
+    if bytes.len() >= 2 && bytes[1] == b':' {
+        return false;
+    }
+    name.split(['/', '\\'])
+        .all(|part| part != ".." && part != ".")
 }
 
 /// Whether a path is under the `Doc_*` prefix.
@@ -601,6 +625,29 @@ mod tests {
             OfdError::Package(PackageError::Corrupted { .. })
         ));
         assert!(err.is_corruption());
+    }
+
+    #[test]
+    fn the_writer_refuses_a_name_the_reader_would_reject() {
+        // Found by the round-trip property test: the writer used to build an
+        // archive with a leading slash that its own reader then refused, so a
+        // document could be "written" and never read back.
+        for bad in [
+            "/a.xml",
+            "\\a.xml",
+            "a/../../b.xml",
+            "C:/a.xml",
+            "a/./b.xml",
+        ] {
+            let err = build_archive(&[(bad, b"x".as_slice())])
+                .expect_err("a path the reader rejects must not be written");
+            assert!(
+                matches!(err, OfdError::Package(PackageError::IllegalPath { .. })),
+                "{bad:?} gave {err:?}"
+            );
+        }
+        // A normal nested name is still accepted.
+        assert!(build_archive(&[("Doc_0/Document.xml", b"<Document/>".as_slice())]).is_ok());
     }
 
     #[test]
