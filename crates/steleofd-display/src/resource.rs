@@ -84,6 +84,29 @@ pub enum ImageCodec {
     Raw,
 }
 
+impl ImageCodec {
+    /// Guess the encoding from a file name, the way the package does when it
+    /// classifies an entry. Unknown names read as `Raw`, which no decoder
+    /// claims, so a wrong guess fails loudly instead of painting noise.
+    pub fn from_file_name(name: &str) -> Self {
+        let lower = name.to_ascii_lowercase();
+        let ext = lower.rsplit('.').next().unwrap_or_default();
+        match ext {
+            "jpg" | "jpeg" => Self::Jpeg,
+            "png" => Self::Png,
+            "tif" | "tiff" => Self::Tiff,
+            "bmp" => Self::Bmp,
+            "jbig2" | "jb2" => Self::Jbig2,
+            _ => Self::Raw,
+        }
+    }
+
+    /// Whether a decoder exists for this encoding.
+    pub fn is_decodable(self) -> bool {
+        !matches!(self, Self::Raw)
+    }
+}
+
 /// Everything one page needs, already resolved.
 #[derive(Debug, Default)]
 pub struct ResolvedResources {

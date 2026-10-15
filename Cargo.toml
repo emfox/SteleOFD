@@ -51,7 +51,7 @@ default-members = ["crates/steleofd-core", "crates/steleofd-cli"]
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.92"
 license = "Apache-2.0"
 repository = "https://example.com/ofd/steleofd-rs"
 authors = ["OFD Team"]
@@ -106,6 +106,10 @@ rustybuzz  = "0.20"
 ttf-parser = "0.25"
 fontdue    = "0.9"
 image      = { version = "0.25", default-features = false, features = ["png", "jpeg", "tiff", "bmp"] }
+
+# JBIG2 for scanned pages. The `simd` feature is off on purpose: it pulls in
+# fearless_simd, and every backend here is `#![forbid(unsafe_code)]`.
+hayro-jbig2 = { version = "0.3", default-features = false }
 
 # PDF interop
 pdf        = { version = "0.10", default-features = false }
