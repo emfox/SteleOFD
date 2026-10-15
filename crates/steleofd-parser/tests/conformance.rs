@@ -522,3 +522,229 @@ fn gb_t_33190_7_8_text_may_be_stroked_as_an_outline() {
         "Fill=false leaves the interiors out"
     );
 }
+
+/// Flatten a page whose single layer holds `object`, splicing `params` into
+/// the `DrawParams` block of the common data.
+fn page_ops(object: &str, params: &str) -> Vec<DrawOp> {
+    let body = document_xml(&format!(
+        r#"<Page ID="1"><Content><Layer>{object}</Layer></Content></Page>"#
+    ));
+    let doc_xml = if params.is_empty() {
+        body
+    } else {
+        body.replace(
+            "</CommonData>",
+            &format!(r#"<DrawParams>{params}</DrawParams></CommonData>"#),
+        )
+    };
+    let entries = [
+        ("OFD.xml", OFD_XML.to_string()),
+        ("Doc_0/Document.xml", doc_xml),
+    ];
+    let mut parser = open(&entries);
+    let doc = parser.open_document().expect("open document");
+    parser.page_display(&doc, 0).expect("flatten page").ops
+}
+
+#[test]
+fn gb_t_33190_8_3_4_axial_shading_becomes_a_linear_gradient() {
+    // An AxialShd fill is written as a child of FillColor rather than as a
+    // Value attribute, and the gradient it describes is drawn as its own
+    // graphic unit ahead of the shape that carries the marker.
+    let ops = page_ops(
+        r##"<PathObject ID="10" Boundary="0 0 10 10">
+  <AbbreviatedData>M 0 0 L 10 0 L 10 10 Z</AbbreviatedData>
+  <FillColor><AxialShd StartPoint="0 0" EndPoint="10 0">
+    <Segment Position="0"><Color Value="#FF0000"/></Segment>
+    <Segment Position="1"><Color Value="#0000FF"/></Segment>
+  </AxialShd></FillColor>
+</PathObject>"##,
+        "",
+    );
+    let DrawOp::LinearGradient {
+        start,
+        end,
+        stops,
+        path,
+    } = &ops[0]
+    else {
+        panic!("expected a linear gradient first, got {ops:?}");
+    };
+    assert_eq!((start.x, start.y), (0.0, 0.0));
+    assert_eq!((end.x, end.y), (10.0, 0.0));
+    assert_eq!(stops.len(), 2);
+    assert_eq!(path.bounding_box(), Rect::new(0.0, 0.0, 10.0, 10.0));
+
+    // The shape below it refers back by index rather than repeating the stops.
+    let marked = ops.iter().any(|op| {
+        matches!(
+            op,
+            DrawOp::Path {
+                fill: Some(Paint::LinearGradientRef(_)),
+                ..
+            }
+        )
+    });
+    assert!(marked, "the path points at the gradient it was given");
+}
+
+#[test]
+fn gb_t_33190_8_3_4_radial_shading_carries_both_radii() {
+    // A RadialShd names two circles, and this parser keeps the start circle as
+    // the one that is painted. The clause also allows the shading to be
+    // stroked rather than filled, so the marker has to work for both paints.
+    let ops = page_ops(
+        r##"<PathObject ID="10" Boundary="0 0 20 20" Stroke="true">
+  <AbbreviatedData>M 0 0 L 20 0 L 20 20 Z</AbbreviatedData>
+  <StrokeColor><RadialShd StartPoint="10 10" StartRadius="0" EndPoint="10 10" EndRadius="5">
+    <Segment Position="0"><Color Value="#FFFFFF"/></Segment>
+    <Segment Position="1"><Color Value="#000000"/></Segment>
+  </RadialShd></StrokeColor>
+</PathObject>"##,
+        "",
+    );
+    let DrawOp::RadialGradient {
+        center,
+        radius,
+        stops,
+        ..
+    } = &ops[0]
+    else {
+        panic!("expected a radial gradient first, got {ops:?}");
+    };
+    assert_eq!((center.x, center.y), (10.0, 10.0));
+    assert_eq!(*radius, 0.0);
+    assert_eq!(stops.len(), 2);
+    assert!(ops.iter().any(|op| matches!(
+        op,
+        DrawOp::Path {
+            stroke: Some(Paint::RadialGradientRef(_)),
+            ..
+        }
+    )));
+}
+
+#[test]
+fn gb_t_33190_8_3_4_segments_keep_their_positions_and_colours() {
+    // A Segment's Position is a fraction along the axis and its Color child
+    // gives the value there; both have to reach the stop list intact.
+    let ops = page_ops(
+        r##"<PathObject ID="10" Boundary="0 0 10 10">
+  <AbbreviatedData>M 0 0 L 10 0 L 10 10 Z</AbbreviatedData>
+  <FillColor><AxialShd StartPoint="0 0" EndPoint="0 10">
+    <Segment Position="0"><Color Value="#FF0000"/></Segment>
+    <Segment Position="0.25"><Color Value="#00FF00"/></Segment>
+    <Segment Position="1"><Color Value="#0000FF" Alpha="128"/></Segment>
+  </AxialShd></FillColor>
+</PathObject>"##,
+        "",
+    );
+    let DrawOp::LinearGradient { stops, .. } = &ops[0] else {
+        panic!("expected a linear gradient, got {ops:?}");
+    };
+    assert_eq!(stops[0].offset, 0.0);
+    assert_eq!(stops[1].offset, 0.25);
+    assert_eq!(stops[2].offset, 1.0);
+    assert_eq!(
+        stops[0].color,
+        steleofd_display::ops::Color::rgba(255, 0, 0, 255)
+    );
+    assert_eq!(
+        stops[2].color,
+        steleofd_display::ops::Color::rgba(0, 0, 255, 128)
+    );
+}
+
+#[test]
+fn gb_t_33190_8_4_clip_area_narrows_the_drawing_to_a_path() {
+    // The clip is state, so the object is bracketed by a save and a restore
+    // around the ClipPath command; drawing after the restore is unaffected.
+    let ops = page_ops(
+        r##"<PathObject ID="10" Boundary="0 0 10 10">
+  <AbbreviatedData>M 0 0 L 10 0 L 10 10 Z</AbbreviatedData>
+  <Clips><Clip><Area>
+    <Path><AbbreviatedData>M 0 0 L 5 0 L 5 5 L 0 5 Z</AbbreviatedData></Path>
+  </Area></Clip></Clips>
+</PathObject>"##,
+        "",
+    );
+    assert!(matches!(ops[0], DrawOp::Save), "clip opens a scope");
+    let DrawOp::ClipPath { path, rule } = &ops[1] else {
+        panic!("expected a clip command, got {ops:?}");
+    };
+    assert_eq!(path.bounding_box(), Rect::new(0.0, 0.0, 5.0, 5.0));
+    assert_eq!(*rule, steleofd_display::ops::PaintRule::NonZero);
+    assert!(matches!(ops[2], DrawOp::Path { .. }));
+    assert!(matches!(ops[3], DrawOp::Restore), "and closes it again");
+    assert_eq!(ops.len(), 4, "nothing else was emitted");
+}
+
+#[test]
+fn gb_t_33190_8_4_a_clipped_object_does_not_clip_its_neighbour() {
+    // A second object drawn after a clipped one starts from the clean state,
+    // because the restore popped the mask back off.
+    let ops = page_ops(
+        r##"<PathObject ID="10" Boundary="0 0 10 10">
+  <AbbreviatedData>M 0 0 L 10 0 L 10 10 Z</AbbreviatedData>
+  <Clips><Clip><Area>
+    <Path><AbbreviatedData>M 0 0 L 5 0 L 5 5 L 0 5 Z</AbbreviatedData></Path>
+  </Area></Clip></Clips>
+</PathObject>
+<PathObject ID="11" Boundary="20 20 10 10">
+  <AbbreviatedData>M 20 20 L 30 20 L 30 30 Z</AbbreviatedData>
+</PathObject>"##,
+        "",
+    );
+    let clips = ops
+        .iter()
+        .filter(|op| matches!(op, DrawOp::ClipPath { .. }))
+        .count();
+    assert_eq!(clips, 1, "only the first object is clipped");
+    let DrawOp::Path { path, .. } = ops.last().expect("second path") else {
+        panic!("expected the unclipped path last, got {ops:?}");
+    };
+    assert_eq!(path.bounding_box(), Rect::new(20.0, 20.0, 10.0, 10.0));
+}
+
+#[test]
+fn gb_t_33190_9_1_path_defaults_are_stroke_on_and_fill_off() {
+    // Clause 9.1: a path object with no Stroke or Fill attribute of its own
+    // takes those from its draw parameter, and the draw parameter's defaults
+    // leave the path filled only.
+    let ops = page_ops(
+        r##"<PathObject ID="10" Boundary="0 0 10 10" DrawParam="d1">
+  <AbbreviatedData>M 0 0 L 10 0 L 10 10 Z</AbbreviatedData>
+</PathObject>"##,
+        r#"<DrawParam ID="d1" Stroke="true" Fill="false" LineWidth="1.5"/>"#,
+    );
+    let DrawOp::Path {
+        fill,
+        stroke,
+        stroke_style,
+        ..
+    } = &ops[0]
+    else {
+        panic!("expected a path op, got {ops:?}");
+    };
+    assert!(fill.is_none(), "the draw parameter turned filling off");
+    assert!(stroke.is_some(), "and stroking on");
+    assert_eq!(stroke_style.width, 1.5);
+}
+
+#[test]
+fn gb_t_33190_9_1_graphic_unit_line_width_overrides_the_draw_param() {
+    // The same clause lets the graphic unit state the stroke parameters
+    // itself, and then those win over whatever the draw parameter said.
+    let ops = page_ops(
+        r##"<PathObject ID="10" Boundary="0 0 10 10" DrawParam="d1" LineWidth="0.1" Cap="Round" Join="Bevel">
+  <AbbreviatedData>M 0 0 L 10 0 L 10 10 Z</AbbreviatedData>
+</PathObject>"##,
+        r#"<DrawParam ID="d1" Stroke="true" LineWidth="9" Cap="Butt" Join="Miter"/>"#,
+    );
+    let DrawOp::Path { stroke_style, .. } = &ops[0] else {
+        panic!("expected a path op, got {ops:?}");
+    };
+    assert_eq!(stroke_style.width, 0.1, "the unit's own width wins");
+    assert_eq!(stroke_style.cap, steleofd_display::ops::LineCap::Round);
+    assert_eq!(stroke_style.join, steleofd_display::ops::LineJoin::Bevel);
+}

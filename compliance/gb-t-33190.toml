@@ -177,12 +177,22 @@ tests = [
 [[item]]
 clause = "8.3.4"
 title = "Gradient"
-status = "untested"
+status = "verified"
+tests = [
+  "gb_t_33190_8_3_4_axial_shading_becomes_a_linear_gradient",
+  "gb_t_33190_8_3_4_radial_shading_carries_both_radii",
+  "gb_t_33190_8_3_4_segments_keep_their_positions_and_colours",
+]
 
 [[item]]
 clause = "8.4"
 title = "Clip area"
-status = "untested"
+status = "partial"
+tests = [
+  "gb_t_33190_8_4_clip_area_narrows_the_drawing_to_a_path",
+  "gb_t_33190_8_4_a_clipped_object_does_not_clip_its_neighbour",
+]
+note = "Only a Path area is read; a Text area is rejected."
 
 [[item]]
 clause = "8.5"
@@ -193,7 +203,11 @@ tests = ["gb_t_33190_8_5_object_carries_boundary_and_visibility"]
 [[item]]
 clause = "9.1"
 title = "Path object"
-status = "untested"
+status = "verified"
+tests = [
+  "gb_t_33190_9_1_path_defaults_are_stroke_on_and_fill_off",
+  "gb_t_33190_9_1_graphic_unit_line_width_overrides_the_draw_param",
+]
 
 [[item]]
 clause = "9.2"
