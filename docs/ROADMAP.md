@@ -14,9 +14,9 @@ criterion, so it is always obvious whether it is done.
 | --- | --- |
 | Crates | 26 (L0 foundation through L5 delivery) |
 | Source | 24,904 lines of Rust, measured with `find crates -name '*.rs'` |
-| Tests | 586 passing, plus 13 inline unit-test modules |
+| Tests | 591 passing, plus 13 inline unit-test modules |
 | Delivery forms | `cli`, `wasm`, `ffi`, `server`, `reader`, all on the `core` facade |
-| Standard clauses verified | 27 of 47 in GB/T 33190-2016 |
+| Standard clauses verified | 32 of 47 in GB/T 33190-2016 |
 | Languages | `en-US` and `zh-CN`, 75 message keys, parity enforced in CI |
 | CI | fmt, clippy, build, test, all-features test, i18n, language, conformance, XSD validation |
 
@@ -25,13 +25,12 @@ criterion, so it is always obvious whether it is done.
 These are the things a new contributor would otherwise discover the hard way.
 Each one is a real, verified finding, not a guess.
 
-1. **20 of 47 standard clauses still have no test asserting them**, down from
-   27 after N2-a closed the structural group. The register in
-   `compliance/gb-t-33190.toml` lists them by name. What remains clusters on
-   drawing details (line joins, dash patterns, caps, gradients, clipping), text
-   detail (positioning, glyph transformation, font selection), and the feature
-   tail (video, composite objects, actions, annotations, custom tags,
-   extensions).
+1. **15 of 47 standard clauses still have no test asserting them**, down from
+   27 before N2. The register in `compliance/gb-t-33190.toml` lists them by
+   name. What remains clusters on gradient and clip geometry (`8.3.4`, `8.4`),
+   text detail (`11.1`, `11.3`, `11.4`, `7.8`) and the feature tail (video,
+   composite objects, actions, annotations, custom tags, extensions,
+   signature scope and appearance).
 2. **`proptest` and `criterion` are declared in the workspace but never used.**
    Zero references outside the root `Cargo.toml`. The property and benchmark
    testing that was planned does not exist yet.
@@ -99,8 +98,13 @@ the cheap structural ones land before the expensive rendering ones.
   moved from 20 to 27 covered clauses. The version clause caught the model's
   silent default: a document with no `Version` attribute reports `1`, not an
   error.
-- **N2-b** Drawing parameters: `8.2.1` draw parameter structure, `8.2.2` line
-  join, `8.2.4` dash pattern, `8.2.5` line cap, `9.2` fill rule.
+- **N2-b** `[x]` Drawing parameters: `8.2.1` draw parameter structure, `8.2.2`
+  line join, `8.2.4` dash pattern, `8.2.5` line cap, `9.2` fill rule. Writing
+  these against the annex A schemas turned up three real parser bugs, all now
+  fixed: the cap and join attributes are named `Cap` and `Join`, not
+  `LineCap`/`LineJoin`; `DashPattern` is an `ST_Array` attribute with a
+  `DashOffset` sibling, not a child element; and the `Rule` attribute on
+  `PathObject` was never read, so every path was filled non-zero.
 - **N2-c** Text and font: `11.1` font, `11.3` text positioning, `11.4` glyph
   transformation, `7.8` outlines.
 - **N2-d** Graphics features: `8.3.4` gradient, `8.4` clip area, `9.1` path

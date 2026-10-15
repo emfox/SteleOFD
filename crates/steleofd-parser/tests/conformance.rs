@@ -312,3 +312,114 @@ fn gb_t_33190_11_2_text_object_keeps_font_size_and_codes() {
     assert_eq!(run.size.0, 4.0);
     assert_eq!(run.glyphs.len(), 2);
 }
+
+/// The stroke style of the first `Path` op the page produces, with the given
+/// draw parameter declared in `CommonData`.
+fn stroke_style(content: &str, param: &str) -> steleofd_display::ops::StrokeStyle {
+    let body = document_xml(&format!(
+        r#"<Page ID="1"><Content><Layer>
+  <PathObject ID="10" Boundary="0 0 10 10" Stroke="true" DrawParam="d1">
+    <AbbreviatedData>M 0 0 L 10 0 L 10 10 Z</AbbreviatedData>
+    {content}
+  </PathObject>
+</Layer></Content></Page>"#
+    ));
+    // Splice the DrawParams block into the CommonData element document_xml
+    // already wrote, since a DrawParam is only reachable from there.
+    let params = format!(r#"<DrawParams><DrawParam ID="d1" {param}/></DrawParams>"#);
+    let doc_xml = body.replace("</CommonData>", &format!("{params}</CommonData>"));
+    let entries = [
+        ("OFD.xml", OFD_XML.to_string()),
+        ("Doc_0/Document.xml", doc_xml),
+    ];
+    let mut parser = open(&entries);
+    let doc = parser.open_document().expect("open document");
+    let page = parser.page_display(&doc, 0).expect("flatten page");
+    page.ops
+        .iter()
+        .find_map(|op| match op {
+            DrawOp::Path { stroke_style, .. } => Some(stroke_style.clone()),
+            _ => None,
+        })
+        .expect("stroke path")
+}
+
+#[test]
+fn gb_t_33190_8_2_1_draw_param_resolves_from_its_id() {
+    // A DrawParam is named by ID and reached through the object's DrawParam
+    // attribute; LineWidth travels with it.
+    let style = stroke_style("", r#"LineWidth="0.5" Cap="Round""#);
+    assert_eq!(style.width, 0.5);
+    assert_eq!(style.cap, steleofd_display::ops::LineCap::Round);
+}
+
+#[test]
+fn gb_t_33190_8_2_2_line_join_maps_to_the_named_style() {
+    use steleofd_display::ops::LineJoin;
+    assert_eq!(stroke_style("", r#"Join="Round""#).join, LineJoin::Round);
+    assert_eq!(stroke_style("", r#"Join="Bevel""#).join, LineJoin::Bevel);
+    assert_eq!(stroke_style("", r#"Join="Miter""#).join, LineJoin::Miter);
+    // An unknown keyword falls back to the default rather than failing the
+    // document, matching how the standard treats absent values.
+    assert_eq!(stroke_style("", r#"Join="Wedge""#).join, LineJoin::Miter);
+}
+
+#[test]
+fn gb_t_33190_8_2_4_dash_pattern_carries_its_values_and_offset() {
+    // DashPattern is an ST_Array attribute, and DashOffset shifts the phase
+    // into it; neither is a child element.
+    let with_dash = stroke_style("", r#"LineWidth="1" DashPattern="3 1 2" DashOffset="1.5""#);
+    assert_eq!(with_dash.dash, vec![3.0, 1.0, 2.0]);
+    assert_eq!(with_dash.dash_offset, 1.5);
+
+    // No DashPattern at all is a solid line, not a missing value.
+    let solid = stroke_style("", r#"LineWidth="1""#);
+    assert!(solid.dash.is_empty());
+    assert_eq!(solid.dash_offset, 0.0);
+}
+
+#[test]
+fn gb_t_33190_8_2_5_line_cap_maps_to_the_named_style() {
+    use steleofd_display::ops::LineCap;
+    assert_eq!(stroke_style("", r#"Cap="Butt""#).cap, LineCap::Butt);
+    assert_eq!(stroke_style("", r#"Cap="Round""#).cap, LineCap::Round);
+    assert_eq!(stroke_style("", r#"Cap="Square""#).cap, LineCap::Square);
+    assert_eq!(
+        stroke_style("", r#"LineWidth="2""#).cap,
+        LineCap::Butt,
+        "an absent cap is Butt, which is what the standard defaults to"
+    );
+}
+
+#[test]
+fn gb_t_33190_9_2_rule_selects_the_fill_rule() {
+    use steleofd_display::ops::PaintRule;
+    let rule_of = |attr: &str| -> PaintRule {
+        let page_xml = document_xml(&format!(
+            r#"<Page ID="1"><Content><Layer>
+  <PathObject ID="10" Boundary="0 0 10 10" Fill="true" {attr}>
+    <AbbreviatedData>M 0 0 L 10 0 L 10 10 Z</AbbreviatedData>
+  </PathObject>
+</Layer></Content></Page>"#
+        ));
+        let entries = [
+            ("OFD.xml", OFD_XML.to_string()),
+            ("Doc_0/Document.xml", page_xml),
+        ];
+        let mut parser = open(&entries);
+        let doc = parser.open_document().expect("open document");
+        let page = parser.page_display(&doc, 0).expect("flatten page");
+        page.ops
+            .iter()
+            .find_map(|op| match op {
+                DrawOp::Path { rule, .. } => Some(*rule),
+                _ => None,
+            })
+            .expect("path op")
+    };
+    // The standard spells the two values `NonZero` and `Even-Odd`, and defaults
+    // to `NonZero` when the attribute is absent.
+    assert_eq!(rule_of(r#"Rule="Even-Odd""#), PaintRule::EvenOdd);
+    assert_eq!(rule_of(r#"Rule="NonZero""#), PaintRule::NonZero);
+    assert_eq!(rule_of(""), PaintRule::NonZero);
+}

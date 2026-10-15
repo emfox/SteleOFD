@@ -130,22 +130,34 @@ tests = ["gb_t_33190_8_1_5_ctm_orders_rows_as_a_b_c_d_e_f"]
 [[item]]
 clause = "8.2.1"
 title = "Draw parameter structure"
-status = "untested"
+status = "verified"
+tests = [
+    "gb_t_33190_8_2_1_draw_param_resolves_from_its_id",
+]
 
 [[item]]
 clause = "8.2.2"
 title = "Line join style"
-status = "untested"
+status = "verified"
+tests = [
+    "gb_t_33190_8_2_2_line_join_maps_to_the_named_style",
+]
 
 [[item]]
 clause = "8.2.4"
 title = "Dash pattern"
-status = "untested"
+status = "verified"
+tests = [
+    "gb_t_33190_8_2_4_dash_pattern_carries_its_values_and_offset",
+]
 
 [[item]]
 clause = "8.2.5"
 title = "Line cap style"
-status = "untested"
+status = "verified"
+tests = [
+    "gb_t_33190_8_2_5_line_cap_maps_to_the_named_style",
+]
 
 [[item]]
 clause = "8.3.2"
@@ -183,7 +195,10 @@ status = "untested"
 [[item]]
 clause = "9.2"
 title = "Fill rule"
-status = "untested"
+status = "verified"
+tests = [
+    "gb_t_33190_9_2_rule_selects_the_fill_rule",
+]
 
 [[item]]
 clause = "9.3.2"
