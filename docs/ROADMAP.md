@@ -48,10 +48,10 @@ Each one is a real, verified finding, not a guess.
 7. **No release automation.** No `CHANGELOG`, no version-bump or publish
    workflow, no `cargo-semver-checks` gate. `Cargo.toml` declares `0.1.0`
    everywhere and nothing tracks whether a change breaks a public API.
-8. **There is no reader UI.** The engine can open, render, search, verify and
-   annotate, and the `wasm` bindings expose all of it, but nothing assembles
-   those calls into an interface a person can read a document with.
-   `locales/*/reader.ftl` already holds ten interface strings — page counter,
+8. **There is no reader.** The engine can open, render, search, verify and
+   annotate, but nothing assembles those calls into a native window a person
+   can read a document with. `locales/*/reader.ftl` already holds ten
+   interface strings — page counter,
    zoom, fit width, fit page, single page, facing pages, continuous, blank
    page, no matches — and **no code references them**. The strings were
    designed; the surface they were designed for was never built. This is the
@@ -144,30 +144,42 @@ reaching into internals.
 - **N6-b** Add a coverage report (`cargo-llvm-cov`) to CI as a non-blocking
   signal, then make it blocking once the number is good enough to defend.
 
-### N7. The reader UI, first surface (U1-a … U1-c)
+### N7. The desktop reader, first surface (U1-a … U1-c)
 
 The reader is the one thing this project is obviously for, and it does not
-exist. Everything below the interface is finished: `wasm` can open a document,
-report its facts, rasterize any page to PNG or SVG, search it and verify its
-signatures. What is missing is the layer that calls those in the right order
-and puts a person in front of the result.
+exist. Everything below the interface is finished: the engine opens a
+document, reports its facts, rasterizes any page to PNG or SVG, searches it
+and verifies its signatures. What is missing is the layer that calls those in
+the right order and puts a person in front of the result.
+
+It is a **native desktop application**, not a web page. It links the engine
+directly, so opening a document involves no upload, no server and no copy of
+the document leaving the machine — which is the point, for the government and
+finance offices this format is used in.
 
 The interface strings already exist. `locales/*/reader.ftl` carries ten of
 them in both languages, from the page counter to facing-pages mode, and no
 code reads them yet. The work is to build the surface they were written for,
 not to invent a new one.
 
-- **U1-a** Stand up `web/`: a `wasm-pack` build of the existing `wasm` crate
-  plus static assets served by anything trivial. No framework decision yet;
-  pick the smallest thing that survives U1-c.
-- **U1-b** Open a file by picker and by drag-and-drop, show the document
-  facts, and make the page counter and navigation work off
-  `reader-page-of`, `reader-blank-page` and `reader-open`.
-- **U1-c** Prove the whole path in CI: build the wasm package headlessly and
-  drive one open-and-navigate flow, so the reader cannot silently rot while
-  the engine keeps moving.
+**The framework is `egui`/`eframe`, and the reason is the build.** It is
+pure Rust, so the reader is one more workspace member rather than a second
+toolchain, and `cargo build --workspace` keeps working unchanged. Its cost is
+that accessibility has to be wired up by hand in U3-c.
 
-Exit criterion: a person can open an `.ofd` in a browser and read every page.
+- **U1-a** Stand up `crates/steleofd-reader`: an `eframe` application that
+  depends on `core` directly, with a window, a menu bar and an empty
+  document area. It must build on a headless runner with no system packages
+  beyond what the workspace already needs.
+- **U1-b** Open a file through a native file dialog and through drag and drop
+  onto the window, show the document facts, and wire the page counter and
+  navigation to `reader-page-of`, `reader-blank-page` and `reader-open`.
+- **U1-c** Prove the path in CI: build the reader headlessly and drive one
+  open-and-navigate flow, so the interface cannot silently rot while the
+  engine keeps moving.
+
+Exit criterion: a person can open an `.ofd` in a native window and read every
+page.
 
 ### N8. Layout, zoom and search (U2-a … U2-c)
 
@@ -187,9 +199,11 @@ Exit criterion: a person can open an `.ofd` in a browser and read every page.
   rather than a bare valid-or-not.
 - **U3-b** Export to PDF and PNG through the existing `convert` path, using
   the page range the reader is currently showing.
-- **U3-c** Keyboard navigation, focus management and ARIA roles, so the reader
-  is operable without a mouse, plus a real locale switch that pulls from the
-  existing catalogues instead of hardcoded strings.
+- **U3-c** Keyboard navigation and focus handling throughout, so the reader is
+  fully operable without a mouse, plus a real locale switch that pulls from the
+  existing catalogues instead of hardcoded strings. `egui` has thin
+  accessibility support, so this task is wider here than it would be in a web
+  reader and is not optional.
 
 ---
 
@@ -265,8 +279,9 @@ grows into the tool the standard's feature set actually implies.
 - **M7-b** Signature appearance rendering, once `18.2.3` is implemented
 - **M7-c** A document comparison view for two revisions of the same file
 - **M7-d** Print, straight from the reader's current view
-- **M7-e** A packaged desktop build of the same interface, so the reader is
-  not browser-only
+- **M7-e** Signed, installable builds for the platforms people actually deploy
+  on, and an offline story: a reader that works from a file share with no
+  network, which is how these documents are often handled.
 
 ---
 
@@ -278,8 +293,8 @@ reading its source.
 ### F1. Developer experience
 
 Task-based documentation with a worked example per delivery form, and examples
-that are compiled in CI so they cannot rot. The browser playground folded into
-U1-c, once the reader it would host exists.
+that are compiled in CI so they cannot rot. A screenshot-driven tour of the
+desktop reader, generated from the same build the tests exercise.
 
 ### F2. Extensibility
 
@@ -297,6 +312,25 @@ Package releases for the platforms people actually deploy on, a Java binding
 alongside the C ABI for the OA systems that need one, and a stable plugin
 point for third-party signature providers.
 
+### F5. Other shells for the same engine
+
+`egui` is a build decision, not a belief. The engine is a library, and these
+are the other ways an organisation may reasonably want to put a front end on
+it. Each is a separate crate that depends on `core`; none of them changes the
+engine.
+
+- **F5-a** A Tauri shell, for organisations that want a web front end with a
+  native window. It buys CSS layout and accessibility for free, at the cost of
+  a second toolchain and webkit2gtk in CI.
+- **F5-b** A Qt or GTK binding, for desktops that embed the reader in an
+  existing native application rather than shipping a standalone one.
+- **F5-c** A browser shell, the reader built on the `wasm` bindings, for the
+  cases where a document may not leave the user's machine as a file — served
+  from an intranet with the document never uploaded.
+
+F5-c is the one that overlaps with the existing `wasm` crate. `wasm` is the
+engine crossing into a browser; a browser *reader* is a product built on it.
+
 ---
 
 ## Sequencing
@@ -305,8 +339,8 @@ Near term runs in order, because N1 unblocks N2 and N4, and N2 is what makes
 the conformance number in the README mean something. N3 and N5 can run
 alongside it, since they touch different crates.
 
-The reader (N7 to N9) starts as soon as `wasm` is stable, which it already
-is, and it does not wait on N2: the interface needs a working renderer, not a
+The reader (N7 to N9) depends on the `core` facade, which is finished, so it
+does not wait on N2: the interface needs a working renderer, not a
 conformance number. U1 can proceed while the clause work runs. M7 depends on
 N2, because annotations and signature appearance are clauses 15 and 18.2.3,
 and there is no point drawing a panel for a feature that is not yet verified.

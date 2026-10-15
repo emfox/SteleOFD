@@ -202,7 +202,7 @@ Typical combinations:
 |---|---|
 | Server-side conversion service | `convert, pdf, archive, async` |
 | Browser preview SDK | `canvas, sign` |
-| Desktop reader | `render, sign, convert, print, edit, search` |
+| Web reader, full featured | `render, sign, convert, print, edit, search` |
 | Embedded slim build | `render`, English only |
 
 ---
@@ -216,7 +216,7 @@ engine       ->  structured errors and data only
    |
 i18n         ->  renders MessageId into a concrete language
    |
-presentation ->  CLI / WASM / FFI / Server / GUI
+presentation ->  CLI / WASM / FFI / Server / Desktop reader
 ```
 
 ### 5.2 Why Fluent
