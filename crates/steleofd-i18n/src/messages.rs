@@ -54,6 +54,8 @@ pub enum MessageId {
     ReaderLayoutContinuous,
     /// Page has no visible content
     ReaderBlankPage,
+    /// The canvas says a page failed; the status bar says why
+    ReaderErrorLabel,
     /// No match found
     ReaderNoMatch,
 
@@ -203,6 +205,7 @@ impl MessageId {
             Self::ReaderLayoutDouble => "reader-layout-double",
             Self::ReaderLayoutContinuous => "reader-layout-continuous",
             Self::ReaderBlankPage => "reader-blank-page",
+            Self::ReaderErrorLabel => "reader-error-label",
             Self::ReaderNoMatch => "reader-no-match",
 
             // Conversion
@@ -303,6 +306,7 @@ impl MessageId {
         Self::ReaderLayoutDouble,
         Self::ReaderLayoutContinuous,
         Self::ReaderBlankPage,
+        Self::ReaderErrorLabel,
         Self::ReaderNoMatch,
         // Conversion
         Self::ConvertStart,

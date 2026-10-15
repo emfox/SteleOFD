@@ -9,7 +9,7 @@ use egui_kittest::kittest::{NodeT, Queryable};
 use steleofd_i18n::{I18n, Locale, MessageId};
 use steleofd_reader::viewer::Layout;
 use steleofd_reader::window;
-use steleofd_reader::{App, Canvas};
+use steleofd_reader::{App, Canvas, Fit};
 
 /// The real minimal document from the conformance corpus.
 fn corpus() -> PathBuf {
@@ -33,6 +33,22 @@ fn harness(app: App) -> Harness<'static, App> {
 /// The label the catalogue gives a key, so the test does not hardcode English.
 fn label(key: MessageId) -> String {
     I18n::with_locale(Locale::en_us()).text(key)
+}
+
+/// Run frames until the pages are rasterized, since rendering is off the draw
+/// path and a frame is what collects a finished raster.
+fn pump_until_rendered(harness: &mut Harness<'static, App>, pages: &[usize]) {
+    for _ in 0..2000 {
+        harness.run();
+        if pages
+            .iter()
+            .all(|page| harness.state().cached(*page).is_some())
+        {
+            return;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(2));
+    }
+    panic!("pages {pages:?} never rendered");
 }
 
 #[test]
@@ -166,26 +182,57 @@ fn a_failure_is_drawn_in_the_status_bar() {
 }
 
 #[test]
-fn the_fit_buttons_move_the_resolution() {
+fn the_fit_buttons_choose_a_fit_and_it_sticks() {
     let mut app = App::new();
     app.open_path(&corpus()).expect("the corpus opens");
     let mut harness = harness(app);
-    harness.state_mut().set_dpi(280.0);
-    harness.run();
+
+    // A fit is a mode, not a one-off resolution: choosing one has to be
+    // visible to the toolbar so it can show which is in force.
+    assert_eq!(harness.state().fit(), None, "nothing fitted on open");
 
     let fit_page = label(MessageId::ReaderFitPage);
     harness.get_by_label(&fit_page).click();
     harness.run();
     assert_eq!(
-        harness.state().dpi(),
-        window::FIT_PAGE_DPI,
-        "fit page selected the page resolution"
+        harness.state().fit(),
+        Some(Fit::Page),
+        "fit page is the mode in force"
     );
 
     let fit_width = label(MessageId::ReaderFitWidth);
     harness.get_by_label(&fit_width).click();
     harness.run();
-    assert_eq!(harness.state().dpi(), window::FIT_WIDTH_DPI);
+    assert_eq!(harness.state().fit(), Some(Fit::Width));
+}
+
+#[test]
+fn a_fit_recomputes_the_resolution_from_the_page_and_the_window() {
+    let mut app = App::new();
+    app.open_path(&corpus()).expect("the corpus opens");
+    let mut harness = harness(app);
+
+    harness.state_mut().set_fit(Fit::Width);
+    harness.run();
+    let wide = harness.state().dpi();
+
+    // The same page in a narrower window must be shown smaller; a fixed
+    // constant would not move at all.
+    let mut narrow = Harness::builder()
+        .with_size(egui::vec2(400.0, 700.0))
+        .build_ui_state(
+            |ui, app: &mut App| {
+                window::draw(ui, app);
+            },
+            App::new(),
+        );
+    narrow.state_mut().set_fit(Fit::Width);
+    narrow.run();
+    let fitted = narrow.state().dpi();
+    assert!(
+        fitted < wide,
+        "a narrower window fits at a lower resolution: {fitted} vs {wide}"
+    );
 }
 
 #[test]
@@ -206,16 +253,19 @@ fn facing_layout_draws_both_pages_of_the_spread() {
     };
 
     harness.state_mut().set_layout(Layout::Single);
-    harness.state_mut().page_image(0).expect("page 0 renders");
-    harness.run();
+    harness.state_mut().page_image(0).expect("page 0 requested");
+    pump_until_rendered(&mut harness, &[0]);
     assert_eq!(images(&harness), 1, "single layout shows one page");
 
     harness.state_mut().set_layout(Layout::Facing);
     harness.state_mut().set_dpi(96.0);
     for page in [0, 1] {
-        harness.state_mut().page_image(page).expect("page renders");
+        harness
+            .state_mut()
+            .page_image(page)
+            .expect("page requested");
     }
-    harness.run();
+    pump_until_rendered(&mut harness, &[0, 1]);
     assert_eq!(images(&harness), 2, "facing layout shows the whole spread");
 }
 
@@ -228,10 +278,14 @@ fn the_continuous_layout_stacks_more_than_one_page() {
     let mut harness = harness(app);
     harness.state_mut().set_layout(Layout::Continuous);
     harness.state_mut().go_to(4);
-    for page in harness.state().visible() {
-        harness.state_mut().page_image(page).expect("page renders");
+    let wanted = harness.state().visible();
+    for page in &wanted {
+        harness
+            .state_mut()
+            .page_image(*page)
+            .expect("page requested");
     }
-    harness.run();
+    pump_until_rendered(&mut harness, &wanted);
     let images = harness
         .query_all_by(|node| node.role() == egui::accesskit::Role::Image)
         .count();

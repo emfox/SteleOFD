@@ -15,12 +15,18 @@ never know a widget exists. Everything testable therefore lives in `app.rs` and
 | --- | --- | --- | --- |
 | Engine | `steleofd-core`, `steleofd-render` | documents, pixels | the reader |
 | State | `crates/steleofd-reader/src/app.rs` | the engine, i18n | `egui`, widgets, pixels |
+| Worker | `crates/steleofd-reader/src/render_worker.rs` | the engine, channels | `App`, `egui` |
 | Cache | `crates/steleofd-reader/src/viewer.rs` | the engine, `ColorImage` | `App`, layout |
-| Window | `crates/steleofd-reader/src/main.rs` | `App`, `egui` | the engine internals |
+| Window | `crates/steleofd-reader/src/window.rs` | `App`, `egui` | the engine internals |
 
 `main.rs` opens no file and parses nothing. It receives bytes or a path, hands
 them to `App`, and paints whatever comes back. If a widget needs a value `App`
 does not expose, `App` gains a method — the widget does not reach around it.
+
+The worker exists so that rasterizing never blocks a frame. It owns its own
+copy of the document, renders one request at a time, and hands results back
+over a channel; `App` drains that channel once per frame, before anything is
+drawn. It never touches `egui`, and `App` never waits on it.
 
 ## 2. Layout zones
 
@@ -51,17 +57,26 @@ is disabled when nothing is open, so the bar never has to explain itself.
 page, zoom. Disabled controls rather than hidden ones, so the bar does not
 reflow as the document changes.
 
-**Z3 canvas.** Exactly one of four states, decided in this order:
+**Z3 canvas.** Exactly one of five states, decided in this order:
 
 | State | Condition | Shown |
 | --- | --- | --- |
 | Empty | no document open | the drop hint, centred |
-| Failed | the page would not rasterize | the engine's own message |
+| Failed | the page would not rasterize | `reader-error-label` |
 | Blank | the page has no visible ink | the page, plus the blank notice |
+| Pending | the page has not landed yet | whatever is cached, so far |
 | Shown | otherwise | the page |
 
 The blank case still paints the page. A blank page in a document is content,
 not an absence, and hiding it would break the sense of place.
+
+`Failed` says only that something went wrong; the engine's own message belongs
+to Z4, and putting the same sentence in two places would show it twice.
+`Pending` is not an error and not a blank: rendering is off the draw path, so
+a page on its way is simply absent from the cache for this frame. It draws the
+same thing as `Blank` and `Shown` — the pages that have arrived — which is why
+the three share a branch. Z3 is still the only zone that rasterizes; it asks
+for what is missing and paints what it has.
 
 **Z4 status bar.** Left: the open document's name and page position. Right: the
 zoom slider. On failure the message takes the left half and stays until it is

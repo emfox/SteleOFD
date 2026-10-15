@@ -5,13 +5,9 @@
 use eframe::egui::{self, TextureOptions, Ui};
 use steleofd_i18n::MessageId;
 
-use crate::app::{App, Canvas};
+use crate::app::{App, Canvas, Fit};
 use crate::viewer::{DroppedFile, Layout, MAX_DPI, MIN_DPI};
 
-/// The resolution a page is shown at when fitted to the width.
-pub const FIT_WIDTH_DPI: f32 = 96.0;
-/// The resolution a page is shown at when the whole page is in view.
-pub const FIT_PAGE_DPI: f32 = 72.0;
 /// The widest a page is drawn, so a large window does not blur a small page.
 pub const MAX_PAGE_WIDTH: f32 = 900.0;
 
@@ -29,6 +25,9 @@ pub struct WindowRequests {
 /// The specification's seven steps in order; nothing here reaches a platform.
 pub fn draw(ui: &mut Ui, app: &mut App) -> WindowRequests {
     let mut requests = WindowRequests::default();
+    // Step 1 collects finished rasters before anything is drawn, so a page the
+    // worker finished during the last frame is on screen in this one.
+    app.poll();
     take_drops(ui, app);
     draw_menu(ui, app, &mut requests);
     draw_toolbar(ui, app);
@@ -99,12 +98,18 @@ fn draw_toolbar(ui: &mut Ui, app: &mut App) {
             }
             ui.separator();
             let fit_width = app.i18n().text(MessageId::ReaderFitWidth);
-            if ui.button(fit_width).clicked() {
-                app.set_dpi(FIT_WIDTH_DPI);
+            if ui
+                .selectable_label(app.fit() == Some(Fit::Width), fit_width)
+                .clicked()
+            {
+                app.set_fit(Fit::Width);
             }
             let fit_page = app.i18n().text(MessageId::ReaderFitPage);
-            if ui.button(fit_page).clicked() {
-                app.set_dpi(FIT_PAGE_DPI);
+            if ui
+                .selectable_label(app.fit() == Some(Fit::Page), fit_page)
+                .clicked()
+            {
+                app.set_fit(Fit::Page);
             }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 let mut dpi = app.dpi();
@@ -124,6 +129,10 @@ fn draw_toolbar(ui: &mut Ui, app: &mut App) {
 
 /// Z3: the only zone that rasterizes, and the only one that may.
 fn draw_canvas(ui: &mut Ui, app: &mut App) {
+    // The canvas is the only place that knows how much room there is, so a fit
+    // is resolved here and the worker asked for the resolution it produces.
+    let available = ui.available_size();
+    app.apply_fit((available.x, available.y));
     match app.canvas() {
         Canvas::Empty => {
             let hint = app.drop_hint();
@@ -131,8 +140,11 @@ fn draw_canvas(ui: &mut Ui, app: &mut App) {
                 ui.label(egui::RichText::new(hint).weak());
             });
         }
-        Canvas::Failed { message } => {
-            ui.colored_label(egui::Color32::from_rgb(180, 40, 40), &message);
+        // The message itself belongs to Z4; stating it twice would put the
+        // same sentence on screen twice. Z3 only says something went wrong.
+        Canvas::Failed => {
+            let notice = app.error_label();
+            ui.colored_label(egui::Color32::from_rgb(180, 40, 40), &notice);
         }
         // The pages on screen are already rasterized or are on their way, so
         // both cases draw the same thing; the pending page is simply absent

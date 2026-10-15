@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 use steleofd_core::Document;
 use steleofd_i18n::{I18n, MessageId};
 
+use crate::render_worker::RenderQueue;
 use crate::viewer::{self, DroppedFile, Layout, PageCache};
 
 /// A failure the reader shows in its own words.
@@ -18,15 +19,29 @@ pub struct AppError {
 pub struct App {
     i18n: I18n,
     doc: Option<Document>,
+    /// The bytes the document came from, so the render worker can open its own
+    /// handle rather than sharing this one across threads.
+    bytes: Option<Vec<u8>>,
+    queue: Option<RenderQueue>,
     path: Option<PathBuf>,
     cache: PageCache,
     current: usize,
     dpi: f32,
+    fit: Option<Fit>,
     layout: Layout,
     error: Option<AppError>,
     info: Option<String>,
     want_open: bool,
     want_quit: bool,
+}
+
+/// A resolution the reader keeps chasing as the window or page changes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Fit {
+    /// Fill the available width with the page.
+    Width,
+    /// Show the whole page inside the available area.
+    Page,
 }
 
 impl Default for App {
@@ -41,10 +56,13 @@ impl App {
         Self {
             i18n: I18n::with_system_locale(),
             doc: None,
+            bytes: None,
+            queue: None,
             path: None,
             cache: PageCache::new(12),
             current: 0,
             dpi: viewer::DEFAULT_DPI,
+            fit: None,
             layout: Layout::Single,
             error: None,
             info: None,
@@ -123,38 +141,44 @@ impl App {
         let bytes = std::fs::read(path).map_err(|err| AppError {
             message: format!("{}: {err}", path.display()),
         })?;
-        let doc = Document::open_bytes(&bytes).map_err(|err| AppError {
-            message: err.to_string(),
-        })?;
-        self.cache.clear();
-        self.current = 0;
-        self.doc = Some(doc);
-        self.path = Some(path.to_path_buf());
-        self.error = None;
+        self.install(&bytes, Some(path.to_path_buf()))?;
         self.info = Some(self.describe());
         Ok(())
     }
 
     /// Open a document already in memory, as a dropped file arrives.
     pub fn open_bytes(&mut self, bytes: &[u8], name: Option<&str>) -> Result<(), AppError> {
+        self.install(bytes, name.map(PathBuf::from))?;
+        self.info = Some(self.describe());
+        Ok(())
+    }
+
+    /// Replace the open document, keeping the bytes for the render worker.
+    /// A failed open changes nothing, so a good document is never lost.
+    fn install(&mut self, bytes: &[u8], path: Option<PathBuf>) -> Result<(), AppError> {
         let doc = Document::open_bytes(bytes).map_err(|err| AppError {
             message: err.to_string(),
         })?;
         self.cache.clear();
         self.current = 0;
+        self.fit = None;
         self.doc = Some(doc);
-        self.path = name.map(PathBuf::from);
+        self.bytes = Some(bytes.to_vec());
+        self.queue = Some(RenderQueue::spawn(bytes.to_vec()));
+        self.path = path;
         self.error = None;
-        self.info = Some(self.describe());
         Ok(())
     }
 
     /// Close the open document and drop its pages.
     pub fn close(&mut self) {
         self.doc = None;
+        self.bytes = None;
+        self.queue = None;
         self.path = None;
         self.cache.clear();
         self.current = 0;
+        self.fit = None;
         self.info = None;
     }
 
@@ -223,7 +247,47 @@ impl App {
 
     /// Set the resolution, clamped to the range a reader can use.
     pub fn set_dpi(&mut self, dpi: f32) {
-        self.dpi = dpi.clamp(viewer::MIN_DPI, viewer::MAX_DPI);
+        let dpi = dpi.clamp(viewer::MIN_DPI, viewer::MAX_DPI);
+        if dpi != self.dpi {
+            self.dpi = dpi;
+            if let Some(queue) = self.queue.as_mut() {
+                queue.rezoom();
+            }
+        }
+        self.fit = None;
+    }
+
+    /// Keep the page fitted to the space it is drawn in.
+    pub fn set_fit(&mut self, fit: Fit) {
+        self.fit = Some(fit);
+    }
+
+    /// The fit the reader is holding, if any.
+    pub fn fit(&self) -> Option<Fit> {
+        self.fit
+    }
+
+    /// Recompute the resolution for the fit in force, given the space the
+    /// canvas has. Called by the window each frame, so a resize re-fits.
+    pub fn apply_fit(&mut self, available: (f32, f32)) {
+        let Some(fit) = self.fit else {
+            return;
+        };
+        let size_mm = self
+            .doc
+            .as_ref()
+            .and_then(|doc| doc.page(self.current))
+            .map(|page| (page.page_box.w as f32, page.page_box.h as f32));
+        let Some(size_mm) = size_mm else {
+            return;
+        };
+        let dpi = viewer::fit_dpi(fit, size_mm, available);
+        if dpi != self.dpi {
+            self.dpi = dpi;
+            if let Some(queue) = self.queue.as_mut() {
+                queue.rezoom();
+            }
+        }
     }
 
     /// Choose how pages are laid out.
@@ -243,6 +307,13 @@ impl App {
         self.error = None;
     }
 
+    /// The sentence the canvas shows when a page would not rasterize.
+    /// The status bar carries the engine's own message, so the canvas says
+    /// only that something failed rather than repeating it verbatim.
+    pub fn error_label(&self) -> String {
+        self.i18n.text(MessageId::ReaderErrorLabel)
+    }
+
     /// The reader's language bundle, for widgets that need a string.
     pub fn i18n(&self) -> &I18n {
         &self.i18n
@@ -254,25 +325,39 @@ impl App {
     }
 
     /// Rasterize a page, or return the cached one.
+    /// Rendering happens off the draw path, so this asks the worker and does
+    /// not wait; the page arrives through `poll` on a later frame.
     pub fn page_image(&mut self, page: usize) -> Result<(), AppError> {
         if self.cache.get(page, self.dpi).is_some() {
             return Ok(());
         }
-        let Some(doc) = self.doc.as_ref() else {
+        if self.doc.is_none() {
             return Ok(());
+        }
+        if let Some(queue) = self.queue.as_mut() {
+            queue.request(page, self.dpi);
+        }
+        Ok(())
+    }
+
+    /// Take whatever the worker has finished and put it in the cache.
+    /// Called once per frame before anything is drawn, so a page that landed
+    /// during the last frame is on screen in this one.
+    pub fn poll(&mut self) {
+        let Some(queue) = self.queue.as_mut() else {
+            return;
         };
-        match viewer::render_page(doc, page, self.dpi) {
-            Ok(rendered) => {
-                self.cache.insert(page, self.dpi, rendered);
-                Ok(())
-            }
-            Err(err) => {
-                self.set_error(err.to_string());
-                Err(AppError {
-                    message: err.to_string(),
-                })
+        for result in queue.drain() {
+            match result.outcome {
+                Ok(rendered) => self.cache.insert(result.page, result.dpi, rendered),
+                Err(message) => self.set_error(message),
             }
         }
+    }
+
+    /// Whether the worker still owes the reader a page at the current zoom.
+    pub fn is_rendering(&self) -> bool {
+        self.queue.as_ref().is_some_and(RenderQueue::is_busy)
     }
 
     /// The page label shown under the window.
@@ -305,16 +390,21 @@ impl App {
     }
 
     /// Whether the current page holds no visible ink.
-    ///
-    /// It rasterizes first, so a caller that paints anyway does not pay twice.
+    /// It asks for the page first, but the answer is only known once the
+    /// raster has landed; an uncached page is not blank, merely unknown.
     pub fn current_page_is_blank(&mut self) -> bool {
         if self.page_count() == 0 {
             return true;
         }
         let page = self.current;
-        if self.page_image(page).is_err() {
-            return false;
-        }
+        let _ = self.page_image(page);
+        self.cache
+            .get(page, self.dpi)
+            .is_some_and(|rendered| viewer::looks_blank(&rendered.image))
+    }
+
+    /// Whether the page at `page` is cached and holds no visible ink.
+    pub fn page_is_blank(&self, page: usize) -> bool {
         self.cache
             .get(page, self.dpi)
             .is_some_and(|rendered| viewer::looks_blank(&rendered.image))
@@ -346,23 +436,20 @@ impl App {
     }
 
     /// What the canvas should draw, decided here so it can be tested.
-    ///
     /// This is zone Z3: the window paints the answer and forms no opinion.
+    /// It reports `Pending` rather than rendering on the draw path.
     pub fn canvas(&mut self) -> Canvas {
         if self.page_count() == 0 {
             return Canvas::Empty;
         }
-        let page = self.current;
-        if self.page_image(page).is_err() {
-            let message = self
-                .error
-                .as_ref()
-                .map_or_else(String::new, |e| e.message.clone());
-            return Canvas::Failed { message };
+        for page in self.visible() {
+            let _ = self.page_image(page);
         }
+        let page = self.current;
         match self.cache.get(page, self.dpi) {
             Some(rendered) if viewer::looks_blank(&rendered.image) => Canvas::Blank,
             Some(_) => Canvas::Page,
+            None if self.error.is_some() => Canvas::Failed,
             None => Canvas::Pending,
         }
     }
@@ -383,11 +470,8 @@ impl App {
 pub enum Canvas {
     /// No document is open, so the drop hint is shown instead.
     Empty,
-    /// The page would not rasterize; the message is the engine's own.
-    Failed {
-        /// The message shown to the reader.
-        message: String,
-    },
+    /// The page would not rasterize. The wording lives in Z4.
+    Failed,
     /// The page is rasterizing and has not landed in the cache yet.
     Pending,
     /// The page rasterized to nothing but white.

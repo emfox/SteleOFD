@@ -27,6 +27,21 @@ fn open_pages(pages: usize) -> App {
     app
 }
 
+/// Ask for a page and wait for the worker to deliver it.
+/// Rendering is off the draw path, so a test that wants a raster has to pump
+/// the queue the way a frame does; the bound fails loudly if it never answers.
+fn wait_for_page(app: &mut App, page: usize) {
+    app.page_image(page).expect("the request is accepted");
+    for _ in 0..2000 {
+        app.poll();
+        if app.cached(page).is_some() {
+            return;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(2));
+    }
+    panic!("page {page} never arrived from the render worker");
+}
+
 #[test]
 fn a_fresh_reader_has_nothing_open() {
     let app = App::new();
@@ -95,7 +110,7 @@ fn a_page_rasterizes_and_is_reused() {
     let mut app = open();
     let page = app.current_page();
 
-    app.page_image(page).expect("the first page renders");
+    wait_for_page(&mut app, page);
     let first = app.cached(page).expect("the page is now cached").image.size;
     assert!(
         first[0] > 0 && first[1] > 0,
@@ -107,17 +122,34 @@ fn a_page_rasterizes_and_is_reused() {
     assert_eq!(app.cached(page).map(|p| p.image.size), Some(first));
 }
 
+/// The reader asks for what is on screen once per frame, so a page already on
+/// its way must not be asked for again. Restamping it every frame would leave
+/// the worker forever rendering a raster the next frame had superseded.
+#[test]
+fn asking_for_the_same_page_every_frame_still_delivers_it() {
+    let mut app = open();
+    let page = app.current_page();
+    for _ in 0..2000 {
+        // What a frame does: ask for the visible page, then collect results.
+        let _ = app.canvas();
+        app.poll();
+        if app.cached(page).is_some() {
+            return;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(2));
+    }
+    panic!("page {page} was asked for on every frame and never arrived");
+}
+
 #[test]
 fn the_cache_keys_on_the_resolution_too() {
     let mut app = open();
     let page = app.current_page();
-    app.page_image(page)
-        .expect("renders at the default resolution");
+    wait_for_page(&mut app, page);
     let wide = app.cached(page).map(|p| p.image.size).unwrap();
 
     app.set_dpi(200.0);
-    app.page_image(page)
-        .expect("renders again at the new resolution");
+    wait_for_page(&mut app, page);
     let larger = app.cached(page).map(|p| p.image.size).unwrap();
 
     assert_ne!(wide, larger, "a different dpi is a different picture");
@@ -215,19 +247,32 @@ fn an_empty_reader_asks_for_a_document_rather_than_a_page() {
 }
 
 #[test]
-fn an_open_reader_paints_its_page() {
+fn an_open_reader_asks_the_worker_then_paints_its_page() {
     let mut app = open();
+    let page = app.current_page();
+    // The draw path never rasterizes: asked for a page it has not got, it
+    // reports it as on its way, or hands back the page it already has if the
+    // worker was quick enough to beat the question.
+    let first = app.canvas();
+    assert!(
+        matches!(first, Canvas::Pending | Canvas::Page | Canvas::Blank),
+        "the canvas either waits or paints, got {first:?}"
+    );
+
+    wait_for_page(&mut app, page);
     let canvas = app.canvas();
     assert!(
         matches!(canvas, Canvas::Page | Canvas::Blank),
         "the corpus rasterizes to something paintable, got {canvas:?}"
     );
+    assert!(!app.is_rendering(), "and the worker owes nothing more");
 }
 
 #[test]
 fn a_blank_page_is_still_drawn() {
     let mut app = open();
-    app.canvas();
+    let page = app.current_page();
+    wait_for_page(&mut app, page);
     let blank = app.current_page_is_blank();
     assert_eq!(
         app.canvas(),
@@ -257,13 +302,15 @@ fn an_error_alone_does_not_displace_the_empty_state() {
 }
 
 #[test]
-fn an_unreadable_page_is_reported_rather_than_left_blank() {
+fn a_page_past_the_end_clamps_back_into_the_document() {
     let mut app = open();
     app.go_to(app.page_count() + 10);
+    let page = app.current_page();
+    wait_for_page(&mut app, page);
     assert_eq!(
         app.canvas(),
         Canvas::Page,
-        "a page past the end clamps back into the document"
+        "the clamped page still rasterizes rather than failing"
     );
 }
 
@@ -344,7 +391,7 @@ fn a_page_never_rasterizes_past_the_texture_limit() {
 fn a_rendered_page_is_small_enough_to_upload() {
     let mut app = open();
     app.set_dpi(MAX_DPI);
-    app.page_image(0).expect("the page rasterizes");
+    wait_for_page(&mut app, 0);
     let rendered = app.cached(0).expect("and lands in the cache");
     let (w, h) = (rendered.image.width(), rendered.image.height());
     let limit = steleofd_reader::viewer::MAX_TEXTURE_SIDE as usize;

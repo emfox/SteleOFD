@@ -13,8 +13,8 @@ criterion, so it is always obvious whether it is done.
 | Measure | Value |
 | --- | --- |
 | Crates | 26 (L0 foundation through L5 delivery) |
-| Source | 29,595 lines of Rust, measured with `find crates -name '*.rs'` |
-| Tests | 745 passing, plus 13 inline unit-test modules |
+| Source | 30,043 lines of Rust, measured with `find crates -name '*.rs'` |
+| Tests | 747 passing, plus 13 inline unit-test modules |
 | Delivery forms | `cli`, `wasm`, `ffi`, `server`, `reader`, all on the `core` facade |
 | Standard clauses verified | 47 of 47 in GB/T 33190-2016 (46 `verified`, 1 `partial`) |
 | Languages | `en-US` and `zh-CN`, 75 message keys, parity enforced in CI |
@@ -311,9 +311,23 @@ page.
   canvas draws that list, and paging now steps by the layout's stride so a
   spread advances a spread. `steleofd-testkit` gained `multipage_archive`,
   since a one-page fixture has no arrangement to assert.
-- **U2-b** `[ ]` Zoom, fit width and fit page, with the zoom percentage coming
-  from `reader-zoom`. Render on demand per page rather than eagerly, and cancel
-  in-flight renders when the reader moves faster than the rasterizer.
+- **U2-b** `[x]` Rendering moved off the draw path into `render_worker`, a
+  thread with its own `Document` and a channel pair. A frame asks for what is
+  on screen and paints whatever the cache holds; a page that has not landed is
+  `Canvas::Pending` rather than a stall, and `steleofd_reader::render_worker`
+  is a public module so its contract is testable outside the window. Zoom is
+  real: `Fit::Width`/`Fit::Page` resolve to a resolution through
+  `viewer::fit_dpi` against the space the canvas actually has, and the toolbar
+  shows the mode in force rather than a one-off number. Cancellation is by
+  generation: a newer request for a page makes an older raster for the same
+  page discardable. Writing this exposed three liveness bugs that only a real
+  frame loop produces, all fixed and covered by tests — a superseded request
+  swallowed the queue behind it, a request was skipped when nothing was left to
+  answer it, and restamping the same request every frame kept the worker
+  permanently rendering rasters the next frame had already replaced. The last
+  one is the interesting one: it means "ask once per frame" is only safe if an
+  identical ask is recognised as identical, which is what `RenderQueue::request`
+  now guarantees.
 - **U2-c** `[ ]` A search panel over the existing `search` capability, listing
   hits by page, jumping to a hit, and showing `reader-no-match` when there is
   none.

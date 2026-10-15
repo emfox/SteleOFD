@@ -193,6 +193,28 @@ pub fn dpi_that_fits(size_mm: (f32, f32)) -> f32 {
     (fit as f32).clamp(MIN_DPI, MAX_DPI)
 }
 
+/// The resolution that fits a page into an area, for a fit mode.
+/// `available` is the area in points and `size_mm` the page's physical size; a
+/// fit is clamped to the reader's range, so it is still only ever a request.
+pub fn fit_dpi(fit: crate::app::Fit, size_mm: (f32, f32), available: (f32, f32)) -> f32 {
+    use crate::app::Fit;
+    // A point is 1/72 inch, so the page's millimetres at 72 dpi are its size in
+    // points; the area divided by that gives the resolution that fills it.
+    let points_per_mm = 72.0 / PIXELS_PER_MM as f32;
+    let page_points = (
+        size_mm.0.max(1.0) * points_per_mm,
+        size_mm.1.max(1.0) * points_per_mm,
+    );
+    let area = (available.0.max(1.0), available.1.max(1.0));
+    let by_side = match fit {
+        Fit::Width => area.0 / page_points.0,
+        Fit::Page => (area.0 / page_points.0).min(area.1 / page_points.1),
+    };
+    (by_side * 72.0)
+        .clamp(MIN_DPI, MAX_DPI)
+        .min(dpi_that_fits(size_mm))
+}
+
 /// Rasterize one page, within what the texture limit can hold.
 ///
 /// The asked-for resolution is honoured only as far as the page size allows.
