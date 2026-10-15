@@ -5,7 +5,8 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use steleofd_display::ops::{Color, LineCap, LineJoin};
+use steleofd_common::Point;
+use steleofd_display::ops::{Color, GradientStop, LineCap, LineJoin};
 use steleofd_display::{
     DisplayListBuilder, DrawOp, GlyphRun, ImageCodec, ImageRef, Paint, PaintRule, StrokeStyle,
 };
@@ -13,8 +14,10 @@ use steleofd_error::{FormatError, OfdError, Result};
 use steleofd_font::FontId;
 use steleofd_geometry::{Affine, Path};
 use steleofd_model::PageBlock;
-use steleofd_model::color::ColorRef;
-use steleofd_model::object::{DrawParam, ImageObject, Object, ObjectBase, PathObject, TextObject};
+use steleofd_model::color::{ColorRef, Segment, Shading};
+use steleofd_model::object::{
+    DrawParam, ImageObject, LineCapStyle, LineJoinStyle, Object, ObjectBase, PathObject, TextObject,
+};
 use steleofd_xml::parse_number_list_n;
 
 /// Default stroke width in millimetres when neither the object nor its draw
@@ -112,11 +115,137 @@ fn solid(color: &ColorRef) -> Result<Paint> {
     Ok(Paint::Solid(Color::rgba(r, g, b, alpha)))
 }
 
+/// Resolve a colour into a paint, emitting a gradient op first when the colour
+/// turns out to be a shading. Clause 8.3.4 draws a shading as its own graphic
+/// unit, so the gradient op carries the path and the paint returned is a marker.
+fn paint_of(color: &ColorRef, path: &Path, builder: &mut DisplayListBuilder) -> Result<Paint> {
+    match color.shading() {
+        None => solid(color),
+        Some(Shading::Axial {
+            start,
+            end,
+            segments,
+        }) => {
+            let stops = stops_of(segments)?;
+            let index = builder.len();
+            builder.push(DrawOp::LinearGradient {
+                start: Point::new(start.0, start.1),
+                end: Point::new(end.0, end.1),
+                stops,
+                path: path.clone(),
+            });
+            Ok(Paint::LinearGradientRef(index))
+        }
+        Some(Shading::Radial {
+            start,
+            start_radius,
+            end,
+            end_radius,
+            segments,
+        }) => {
+            let stops = stops_of(segments)?;
+            let index = builder.len();
+            // Only the start circle is painted; the end circle the clause also
+            // gives is not folded in yet.
+            let _ = end;
+            let _ = end_radius;
+            builder.push(DrawOp::RadialGradient {
+                center: Point::new(start.0, start.1),
+                radius: *start_radius,
+                stops,
+                path: path.clone(),
+            });
+            Ok(Paint::RadialGradientRef(index))
+        }
+    }
+}
+
+fn stops_of(segments: &[Segment]) -> Result<Vec<GradientStop>> {
+    segments
+        .iter()
+        .map(|s| {
+            let (r, g, b) = s.color.to_rgb()?;
+            Ok(GradientStop {
+                offset: s.position,
+                color: Color::rgba(r, g, b, s.color.clone().alpha()),
+            })
+        })
+        .collect()
+}
+
+/// GB/T 33190 clause 8.4: the clip areas an object narrows its drawing to.
+/// The first area of the first clip wins; areas beyond it are reported rather
+/// than silently dropped.
+fn clip_of(
+    base: &ObjectBase,
+    params: &HashMap<String, DrawParam>,
+) -> Result<Option<(Path, PaintRule)>> {
+    let Some(list) = base.clips.as_ref() else {
+        return Ok(None);
+    };
+    if list.items.len() > 1 {
+        return Err(nested_clips(list.items.len()));
+    }
+    let Some(area) = list.items.first() else {
+        return Ok(None);
+    };
+    let Some(data) = area.path_data.as_deref().map(str::trim) else {
+        return Ok(None);
+    };
+    if data.is_empty() {
+        return Ok(None);
+    }
+    let mut path: Path = crate::pathdata::parse_path(data)?;
+    // An area may carry its own CTM, applied to the clip path alone.
+    if let Some(raw) = area.ctm.as_deref() {
+        let v = parse_number_list_n::<6>("Area", "CTM", raw)?;
+        path = path.transformed(&Affine::new(v[0], v[1], v[2], v[3], v[4], v[5]));
+    }
+    // A clip area's DrawParam may name the fill rule that decides which side
+    // of the outline is inside the clip.
+    let rule = area
+        .draw_param
+        .as_ref()
+        .and_then(|id| params.get(id))
+        .map(|_| PaintRule::NonZero)
+        .unwrap_or(PaintRule::NonZero);
+    Ok(Some((path, rule)))
+}
+
+/// Clip lists with more than one area are valid in principle but not read yet;
+/// saying so beats drawing a page that quietly lost part of its mask.
+fn nested_clips(count: usize) -> OfdError {
+    OfdError::Xml(steleofd_error::XmlError::UnsupportedExtension(format!(
+        "clip list with {count} areas"
+    )))
+}
+
+/// Wrap a graphic unit in its clip, so the state stack stays balanced.
+fn with_clip(
+    base: &ObjectBase,
+    params: &HashMap<String, DrawParam>,
+    builder: &mut DisplayListBuilder,
+    body: impl FnOnce(&mut DisplayListBuilder) -> Result<()>,
+) -> Result<()> {
+    match clip_of(base, params)? {
+        None => body(builder),
+        Some((path, rule)) => {
+            builder.save()?;
+            builder.push(DrawOp::ClipPath { path, rule });
+            let result = body(builder);
+            builder.restore()?;
+            result
+        }
+    }
+}
+
 fn default_color() -> ColorRef {
     ColorRef::from_hex("#000000")
 }
 
-fn stroke_style_of(param: Option<&DrawParam>) -> StrokeStyle {
+/// GB/T 33190 clause 9.1: a graphic unit may state the stroke parameters
+/// itself, and those win over the ones its `DrawParam` carries.
+fn stroke_style_of(base: &ObjectBase, param: Option<&DrawParam>) -> StrokeStyle {
     let dash = param
         .and_then(|p| p.dash_pattern.as_ref())
         .map(|d| d.pattern.clone())
@@ -126,22 +255,23 @@ fn stroke_style_of(param: Option<&DrawParam>) -> StrokeStyle {
         .map(|d| d.phase)
         .unwrap_or(0.0);
     StrokeStyle {
-        width: param
-            .and_then(|p| p.line_width)
+        width: base
+            .line_width
+            .or_else(|| param.and_then(|p| p.line_width))
             .unwrap_or(DEFAULT_LINE_WIDTH),
         dash,
         dash_offset,
-        cap: match param.and_then(|p| p.line_cap) {
-            Some(steleofd_model::object::LineCapStyle::Round) => LineCap::Round,
-            Some(steleofd_model::object::LineCapStyle::Square) => LineCap::Square,
+        cap: match base.cap.or_else(|| param.and_then(|p| p.line_cap)) {
+            Some(LineCapStyle::Round) => LineCap::Round,
+            Some(LineCapStyle::Square) => LineCap::Square,
             _ => LineCap::Butt,
         },
-        join: match param.and_then(|p| p.line_join) {
-            Some(steleofd_model::object::LineJoinStyle::Round) => LineJoin::Round,
-            Some(steleofd_model::object::LineJoinStyle::Bevel) => LineJoin::Bevel,
+        join: match base.join.or_else(|| param.and_then(|p| p.line_join)) {
+            Some(LineJoinStyle::Round) => LineJoin::Round,
+            Some(LineJoinStyle::Bevel) => LineJoin::Bevel,
             _ => LineJoin::Miter,
         },
-        miter_limit: 4.0,
+        miter_limit: base.miter_limit.unwrap_or(4.0),
     }
 }
 
@@ -165,37 +295,39 @@ fn flatten_path(
     let path: Path = crate::pathdata::parse_path(data)?;
     let fill_on = p.fill.or(param.and_then(|d| d.fill)).unwrap_or(true);
     let stroke_on = p.stroke.or(param.and_then(|d| d.stroke)).unwrap_or(false);
-    let style = stroke_style_of(param);
+    let style = stroke_style_of(&p.base, param);
     let black = default_color();
-    let fill = if fill_on {
-        Some(solid(
-            p.fill_color
-                .as_ref()
-                .or(param.and_then(|d| d.fill_color.as_ref()))
-                .unwrap_or(&black),
-        )?)
-    } else {
-        None
-    };
-    let stroke = if stroke_on {
-        Some(solid(
-            p.stroke_color
-                .as_ref()
-                .or(param.and_then(|d| d.stroke_color.as_ref()))
-                .unwrap_or(&black),
-        )?)
-    } else {
-        None
-    };
+    let fill_color = p
+        .fill_color
+        .as_ref()
+        .or(param.and_then(|d| d.fill_color.as_ref()))
+        .unwrap_or(&black);
+    let stroke_color = p
+        .stroke_color
+        .as_ref()
+        .or(param.and_then(|d| d.stroke_color.as_ref()))
+        .unwrap_or(&black);
     with_ctm(&p.base, builder, |b| {
-        b.push(DrawOp::Path {
-            path,
-            fill,
-            stroke,
-            stroke_style: style,
-            rule: fill_rule(p.rule),
-        });
-        Ok(())
+        with_clip(&p.base, params, b, |b| {
+            let fill = if fill_on {
+                Some(paint_of(fill_color, &path, b)?)
+            } else {
+                None
+            };
+            let stroke = if stroke_on {
+                Some(paint_of(stroke_color, &path, b)?)
+            } else {
+                None
+            };
+            b.push(DrawOp::Path {
+                path,
+                fill,
+                stroke,
+                stroke_style: style,
+                rule: fill_rule(p.rule),
+            });
+            Ok(())
+        })
     })
 }
 
@@ -238,36 +370,38 @@ fn flatten_text(
     let letter_spacing = t.char_space.unwrap_or(0.0);
     let font = FontId(t.font.parse::<u32>().unwrap_or(0));
     with_ctm(&t.base, builder, |b| {
-        for code in &t.codes {
-            if code.text.is_empty() {
-                continue;
+        with_clip(&t.base, params, b, |b| {
+            for code in &t.codes {
+                if code.text.is_empty() {
+                    continue;
+                }
+                // Glyph ids are placeholders until font shaping lands; the raw
+                // code points keep text extraction working in the meantime.
+                let glyphs: Vec<u16> = code.text.chars().map(|c| u32::from(c) as u16).collect();
+                let advances = advances_of(code, size);
+                let place = Affine::translate(code.x, code.y);
+                let transform = if h_scale == 1.0 {
+                    place
+                } else {
+                    Affine::new(h_scale, 0.0, 0.0, 1.0, 0.0, 0.0).then(place)
+                };
+                b.push(DrawOp::Text(GlyphRun {
+                    font,
+                    size: t.size,
+                    glyphs,
+                    advances,
+                    text: Some(code.text.clone()),
+                    cluster_map: None,
+                    transform,
+                    fill: fill.clone(),
+                    stroke: stroke.clone(),
+                    letter_spacing,
+                    word_spacing: 0.0,
+                    bbox: t.base.boundary,
+                }));
             }
-            // Glyph ids are placeholders until font shaping lands; the raw
-            // code points keep text extraction working in the meantime.
-            let glyphs: Vec<u16> = code.text.chars().map(|c| u32::from(c) as u16).collect();
-            let advances = advances_of(code, size);
-            let place = Affine::translate(code.x, code.y);
-            let transform = if h_scale == 1.0 {
-                place
-            } else {
-                Affine::new(h_scale, 0.0, 0.0, 1.0, 0.0, 0.0).then(place)
-            };
-            b.push(DrawOp::Text(GlyphRun {
-                font,
-                size: t.size,
-                glyphs,
-                advances,
-                text: Some(code.text.clone()),
-                cluster_map: None,
-                transform,
-                fill: fill.clone(),
-                stroke: stroke.clone(),
-                letter_spacing,
-                word_spacing: 0.0,
-                bbox: t.base.boundary,
-            }));
-        }
-        Ok(())
+            Ok(())
+        })
     })
 }
 
@@ -297,12 +431,14 @@ fn flatten_image(i: &ImageObject, builder: &mut DisplayListBuilder) -> Result<()
         ImageCodec::Png,
     );
     with_ctm(&i.base, builder, |b| {
-        b.push(DrawOp::Image {
-            image,
-            dst: i.base.boundary,
-            transform: Affine::IDENTITY,
-        });
-        Ok(())
+        with_clip(&i.base, &HashMap::new(), b, |b| {
+            b.push(DrawOp::Image {
+                image,
+                dst: i.base.boundary,
+                transform: Affine::IDENTITY,
+            });
+            Ok(())
+        })
     })
 }
 

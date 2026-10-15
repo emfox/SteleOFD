@@ -8,13 +8,72 @@ use steleofd_error::{OfdError, XmlError};
 use crate::Valid;
 
 /// Colour vocabulary of GB/T 33190-2016, used by `FillColor` and `StrokeColor`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+/// Clause 8.3.4 also lets a colour be a shading, in which case `value` is empty
+/// and [`ColorRef::shading`] carries the segments and geometry.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ColorRef {
     /// `#RRGGBB` or `rgb(r,g,b)` as written.
     pub value: String,
     /// Alpha from 0 to 255, absent meaning opaque.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub alpha: Option<u8>,
+    /// Gradient instead of a flat colour, when the writer used a shading.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub shading: Option<Shading>,
+}
+
+/// One colour stop of a shading.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Segment {
+    /// Position along the gradient, from 0 to 1.
+    #[serde(rename = "Position", default)]
+    pub position: f64,
+    /// Colour at this position.
+    #[serde(rename = "Color", default)]
+    pub color: ColorRef,
+}
+
+/// The two shadings clause 8.3.4 defines: a linear axis and a radial cone.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum Shading {
+    /// `AxialShd`: a linear gradient from one point to another.
+    Axial {
+        /// Start of the gradient axis.
+        start: (f64, f64),
+        /// End of the gradient axis.
+        end: (f64, f64),
+        /// Colour stops, at least two, in the order written.
+        segments: Vec<Segment>,
+    },
+    /// `RadialShd`: a cone from one circle to another.
+    Radial {
+        /// Centre of the start circle.
+        start: (f64, f64),
+        /// Radius of the start circle.
+        start_radius: f64,
+        /// Centre of the end circle.
+        end: (f64, f64),
+        /// Radius of the end circle.
+        end_radius: f64,
+        /// Colour stops, at least two, in the order written.
+        segments: Vec<Segment>,
+    },
+}
+
+impl Shading {
+    /// The colour stops, whichever shading this is.
+    pub fn segments(&self) -> &[Segment] {
+        match self {
+            Shading::Axial { segments, .. } | Shading::Radial { segments, .. } => segments,
+        }
+    }
+}
+
+impl Default for ColorRef {
+    /// Opaque black, the colour an absent value means.
+    fn default() -> Self {
+        Self::BLACK
+    }
 }
 
 impl ColorRef {
@@ -22,6 +81,7 @@ impl ColorRef {
     pub const BLACK: Self = Self {
         value: String::new(),
         alpha: None,
+        shading: None,
     };
 
     /// Build from an `#RRGGBB` string.
@@ -29,6 +89,16 @@ impl ColorRef {
         Self {
             value: hex.into(),
             alpha: None,
+            shading: None,
+        }
+    }
+
+    /// Build from a shading, which carries its own colours.
+    pub fn from_shading(shading: Shading) -> Self {
+        Self {
+            value: String::new(),
+            alpha: None,
+            shading: Some(shading),
         }
     }
 
@@ -40,7 +110,13 @@ impl ColorRef {
 
     /// Whether the colour text is absent, meaning the OFD default applies.
     pub fn is_default(&self) -> bool {
-        self.value.is_empty()
+        self.value.is_empty() && self.shading.is_none()
+    }
+
+    /// The shading this colour carries, if it is a gradient rather than a flat
+    /// colour.
+    pub fn shading(&self) -> Option<&Shading> {
+        self.shading.as_ref()
     }
 
     /// The channel values as written, without guessing a colour space.

@@ -132,6 +132,17 @@ impl DisplayListBuilder {
         self.ops.push(op);
     }
 
+    /// How many commands have been emitted so far. A caller that pushes a
+    /// command and then needs to refer back to it reads this before the push.
+    pub fn len(&self) -> usize {
+        self.ops.len()
+    }
+
+    /// Whether no command has been emitted yet.
+    pub fn is_empty(&self) -> bool {
+        self.ops.is_empty()
+    }
+
     /// Finish the page.
     pub fn finish(self, index: usize) -> PageDisplay {
         PageDisplay {

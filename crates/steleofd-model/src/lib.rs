@@ -9,14 +9,14 @@ pub mod color;
 pub mod document;
 pub mod object;
 
-pub use color::ColorRef;
+pub use color::{ColorRef, Segment, Shading};
 pub use document::{
     CommonData, DocBody, DocRoot, Document, Location, OfdRoot, Page, PageBlock, Pages, Version,
     Zones,
 };
 pub use object::{
-    DashPattern, DrawParam, FillRuleStyle, GraphicsUnit, ImageObject, LineCapStyle, LineJoinStyle,
-    Object, ObjectRef, PathObject, TextObject,
+    ClipArea, ClipList, DashPattern, DrawParam, FillRuleStyle, GraphicsUnit, ImageObject,
+    LineCapStyle, LineJoinStyle, Object, ObjectRef, PathObject, TextObject,
 };
 
 /// Reference attribute (`ID` in the standard) identifying an object or resource.

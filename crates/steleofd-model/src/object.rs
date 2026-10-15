@@ -177,6 +177,43 @@ pub struct ObjectBase {
     /// Replacement colour applied to one-bit images.
     #[serde(rename = "Name", skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
+    /// Clip areas that narrow where this object draws, clause 8.4.
+    #[serde(rename = "Clips", skip_serializing_if = "Option::is_none")]
+    pub clips: Option<ClipList>,
+    /// Stroke width written on the object itself, overriding any draw parameter.
+    #[serde(rename = "LineWidth", skip_serializing_if = "Option::is_none")]
+    pub line_width: Option<f64>,
+    /// End cap written on the object itself.
+    #[serde(rename = "Cap", skip_serializing_if = "Option::is_none")]
+    pub cap: Option<LineCapStyle>,
+    /// Segment join written on the object itself.
+    #[serde(rename = "Join", skip_serializing_if = "Option::is_none")]
+    pub join: Option<LineJoinStyle>,
+    /// Miter limit written on the object itself.
+    #[serde(rename = "MiterLimit", skip_serializing_if = "Option::is_none")]
+    pub miter_limit: Option<f64>,
+}
+
+/// The `Clips` container of clause 8.4.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct ClipList {
+    /// Clip areas, each narrowing the region the object may draw in.
+    #[serde(rename = "Clip", default)]
+    pub items: Vec<ClipArea>,
+}
+
+/// One clip area: the geometry a drawing is confined to.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct ClipArea {
+    /// The path the clip is bounded by, in abbreviated form.
+    #[serde(rename = "PathData", skip_serializing_if = "Option::is_none")]
+    pub path_data: Option<String>,
+    /// Placement transform for this area, `a b c d e f`.
+    #[serde(rename = "CTM", skip_serializing_if = "Option::is_none")]
+    pub ctm: Option<String>,
+    /// Drawing parameters referenced by this area.
+    #[serde(rename = "DrawParam", skip_serializing_if = "Option::is_none")]
+    pub draw_param: Option<RefId>,
 }
 
 /// One reference from an object to something else.
@@ -330,6 +367,7 @@ mod tests {
             draw_param: None,
             visible: Some(true),
             name: None,
+            ..Default::default()
         }
     }
 

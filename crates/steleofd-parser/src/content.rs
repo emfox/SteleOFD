@@ -3,14 +3,14 @@
 
 use steleofd_common::{Millimeter, Rect};
 use steleofd_error::{FormatError, OfdError, Result, XmlError};
-use steleofd_model::color::ColorRef;
+use steleofd_model::color::{ColorRef, Segment, Shading};
 use steleofd_model::document::{
     CommonData, DocBody, Document as ModelDocument, DrawParamList, Layer, Location, OfdRoot, Page,
     PageArea, PageBlock, Pages, Template, TemplateList, TemplatePageList, TemplateRef, Version,
 };
 use steleofd_model::object::{
-    DashPattern, DrawParam, FillRuleStyle, GraphicsUnit, ImageObject, LineCapStyle, LineJoinStyle,
-    Object, ObjectBase, PathObject, TextCode, TextObject,
+    ClipArea, ClipList, DashPattern, DrawParam, FillRuleStyle, GraphicsUnit, ImageObject,
+    LineCapStyle, LineJoinStyle, Object, ObjectBase, PathObject, TextCode, TextObject,
 };
 use steleofd_xml::cursor::Event;
 use steleofd_xml::{Cursor, Node, parse_bool, parse_number_list, parse_number_list_n};
@@ -286,12 +286,184 @@ fn read_draw_param(cursor: &mut Cursor<'_>, node: &Node) -> Result<DrawParam> {
 }
 
 /// `<FillColor Value="#FF0000" Alpha="255"/>`; `Alpha` is `0..=255`.
+/// Clause 8.3.4 also allows the colour to be a shading, written as a child
+/// element rather than a `Value` attribute.
 fn read_color(node: &Node, cursor: &mut Cursor<'_>) -> Result<ColorRef> {
     let a = node.attributes();
     let value = a.get("Value").unwrap_or("").to_string();
     let alpha = a.optional_as::<u8>("FillColor", "Alpha")?.unwrap_or(255);
-    cursor.skip_element(node)?;
-    Ok(ColorRef::from_hex(value).with_alpha(alpha))
+    let element = node.local();
+    if node.is_self_closing() {
+        return Ok(ColorRef::from_hex(value).with_alpha(alpha));
+    }
+    let mut shading = None;
+    loop {
+        match cursor.next_event()? {
+            Event::Start(n) if n.is("AxialShd") => shading = Some(read_axial(&n, cursor)?),
+            Event::Start(n) if n.is("RadialShd") => shading = Some(read_radial(&n, cursor)?),
+            Event::Start(other) if other.is("Pattern") || other.is("GouraudShd") => {
+                return Err(unsupported_shading(other.local()));
+            }
+            Event::Start(other) => cursor.skip_element(&other)?,
+            Event::End(_) | Event::Eof => break,
+            Event::Text(_) => {}
+        }
+    }
+    let mut color = ColorRef::from_hex(value).with_alpha(alpha);
+    color.shading = shading;
+    let _ = element;
+    Ok(color)
+}
+
+/// A shading the standard defines but this parser does not yet read. Returning
+/// an error keeps the gap visible; dropping the element would render a document
+/// that silently lost its fill.
+fn unsupported_shading(name: &str) -> OfdError {
+    OfdError::Xml(XmlError::UnsupportedExtension(name.to_string()))
+}
+
+/// `AxialShd`: a linear gradient axis with its colour stops.
+fn read_axial(node: &Node, cursor: &mut Cursor<'_>) -> Result<Shading> {
+    let a = node.attributes();
+    let start = parse_position("AxialShd", "StartPoint", a.get("StartPoint"))?;
+    let end = parse_position("AxialShd", "EndPoint", a.get("EndPoint"))?;
+    let segments = read_segments(cursor)?;
+    Ok(Shading::Axial {
+        start,
+        end,
+        segments,
+    })
+}
+
+/// `RadialShd`: a cone described by two circles and its colour stops.
+fn read_radial(node: &Node, cursor: &mut Cursor<'_>) -> Result<Shading> {
+    let a = node.attributes();
+    let start = parse_position("RadialShd", "StartPoint", a.get("StartPoint"))?;
+    let end = parse_position("RadialShd", "EndPoint", a.get("EndPoint"))?;
+    let start_radius = a
+        .optional_as::<f64>("RadialShd", "StartRadius")?
+        .unwrap_or(0.0);
+    let end_radius = a
+        .optional_as::<f64>("RadialShd", "EndRadius")?
+        .unwrap_or(0.0);
+    let segments = read_segments(cursor)?;
+    Ok(Shading::Radial {
+        start,
+        start_radius,
+        end,
+        end_radius,
+        segments,
+    })
+}
+
+/// `<Segment Position="0.5"><Color Value="#808080"/></Segment>` in sequences of
+/// at least two.
+fn read_segments(cursor: &mut Cursor<'_>) -> Result<Vec<Segment>> {
+    let mut segments = Vec::new();
+    loop {
+        match cursor.next_event()? {
+            Event::Start(n) if n.is("Segment") => {
+                let a = n.attributes();
+                let position = a.optional_as::<f64>("Segment", "Position")?.unwrap_or(0.0);
+                let mut color = ColorRef::default();
+                if n.is_self_closing() {
+                    segments.push(Segment { position, color });
+                    continue;
+                }
+                loop {
+                    match cursor.next_event()? {
+                        Event::Start(c) if c.is("Color") => color = read_color(&c, cursor)?,
+                        Event::Start(other) => cursor.skip_element(&other)?,
+                        Event::End(_) | Event::Eof => break,
+                        Event::Text(_) => {}
+                    }
+                }
+                segments.push(Segment { position, color });
+            }
+            Event::Start(other) => cursor.skip_element(&other)?,
+            Event::End(_) | Event::Eof => break,
+            Event::Text(_) => {}
+        }
+    }
+    Ok(segments)
+}
+
+/// `StartPoint="0 10"`, a space-separated pair.
+fn parse_position(element: &str, attribute: &str, raw: Option<&str>) -> Result<(f64, f64)> {
+    let raw = raw.ok_or_else(|| {
+        OfdError::Xml(XmlError::MissingAttribute {
+            element: element.to_string(),
+            attr: attribute.to_string(),
+        })
+    })?;
+    let v = parse_number_list_n::<2>(element, attribute, raw)?;
+    Ok((v[0], v[1]))
+}
+
+/// `<Clips><Clip><Area><Path .../></Area></Clip></Clips>`; clause 8.4 confines a
+/// drawing to the intersection of its areas.
+fn read_clips(cursor: &mut Cursor<'_>) -> Result<ClipList> {
+    let mut list = ClipList::default();
+    loop {
+        match cursor.next_event()? {
+            Event::Start(n) if n.is("Clip") => list.items.push(read_clip(cursor)?),
+            Event::Start(other) => cursor.skip_element(&other)?,
+            Event::End(_) | Event::Eof => break,
+            Event::Text(_) => {}
+        }
+    }
+    Ok(list)
+}
+
+/// One `Clip`: the areas it is made of.
+fn read_clip(cursor: &mut Cursor<'_>) -> Result<ClipArea> {
+    let mut area = ClipArea::default();
+    loop {
+        match cursor.next_event()? {
+            Event::Start(n) if n.is("Area") => {
+                let a = n.attributes();
+                area.ctm = a.get("CTM").map(str::to_string);
+                area.draw_param = a.get("DrawParam").map(str::to_string);
+                if n.is_self_closing() {
+                    continue;
+                }
+                loop {
+                    match cursor.next_event()? {
+                        Event::Start(p) if p.is("Path") => {
+                            area.path_data = read_clip_path(cursor, &p)?;
+                        }
+                        Event::Start(t) if t.is("Text") => {
+                            return Err(unsupported_shading("text clip area"));
+                        }
+                        Event::Start(other) => cursor.skip_element(&other)?,
+                        Event::End(_) | Event::Eof => break,
+                        Event::Text(_) => {}
+                    }
+                }
+            }
+            Event::Start(other) => cursor.skip_element(&other)?,
+            Event::End(_) | Event::Eof => break,
+            Event::Text(_) => {}
+        }
+    }
+    Ok(area)
+}
+
+/// The abbreviated data inside an `Area`'s `Path`.
+fn read_clip_path(cursor: &mut Cursor<'_>, node: &Node) -> Result<Option<String>> {
+    if node.is_self_closing() {
+        return Ok(None);
+    }
+    let mut data = None;
+    loop {
+        match cursor.next_event()? {
+            Event::Start(n) if n.is("AbbreviatedData") => data = Some(cursor.read_text()?),
+            Event::Start(other) => cursor.skip_element(&other)?,
+            Event::End(_) | Event::Eof => break,
+            Event::Text(_) => {}
+        }
+    }
+    Ok(data)
 }
 
 fn read_dash(node: &Node, cursor: &mut Cursor<'_>) -> Result<DashPattern> {
@@ -458,6 +630,21 @@ fn parse_base(node: &Node) -> Result<ObjectBase> {
             None => None,
         },
         name: a.get("Name").map(str::to_string),
+        // Clause 8.2 fixes these on the graphic unit itself; a draw parameter
+        // only supplies them when the object does not.
+        line_width: a.optional_as::<f64>(element, "LineWidth")?,
+        cap: a.get("Cap").map(|raw| match raw {
+            "Round" => LineCapStyle::Round,
+            "Square" => LineCapStyle::Square,
+            _ => LineCapStyle::Butt,
+        }),
+        join: a.get("Join").map(|raw| match raw {
+            "Round" => LineJoinStyle::Round,
+            "Bevel" => LineJoinStyle::Bevel,
+            _ => LineJoinStyle::Miter,
+        }),
+        miter_limit: a.optional_as::<f64>(element, "MiterLimit")?,
+        clips: None,
     })
 }
 
@@ -492,6 +679,7 @@ fn read_path_object(cursor: &mut Cursor<'_>, node: &Node) -> Result<PathObject> 
                 Event::Start(n) if n.is("StrokeColor") => {
                     p.stroke_color = Some(read_color(&n, cursor)?)
                 }
+                Event::Start(n) if n.is("Clips") => p.base.clips = Some(read_clips(cursor)?),
                 Event::Start(other) => cursor.skip_element(&other)?,
                 Event::End(_) => break,
                 Event::Eof => break,
@@ -530,9 +718,7 @@ fn read_text_object(cursor: &mut Cursor<'_>, node: &Node) -> Result<TextObject> 
                 Event::Start(n) if n.is("FillColor") => {
                     t.fill_color = Some(read_color(&n, cursor)?)
                 }
-                Event::Start(n) if n.is("FillColor") => {
-                    t.fill_color = Some(read_color(&n, cursor)?)
-                }
+                Event::Start(n) if n.is("Clips") => t.base.clips = Some(read_clips(cursor)?),
                 Event::Start(other) => cursor.skip_element(&other)?,
                 Event::End(_) => break,
                 Event::Eof => break,
@@ -578,6 +764,7 @@ fn read_image_object(cursor: &mut Cursor<'_>, node: &Node) -> Result<ImageObject
                 Event::Start(n) if n.is("Substitution") => {
                     i.substitution = Some(read_color(&n, cursor)?)
                 }
+                Event::Start(n) if n.is("Clips") => i.base.clips = Some(read_clips(cursor)?),
                 Event::Start(other) => cursor.skip_element(&other)?,
                 Event::End(_) => break,
                 Event::Eof => break,
