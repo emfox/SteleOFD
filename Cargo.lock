@@ -4982,6 +4982,7 @@ dependencies = [
 name = "steleofd-parser"
 version = "0.1.0"
 dependencies = [
+ "proptest",
  "steleofd-common",
  "steleofd-display",
  "steleofd-error",
