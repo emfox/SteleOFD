@@ -12,6 +12,7 @@ pub struct Certificate {
     serial: String,
     not_before: i64,
     not_after: i64,
+    public_key: Vec<u8>,
 }
 
 impl Certificate {
@@ -29,6 +30,7 @@ impl Certificate {
             serial: hex_of(cert.tbs_certificate.serial.to_bytes_be()),
             not_before: cert.validity().not_before.timestamp(),
             not_after: cert.validity().not_after.timestamp(),
+            public_key: cert.public_key().subject_public_key.data.to_vec(),
         })
     }
 
@@ -42,6 +44,12 @@ impl Certificate {
     /// The raw DER bytes.
     pub fn raw_der(&self) -> &[u8] {
         &self.raw_der
+    }
+
+    /// Subject public key bytes, exactly as the certificate encodes them:
+    /// for an SM2 certificate, the uncompressed EC point.
+    pub fn public_key(&self) -> &[u8] {
+        &self.public_key
     }
 
     /// Distinguished name of the subject.
