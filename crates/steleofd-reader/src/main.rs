@@ -5,6 +5,7 @@
 use eframe::egui::{self, Ui};
 use steleofd_i18n::MessageId;
 use steleofd_reader::App;
+use steleofd_reader::ExportFormat;
 use steleofd_reader::window;
 
 /// The window state, boxed so `eframe` can own it.
@@ -44,6 +45,9 @@ impl eframe::App for Reader {
         if requests.open_dialog {
             open_with_dialog(&mut self.app);
         }
+        if let Some(format) = requests.export {
+            export_with_dialog(&mut self.app, format);
+        }
         self.sync_title(ui);
         if requests.quit {
             ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
@@ -78,4 +82,35 @@ fn open_with_dialog(app: &mut App) {
     if let Err(err) = app.open_path(&path) {
         app.set_error(err.message);
     }
+}
+
+/// Ask the platform where the export should go. A PDF is one file so the
+/// platform names it; PNG writes one file per page, so it names a folder.
+/// Cancelling is not a failure, so nothing is reported.
+fn export_with_dialog(app: &mut App, requested: ExportFormat) {
+    // Consuming the request also learns the page selection, which the window
+    // does not own. Cancelling the dialog leaves the request cleared, so the
+    // platform is not asked again on the next frame.
+    let Some((format, pages)) = app.take_export_request() else {
+        return;
+    };
+    debug_assert_eq!(format, requested, "the window reported a different format");
+    let destination = match format {
+        ExportFormat::Pdf => {
+            let title = app.i18n().text(MessageId::ReaderExportPdfTitle);
+            let mut dialog = rfd::FileDialog::new().set_title(&title);
+            if let Some(stem) = app.path().and_then(|p| p.file_stem()) {
+                dialog = dialog.set_file_name(format!("{}.pdf", stem.to_string_lossy()));
+            }
+            dialog.add_filter("PDF document", &["pdf"]).save_file()
+        }
+        ExportFormat::Png => {
+            let title = app.i18n().text(MessageId::ReaderExportPngTitle);
+            rfd::FileDialog::new().set_title(&title).pick_folder()
+        }
+    };
+    let Some(destination) = destination else {
+        return;
+    };
+    app.export_to(format, pages, destination);
 }

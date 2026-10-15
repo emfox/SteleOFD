@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 use steleofd_core::Document;
 use steleofd_i18n::{I18n, MessageId};
 
+use crate::export_worker::{ExportFormat, ExportQueue, ExportRequest};
 use crate::render_worker::RenderQueue;
 use crate::viewer::{self, DroppedFile, Layout, PageCache};
 
@@ -41,10 +42,29 @@ pub struct App {
     signatures: Option<Vec<SignatureReport>>,
     /// Whether the signature panel is showing.
     signatures_open: bool,
+    /// The worker that converts and writes exported pages.
+    exports: Option<ExportQueue>,
+    /// The stamp the newest export was asked under.
+    export_generation: u64,
+    /// What the newest finished export wrote, for the status bar to report.
+    export_report: Option<ExportReport>,
+    /// The format the reader asked to export, waiting for a destination.
+    want_export: Option<ExportFormat>,
     error: Option<AppError>,
     info: Option<String>,
     want_open: bool,
     want_quit: bool,
+}
+
+/// What one finished export produced, in the reader's terms.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExportReport {
+    /// What was produced.
+    pub format: ExportFormat,
+    /// How many pages went in.
+    pub pages: usize,
+    /// Where the files landed.
+    pub written: Vec<PathBuf>,
 }
 
 /// What the reader needs to know about one signature. The verdict comes from
@@ -135,6 +155,10 @@ impl App {
             search_open: false,
             signatures: None,
             signatures_open: false,
+            exports: None,
+            export_generation: 0,
+            export_report: None,
+            want_export: None,
             error: None,
             info: None,
             want_open: false,
@@ -257,6 +281,9 @@ impl App {
         self.search_open = false;
         self.signatures = None;
         self.signatures_open = false;
+        self.exports = None;
+        self.export_report = None;
+        self.want_export = None;
     }
 
     /// The one-line description of the open document, for the status bar.
@@ -425,6 +452,7 @@ impl App {
     /// Called once per frame before anything is drawn, so a page that landed
     /// during the last frame is on screen in this one.
     pub fn poll(&mut self) {
+        self.collect_exports();
         let Some(queue) = self.queue.as_mut() else {
             return;
         };
@@ -774,6 +802,133 @@ impl App {
         report.algorithm.as_ref().map(|algo| {
             self.i18n
                 .text_with(MessageId::SignAlgorithm, [("algo", algo.clone().into())])
+        })
+    }
+
+    /// Ask to export the pages on screen. The host answers with a
+    /// destination, because only the platform knows where a file should land.
+    pub fn request_export(&mut self, format: ExportFormat) {
+        if !self.is_open() {
+            return;
+        }
+        self.want_export = Some(format);
+    }
+
+    /// Whether the window should ask the platform for a destination.
+    pub fn wants_export(&self) -> Option<ExportFormat> {
+        self.want_export
+    }
+
+    /// Consume the export request, yielding the format and the pages to write.
+    pub fn take_export_request(&mut self) -> Option<(ExportFormat, Vec<usize>)> {
+        let format = self.want_export.take()?;
+        let pages = self.export_pages();
+        Some((format, pages))
+    }
+
+    /// The pages an export covers: the reader's selection rather than the whole
+    /// document, so a spread exports as the two pages shown and a search result
+    /// exports the page it found.
+    pub fn export_pages(&self) -> Vec<usize> {
+        if self.page_count() == 0 {
+            return Vec::new();
+        }
+        self.visible()
+    }
+
+    /// Export `pages` as `format` into `destination`, off the draw path. The
+    /// destination is the file for PDF and the directory for PNG. Starting an
+    /// export drops the previous report, so the bar never describes a stale file.
+    pub fn export_to(&mut self, format: ExportFormat, pages: Vec<usize>, destination: PathBuf) {
+        let Some(bytes) = self.bytes.clone() else {
+            return;
+        };
+        if pages.is_empty() {
+            return;
+        }
+        // Read the stem before the queue is borrowed, since it needs `self`.
+        let stem = self.export_stem();
+        let dpi = self.dpi;
+        self.export_generation += 1;
+        let generation = self.export_generation;
+        self.export_report = None;
+        let queue = self
+            .exports
+            .get_or_insert_with(|| ExportQueue::spawn(bytes));
+        queue.submit(ExportRequest {
+            generation,
+            format,
+            pages,
+            dpi,
+            destination,
+            stem,
+        });
+    }
+
+    /// Whether an export is still being written.
+    pub fn is_exporting(&self) -> bool {
+        self.exports.as_ref().is_some_and(ExportQueue::is_busy)
+    }
+
+    /// What the newest finished export wrote, if it has finished.
+    pub fn export_report(&self) -> Option<&ExportReport> {
+        self.export_report.as_ref()
+    }
+
+    /// The filename stem exported files are named from. A dropped file has no
+    /// path, so it falls back to a fixed name rather than files called nothing.
+    fn export_stem(&self) -> String {
+        self.path
+            .as_ref()
+            .and_then(|path| path.file_stem())
+            .map(|stem| stem.to_string_lossy().into_owned())
+            .unwrap_or_else(|| "document".to_string())
+    }
+
+    /// Collect finished exports into the report and the error line. Files
+    /// written before a failure are kept in the report, because they exist.
+    pub fn collect_exports(&mut self) {
+        let Some(queue) = self.exports.as_mut() else {
+            return;
+        };
+        for result in queue.drain() {
+            match result.outcome {
+                Ok(()) => {
+                    self.export_report = Some(ExportReport {
+                        format: result.format,
+                        pages: result.pages,
+                        written: result.written,
+                    });
+                    self.info = None;
+                }
+                // Files written before the failure still exist, so the report
+                // is kept and the failure is stated rather than replacing it.
+                Err(message) => self.set_error(message),
+            }
+        }
+    }
+
+    /// What the status bar says about the last export. The two formats count
+    /// differently because they are different things: one PDF holding two pages
+    /// is one file but two pages, and reporting files would halve a spread.
+    pub fn export_label(&self) -> Option<String> {
+        let report = self.export_report.as_ref()?;
+        let path = report.written.first().map(|p| p.display().to_string());
+        Some(match report.format {
+            ExportFormat::Pdf => self.i18n.text_with(
+                MessageId::ReaderExportPdfDone,
+                [
+                    ("count", report.pages.to_string().into()),
+                    ("path", path.unwrap_or_default().into()),
+                ],
+            ),
+            ExportFormat::Png => self.i18n.text_with(
+                MessageId::ReaderExportPngDone,
+                [
+                    ("count", report.written.len().to_string().into()),
+                    ("path", path.unwrap_or_default().into()),
+                ],
+            ),
         })
     }
 

@@ -17,7 +17,7 @@ pub use replay::{GradientShape, PageSink, PathShape, replay};
 pub use svg::{SvgOptions, SvgSink, page_to_svg, pages_to_svg};
 
 #[cfg(feature = "pdf")]
-pub use pdf::{PdfOptions, PdfSink, document_to_pdf, page_to_pdf};
+pub use pdf::{PdfOptions, PdfSink, document_to_pdf, document_to_pdf_pages, page_to_pdf};
 
 /// How glyph runs become target-format content.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]

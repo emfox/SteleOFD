@@ -4,8 +4,8 @@
 
 use steleofd_common::Rect;
 use steleofd_convert::{
-    ConversionStats, PdfOptions, SvgOptions, TextExport, document_to_pdf, page_to_pdf, page_to_svg,
-    pages_to_svg,
+    ConversionStats, PdfOptions, SvgOptions, TextExport, document_to_pdf, document_to_pdf_pages,
+    page_to_pdf, page_to_svg, pages_to_svg,
 };
 use steleofd_display::ops::{Color, Paint, PaintRule, StrokeStyle};
 use steleofd_display::{DisplayList, DrawOp, PageDisplay};
@@ -130,6 +130,59 @@ fn a_multi_page_pdf_counts_every_page() {
     assert!(
         text.contains("/Count 3"),
         "page tree does not count three pages"
+    );
+}
+
+#[test]
+fn a_selected_subset_of_pages_becomes_a_pdf_of_just_those_pages() {
+    // A reader exports what it is looking at, which is a subset rather than a
+    // span: facing mode shows page 2 beside page 3 and skips nothing between
+    // them, but a search can leave gaps, so the selection is a list.
+    let list = display_list(vec![blank_page(0), one_rect_page(1), blank_page(2)]);
+    let pdf = document_to_pdf_pages(&list, &[0, 2], &PdfOptions::default()).expect("convert");
+    let text = String::from_utf8_lossy(&pdf);
+    assert!(
+        text.contains("/Count 2"),
+        "a two-page selection produced a tree that counts something else"
+    );
+}
+
+#[test]
+fn a_selection_may_name_the_same_page_twice() {
+    // Repeating a page is a legitimate ask — a reader may want one page in the
+    // export twice — and silently collapsing it would lose a page the caller
+    // asked for.
+    let list = display_list(vec![blank_page(0), one_rect_page(1)]);
+    let pdf = document_to_pdf_pages(&list, &[1, 1], &PdfOptions::default()).expect("convert");
+    assert!(
+        String::from_utf8_lossy(&pdf).contains("/Count 2"),
+        "a repeated page was collapsed"
+    );
+}
+
+#[test]
+fn a_page_that_is_not_in_the_display_list_is_an_error_not_a_short_pdf() {
+    // A windowed display list may hold fewer pages than the document has, so
+    // the selection can name a page that was never materialized. Failing
+    // loudly beats writing a PDF that quietly omits what the reader wanted.
+    let mut list = display_list(vec![blank_page(0), one_rect_page(1)]);
+    list.page_count = 9;
+    let err = document_to_pdf_pages(&list, &[0, 8], &PdfOptions::default())
+        .expect_err("a page outside the list must not convert");
+    assert!(
+        err.to_string().contains("out of range"),
+        "unhelpful error: {err}"
+    );
+}
+
+#[test]
+fn an_empty_selection_still_produces_a_readable_pdf() {
+    let list = display_list(vec![blank_page(0)]);
+    let pdf = document_to_pdf_pages(&list, &[], &PdfOptions::default()).expect("convert");
+    assert!(pdf.starts_with(b"%PDF-"));
+    assert!(
+        String::from_utf8_lossy(&pdf).contains("/Count 0"),
+        "an empty selection should count zero pages, not fall back to all of them"
     );
 }
 

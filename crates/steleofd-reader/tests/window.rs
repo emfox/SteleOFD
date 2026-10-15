@@ -396,3 +396,61 @@ fn opening_the_signature_panel_shows_the_count_and_the_verdict() {
     let verdict = label(MessageId::SignValid);
     harness.get_by_label_contains(&verdict);
 }
+
+#[test]
+fn the_export_buttons_are_disabled_until_a_document_is_open() {
+    let harness = harness(App::new());
+    for key in [MessageId::ReaderExportPdf, MessageId::ReaderExportPng] {
+        let text = label(key);
+        let button = harness.get_by_label(&text);
+        assert!(
+            button.accesskit_node().is_disabled(),
+            "there is nothing to export with no document open"
+        );
+    }
+}
+
+#[test]
+fn asking_to_export_asks_the_host_where_to_write_it() {
+    // The window cannot know where a person wants a file, so it reports the
+    // format and lets the host ask the platform.
+    let mut app = App::new();
+    let bytes = steleofd_testkit::multipage_archive(3);
+    app.open_bytes(&bytes, Some("many.ofd"))
+        .expect("the fixture opens");
+    let mut harness = harness(app);
+
+    harness
+        .get_by_label(&label(MessageId::ReaderExportPdf))
+        .click();
+    harness.run();
+    assert_eq!(
+        harness.state().wants_export(),
+        Some(steleofd_reader::ExportFormat::Pdf),
+        "the state holds the request until the host answers"
+    );
+}
+
+#[test]
+fn a_finished_export_is_announced_in_the_status_bar() {
+    let dir = std::env::temp_dir().join("steleofd-window-export");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("the scratch directory is creatable");
+    let out = dir.join("out.pdf");
+    let mut app = App::new();
+    let bytes = steleofd_testkit::multipage_archive(2);
+    app.open_bytes(&bytes, Some("many.ofd"))
+        .expect("the fixture opens");
+    app.export_to(steleofd_reader::ExportFormat::Pdf, vec![0], out.clone());
+    for _ in 0..2000 {
+        app.poll();
+        if !app.is_exporting() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(2));
+    }
+    let harness = harness(app);
+    let label = harness.state().export_label().expect("the export reported");
+    harness.get_by_label_contains(&label);
+    let _ = std::fs::remove_dir_all(&dir);
+}

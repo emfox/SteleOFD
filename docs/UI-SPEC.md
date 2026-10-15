@@ -114,6 +114,22 @@ signature — asking the engine per signature re-reads the package each time.
 Like Z5, it is drawn before the canvas so the canvas measures the width that is
 actually left for pages.
 
+**Export.** Two actions at the far end of Z1: as one PDF, or as one PNG per
+page. They are document-level rather than page-level, so they sit in Z1 and not
+in Z2. Both write the pages the reader is currently looking at — a spread
+exports as the two pages shown — because "export what I am looking at" is the
+question a reader in front of a document actually has.
+
+The window cannot know where a file should go, so it writes the request into
+`App` and reports the format in `WindowRequests`; the host consumes it and asks
+the platform. A PDF is one file, so the platform names it; PNG writes one file
+per page, so the platform names a folder. Cancelling is not a failure.
+
+Conversion runs on its own thread, for the same reason rasterizing does: a PDF
+of a long document is written in one go and would otherwise drop frames. Unlike
+a render, an export is never superseded — the reader asked for a file, and the
+file either appears or it does not.
+
 ## 3. Frame flow
 
 `eframe::App::ui` runs nine steps, always in this order. The order is the

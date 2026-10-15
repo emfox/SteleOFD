@@ -169,6 +169,18 @@ impl Document {
         steleofd_convert::document_to_pdf(&self.list, &steleofd_convert::PdfOptions::default())
     }
 
+    /// Convert the named pages to one PDF file, in the order given. The
+    /// selection is a list rather than a span because a reader's pages are not
+    /// contiguous: facing mode shows a pair, and a search lands anywhere.
+    #[cfg(feature = "pdf")]
+    pub fn to_pdf_pages(&self, pages: &[usize]) -> Result<Vec<u8>> {
+        steleofd_convert::document_to_pdf_pages(
+            &self.list,
+            pages,
+            &steleofd_convert::PdfOptions::default(),
+        )
+    }
+
     /// Convert one page to SVG.
     #[cfg(feature = "convert")]
     pub fn to_svg(&self, index: usize) -> Result<String> {

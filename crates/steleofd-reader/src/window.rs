@@ -6,6 +6,7 @@ use eframe::egui::{self, TextureOptions, Ui};
 use steleofd_i18n::MessageId;
 
 use crate::app::{App, Canvas, Fit, Verdict};
+use crate::export_worker::ExportFormat;
 use crate::viewer::{DroppedFile, Layout, MAX_DPI, MIN_DPI};
 
 /// The widest a page is drawn, so a large window does not blur a small page.
@@ -16,6 +17,8 @@ pub const MAX_PAGE_WIDTH: f32 = 900.0;
 pub struct WindowRequests {
     /// The reader asked for a file; the host opens the platform dialog.
     pub open_dialog: bool,
+    /// The reader asked where to write an export; the host asks the platform.
+    pub export: Option<ExportFormat>,
     /// The reader wants the window closed.
     pub quit: bool,
 }
@@ -38,6 +41,10 @@ pub fn draw(ui: &mut Ui, app: &mut App) -> WindowRequests {
     if app.wants_quit() {
         requests.quit = true;
     }
+    // The request is not consumed here: the host consumes it, because the host
+    // is what asks the platform where a file should land, and it needs the
+    // page selection this window does not own.
+    requests.export = app.wants_export();
     requests
 }
 
@@ -98,8 +105,33 @@ fn draw_menu(ui: &mut Ui, app: &mut App, requests: &mut WindowRequests) {
                     app.set_layout(layout);
                 }
             }
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                draw_exports(ui, app);
+            });
         });
     });
+}
+
+/// The export actions. Export writes what the reader is looking at, so it
+/// belongs to the document rather than to the page controls in Z2, and it
+/// disables while an export runs so two cannot interleave their files.
+fn draw_exports(ui: &mut Ui, app: &mut App) {
+    let busy = app.is_exporting();
+    ui.label(app.i18n().text(MessageId::ReaderExport));
+    let pdf = app.i18n().text(MessageId::ReaderExportPdf);
+    if ui
+        .add_enabled(app.is_open() && !busy, egui::Button::new(pdf))
+        .clicked()
+    {
+        app.request_export(ExportFormat::Pdf);
+    }
+    let png = app.i18n().text(MessageId::ReaderExportPng);
+    if ui
+        .add_enabled(app.is_open() && !busy, egui::Button::new(png))
+        .clicked()
+    {
+        app.request_export(ExportFormat::Png);
+    }
 }
 
 /// Z2: actions on the page on screen. Controls disable rather than hide.
@@ -384,6 +416,13 @@ fn draw_status(ui: &mut Ui, app: &mut App) {
             if let Some(err) = app.error() {
                 ui.colored_label(egui::Color32::from_rgb(180, 40, 40), &err.message);
             } else {
+                // A finished export speaks before the document description,
+                // because it is the newest thing that happened and the reader
+                // is waiting to hear whether the file appeared.
+                if let Some(label) = app.export_label() {
+                    ui.label(egui::RichText::new(label).weak());
+                    ui.separator();
+                }
                 let info = app.info_label();
                 if !info.is_empty() {
                     ui.label(egui::RichText::new(info).weak());

@@ -555,9 +555,29 @@ pub fn document_to_pdf(
     list: &steleofd_display::DisplayList,
     options: &PdfOptions<'_>,
 ) -> Result<Vec<u8>> {
+    let every: Vec<usize> = list.pages.iter().map(|page| page.index).collect();
+    document_to_pdf_pages(list, &every, options)
+}
+
+/// Convert the named pages into one PDF, in the order given. A reader exporting
+/// "the pages I am looking at" holds a subset, not a contiguous range: facing
+/// mode shows a pair and a search lands anywhere, so this takes a list.
+pub fn document_to_pdf_pages(
+    list: &steleofd_display::DisplayList,
+    pages: &[usize],
+    options: &PdfOptions<'_>,
+) -> Result<Vec<u8>> {
     let mut doc = Document::new();
-    let mut page_ids = Vec::with_capacity(list.pages.len());
-    for page in &list.pages {
+    let mut page_ids = Vec::with_capacity(pages.len());
+    for wanted in pages {
+        let Some(page) = list.page(*wanted) else {
+            return Err(OfdError::Format(
+                steleofd_error::FormatError::PageOutOfRange {
+                    index: *wanted,
+                    total: list.page_count,
+                },
+            ));
+        };
         let mut sink = PdfSink::new(page.page_box, options);
         replay(page, &mut sink)?;
         page_ids.push(sink.emit_page(&mut doc)?);

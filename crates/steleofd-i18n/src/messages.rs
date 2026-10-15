@@ -62,6 +62,20 @@ pub enum MessageId {
     ReaderSearchPanelTitle,
     /// No match found
     ReaderNoMatch,
+    /// Menu heading for the export actions
+    ReaderExport,
+    /// Export the pages on screen as one PDF
+    ReaderExportPdf,
+    /// Export the pages on screen as one PNG file each
+    ReaderExportPng,
+    /// A PDF export finished, with its page count and path
+    ReaderExportPdfDone,
+    /// A PNG export finished, with its file count and path
+    ReaderExportPngDone,
+    /// Title of the platform dialog choosing where the PDF goes
+    ReaderExportPdfTitle,
+    /// Title of the platform dialog choosing where the PNG files go
+    ReaderExportPngTitle,
 
     // Conversion module
     /// Conversion started
@@ -215,6 +229,13 @@ impl MessageId {
             Self::ReaderSearchTitle => "reader-search-title",
             Self::ReaderSearchPanelTitle => "reader-search-panel-title",
             Self::ReaderNoMatch => "reader-no-match",
+            Self::ReaderExport => "reader-export",
+            Self::ReaderExportPdf => "reader-export-pdf",
+            Self::ReaderExportPng => "reader-export-png",
+            Self::ReaderExportPdfDone => "reader-export-pdf-done",
+            Self::ReaderExportPngDone => "reader-export-png-done",
+            Self::ReaderExportPdfTitle => "reader-export-pdf-title",
+            Self::ReaderExportPngTitle => "reader-export-png-title",
 
             // Conversion
             Self::ConvertStart => "convert-start",
@@ -319,6 +340,13 @@ impl MessageId {
         Self::ReaderSearchTitle,
         Self::ReaderSearchPanelTitle,
         Self::ReaderNoMatch,
+        Self::ReaderExport,
+        Self::ReaderExportPdf,
+        Self::ReaderExportPng,
+        Self::ReaderExportPdfDone,
+        Self::ReaderExportPngDone,
+        Self::ReaderExportPdfTitle,
+        Self::ReaderExportPngTitle,
         // Conversion
         Self::ConvertStart,
         Self::ConvertProgress,

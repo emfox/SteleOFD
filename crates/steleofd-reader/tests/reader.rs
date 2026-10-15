@@ -788,3 +788,217 @@ fn verifying_with_nothing_open_is_harmless() {
     assert_eq!(app.signature_count(), 0);
     assert!(app.error().is_none());
 }
+
+/// Export the pages on screen and wait for the files. Like rendering, export
+/// is off the draw path, so the queue is pumped the way a frame pumps it, and
+/// the bound fails loudly rather than hanging forever.
+fn wait_for_export(app: &mut App) -> bool {
+    for _ in 0..2000 {
+        app.poll();
+        if !app.is_exporting() {
+            return true;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(2));
+    }
+    false
+}
+
+/// A scratch directory that removes itself, so a test writes nothing permanent.
+fn scratch(name: &str) -> PathBuf {
+    let dir = std::env::temp_dir().join(format!("steleofd-export-{name}"));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("the scratch directory is creatable");
+    dir
+}
+
+#[test]
+fn an_export_covers_the_pages_on_screen() {
+    let mut app = open_pages(6);
+    app.set_layout(steleofd_reader::viewer::Layout::Facing);
+    app.go_to(2);
+    assert_eq!(app.export_pages(), vec![2, 3], "a spread is both pages");
+}
+
+#[test]
+fn asking_to_export_before_a_document_is_open_does_nothing() {
+    // The menu disables the button, but the state must also refuse: a widget
+    // that is reachable should not be able to start a job with no document.
+    let mut app = App::new();
+    app.request_export(steleofd_reader::ExportFormat::Pdf);
+    assert!(app.wants_export().is_none());
+    assert!(app.take_export_request().is_none());
+}
+
+#[test]
+fn the_export_request_is_handed_out_once() {
+    let mut app = open();
+    app.request_export(steleofd_reader::ExportFormat::Pdf);
+    let (format, pages) = app.take_export_request().expect("a request was made");
+    assert_eq!(format, steleofd_reader::ExportFormat::Pdf);
+    assert_eq!(pages, vec![0]);
+    assert!(
+        app.take_export_request().is_none(),
+        "a second read would ask the platform twice for the same file"
+    );
+}
+
+#[test]
+fn a_pdf_export_writes_the_file_the_pages_were_asked_for() {
+    let dir = scratch("pdf");
+    let out = dir.join("out.pdf");
+    let mut app = open_pages(5);
+    app.set_layout(steleofd_reader::viewer::Layout::Facing);
+    app.go_to(2);
+    app.request_export(steleofd_reader::ExportFormat::Pdf);
+    let (_, pages) = app.take_export_request().expect("a request was made");
+    app.export_to(steleofd_reader::ExportFormat::Pdf, pages, out.clone());
+    assert!(
+        wait_for_export(&mut app),
+        "the export worker never answered"
+    );
+    assert!(app.error().is_none(), "export failed: {:?}", app.error());
+    let bytes = std::fs::read(&out).expect("the PDF was written");
+    assert!(bytes.starts_with(b"%PDF-"), "not a PDF");
+    let report = app
+        .export_report()
+        .expect("the reader reports what it wrote");
+    assert_eq!(report.written, vec![out]);
+    assert_eq!(report.pages, 2, "the spread went in as two pages");
+    assert!(
+        app.export_label().is_some_and(|label| label.contains("2")),
+        "the status bar names the page count: {:?}",
+        app.export_label()
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_png_export_writes_one_file_per_page() {
+    let dir = scratch("png");
+    let mut app = open_pages(3);
+    app.set_layout(steleofd_reader::viewer::Layout::Facing);
+    app.go_to(0);
+    app.request_export(steleofd_reader::ExportFormat::Png);
+    let (_, pages) = app.take_export_request().expect("a request was made");
+    app.export_to(steleofd_reader::ExportFormat::Png, pages, dir.clone());
+    assert!(
+        wait_for_export(&mut app),
+        "the export worker never answered"
+    );
+    assert!(app.error().is_none(), "export failed: {:?}", app.error());
+    let written: Vec<String> = std::fs::read_dir(&dir)
+        .expect("the directory is readable")
+        .map(|entry| {
+            entry
+                .expect("an entry")
+                .file_name()
+                .to_string_lossy()
+                .into_owned()
+        })
+        .collect();
+    assert_eq!(
+        written.len(),
+        2,
+        "a two-page spread writes two files, got {written:?}"
+    );
+    assert!(
+        written.iter().all(|name| name.starts_with("many-")),
+        "files are named from the document: {written:?}"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn an_export_of_no_pages_never_starts() {
+    // Nothing to export is not a zero-page PDF; it is no export at all.
+    let dir = scratch("empty");
+    let mut app = open();
+    app.export_to(
+        steleofd_reader::ExportFormat::Pdf,
+        Vec::new(),
+        dir.join("out.pdf"),
+    );
+    assert!(!app.is_exporting(), "an empty export was submitted anyway");
+    assert!(app.export_report().is_none());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn an_export_that_cannot_be_written_says_so_and_writes_nothing() {
+    // A destination inside a file that is not a directory cannot be created, so
+    // the worker must report it rather than fail silently.
+    let dir = scratch("failure");
+    let blocker = dir.join("blocker");
+    std::fs::write(&blocker, b"not a directory").expect("the blocker is writable");
+    let mut app = open_pages(2);
+    app.request_export(steleofd_reader::ExportFormat::Pdf);
+    let (_, pages) = app.take_export_request().expect("a request was made");
+    app.export_to(
+        steleofd_reader::ExportFormat::Pdf,
+        pages,
+        blocker.join("out.pdf"),
+    );
+    assert!(
+        wait_for_export(&mut app),
+        "the export worker never answered"
+    );
+    assert!(
+        app.error().is_some(),
+        "writing into a file as if it were a directory must be reported"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn closing_the_document_forgets_the_export_report() {
+    let dir = scratch("close");
+    let out = dir.join("out.pdf");
+    let mut app = open_pages(2);
+    app.request_export(steleofd_reader::ExportFormat::Pdf);
+    let (_, pages) = app.take_export_request().expect("a request was made");
+    app.export_to(steleofd_reader::ExportFormat::Pdf, pages, out);
+    assert!(
+        wait_for_export(&mut app),
+        "the export worker never answered"
+    );
+    assert!(app.export_report().is_some());
+    app.close();
+    assert!(
+        app.export_report().is_none(),
+        "a report must not outlive the document it describes"
+    );
+    assert!(!app.is_exporting(), "and the worker goes with it");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_dropped_document_still_names_its_export_files() {
+    // A dropped file has no path, so the stem has to fall back to something
+    // rather than producing files called nothing at all.
+    let dir = scratch("stem");
+    let mut app = App::new();
+    let bytes = steleofd_testkit::multipage_archive(2);
+    app.open_bytes(&bytes, None).expect("the fixture opens");
+    app.request_export(steleofd_reader::ExportFormat::Png);
+    let (_, pages) = app.take_export_request().expect("a request was made");
+    app.export_to(steleofd_reader::ExportFormat::Png, pages, dir.clone());
+    assert!(
+        wait_for_export(&mut app),
+        "the export worker never answered"
+    );
+    let written: Vec<String> = std::fs::read_dir(&dir)
+        .expect("the directory is readable")
+        .map(|entry| {
+            entry
+                .expect("an entry")
+                .file_name()
+                .to_string_lossy()
+                .into_owned()
+        })
+        .collect();
+    assert!(
+        written.iter().all(|name| name.starts_with("document-")),
+        "a pathless document still names its files: {written:?}"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
