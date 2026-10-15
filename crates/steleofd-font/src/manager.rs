@@ -134,7 +134,7 @@ impl FontManager {
     }
 
     /// Load a face from the system by family name.
-    #[cfg(feature = "system-fonts")]
+    #[cfg(all(feature = "system-fonts", not(target_arch = "wasm32")))]
     fn load_system_font(&self, family: &str) -> Result<Arc<Vec<u8>>> {
         use font_kit::family_name::FamilyName;
         use font_kit::handle::Handle;
@@ -158,8 +158,9 @@ impl FontManager {
         })
     }
 
-    /// Degraded path when system font lookup is compiled out.
-    #[cfg(not(feature = "system-fonts"))]
+    /// Degraded path when system font lookup is compiled out: either the
+    /// feature is off, or the target has no system fonts to resolve.
+    #[cfg(not(all(feature = "system-fonts", not(target_arch = "wasm32"))))]
     fn load_system_font(&self, family: &str) -> Result<Arc<Vec<u8>>> {
         Err(FontError::Missing {
             family: family.to_string(),
