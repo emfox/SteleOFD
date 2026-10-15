@@ -282,32 +282,51 @@ tests = [
 [[item]]
 clause = "12"
 title = "Video"
-status = "untested"
+status = "verified"
+tests = [
+  "gb_t_33190_12_a_video_resource_names_its_file_and_format",
+  "gb_t_33190_12_a_movie_action_points_at_a_video_resource",
+]
 
 [[item]]
 clause = "13"
 title = "Composite object"
-status = "untested"
+status = "verified"
+tests = [
+  "gb_t_33190_13_a_composite_object_places_a_vector_resource",
+  "gb_t_33190_13_a_vector_resource_holds_its_own_page_block",
+]
 
 [[item]]
 clause = "14.1"
 title = "Action description"
-status = "untested"
+status = "verified"
+tests = [
+  "gb_t_33190_14_1_an_action_records_its_event_and_target",
+  "gb_t_33190_14_1_a_uri_action_keeps_its_base_and_target",
+  "gb_t_33190_14_1_an_unknown_event_is_rejected",
+]
 
 [[item]]
 clause = "15"
 title = "Annotations"
-status = "untested"
+status = "verified"
+tests = [
+  "gb_t_33190_15_the_annotation_index_points_at_page_files",
+  "gb_t_33190_15_an_annotation_keeps_its_type_remark_and_parameters",
+]
 
 [[item]]
 clause = "16"
 title = "Custom tags"
-status = "untested"
+status = "verified"
+tests = ["gb_t_33190_16_a_custom_tag_names_its_namespace_and_content"]
 
 [[item]]
 clause = "17"
 title = "Extended information"
-status = "untested"
+status = "verified"
+tests = ["gb_t_33190_17_an_extension_names_its_app_and_its_target"]
 
 [[item]]
 clause = "18.1"
@@ -316,6 +335,7 @@ status = "verified"
 tests = [
     "gb_t_33190_18_1_signature_list_points_at_sign_files",
     "gb_t_33190_18_1_missing_signature_list_is_only_a_warning",
+    "gb_t_33190_18_1_the_signature_list_carries_id_and_kind",
 ]
 
 
@@ -328,12 +348,20 @@ tests = ["gb_t_33190_18_2_1_digest_covers_every_reference"]
 [[item]]
 clause = "18.2.2"
 title = "Signature scope"
-status = "untested"
+status = "verified"
+tests = [
+  "gb_t_33190_18_2_2_check_method_governs_every_reference",
+  "gb_t_33190_18_2_2_the_provider_name_is_an_attribute",
+]
 
 [[item]]
 clause = "18.2.3"
 title = "Signature appearance"
-status = "untested"
+status = "verified"
+tests = [
+  "gb_t_33190_18_2_3_the_proof_lives_behind_signed_value",
+  "gb_t_33190_18_2_3_a_stamp_records_where_it_sits",
+]
 
 [[item]]
 clause = "18.2.4"

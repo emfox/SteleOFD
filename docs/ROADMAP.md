@@ -13,10 +13,10 @@ criterion, so it is always obvious whether it is done.
 | Measure | Value |
 | --- | --- |
 | Crates | 26 (L0 foundation through L5 delivery) |
-| Source | 24,904 lines of Rust, measured with `find crates -name '*.rs'` |
-| Tests | 604 passing, plus 13 inline unit-test modules |
+| Source | 27,417 lines of Rust, measured with `find crates -name '*.rs'` |
+| Tests | 620 passing, plus 13 inline unit-test modules |
 | Delivery forms | `cli`, `wasm`, `ffi`, `server`, `reader`, all on the `core` facade |
-| Standard clauses verified | 39 of 47 in GB/T 33190-2016 |
+| Standard clauses verified | 47 of 47 in GB/T 33190-2016 (46 `verified`, 1 `partial`) |
 | Languages | `en-US` and `zh-CN`, 75 message keys, parity enforced in CI |
 | CI | fmt, clippy, build, test, all-features test, i18n, language, conformance, XSD validation |
 
@@ -25,14 +25,14 @@ criterion, so it is always obvious whether it is done.
 These are the things a new contributor would otherwise discover the hard way.
 Each one is a real, verified finding, not a guess.
 
-1. **8 of 47 standard clauses still have no test asserting them**, down from
-   27 before N2. The register in `compliance/gb-t-33190.toml` lists them by
-   name. What remains is the feature tail: `12` video, `13` composite, `14.1`
-   actions, `15` annotations, `16` custom tags, `17` extensions, `18.2.2`/`18.2.3`
-   signature scope and appearance.
+1. **Every one of the 47 standard clauses now has a test asserting it**, up from
+   20 before N2. One stays honestly short of `verified`: `8.4` is `partial`
+   because only a `Path` clip area is read and a `Text` area is rejected with an
+   explicit error. The register in `compliance/gb-t-33190.toml` is the source of
+   truth and lists the status of each by name.
 2. **`proptest` and `criterion` are declared in the workspace but never used.**
    Zero references outside the root `Cargo.toml`. The property and benchmark
-   testing that was planned does not exist yet.
+   testing that was planned does not exist yet. This is the next step, N3.
 3. **The OFD corpus is one file.** `compliance/corpus/minimal.ofd` is the only
    document the XSD validation and the test suites actually read.
 4. ~~**The signed-fixture builder is duplicated four times** across the `sign`,
@@ -117,9 +117,25 @@ the cheap structural ones land before the expensive rendering ones.
   `Clips`/`Clip`/`Area` and emitted as a `ClipPath` between a `Save`/`Restore`
   pair. `8.4` stays `partial`: only a `Path` area is read, a `Text` area is
   rejected with an explicit error rather than silently dropped.
-- **N2-e** The feature tail: `12` video, `13` composite object, `14.1` action
-  description, `15` annotations, `16` custom tags, `17` extended information,
-  `18.2.2` signature scope, `18.2.3` signature appearance.
+- **N2-e** `[x]` The feature tail: `12` video, `13` composite object, `14.1`
+  action description, `15` annotations, `16` custom tags, `17` extended
+  information, `18.2.2` signature scope, `18.2.3` signature appearance.
+  Reading the schemas first paid off three times. `18.2.2` was wrong in the
+  fixture as well as the parser: `CheckMethod` belongs on `References`, and the
+  provider name is a `ProviderName` **attribute** on `Provider`. `18.2.3` was
+  wrong about shape: `SignedValue` is an `ST_Loc` *path* to the proof, not the
+  proof inline, so the parser now follows it and the testkit writes it as its
+  own entry. `12` and `13` turned out to be resource clauses, not page-object
+  ones: video has no graphic unit of its own, it is a `MultiMedia` of `Type`
+  `Video`, and a `CompositeObject` on a page is only a `ResourceID` pointing at
+  a `CompositeGraphicUnit` whose `Content` is a page block. All three are now
+  read, and the clause count closes at `47 of 47`.
+- **N2-e extras** `Action` is modelled as the schema declares it: `Event` is a
+  required enumeration (`DO`/`PO`/`CLICK`), so an unknown spelling is a parse
+  error rather than a silent default, and the body is a choice of `Goto`
+  (`Dest` or `Bookmark`), `URI`, `GotoA`, `Sound` or `Movie`, each read into its
+  own shape. `MovieOperator` and `ActionEvent` keep the standard's spelling on
+  one side and a Rust enum on the other, so callers never match on strings.
 
 A clause moves to `verified` only when a linked test actually asserts it. The
 gate script stays the single source of truth; `docs/COMPLIANCE.md` is
