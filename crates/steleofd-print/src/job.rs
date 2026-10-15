@@ -171,3 +171,144 @@ fn needs_rotation(w: f64, h: f64, orientation: Orientation) -> bool {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::paper::Margins;
+    use crate::paper::PaperSize;
+    use crate::settings::PageSelection;
+    use crate::settings::ScaleMode;
+    use steleofd_common::Rect;
+
+    fn page(index: usize, w: f64, h: f64) -> steleofd_display::PageDisplay {
+        steleofd_display::PageDisplay {
+            index,
+            page_box: Rect::new(0.0, 0.0, w, h),
+            ops: Vec::new(),
+            content_bbox: Rect::EMPTY,
+        }
+    }
+
+    fn list(pages: Vec<steleofd_display::PageDisplay>) -> DisplayList {
+        DisplayList {
+            page_count: pages.len(),
+            pages,
+        }
+    }
+
+    #[test]
+    fn a_landscape_page_prints_on_a_landscape_sheet() {
+        let settings = PrintSettings {
+            orientation: Orientation::Landscape,
+            ..PrintSettings::default()
+        };
+        let job = plan(&list(vec![page(0, 210.0, 297.0)]), &settings).expect("plan");
+        let planned = &job.pages[0];
+        assert_eq!(planned.paper.w, 297.0);
+        assert_eq!(planned.paper.h, 210.0);
+        // Content is portrait on a landscape sheet, so it turns a quarter and
+        // then fills the sheet corner to corner.
+        let top_right = planned.placement.apply(0.0, 0.0);
+        let bottom_left = planned.placement.apply(210.0, 297.0);
+        assert!((top_right.0 - 297.0).abs() < 1e-9);
+        assert!(top_right.1.abs() < 1e-9);
+        assert!(bottom_left.0.abs() < 1e-9);
+        assert!((bottom_left.1 - 210.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn fitting_a_page_into_the_printable_area_centres_it() {
+        let settings = PrintSettings {
+            paper: PaperSize::A4,
+            margins: Margins::uniform(10.0),
+            scale: ScaleMode::FitPrintable,
+            ..PrintSettings::default()
+        };
+        let job = plan(&list(vec![page(0, 100.0, 100.0)]), &settings).expect("plan");
+        let planned = &job.pages[0];
+        // Fitting grows the square to the 190mm printable width, centred in
+        // the 190x277mm printable area.
+        let top_left = planned.placement.apply(0.0, 0.0);
+        let centre = planned.placement.apply(50.0, 50.0);
+        assert!((top_left.0 - 10.0).abs() < 1e-9);
+        assert!((centre.0 - 105.0).abs() < 1e-9);
+        assert!((centre.1 - 148.5).abs() < 1e-9);
+    }
+
+    #[test]
+    fn copies_collate_into_page_order() {
+        let settings = PrintSettings {
+            copies: 2,
+            collate: true,
+            ..PrintSettings::default()
+        };
+        let job = plan(
+            &list(vec![page(0, 210.0, 297.0), page(1, 210.0, 297.0)]),
+            &settings,
+        )
+        .expect("plan");
+        let order: Vec<usize> = job.pages.iter().map(|p| p.page_index).collect();
+        assert_eq!(order, vec![0, 1, 0, 1]);
+    }
+
+    #[test]
+    fn copies_without_collate_group_per_page() {
+        let settings = PrintSettings {
+            copies: 2,
+            collate: false,
+            ..PrintSettings::default()
+        };
+        let job = plan(
+            &list(vec![page(0, 210.0, 297.0), page(1, 210.0, 297.0)]),
+            &settings,
+        )
+        .expect("plan");
+        let order: Vec<usize> = job.pages.iter().map(|p| p.page_index).collect();
+        assert_eq!(order, vec![0, 0, 1, 1]);
+    }
+
+    #[test]
+    fn duplex_pairs_pages_onto_sheets() {
+        let settings = PrintSettings {
+            duplex: Duplex::LongEdge,
+            ..PrintSettings::default()
+        };
+        let list = list(vec![
+            page(0, 210.0, 297.0),
+            page(1, 210.0, 297.0),
+            page(2, 210.0, 297.0),
+        ]);
+        let job = plan(&list, &settings).expect("plan");
+        assert_eq!(job.sheet_count(), 2);
+        assert_eq!(job.pages[1].side, PageSide::Back);
+        assert_eq!(job.pages[1].sheet, 0);
+        assert_eq!(job.pages[2].side, PageSide::Front);
+        assert_eq!(job.pages[2].sheet, 1);
+    }
+
+    #[test]
+    fn a_page_beyond_the_document_is_rejected() {
+        let settings = PrintSettings {
+            selection: PageSelection::List(vec![3]),
+            ..PrintSettings::default()
+        };
+        let err = plan(&list(vec![page(0, 210.0, 297.0)]), &settings).expect_err("out of range");
+        assert!(matches!(
+            err,
+            OfdError::Print(PrintError::PageOutOfRange { .. })
+        ));
+    }
+
+    #[test]
+    fn zero_copies_is_rejected() {
+        let settings = PrintSettings {
+            copies: 0,
+            ..PrintSettings::default()
+        };
+        let err = plan(&list(vec![page(0, 210.0, 297.0)]), &settings).expect_err("no copies");
+        assert!(matches!(
+            err,
+            OfdError::Print(PrintError::InvalidCopies { .. })
+        ));
+    }
+}
