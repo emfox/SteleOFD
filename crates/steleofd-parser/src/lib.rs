@@ -6,6 +6,7 @@
 
 pub mod content;
 pub mod flatten;
+pub mod images;
 pub mod marks;
 pub mod pathdata;
 
@@ -28,6 +29,8 @@ pub struct ParsedDocument {
     /// Directory of the document inside the archive, the base for all
     /// relative references made from within the document.
     pub doc_dir: String,
+    /// Image resources the document declares, with their bytes read in.
+    pub images: images::ImageTable,
 }
 
 /// Reads OFD files from a [`Package`] and flattens pages on demand.
@@ -65,10 +68,12 @@ impl<'a> Parser<'a> {
         let doc_dir = parent_of(&body.doc_root.value).to_string();
         let doc_xml = self.package.read_string(&body.doc_root.value)?;
         let document = content::read_document(&doc_xml)?;
+        let images = images::load_images(self.package, &doc_dir)?;
         Ok(ParsedDocument {
             ofd,
             document,
             doc_dir,
+            images,
         })
     }
 
@@ -119,7 +124,11 @@ impl<'a> Parser<'a> {
         if let Some(inline) = &page.content {
             flatten::flatten_block(inline, &params, &mut builder)?;
         }
-        Ok(builder.finish(index))
+        let mut page = builder.finish(index);
+        // The flattened list names image resources but holds no bytes, so they
+        // are filled in here, where the archive is still to hand.
+        images::attach_images(&mut page, &doc.images);
+        Ok(page)
     }
 
     /// Flatten a page range into a display list for the whole document.

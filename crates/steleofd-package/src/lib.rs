@@ -178,12 +178,33 @@ impl Package {
 
     /// Whether a path exists in the archive.
     pub fn contains(&self, path: &str) -> bool {
-        self.paths.iter().any(|p| p == path)
+        self.paths.iter().any(|p| p == path) || self.match_ignoring_case(path).is_some()
+    }
+
+    /// Find the entry a path names, ignoring case when nothing matches exactly.
+    /// Archives disagree with themselves: one stores `Doc_0/Document.xml` beside
+    /// `DOC_0/Res/Image_4.JPEG`. Exact match wins, so two spellings still work.
+    fn match_ignoring_case(&self, path: &str) -> Option<&str> {
+        self.paths
+            .iter()
+            .find(|p| p.eq_ignore_ascii_case(path))
+            .map(String::as_str)
     }
 
     /// Read one entry in full.
     pub fn read(&mut self, path: &str) -> Result<Vec<u8>> {
-        let mut file = self.archive.by_name(path).map_err(|e| match e {
+        let path = match self.paths.iter().any(|p| p == path) {
+            true => path.to_string(),
+            false => self
+                .match_ignoring_case(path)
+                .ok_or_else(|| {
+                    steleofd_error::OfdError::from(PackageError::MissingEntry {
+                        entry: path.to_string(),
+                    })
+                })?
+                .to_string(),
+        };
+        let mut file = self.archive.by_name(&path).map_err(|e| match e {
             zip::result::ZipError::FileNotFound => PackageError::MissingEntry {
                 entry: path.to_string(),
             }
