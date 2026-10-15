@@ -1,0 +1,6 @@
+#!/bin/sh
+# Reject a commit message that breaks docs/CONVENTIONS.md section 3.
+# Installed by scripts/install-hooks.sh; bypass with --no-verify only when
+# fixing history you have already pushed.
+exec python3 "$(git rev-parse --show-toplevel)/scripts/check_commits.py" \
+    --message "$1"

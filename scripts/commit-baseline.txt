@@ -1,0 +1,20 @@
+# Grandfathered commit-message violations.
+#
+# Commits listed here are already published, so rewriting them would break
+# every existing clone. They are exempt; anything after this point is not.
+#
+# scripts/check_commits.py --grandfathered <this file> skips the listed
+# commits, so a new violation still fails the build.
+#
+# One short sha and an optional reason per line, `#` starts a comment.
+
+# 7e90b85 subject is 73 chars, one over the 72 limit.
+7e90b85
+# ef2aa22 subject is 73 chars, one over the 72 limit.
+ef2aa22
+# 60ea933 body runs to 13 lines, where the rule allows 2.
+60ea933
+# 8cffd09 body runs to 9 lines, where the rule allows 2.
+8cffd09
+# e01d170 body runs to 10 lines, where the rule allows 2.
+e01d170

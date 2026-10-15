@@ -68,12 +68,42 @@ file touched, do not restate the diff, and do not write a changelog entry.
 
 ## 4. Enforcement
 
-Two checks run in CI and are expected to pass before any merge:
+Five checks run in CI and are expected to pass before any merge:
 
 ```bash
+python3 scripts/check_commits.py --grandfathered scripts/commit-baseline.txt
 python3 scripts/check_i18n.py          # message key consistency across locales
 python3 scripts/check_language.py      # English-only policy for code and docs
+python3 scripts/check_compliance.py --check-only
+python3 scripts/validate_ofd.py ...     # corpus against the annex A schemas
 ```
+
+Commit messages are checked at three points, so a violation is caught before
+it becomes history rather than during a review:
+
+| Where | What it checks |
+| --- | --- |
+| `scripts/hooks/commit-msg` | the message being written, before the commit exists |
+| `.github/workflows/rust.yml` | the commits a push or pull request proposes |
+| `python3 scripts/check_commits.py REF` | the whole reachable history, on demand |
+
+Install the local hook once per clone:
+
+```bash
+sh scripts/install-hooks.sh
+```
+
+The rules it enforces are the ones above: an allowed type, a subject of at
+most 72 characters with no trailing period, a body of at most two non-blank
+lines, and no CJK anywhere in the message.
+
+`scripts/commit-baseline.txt` lists the five commits that already break these
+rules. They predate the checker and are already published, so rewriting them
+would break every existing clone. The file is append-only in practice: adding
+a line to it is a deliberate decision to accept a violation, and it should
+carry a reason.
+
+### 4.1 Exemptions from the language policy
 
 `check_language.py` scans Rust sources, `Cargo.toml` files, and Markdown or reST
 documentation. It fails on CJK characters in any of them and on comment blocks
