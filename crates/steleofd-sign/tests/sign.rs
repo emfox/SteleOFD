@@ -4,8 +4,8 @@ use steleofd_crypto::Sm2KeyPair;
 use steleofd_error::OfdError;
 use steleofd_package::Package;
 use steleofd_sign::{
-    Reference, Signature, VerifyStatus, read_sign_list, read_signature, signed_digest,
-    verify_signature, verify_with_public_key,
+    Reference, Signature, SignatureKind, VerifyStatus, read_sign_list, read_signature,
+    signed_digest, verify_descriptor, verify_signature, verify_with_public_key,
 };
 use steleofd_testkit::{
     DOCUMENT_ENTRY, OFD_XML_SIGNED, SIGN_FILE, SIGNS_ENTRY, SIGNS_XML, descriptor, open_package,
@@ -59,6 +59,7 @@ fn descriptor_fields_are_parsed() {
         Reference {
             check_method: "SM3".into(),
             file_ref: "Doc_0/Document.xml".into(),
+            check_value: Vec::new(),
         }
     );
 }
@@ -264,8 +265,140 @@ fn gb_t_33190_18_2_4_tampered_content_fails_the_check_value() {
     entries.append(&mut extra);
     let mut package = open(&entries);
     let sig = read_signature(&mut package, SIGN_FILE).expect("descriptor");
-    assert_eq!(
-        verify_signature(&mut package, &sig).expect("verify"),
-        VerifyStatus::Tampered
+    // The descriptor records each protected file's own digest, so the change is
+    // caught there rather than only at the final signature check.
+    let out = verify_signature(&mut package, &sig);
+    assert!(
+        matches!(out, Err(OfdError::Signature(_))),
+        "tampered content must not verify, got {out:?}"
     );
+}
+
+#[test]
+fn gb_t_33190_18_1_the_signature_list_carries_id_and_kind() {
+    // Each Sign entry names its descriptor and says whether it is a seal or a
+    // plain signature; Seal is what the schema defaults to.
+    let xml = br#"<Signatures>
+      <MaxSignId>S3</MaxSignId>
+      <Signature ID="S1" BaseLoc="Signs/Sign_0.xml"/>
+      <Signature ID="S2" Type="Sign" BaseLoc="Signs/Sign_1.xml"/>
+      <Signature ID="S3" Type="Seal" BaseLoc="Signs/Sign_2.xml"/>
+    </Signatures>"#
+        .to_vec();
+    let mut package = open(&[("Signs/Signs.xml", xml)]);
+    let signs = read_sign_list(&mut package, "Signs/Signs.xml").expect("list");
+    assert_eq!(signs.len(), 3);
+    assert_eq!(signs[0].id.as_deref(), Some("S1"));
+    assert_eq!(signs[0].kind, SignatureKind::Seal, "Seal is the default");
+    assert_eq!(signs[1].kind, SignatureKind::Sign);
+    assert_eq!(signs[2].kind, SignatureKind::Seal);
+    assert_eq!(signs[2].base_loc, "Signs/Sign_2.xml");
+}
+
+#[test]
+fn gb_t_33190_18_2_2_check_method_governs_every_reference() {
+    // CheckMethod is written once on References and applies to each Reference
+    // below it, so a descriptor with several protected files needs it only once.
+    let xml = br#"<Signature ID="s">
+      <SignedInfo><References CheckMethod="SM3">
+        <Reference FileRef="a.bin"><CheckValue>AAAA</CheckValue></Reference>
+        <Reference FileRef="b.bin"><CheckValue>BBBB</CheckValue></Reference>
+      </References></SignedInfo>
+    </Signature>"#
+        .to_vec();
+    let mut package = open(&[("Signs/Sign_0.xml", xml)]);
+    let sig = read_signature(&mut package, "Signs/Sign_0.xml").expect("descriptor");
+    assert_eq!(sig.references.len(), 2);
+    assert!(sig.references.iter().all(|r| r.check_method == "SM3"));
+    assert_eq!(sig.references[0].file_ref, "a.bin");
+    assert_eq!(sig.references[1].file_ref, "b.bin");
+    assert!(
+        !sig.references[0].check_value.is_empty(),
+        "each reference keeps its own recorded digest"
+    );
+    assert_ne!(
+        sig.references[0].check_value, sig.references[1].check_value,
+        "the two references do not share a digest"
+    );
+}
+
+#[test]
+fn gb_t_33190_18_2_3_the_proof_lives_behind_signed_value() {
+    // SignedValue is a path, not the proof itself, so the descriptor alone is
+    // not enough to verify: the referenced file has to be read too.
+    let (bytes, pair) = signed_fixture();
+    let mut package = open_package_bytes(&bytes);
+    let sig = read_signature(&mut package, SIGN_FILE).expect("descriptor");
+    assert!(
+        sig.signed_value_ref.is_some(),
+        "the descriptor points at its proof"
+    );
+    assert!(
+        sig.check_value.is_empty(),
+        "reading the descriptor alone leaves the proof unloaded"
+    );
+
+    // A key that is not the signer's must not verify it.
+    let other = Sm2KeyPair::generate().expect("keygen");
+    assert_eq!(
+        verify_descriptor(&mut package, &sig, &other.public_bytes()).expect("verify"),
+        VerifyStatus::Tampered,
+        "a stranger's key does not validate the proof"
+    );
+    assert_eq!(
+        verify_descriptor(&mut package, &sig, &pair.public_bytes()).expect("verify"),
+        VerifyStatus::Valid,
+        "the signer's key does"
+    );
+}
+
+#[test]
+fn gb_t_33190_18_2_3_a_stamp_records_where_it_sits() {
+    // An electronic seal also says where on which page it is drawn, and may
+    // clip itself to a smaller region.
+    let xml = br#"<Signature ID="s">
+      <SignedInfo><References CheckMethod="SM3">
+        <Reference FileRef="a.bin"><CheckValue>AAAA</CheckValue></Reference>
+      </References></SignedInfo>
+      <StampAnnot ID="1" PageRef="3" Boundary="10 20 30 40" Clip="12 22 26 36"/>
+      <Seal><BaseLoc>Res/Seal.esl</BaseLoc></Seal>
+    </Signature>"#
+        .to_vec();
+    let mut package = open(&[("Signs/Sign_0.xml", xml)]);
+    let sig = read_signature(&mut package, "Signs/Sign_0.xml").expect("descriptor");
+    assert_eq!(sig.stamps.len(), 1);
+    let stamp = &sig.stamps[0];
+    assert_eq!(stamp.id, "1");
+    assert_eq!(stamp.page_ref, "3");
+    assert_eq!(
+        stamp.boundary,
+        steleofd_common::Rect::new(10.0, 20.0, 30.0, 40.0)
+    );
+    assert_eq!(
+        stamp.clip,
+        Some(steleofd_common::Rect::new(12.0, 22.0, 26.0, 36.0))
+    );
+    assert_eq!(sig.seal.as_deref(), Some("Res/Seal.esl"));
+}
+
+#[test]
+fn gb_t_33190_18_2_2_the_provider_name_is_an_attribute() {
+    // Provider carries its name as ProviderName rather than as element text,
+    // which a text-only reader would silently lose.
+    let xml = br#"<Signature ID="s">
+      <SignedInfo>
+        <Provider ProviderName="Example CA" Version="1.0"/>
+        <SignatureMethod>SM2-SM3</SignatureMethod>
+        <SignatureDateTime>2024-05-01T09:00:00</SignatureDateTime>
+        <References CheckMethod="SM3">
+          <Reference FileRef="a.bin"><CheckValue>AAAA</CheckValue></Reference>
+        </References>
+      </SignedInfo>
+    </Signature>"#
+        .to_vec();
+    let mut package = open(&[("Signs/Sign_0.xml", xml)]);
+    let sig = read_signature(&mut package, "Signs/Sign_0.xml").expect("descriptor");
+    assert_eq!(sig.provider.as_deref(), Some("Example CA"));
+    assert_eq!(sig.signature_method.as_deref(), Some("SM2-SM3"));
+    assert_eq!(sig.sign_time.as_deref(), Some("2024-05-01T09:00:00"));
 }

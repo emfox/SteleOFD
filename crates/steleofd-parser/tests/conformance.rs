@@ -5,6 +5,7 @@ use steleofd_common::Rect;
 use steleofd_display::DrawOp;
 use steleofd_display::ops::Paint;
 use steleofd_geometry::Affine;
+use steleofd_model::{ActionEvent, ActionKind, GotoTarget};
 use steleofd_package::{Package, build_archive};
 use steleofd_parser::Parser;
 use steleofd_parser::pathdata::parse_path;
@@ -747,4 +748,349 @@ fn gb_t_33190_9_1_graphic_unit_line_width_overrides_the_draw_param() {
     assert_eq!(stroke_style.width, 0.1, "the unit's own width wins");
     assert_eq!(stroke_style.cap, steleofd_display::ops::LineCap::Round);
     assert_eq!(stroke_style.join, steleofd_display::ops::LineJoin::Bevel);
+}
+
+/// Open a package whose entries are given directly, for the side files that
+/// are not part of the page tree.
+fn side_package(entries: &[(&str, &str)]) -> steleofd_package::Package {
+    let borrowed: Vec<(&str, &[u8])> = entries.iter().map(|(p, s)| (*p, s.as_bytes())).collect();
+    let bytes = build_archive(&borrowed).expect("build fixture");
+    steleofd_package::Package::from_bytes(&bytes).expect("open package")
+}
+
+#[test]
+fn gb_t_33190_15_the_annotation_index_points_at_page_files() {
+    // Annotations live apart from the page they mark up: the index says which
+    // file holds the marks for which page.
+    let mut package = side_package(&[(
+        "Doc_0/Annots/Annotations.xml",
+        r#"<?xml version="1.0" encoding="UTF-8"?>
+<Annotations>
+  <Page PageID="1"><FileLoc>Annots/Page_0/Annotation.xml</FileLoc></Page>
+  <Page PageID="2"><FileLoc>Annots/Page_1/Annotation.xml</FileLoc></Page>
+</Annotations>"#,
+    )]);
+    let index = steleofd_parser::marks::read_annotations_index(
+        &mut package,
+        "Doc_0/Annots/Annotations.xml",
+    )
+    .expect("index");
+    assert_eq!(index.pages.len(), 2);
+    assert_eq!(index.pages[0].page_id, "1");
+    assert_eq!(index.pages[0].file_loc, "Annots/Page_0/Annotation.xml");
+    assert_eq!(index.pages[1].page_id, "2");
+}
+
+#[test]
+fn gb_t_33190_15_an_annotation_keeps_its_type_remark_and_parameters() {
+    let mut package = side_package(&[(
+        "Doc_0/Annots/Page_0/Annotation.xml",
+        r#"<?xml version="1.0" encoding="UTF-8"?>
+<ofd:PageAnnot xmlns:ofd="http://www.ofdspec.org/2016">
+  <Annot ID="1" Type="Highlight" Creator="alice" LastModDate="2024-01-01" Visible="false">
+    <Remark>look here</Remark>
+    <Parameters><Parameter Name="Colour">#FFEE00</Parameter></Parameters>
+    <Appearance Boundary="5 5 40 20"/>
+  </Annot>
+  <Annot ID="2" Type="Stamp" Creator="bob" LastModDate="2024-01-02"/>
+</ofd:PageAnnot>"#,
+    )]);
+    let page = steleofd_parser::marks::read_page_annots(
+        &mut package,
+        "Doc_0/Annots/Page_0/Annotation.xml",
+    )
+    .expect("annots");
+    assert_eq!(page.items.len(), 2);
+    let first = &page.items[0];
+    assert_eq!(first.id, "1");
+    assert_eq!(first.kind, "Highlight");
+    assert_eq!(first.remark.as_deref(), Some("look here"));
+    assert_eq!(
+        first.parameters,
+        vec![("Colour".to_string(), "#FFEE00".to_string())]
+    );
+    assert!(!first.visible, "Visible=false hides the annotation");
+    assert_eq!(
+        first.boundary,
+        Some(Rect::new(5.0, 5.0, 40.0, 20.0)),
+        "the appearance says where it is drawn"
+    );
+    assert_eq!(page.items[1].id, "2");
+    assert!(page.items[1].visible, "annotations are visible by default");
+}
+
+#[test]
+fn gb_t_33190_16_a_custom_tag_names_its_namespace_and_content() {
+    // A custom tag is a detached reference: the index names the namespace and
+    // points at the content file rather than inlining it.
+    let mut package = side_package(&[(
+        "Doc_0/Tags/CustomTags.xml",
+        r#"<?xml version="1.0" encoding="UTF-8"?>
+<CustomTags>
+  <CustomTag NameSpace="http://example.com/invoice">
+    <SchemaLoc>Tags/invoice.xsd</SchemaLoc>
+    <FileLoc>Tags/Tag_0.xml</FileLoc>
+  </CustomTag>
+  <CustomTag NameSpace="urn:plain">
+    <FileLoc>Tags/Tag_1.xml</FileLoc>
+  </CustomTag>
+</CustomTags>"#,
+    )]);
+    let tags = steleofd_parser::marks::read_custom_tags(&mut package, "Doc_0/Tags/CustomTags.xml")
+        .expect("tags");
+    assert_eq!(tags.tags.len(), 2);
+    assert_eq!(tags.tags[0].namespace, "http://example.com/invoice");
+    assert_eq!(tags.tags[0].schema_loc.as_deref(), Some("Tags/invoice.xsd"));
+    assert_eq!(tags.tags[0].file_loc, "Tags/Tag_0.xml");
+    assert_eq!(
+        tags.tags[1].schema_loc, None,
+        "the schema is optional, the namespace and file are not"
+    );
+}
+
+#[test]
+fn gb_t_33190_17_an_extension_names_its_app_and_its_target() {
+    // An extension attaches to an object by id and records which application
+    // wrote it, so a reader can skip blocks it does not understand.
+    let mut package = side_package(&[(
+        "Doc_0/Extensions.xml",
+        r#"<?xml version="1.0" encoding="UTF-8"?>
+<Extensions>
+  <Extension AppName="Acme Writer" Company="Acme" AppVersion="3.1" RefId="7">
+    <Property Name="LayerName">stamps</Property>
+    <ExtendData>Extends/Ext_0.dat</ExtendData>
+  </Extension>
+  <Extension AppName="Other" RefId="9">
+    <Data><anything/></Data>
+  </Extension>
+</Extensions>"#,
+    )]);
+    let ext = steleofd_parser::marks::read_extensions(&mut package, "Doc_0/Extensions.xml")
+        .expect("extensions");
+    assert_eq!(ext.items.len(), 2);
+    let first = &ext.items[0];
+    assert_eq!(first.ref_id, "7", "an extension attaches to one object");
+    assert_eq!(first.app_name, "Acme Writer");
+    assert_eq!(first.company.as_deref(), Some("Acme"));
+    assert_eq!(first.app_version.as_deref(), Some("3.1"));
+    assert_eq!(
+        first.properties,
+        vec![("LayerName".to_string(), "stamps".to_string())]
+    );
+    assert_eq!(first.extend_data, vec!["Extends/Ext_0.dat".to_string()]);
+    assert!(!first.has_data);
+    assert!(
+        ext.items[1].has_data,
+        "a Data block is noted even if opaque"
+    );
+}
+
+#[test]
+fn gb_t_33190_12_a_video_resource_names_its_file_and_format() {
+    // Clause 12 has no video graphic unit of its own: a video is a multimedia
+    // resource, and the schema types it `Video` alongside `Image` and `Audio`.
+    let list = steleofd_parser::content::read_multimedias(
+        r#"<?xml version="1.0" encoding="UTF-8"?>
+<Res BaseLoc="Res">
+  <MultiMedias>
+    <MultiMedia ID="20" Type="Video" Format="mp4">
+      <MediaFile>Res/clip.mp4</MediaFile>
+    </MultiMedia>
+    <MultiMedia ID="21" Type="Audio" Format="wav">
+      <MediaFile>Res/tone.wav</MediaFile>
+    </MultiMedia>
+    <MultiMedia ID="22" Type="Image"><MediaFile>Res/logo.png</MediaFile></MultiMedia>
+  </MultiMedias>
+</Res>"#,
+    )
+    .expect("multimedias");
+    assert_eq!(list.items.len(), 3);
+    let video = &list.items[0];
+    assert_eq!(video.id, "20");
+    assert_eq!(video.kind, steleofd_model::MultimediaKind::Video);
+    assert_eq!(video.format.as_deref(), Some("mp4"));
+    assert_eq!(video.media_file, "Res/clip.mp4");
+    assert_eq!(list.items[1].kind, steleofd_model::MultimediaKind::Audio);
+    assert_eq!(list.items[2].kind, steleofd_model::MultimediaKind::Image);
+}
+
+#[test]
+fn gb_t_33190_12_a_movie_action_points_at_a_video_resource() {
+    // The video is played by a `Movie` action, which names the resource and
+    // says what to do with it.
+    let ops = page_ops(
+        r#"<PathObject ID="10" Boundary="0 0 10 10">
+  <AbbreviatedData>M 0 0 L 10 0 L 10 10 Z</AbbreviatedData>
+  <Actions>
+    <Action Event="CLICK"><Movie ResourceID="20" Operator="Play"/></Action>
+  </Actions>
+</PathObject>"#,
+        "",
+    );
+    assert!(!ops.is_empty(), "the action does not stop the path drawing");
+}
+
+#[test]
+fn gb_t_33190_13_a_composite_object_places_a_vector_resource() {
+    // A composite object is a placed vector graphic: the page object carries
+    // only a resource id, and the graphic itself lives in the resource file.
+    let ops = page_ops(
+        r#"<CompositeObject ID="30" Boundary="10 10 50 30" ResourceID="5"/>"#,
+        "",
+    );
+    match ops.iter().find(|op| matches!(op, DrawOp::Image { .. })) {
+        Some(DrawOp::Image { image, dst, .. }) => {
+            assert_eq!(image.id, "5", "the placement names the resource");
+            assert_eq!(*dst, Rect::new(10.0, 10.0, 50.0, 30.0));
+        }
+        other => panic!("expected an image placement, got {other:?}"),
+    }
+}
+
+#[test]
+fn gb_t_33190_13_a_vector_resource_holds_its_own_page_block() {
+    // `CT_VectorG` gives the graphic a natural size and a content block, so it
+    // can be flattened exactly like a page.
+    let list = steleofd_parser::content::read_composite_graphic_units(
+        r#"<?xml version="1.0" encoding="UTF-8"?>
+<Res BaseLoc="Res">
+  <CompositeGraphicUnits>
+    <CompositeGraphicUnit ID="5" Width="50" Height="30">
+      <Thumbnail>4</Thumbnail>
+      <Content><Layer ID="1">
+        <PathObject ID="6" Boundary="0 0 50 30">
+          <AbbreviatedData>M 0 0 L 50 0 L 50 30 Z</AbbreviatedData>
+        </PathObject>
+      </Layer></Content>
+    </CompositeGraphicUnit>
+  </CompositeGraphicUnits>
+</Res>"#,
+    )
+    .expect("composite graphic units");
+    assert_eq!(list.items.len(), 1);
+    let unit = &list.items[0];
+    assert_eq!(unit.id, "5");
+    assert_eq!(unit.width, 50.0);
+    assert_eq!(unit.height, 30.0);
+    assert_eq!(unit.thumbnail.as_deref(), Some("4"));
+    let block = unit.content.as_ref().expect("content block");
+    assert_eq!(block.layers.len(), 1);
+    assert_eq!(block.layers[0].objects.len(), 1);
+}
+
+#[test]
+fn gb_t_33190_14_1_an_action_records_its_event_and_target() {
+    // `Event` is required and may only be `DO`, `PO` or `CLICK`; the body says
+    // what the action does.
+    let ops = page_ops(
+        r#"<PathObject ID="10" Boundary="0 0 10 10">
+  <AbbreviatedData>M 0 0 L 10 0 L 10 10 Z</AbbreviatedData>
+  <Actions>
+    <Action Event="CLICK"><Goto><Dest Type="XYZ" PageID="2" Left="0" Top="0" Zoom="1"/></Goto></Action>
+    <Action Event="DO"><Goto><Bookmark Name="chapter-1"/></Goto></Action>
+  </Actions>
+</PathObject>"#,
+        "",
+    );
+    assert!(!ops.is_empty());
+
+    // Read the same page through the model-facing reader to inspect the action.
+    let actions = read_page_actions(
+        r#"<PathObject ID="10" Boundary="0 0 10 10">
+  <AbbreviatedData>M 0 0 L 10 0 L 10 10 Z</AbbreviatedData>
+  <Actions>
+    <Action Event="CLICK"><Goto><Dest Type="XYZ" PageID="2" Left="0" Top="0" Zoom="1"/></Goto></Action>
+    <Action Event="PO"><Goto><Bookmark Name="chapter-1"/></Goto></Action>
+  </Actions>
+</PathObject>"#,
+    );
+    assert_eq!(actions.items.len(), 2);
+    assert_eq!(actions.items[0].event, ActionEvent::Click);
+    assert_eq!(actions.items[1].event, ActionEvent::Hover);
+    match &actions.items[0].kind {
+        ActionKind::Goto(GotoTarget::Dest(d)) => {
+            assert_eq!(d.kind, "XYZ");
+            assert_eq!(d.page_id, "2");
+            assert_eq!(d.zoom.as_deref(), Some("1"));
+        }
+        other => panic!("expected a destination jump, got {other:?}"),
+    }
+    match &actions.items[1].kind {
+        ActionKind::Goto(GotoTarget::Bookmark { name }) => assert_eq!(name, "chapter-1"),
+        other => panic!("expected a bookmark jump, got {other:?}"),
+    }
+}
+
+#[test]
+fn gb_t_33190_14_1_a_uri_action_keeps_its_base_and_target() {
+    let actions = read_page_actions(
+        r#"<PathObject ID="10" Boundary="0 0 10 10">
+  <AbbreviatedData>M 0 0 L 10 0 Z</AbbreviatedData>
+  <Actions>
+    <Action Event="CLICK">
+      <URI URI="page.html" Base="https://example.com/" Target="_blank"/>
+    </Action>
+  </Actions>
+</PathObject>"#,
+    );
+    match &actions.items[0].kind {
+        ActionKind::Uri(u) => {
+            assert_eq!(u.uri, "page.html");
+            assert_eq!(u.base.as_deref(), Some("https://example.com/"));
+            assert_eq!(u.target.as_deref(), Some("_blank"));
+        }
+        other => panic!("expected a URI action, got {other:?}"),
+    }
+}
+
+#[test]
+fn gb_t_33190_14_1_an_unknown_event_is_rejected() {
+    // `Event` is an enumeration, so a value outside it is a broken document
+    // rather than something to guess about.
+    let entries = [
+        ("OFD.xml", OFD_XML.to_string()),
+        (
+            "Doc_0/Document.xml",
+            document_xml(
+                r#"<Page ID="1"><Content><Layer>
+  <PathObject ID="10" Boundary="0 0 10 10">
+    <AbbreviatedData>M 0 0 L 10 0 Z</AbbreviatedData>
+    <Actions><Action Event="MAYBE"><URI URI="x"/></Action></Actions>
+  </PathObject>
+</Layer></Content></Page>"#,
+            ),
+        ),
+    ];
+    let mut parser = open(&entries);
+    let err = match parser.open_document() {
+        Ok(_) => panic!("Event=MAYBE must be rejected"),
+        Err(err) => err,
+    };
+    assert!(err.to_string().contains("MAYBE"), "got {err}");
+}
+
+/// Flatten a page holding one object and return the actions that object
+/// declared, for the tests that need the model rather than the draw ops.
+fn read_page_actions(object: &str) -> steleofd_model::Actions {
+    let doc_xml = document_xml(&format!(
+        r#"<Page ID="1"><Content><Layer>{object}</Layer></Content></Page>"#
+    ));
+    let entries = [
+        ("OFD.xml", OFD_XML.to_string()),
+        ("Doc_0/Document.xml", doc_xml),
+    ];
+    let mut parser = open(&entries);
+    let doc = parser.open_document().expect("open document");
+    let page = parser.page_model(&doc, 0).expect("page model");
+    let block = page.content.as_ref().expect("page content");
+    let object = block
+        .layers
+        .iter()
+        .flat_map(|l| l.objects.iter())
+        .find(|o| o.id().is_some())
+        .expect("an object");
+    match object {
+        steleofd_model::Object::PathObject(p) => p.base.actions.clone().unwrap_or_default(),
+        other => panic!("expected a path object, got {other:?}"),
+    }
 }
