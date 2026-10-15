@@ -48,6 +48,15 @@ Each one is a real, verified finding, not a guess.
 7. **No release automation.** No `CHANGELOG`, no version-bump or publish
    workflow, no `cargo-semver-checks` gate. `Cargo.toml` declares `0.1.0`
    everywhere and nothing tracks whether a change breaks a public API.
+8. **There is no reader UI.** The engine can open, render, search, verify and
+   annotate, and the `wasm` bindings expose all of it, but nothing assembles
+   those calls into an interface a person can read a document with.
+   `locales/*/reader.ftl` already holds ten interface strings — page counter,
+   zoom, fit width, fit page, single page, facing pages, continuous, blank
+   page, no matches — and **no code references them**. The strings were
+   designed; the surface they were designed for was never built. This is the
+   largest single omission in the project, and it is deliberate work rather
+   than engine work: everything a reader needs already exists below.
 
 ---
 
@@ -135,6 +144,53 @@ reaching into internals.
 - **N6-b** Add a coverage report (`cargo-llvm-cov`) to CI as a non-blocking
   signal, then make it blocking once the number is good enough to defend.
 
+### N7. The reader UI, first surface (U1-a … U1-c)
+
+The reader is the one thing this project is obviously for, and it does not
+exist. Everything below the interface is finished: `wasm` can open a document,
+report its facts, rasterize any page to PNG or SVG, search it and verify its
+signatures. What is missing is the layer that calls those in the right order
+and puts a person in front of the result.
+
+The interface strings already exist. `locales/*/reader.ftl` carries ten of
+them in both languages, from the page counter to facing-pages mode, and no
+code reads them yet. The work is to build the surface they were written for,
+not to invent a new one.
+
+- **U1-a** Stand up `web/`: a `wasm-pack` build of the existing `wasm` crate
+  plus static assets served by anything trivial. No framework decision yet;
+  pick the smallest thing that survives U1-c.
+- **U1-b** Open a file by picker and by drag-and-drop, show the document
+  facts, and make the page counter and navigation work off
+  `reader-page-of`, `reader-blank-page` and `reader-open`.
+- **U1-c** Prove the whole path in CI: build the wasm package headlessly and
+  drive one open-and-navigate flow, so the reader cannot silently rot while
+  the engine keeps moving.
+
+Exit criterion: a person can open an `.ofd` in a browser and read every page.
+
+### N8. Layout, zoom and search (U2-a … U2-c)
+
+- **U2-a** Layout modes wired to the strings that already exist: single page,
+  facing pages, continuous. This is where `reader-layout-*` stops being dead
+  text.
+- **U2-b** Zoom, fit width and fit page, with the zoom percentage coming from
+  `reader-zoom`. Render on demand per page rather than eagerly, and cancel
+  in-flight renders when the reader moves faster than the rasterizer.
+- **U2-c** A search panel over the existing `search` capability, listing hits
+  by page, jumping to a hit, and showing `reader-no-match` when there is
+  none.
+
+### N9. Verification, export and access (U3-a … U3-c)
+
+- **U3-a** A signature panel that shows what `verify` returns, per signature,
+  rather than a bare valid-or-not.
+- **U3-b** Export to PDF and PNG through the existing `convert` path, using
+  the page range the reader is currently showing.
+- **U3-c** Keyboard navigation, focus management and ARIA roles, so the reader
+  is operable without a mouse, plus a real locale switch that pulls from the
+  existing catalogues instead of hardcoded strings.
+
 ---
 
 ## Mid term: make it fast and complete
@@ -200,6 +256,18 @@ The HTTP surface works; it is not yet something to put behind a load balancer.
 - **M6-b** Round-trip tests against the standard's own examples, if the
   working group publishes any.
 
+### M7. The reader, completed
+
+The first surface in N7 is deliberately minimal. This is where the reader
+grows into the tool the standard's feature set actually implies.
+
+- **M7-a** Annotation display and navigation, once clause 15 is verified
+- **M7-b** Signature appearance rendering, once `18.2.3` is implemented
+- **M7-c** A document comparison view for two revisions of the same file
+- **M7-d** Print, straight from the reader's current view
+- **M7-e** A packaged desktop build of the same interface, so the reader is
+  not browser-only
+
 ---
 
 ## Far term: become the reference implementation
@@ -209,9 +277,9 @@ reading its source.
 
 ### F1. Developer experience
 
-Task-based documentation with a worked example per delivery form, a
-`steleofd` playground in the browser backed by the wasm build, and examples
-that are compiled in CI so they cannot rot.
+Task-based documentation with a worked example per delivery form, and examples
+that are compiled in CI so they cannot rot. The browser playground folded into
+U1-c, once the reader it would host exists.
 
 ### F2. Extensibility
 
@@ -236,6 +304,12 @@ point for third-party signature providers.
 Near term runs in order, because N1 unblocks N2 and N4, and N2 is what makes
 the conformance number in the README mean something. N3 and N5 can run
 alongside it, since they touch different crates.
+
+The reader (N7 to N9) starts as soon as `wasm` is stable, which it already
+is, and it does not wait on N2: the interface needs a working renderer, not a
+conformance number. U1 can proceed while the clause work runs. M7 depends on
+N2, because annotations and signature appearance are clauses 15 and 18.2.3,
+and there is no point drawing a panel for a feature that is not yet verified.
 
 Mid term starts when the near-term exit criterion is met. M1 first, because a
 performance budget cannot be enforced without a baseline to measure against.

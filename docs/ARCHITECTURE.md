@@ -249,6 +249,12 @@ locales/
 └── zh-CN/          <- same structure
 ```
 
+`reader.ftl` is currently the one module with no consumer: the reader
+interface it was written for is scheduled in
+[`ROADMAP.md`](ROADMAP.md) under N7, and the other modules are reachable
+through the CLI today. The catalogues are the specification for the reader,
+so they are kept complete and bilingual even ahead of the code.
+
 **Current state:** 56 message keys across 2 locales, with identical key sets.
 
 ### 5.4 Conventions and safeguards

@@ -200,7 +200,8 @@ rather than the national standards one.
 
 All 25 crates are in place, and the four delivery forms (`cli`, `wasm`, `ffi`,
 `server`) sit on the same `core` facade. What comes next is tracked in
-[`docs/ROADMAP.md`](docs/ROADMAP.md). Clause-level coverage lives in
+[`docs/ROADMAP.md`](docs/ROADMAP.md), which starts with the reader interface
+the engine is built to serve. Clause-level coverage lives in
 [`compliance/gb-t-33190.toml`](compliance/gb-t-33190.toml); 20 of 47 clauses
 are covered so far.
 
