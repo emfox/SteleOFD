@@ -121,20 +121,21 @@ raced by a stray drag.
 
 ## 5. Testing
 
-The window cannot be tested headlessly, so nothing that matters may live only
-there. Each rule above has a counterpart in `tests/reader.rs`:
+The window is tested twice over, and the split matters.
 
-| Rule | Test |
-| --- | --- |
-| state decides, window draws | every `App` transition is a method call |
-| navigation clamps | `navigation_clamps_to_the_pages_that_exist` |
-| failures are shown and clearable | `a_failure_is_shown_and_can_be_cleared` |
-| a failed open keeps the old document | `opening_another_document_replaces_the_first` |
-| one raster per resolution | `the_cache_keys_on_the_resolution_too` |
-| blank is content | `a_blank_page_is_still_drawn` |
+**`tests/reader.rs` proves the state machine**, calling `App` methods directly.
+Fast, and it can reach states a click cannot.
+
+**`tests/window.rs` proves the layout draws that state**, building a real
+`egui` widget tree through `egui_kittest` and running frames with no display
+and no X server. It clicks the actual toolbar buttons and reads labels out of
+the catalogue, so a string that loses its entry, a control that stops wiring to
+`App`, or a raster too large for the driver all fail in CI rather than in front
+of a reader. Labels are never written as literals in this file; if a test needs
+to find a control, it asks the catalogue what that control says.
 
 A change to the window that cannot be expressed as a change to `App` needs a new
-method here first. If it cannot be, the feature does not belong in this reader.
+method there first. If it cannot be, the feature does not belong in this reader.
 
 ## 6. Adding a zone
 

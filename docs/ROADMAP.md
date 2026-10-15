@@ -13,8 +13,8 @@ criterion, so it is always obvious whether it is done.
 | Measure | Value |
 | --- | --- |
 | Crates | 26 (L0 foundation through L5 delivery) |
-| Source | 24,626 lines of Rust, measured with `find crates -name '*.rs'` |
-| Tests | 563 passing, plus 13 inline unit-test modules |
+| Source | 24,904 lines of Rust, measured with `find crates -name '*.rs'` |
+| Tests | 576 passing, plus 13 inline unit-test modules |
 | Delivery forms | `cli`, `wasm`, `ffi`, `server`, `reader`, all on the `core` facade |
 | Standard clauses verified | 20 of 47 in GB/T 33190-2016 |
 | Languages | `en-US` and `zh-CN`, 75 message keys, parity enforced in CI |
@@ -177,9 +177,14 @@ that accessibility has to be wired up by hand in U3-c.
   the layout is a rule rather than a convention; the four-zone window is drawn
   from panels and the canvas state is decided in `App`, which keeps it
   testable without a display.
-- [ ] **U1-c** Prove the path in CI: build the reader headlessly and drive one
+- [x] **U1-c** Prove the path in CI: build the reader headlessly and drive one
   open-and-navigate flow, so the interface cannot silently rot while the
-  engine keeps moving.
+  engine keeps moving. `tests/window.rs` runs the real widget tree through
+  `egui_kittest` with no display and no X server, clicking the actual toolbar
+  buttons and reading labels out of the catalogue rather than out of the test.
+  It immediately earned its keep: it found a slider labelled with the raw
+  `{ $percent }` template, and a page rasterized wider than the driver's
+  texture limit at high zoom, which `egui` answers with a panic.
 
 Exit criterion: a person can open an `.ofd` in a native window and read every
 page.
