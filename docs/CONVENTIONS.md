@@ -49,8 +49,10 @@ Long-form design rationale belongs in `docs/`, not in source comments.
 <type>(<scope>): <subject in English, imperative, no trailing period>
 ```
 
-One line is the norm. A genuinely significant change may add a short body of
-at most two lines explaining why. Anything longer belongs in `docs/`.
+One line is the norm, and the subject is capped at **75 bytes** so it stays
+one line in a terminal and in `git log`. A genuinely significant change may
+add a short body of at most two lines explaining why. Anything longer belongs
+in `docs/`.
 
 ```text
 <type>(<scope>): <subject>
@@ -94,8 +96,8 @@ sh scripts/install-hooks.sh
 ```
 
 The rules it enforces are the ones above: an allowed type, a subject of at
-most 72 characters with no trailing period, a body of at most two non-blank
-lines, and no CJK anywhere in the message.
+most 75 bytes with no trailing period, a body of at most two non-blank lines,
+and no CJK anywhere in the message.
 
 `scripts/commit-baseline.txt` lists the five commits that already break these
 rules. They predate the checker and are already published, so rewriting them

@@ -7,11 +7,10 @@
 # commits, so a new violation still fails the build.
 #
 # One short sha and an optional reason per line, `#` starts a comment.
+#
+# This list is meant to shrink. Each entry is a debt someone accepted, and
+# removing an entry is a small celebration.
 
-# 7e90b85 subject is 73 chars, one over the 72 limit.
-7e90b85
-# ef2aa22 subject is 73 chars, one over the 72 limit.
-ef2aa22
 # 60ea933 body runs to 13 lines, where the rule allows 2.
 60ea933
 # 8cffd09 body runs to 9 lines, where the rule allows 2.

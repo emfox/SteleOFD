@@ -29,8 +29,9 @@ TYPES = {
 # At most two lines of body, which is what "a short body" means in the rules.
 MAX_BODY_LINES = 2
 
-# A subject is one line; past this it stops being scannable in git log.
-MAX_SUBJECT_CHARS = 72
+# A subject is one line; past this it stops being scannable in git log. The
+# limit is counted in bytes, not characters, so it holds for any content.
+MAX_SUBJECT_BYTES = 75
 
 SUBJECT_RE = re.compile(r"^([a-z]+)(?:\(([^)]+)\))?: (.+)$")
 CJK_RE = re.compile(r"[\u3000-\u303f\u4e00-\u9fff\uff00-\uffef]")
@@ -48,9 +49,10 @@ def check(subject: str, body: str) -> list[str]:
             problems.append(f"type {kind!r} is not one of {sorted(TYPES)}")
         if text.endswith("."):
             problems.append("subject has a trailing period")
-        if len(subject) > MAX_SUBJECT_CHARS:
+        size = len(subject.encode("utf-8"))
+        if size > MAX_SUBJECT_BYTES:
             problems.append(
-                f"subject is {len(subject)} chars (max {MAX_SUBJECT_CHARS})")
+                f"subject is {size} bytes (max {MAX_SUBJECT_BYTES})")
 
     lines = [line for line in body.split("\n") if line.strip()]
     if len(lines) > MAX_BODY_LINES:
