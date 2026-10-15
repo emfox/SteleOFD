@@ -74,11 +74,11 @@ impl Fixture {
         let page = self.0.page_display(doc, 0).expect("page display");
         let mut out = String::new();
         for op in &page.ops {
-            if let DrawOp::Text(run) = op {
-                if let Some(text) = &run.text {
-                    out.push_str(text);
-                    out.push('\n');
-                }
+            if let DrawOp::Text(run) = op
+                && let Some(text) = &run.text
+            {
+                out.push_str(text);
+                out.push('\n');
             }
         }
         out
