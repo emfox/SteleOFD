@@ -1,6 +1,7 @@
 //! Conformance tests bound to GB/T 33190-2016 clauses.
 //! Names map to entries in compliance/gb-t-33190.toml.
 
+use steleofd_common::Rect;
 use steleofd_display::DrawOp;
 use steleofd_display::ops::Paint;
 use steleofd_geometry::Affine;
@@ -34,6 +35,38 @@ fn open(entries: &[(&str, String)]) -> Parser<'static> {
 }
 
 #[test]
+fn gb_t_33190_7_3_physical_box_is_element_text() {
+    // ST_Box carries its four numbers as element text; the attribute form is
+    // what sloppy writers emit, so both must parse to the same rectangle.
+    let text_form = r#"<?xml version="1.0" encoding="UTF-8"?>
+<Document>
+  <CommonData>
+    <PageArea><PhysicalBox>0 0 210 297</PhysicalBox></PageArea>
+  </CommonData>
+  <Pages><Page ID="1"/></Pages>
+</Document>"#;
+    let mut parser = open(&[
+        ("OFD.xml", OFD_XML.to_string()),
+        ("Doc_0/Document.xml", text_form.to_string()),
+    ]);
+    let doc = parser.open_document().expect("open document");
+    assert_eq!(
+        doc.document.common_data.page_area.physical_box,
+        Rect::new(0.0, 0.0, 210.0, 297.0)
+    );
+
+    let mut parser = open(&[
+        ("OFD.xml", OFD_XML.to_string()),
+        ("Doc_0/Document.xml", document_xml(r#"<Page ID="1"/>"#)),
+    ]);
+    let doc = parser.open_document().expect("open document");
+    assert_eq!(
+        doc.document.common_data.page_area.physical_box,
+        Rect::new(0.0, 0.0, 210.0, 297.0)
+    );
+}
+
+#[test]
 fn gb_t_33190_7_4_main_entry_is_required() {
     let bytes = build_archive(&[("Doc_0/Document.xml", b"<Document/>".as_slice())])
         .expect("archive without OFD.xml");
@@ -61,6 +94,18 @@ fn gb_t_33190_7_5_document_root_requires_pages() {
         doc.doc_dir, "Doc_0",
         "the document directory is the root's parent"
     );
+}
+
+#[test]
+fn gb_t_33190_7_4_version_attribute_is_read() {
+    let entries = [
+        ("OFD.xml", OFD_XML.to_string()),
+        ("Doc_0/Document.xml", document_xml(r#"<Page ID="1"/>"#)),
+    ];
+    let mut parser = open(&entries);
+    let doc = parser.open_document().expect("open document");
+    assert_eq!(doc.ofd.version.major, "1");
+    assert_eq!(doc.ofd.version.sub.as_deref(), Some("0"));
 }
 
 #[test]

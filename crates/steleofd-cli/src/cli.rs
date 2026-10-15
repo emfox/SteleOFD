@@ -202,3 +202,80 @@ pub struct PrintArgs {
     #[arg(short, long, default_value_t = 1)]
     pub copies: usize,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap::CommandFactory;
+
+    #[test]
+    fn grammar_is_well_formed() {
+        // Catches flag typos and missing values at test time, not at runtime.
+        Cli::command().debug_assert();
+    }
+
+    #[test]
+    fn parses_global_locale_before_the_subcommand() {
+        let cli = Cli::parse_from(["steleofd", "--locale", "zh-CN", "info", "doc.ofd"]);
+        assert_eq!(cli.locale.as_deref(), Some("zh-CN"));
+        assert!(matches!(cli.command, Command::Info(_)));
+    }
+
+    #[test]
+    fn parses_locale_after_the_subcommand_too() {
+        let cli = Cli::parse_from(["steleofd", "info", "doc.ofd", "--locale", "en-US"]);
+        assert_eq!(cli.locale.as_deref(), Some("en-US"));
+    }
+
+    #[test]
+    fn render_defaults_to_first_page_and_150_dpi() {
+        let cli = Cli::parse_from(["steleofd", "render", "doc.ofd"]);
+        let Command::Render(args) = cli.command else {
+            panic!("expected render");
+        };
+        assert_eq!(args.page, 0);
+        assert_eq!(args.dpi, 150.0);
+        assert!(args.output.is_none());
+    }
+
+    #[test]
+    fn convert_defaults_to_pdf_and_every_page() {
+        let cli = Cli::parse_from(["steleofd", "convert", "doc.ofd"]);
+        let Command::Convert(args) = cli.command else {
+            panic!("expected convert");
+        };
+        assert_eq!(args.format, FormatArg::Pdf);
+        assert_eq!(args.page, None);
+    }
+
+    #[test]
+    fn convert_takes_a_page() {
+        let cli = Cli::parse_from(["steleofd", "convert", "doc.ofd", "-p", "2"]);
+        let Command::Convert(args) = cli.command else {
+            panic!("expected convert");
+        };
+        assert_eq!(args.page, Some(2));
+    }
+
+    #[test]
+    fn print_parses_paper_and_copies() {
+        let cli = Cli::parse_from([
+            "steleofd", "print", "doc.ofd", "--paper", "letter", "-c", "3",
+        ]);
+        let Command::Print(args) = cli.command else {
+            panic!("expected print");
+        };
+        assert_eq!(args.paper, PaperArg::Letter);
+        assert_eq!(args.copies, 3);
+    }
+
+    #[test]
+    fn search_takes_a_needle() {
+        let cli = Cli::parse_from(["steleofd", "search", "doc.ofd", "OFD"]);
+        let Command::Search(args) = cli.command else {
+            panic!("expected search");
+        };
+        assert_eq!(args.needle, "OFD");
+        assert!(!args.case_sensitive);
+    }
+}

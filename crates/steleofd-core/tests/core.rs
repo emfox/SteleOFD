@@ -90,6 +90,12 @@ fn model_mirrors_the_declaration() {
 }
 
 #[test]
+fn version_reports_the_declared_version() {
+    let doc = two_page_document();
+    assert_eq!(doc.version(), "1.0");
+}
+
+#[test]
 fn rejects_a_container_without_the_entry_point() {
     let bytes =
         build_archive(&[("Doc_0/Document.xml", b"<Document/>".as_slice())]).expect("build fixture");
@@ -244,6 +250,39 @@ fn renders_text_with_the_registered_face() {
         })
     });
     assert!(dark, "the glyph is outlined from the registered font");
+}
+
+#[cfg(feature = "render")]
+#[test]
+fn a_referenced_but_unembedded_font_degrades_to_substitution() {
+    // GB/T 33190-2016 allows naming a font without shipping it; the renderer
+    // substitutes a system face instead of failing the whole page.
+    let entries = [
+        ("OFD.xml", OFD_XML.as_bytes().to_vec()),
+        (
+            "Doc_0/Document.xml",
+            document_xml(&text_page("5", "20.0", "A")).into_bytes(),
+        ),
+    ];
+    let doc = open(&entries);
+    let options = steleofd_render::RenderOptions {
+        dpi: 36.0,
+        ..Default::default()
+    };
+    let raster = doc.render_page(0, &options).expect("render page");
+    let rgba = raster.rgba_bytes();
+    let dark = (12..50).any(|x| {
+        (5..35).any(|y| {
+            let offset = ((y * raster.width + x) * 4) as usize;
+            let (r, g, b) = (
+                rgba[offset] as u32,
+                rgba[offset + 1] as u32,
+                rgba[offset + 2] as u32,
+            );
+            r + g + b < 300
+        })
+    });
+    assert!(dark, "the substituted face still outlines the glyph");
 }
 
 #[cfg(feature = "convert")]
