@@ -5,12 +5,21 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 
+[lib]
+name = "steleofd_server"
+path = "src/lib.rs"
+
 [[bin]]
 name = "steleofd-server"
 path = "src/main.rs"
 
 [dependencies]
-steleofd-core = { workspace = true, features = ["render", "sign", "convert", "print", "edit", "search", "archive", "async", "pdf"] }
+steleofd-core = { workspace = true, features = ["render", "sign", "convert", "search", "pdf"] }
+steleofd-error.workspace = true
+steleofd-font.workspace = true
+steleofd-render.workspace = true
+steleofd-search.workspace = true
+steleofd-sign.workspace = true
 axum.workspace = true
 tokio.workspace = true
 tower-http = { version = "0.6", features = ["cors", "limit", "trace"] }
@@ -19,3 +28,8 @@ serde_json.workspace = true
 tracing.workspace = true
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 uuid.workspace = true
+
+[dev-dependencies]
+tower = { version = "0.5", features = ["util"] }
+steleofd-crypto.workspace = true
+steleofd-package.workspace = true

@@ -192,14 +192,14 @@ rather than the national standards one.
 - [x] **P5a** The `steleofd` command line tool
 - [x] **P5b** WebAssembly bindings for the browser
 - [x] **P5c** C ABI shared library for OA and ERP integration (`ffi`)
-- [ ] **P5d** HTTP service delivery (`server`)
+- [x] **P5d** HTTP service delivery for OA and ERP back ends (`server`)
 - [x] **P6** Document editing with an undo stack
 - [x] **P7** Full-text search over the display list (`search`)
 - [x] **P8** Archival readiness auditing (`archive`)
 - [x] **P9** GB/T 33190-2016 conformance harness: annex A schemas rebuilt from the standard, enforced in CI
 
-Next up is the remaining L5 delivery crate (`server`), built on the same
-`core` facade. Clause-level coverage lives in
+All 25 crates are in place, and the four delivery forms (`cli`, `wasm`, `ffi`,
+`server`) sit on the same `core` facade. Clause-level coverage lives in
 [`compliance/gb-t-33190.toml`](compliance/gb-t-33190.toml); 20 of 47 clauses
 are covered so far.
 
