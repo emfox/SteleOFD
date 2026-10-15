@@ -1,0 +1,144 @@
+# Reader UI Layout and Frame Flow
+
+This is the contract every reader surface follows. It exists because the reader
+has three layers that can each be written in any order, and without a rule the
+window turns into one long function whose behaviour nobody can test.
+
+The rule the rest of this document serves: **the window draws, the state
+decides.** `main.rs` may only read state and ask `App` to change it; `App` may
+never know a widget exists. Everything testable therefore lives in `app.rs` and
+`viewer.rs`, and the tests never open a window.
+
+## 1. Layers
+
+| Layer | File | May know about | May not |
+| --- | --- | --- | --- |
+| Engine | `steleofd-core`, `steleofd-render` | documents, pixels | the reader |
+| State | `crates/steleofd-reader/src/app.rs` | the engine, i18n | `egui`, widgets, pixels |
+| Cache | `crates/steleofd-reader/src/viewer.rs` | the engine, `ColorImage` | `App`, layout |
+| Window | `crates/steleofd-reader/src/main.rs` | `App`, `egui` | the engine internals |
+
+`main.rs` opens no file and parses nothing. It receives bytes or a path, hands
+them to `App`, and paints whatever comes back. If a widget needs a value `App`
+does not expose, `App` gains a method — the widget does not reach around it.
+
+## 2. Layout zones
+
+The window is a stack of fixed zones around one growing canvas. Zones are
+declared in this order every frame; `egui` reserves space top-down, so the order
+is the layout.
+
+```
+┌────────────────────────────────────────────────────────┐
+│ Z1  menu bar      fixed      open · close · layout      │  Panel::top("menu")
+├────────────────────────────────────────────────────────┤
+│ Z2  toolbar       fixed      paging · fit · zoom        │  Panel::top("toolbar")
+├────────────────────────────────────────────────────────┤
+│                                                        │
+│ Z3  canvas        growing    the page, or the drop     │  ScrollArea
+│                 hint, or a failure                     │  id_salt("canvas")
+│                                                        │
+├────────────────────────────────────────────────────────┤
+│ Z4  status bar    fixed      document · page · error   │  Panel::bottom("status")
+└────────────────────────────────────────────────────────┘
+```
+
+**Z1 menu bar.** Document-level actions only: open, close, and the layout
+choice. Anything that acts on the current page belongs in Z2. The close button
+is disabled when nothing is open, so the bar never has to explain itself.
+
+**Z2 toolbar.** Actions on what is on screen: previous, next, fit width, fit
+page, zoom. Disabled controls rather than hidden ones, so the bar does not
+reflow as the document changes.
+
+**Z3 canvas.** Exactly one of four states, decided in this order:
+
+| State | Condition | Shown |
+| --- | --- | --- |
+| Empty | no document open | the drop hint, centred |
+| Failed | the page would not rasterize | the engine's own message |
+| Blank | the page has no visible ink | the page, plus the blank notice |
+| Shown | otherwise | the page |
+
+The blank case still paints the page. A blank page in a document is content,
+not an absence, and hiding it would break the sense of place.
+
+**Z4 status bar.** Left: the open document's name and page position. Right: the
+zoom slider. On failure the message takes the left half and stays until it is
+dismissed or the next document opens — a message that flickers away is a message
+that will be missed.
+
+Every zone draws a separator line it does not own. `Panel::show_separator_line`
+does this, and it is why zones are panels rather than stacked `horizontal`
+closures.
+
+## 3. Frame flow
+
+`eframe::App::ui` runs seven steps, always in this order. The order is the
+specification; a step may not be moved earlier because each one consumes what
+the previous produced.
+
+```
+1  resolve intent   consume the open request, then dropped files
+2  apply state      App mutates: document, page, dpi, layout, error
+3  sync window      push the document name into the title bar
+4  draw Z1          menu bar      (reads state, writes intent)
+5  draw Z2          toolbar       (reads state, writes intent)
+6  draw Z3          canvas        (the only zone that rasterizes)
+7  draw Z4          status bar    (reads state, error wins the left half)
+```
+
+Three consequences worth stating, because each one has been got wrong before:
+
+- **Intent is resolved before it is drawn.** Z1 sets the open request; the
+  dialog opens on the next frame's step 1, never inside the click handler. A
+  modal dialog opened from inside a layout pass corrupts that pass.
+- **Z3 is the only rasterizer.** The status bar must never ask for a page. If a
+  value requires rendering, it is drawn in the canvas or not at all.
+- **State changes land before the frame is painted.** A click in Z1 mutates
+  `App`; the canvas in Z3 of the same frame already shows the result. Nothing
+  waits a frame, because a frame of lag reads as a dropped click.
+
+Drops are resolved after the open request, so a deliberate menu open is never
+raced by a stray drag.
+
+## 4. Rules
+
+- **No literal user-facing text in `main.rs`.** Every string comes from
+  `locales/<tag>/reader.ftl` through `MessageId`. Symbols that are not language
+  (`◀`, `▶`) may be written inline; they carry no meaning a translator can lose.
+- **Errors are shown, never swallowed.** A failure reaches the status bar as the
+  engine's own message. The window adds no wording of its own, so the reader
+  sees one vocabulary.
+- **A failed open leaves the previous document open.** Replacing a good document
+  with a broken one loses the reader's place for no reason.
+- **Every `id_salt` is a literal.** Widget identity must be stable across
+  builds; an interpolated salt silently resets scroll position and focus.
+- **One texture per canvas.** The page is uploaded once per resolution and
+  reused from the cache, so the canvas must not reload it under a new name.
+- **Blocking work stays off the draw path.** `rfd` and `std::fs` run in step 1
+  or in the intent handler, never inside Z3.
+
+## 5. Testing
+
+The window cannot be tested headlessly, so nothing that matters may live only
+there. Each rule above has a counterpart in `tests/reader.rs`:
+
+| Rule | Test |
+| --- | --- |
+| state decides, window draws | every `App` transition is a method call |
+| navigation clamps | `navigation_clamps_to_the_pages_that_exist` |
+| failures are shown and clearable | `a_failure_is_shown_and_can_be_cleared` |
+| a failed open keeps the old document | `opening_another_document_replaces_the_first` |
+| one raster per resolution | `the_cache_keys_on_the_resolution_too` |
+| blank is content | `a_blank_page_is_still_drawn` |
+
+A change to the window that cannot be expressed as a change to `App` needs a new
+method here first. If it cannot be, the feature does not belong in this reader.
+
+## 6. Adding a zone
+
+A new zone is admitted only if it cannot live in an existing one, and it must
+come with: its position in the stack above, its step in the frame flow, its
+disabled-state rule, its strings in both catalogues, and a test for whatever
+`App` method it drives.
