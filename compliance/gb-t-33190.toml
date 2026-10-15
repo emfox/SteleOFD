@@ -191,6 +191,8 @@ status = "partial"
 tests = [
   "gb_t_33190_8_4_clip_area_narrows_the_drawing_to_a_path",
   "gb_t_33190_8_4_a_clipped_object_does_not_clip_its_neighbour",
+  "gb_t_33190_8_4_several_clips_cover_the_union_of_their_areas",
+  "gb_t_33190_8_4_one_clip_may_hold_several_areas",
 ]
 note = "Only a Path area is read; a Text area is rejected."
 

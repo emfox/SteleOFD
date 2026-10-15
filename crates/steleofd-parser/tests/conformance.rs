@@ -681,6 +681,69 @@ fn gb_t_33190_8_4_clip_area_narrows_the_drawing_to_a_path() {
 }
 
 #[test]
+fn gb_t_33190_8_4_several_clips_cover_the_union_of_their_areas() {
+    // Clause 8.4: where more than one Clip is present the region is their
+    // union, so both outlines reach the clip path rather than the first one
+    // winning. A scanned invoice in the fetched corpus carries two.
+    let ops = page_ops(
+        r##"<PathObject ID="10" Boundary="0 0 40 10">
+  <AbbreviatedData>M 0 0 L 40 0 L 40 10 L 0 10 Z</AbbreviatedData>
+  <Clips>
+    <Clip><Area>
+      <Path><AbbreviatedData>M 0 0 L 5 0 L 5 5 L 0 5 Z</AbbreviatedData></Path>
+    </Area></Clip>
+    <Clip><Area>
+      <Path><AbbreviatedData>M 20 0 L 25 0 L 25 5 L 20 5 Z</AbbreviatedData></Path>
+    </Area></Clip>
+  </Clips>
+</PathObject>"##,
+        "",
+    );
+    let DrawOp::ClipPath { path, .. } = &ops[1] else {
+        panic!("expected a clip command, got {ops:?}");
+    };
+    assert_eq!(
+        path.bounding_box(),
+        Rect::new(0.0, 0.0, 25.0, 5.0),
+        "the union of both, not one of them"
+    );
+    let subpaths = path
+        .segments
+        .iter()
+        .filter(|s| matches!(s, steleofd_geometry::PathSegment::MoveTo(..)))
+        .count();
+    assert_eq!(subpaths, 2, "one subpath per clip");
+}
+
+#[test]
+fn gb_t_33190_8_4_one_clip_may_hold_several_areas() {
+    // A Clip is made of areas that together cover their union, and each keeps
+    // its own CTM, which applies to that area's path and nothing else.
+    let ops = page_ops(
+        r##"<PathObject ID="10" Boundary="0 0 40 10">
+  <AbbreviatedData>M 0 0 L 40 0 L 40 10 L 0 10 Z</AbbreviatedData>
+  <Clips><Clip>
+    <Area>
+      <Path><AbbreviatedData>M 0 0 L 4 0 L 4 4 L 0 4 Z</AbbreviatedData></Path>
+    </Area>
+    <Area CTM="1 0 0 1 10 0">
+      <Path><AbbreviatedData>M 0 0 L 4 0 L 4 4 L 0 4 Z</AbbreviatedData></Path>
+    </Area>
+  </Clip></Clips>
+</PathObject>"##,
+        "",
+    );
+    let DrawOp::ClipPath { path, .. } = &ops[1] else {
+        panic!("expected a clip command, got {ops:?}");
+    };
+    assert_eq!(
+        path.bounding_box(),
+        Rect::new(0.0, 0.0, 14.0, 4.0),
+        "the second area is shifted by its own CTM"
+    );
+}
+
+#[test]
 fn gb_t_33190_8_4_a_clipped_object_does_not_clip_its_neighbour() {
     // A second object drawn after a clipped one starts from the clean state,
     // because the restore popped the mask back off.

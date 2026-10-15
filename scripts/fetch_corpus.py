@@ -81,7 +81,6 @@ SAMPLES: dict[str, str] = {
 # it means something, so the list is short, each entry names a cause, and CI
 # fails when a sample here starts working: that is the signal to remove it.
 KNOWN_UNPARSED = {
-    "intro-数科.ofd": "clip list with more than one area is not read yet",
     "n.ofd": "the sample itself references a DrawParam it does not contain",
 }
 

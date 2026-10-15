@@ -206,6 +206,33 @@ fn a_clip_confines_the_painted_pixels() {
 }
 
 #[test]
+fn a_clip_of_two_subpaths_paints_both_of_them() {
+    let fonts = FontManager::new();
+    // Clause 8.4: the areas of a clip cover their union, so a clip path made of
+    // two separate squares leaves the gap between them unpainted and both
+    // squares painted. Reading the areas as one each would lose half.
+    let clip = Path::build(|b| {
+        b.rect(0.0, 0.0, 20.0, 20.0);
+        b.rect(60.0, 0.0, 20.0, 20.0);
+    });
+    let page = page_with(vec![
+        DrawOp::ClipPath {
+            path: clip,
+            rule: PaintRule::NonZero,
+        },
+        filled(rect(0.0, 0.0, 200.0, 200.0), Color::rgba(255, 0, 0, 255)),
+    ]);
+    let output = render_page(&page, &fonts, &RenderOptions::default()).expect("render");
+    assert_eq!(pixel(&output, 30, 30)[0], 255, "the first square");
+    assert_eq!(pixel(&output, 190, 30)[0], 255, "the second square");
+    assert_eq!(
+        pixel(&output, 110, 30),
+        [255, 255, 255, 255],
+        "the gap between them is outside the union"
+    );
+}
+
+#[test]
 fn a_run_with_no_glyphs_paints_nothing() {
     let (fonts, id) = manager_with_fixture();
     // An empty run is a legitimate input — a blank line in a text block — and
