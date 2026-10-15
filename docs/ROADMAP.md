@@ -14,9 +14,9 @@ criterion, so it is always obvious whether it is done.
 | --- | --- |
 | Crates | 26 (L0 foundation through L5 delivery) |
 | Source | 24,904 lines of Rust, measured with `find crates -name '*.rs'` |
-| Tests | 597 passing, plus 13 inline unit-test modules |
+| Tests | 604 passing, plus 13 inline unit-test modules |
 | Delivery forms | `cli`, `wasm`, `ffi`, `server`, `reader`, all on the `core` facade |
-| Standard clauses verified | 36 of 47 in GB/T 33190-2016 |
+| Standard clauses verified | 39 of 47 in GB/T 33190-2016 |
 | Languages | `en-US` and `zh-CN`, 75 message keys, parity enforced in CI |
 | CI | fmt, clippy, build, test, all-features test, i18n, language, conformance, XSD validation |
 
@@ -25,12 +25,11 @@ criterion, so it is always obvious whether it is done.
 These are the things a new contributor would otherwise discover the hard way.
 Each one is a real, verified finding, not a guess.
 
-1. **11 of 47 standard clauses still have no test asserting them**, down from
+1. **8 of 47 standard clauses still have no test asserting them**, down from
    27 before N2. The register in `compliance/gb-t-33190.toml` lists them by
-   name. What remains is gradient and clip geometry (`8.3.4`, `8.4`), the path
-   object itself (`9.1`) and the feature tail (`12` video, `13` composite, `14.1`
+   name. What remains is the feature tail: `12` video, `13` composite, `14.1`
    actions, `15` annotations, `16` custom tags, `17` extensions, `18.2.2`/`18.2.3`
-   signature scope and appearance).
+   signature scope and appearance.
 2. **`proptest` and `criterion` are declared in the workspace but never used.**
    Zero references outside the root `Cargo.toml`. The property and benchmark
    testing that was planned does not exist yet.
@@ -110,8 +109,14 @@ the cheap structural ones land before the expensive rendering ones.
   `DeltaY` was not parsed, `DeltaX` was parsed but never applied, `HScale` was
   ignored, and `TextObject.Stroke`/`Fill` meant text could never be outlined.
   All four are now read and flattened.
-- **N2-d** Graphics features: `8.3.4` gradient, `8.4` clip area, `9.1` path
-  object.
+- **N2-d** `[x]` Graphics features: `8.3.4` gradient, `8.4` clip area, `9.1`
+  path object. Gradients meant the parser had to stop skipping `FillColor`
+  children: an `AxialShd`/`RadialShd` is now read into a shading and flattened
+  as its own `LinearGradient`/`RadialGradient` command ahead of the shape, with
+  the shape carrying only a `*GradientRef` marker. Clip areas are read from
+  `Clips`/`Clip`/`Area` and emitted as a `ClipPath` between a `Save`/`Restore`
+  pair. `8.4` stays `partial`: only a `Path` area is read, a `Text` area is
+  rejected with an explicit error rather than silently dropped.
 - **N2-e** The feature tail: `12` video, `13` composite object, `14.1` action
   description, `15` annotations, `16` custom tags, `17` extended information,
   `18.2.2` signature scope, `18.2.3` signature appearance.
