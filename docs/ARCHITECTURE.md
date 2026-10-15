@@ -341,7 +341,8 @@ opt-level = "s"         # size first for WASM
 displaying a single OFD page, then broaden capabilities. That yields end-to-end
 feedback early instead of spinning inside abstraction layers.
 
-**Still to build:** nothing on the roadmap; all 25 crates are in place. Clause-level conformance is tracked in
+**Still to build:** the original sequence is complete; what comes next is tracked
+in [`ROADMAP.md`](ROADMAP.md). Clause-level conformance is tracked in
 `compliance/gb-t-33190.toml`; 20 of 47 clauses are covered so far, and the
 register is the single source of truth that `scripts/check_compliance.py` gates
 on.

@@ -199,7 +199,8 @@ rather than the national standards one.
 - [x] **P9** GB/T 33190-2016 conformance harness: annex A schemas rebuilt from the standard, enforced in CI
 
 All 25 crates are in place, and the four delivery forms (`cli`, `wasm`, `ffi`,
-`server`) sit on the same `core` facade. Clause-level coverage lives in
+`server`) sit on the same `core` facade. What comes next is tracked in
+[`docs/ROADMAP.md`](docs/ROADMAP.md). Clause-level coverage lives in
 [`compliance/gb-t-33190.toml`](compliance/gb-t-33190.toml); 20 of 47 clauses
 are covered so far.
 

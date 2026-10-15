@@ -174,18 +174,20 @@ GB/T 33476 分为三个部分，本项目遵循的是第 1、2 部分。GM/T 009
 - [x] **P0** 工程骨架：分层架构、错误体系、显示列表 IR、国际化层
 - [x] **P1** OFD 结构解析（`model` / `xml` / `package` / `parser`）
 - [x] **P2** 光栅渲染后端，打通「打开 → 显示」链路
-- [ ] **P3** 格式转换（OFD → PDF / PNG / SVG）
+- [x] **P3** 格式转换（OFD → PDF / PNG / SVG）
 - [x] **P4** 国密验签
-- [ ] **P5** CLI / WASM / Server 三形态交付
+- [x] **P5** CLI / WASM / C ABI / HTTP Server 四形态交付
 - [x] **P6** 文档编辑与撤销栈
 - [x] **P7** 基于显示列表的全文检索（`search`）
 - [x] **P8** 归档就绪度检查（`archive`）
 - [x] **P9** GB/T 33190-2016 合规闭环：从标准正文重建附录 A 的 Schema 并在 CI 强制校验
 
-下一步是 `convert`（P3），随后是 `print` 与 `core` 门面，最后才是 L5 的三个
-交付 crate。条款级覆盖情况见
+25 个 crate 已全部就位，四种交付形态（`cli` / `wasm` / `ffi` / `server`）
+共用同一个 `core` 门面。后续规划见
+[`docs/ROADMAP.md`](docs/ROADMAP.md)，按近期 / 中期 / 远期三个阶段组织。
+条款级覆盖情况见
 [`compliance/gb-t-33190.toml`](compliance/gb-t-33190.toml)，目前覆盖 47 条中的
-18 条。
+20 条。
 
 ## 贡献
 
