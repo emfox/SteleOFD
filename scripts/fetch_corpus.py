@@ -62,18 +62,13 @@ SAMPLES: dict[str, str] = {
     "ano.ofd": "ofdrw-converter/src/test/resources/ano.ofd",
     "SignScaleError.ofd": "ofdrw-converter/src/test/resources/SignScaleError.ofd",
     "signout.ofd": "ofdrw-converter/src/test/resources/signout.ofd",
-    "pattern-type.ofd": "ofdrw-converter/src/test/resources/pattern类型.ofd",
-    # A real seven-megabyte scanned invoice: the shape a government office
-    # actually receives, and the reason JBIG2 is not optional.
-    "intro-invoice.ofd": "ofdrw-converter/src/test/resources/intro-数科.ofd",
-}
-
-# The two names above are renamed on the way in. A CJK path is a portability
-# trap on Windows and a policy violation in this repository's own source, and
-# the rename costs nothing because the reason string carries the origin.
-RENAME_FROM = {
-    "pattern-type.ofd": "pattern类型.ofd",
-    "intro-invoice.ofd": "intro-数科.ofd",
+    "pattern类型.ofd": "ofdrw-converter/src/test/resources/pattern类型.ofd",
+    # A real scanned invoice: the shape a government office actually receives,
+    # and the reason JBIG2 is not optional.
+    # Names are the producer's, CJK included: a sample renamed on the way in
+    # loses the only link back to the document it came from, and fetched
+    # samples are exempt from the language policy for exactly that reason.
+    "intro-数科.ofd": "ofdrw-converter/src/test/resources/intro-数科.ofd",
 }
 
 
@@ -140,8 +135,7 @@ def main() -> int:
             failures += 1
             continue
         (args.out / name).write_bytes(blob)
-        origin = RENAME_FROM.get(name, source.rsplit("/", 1)[-1])
-        print(f"ok   {name:<28} {len(blob):>9,} bytes  <- {origin}")
+        print(f"ok   {name:<28} {len(blob):>9,} bytes")
 
     print(f"\n{len(wanted) - failures}/{len(wanted)} fetched into {args.out}")
     return 1 if failures else 0

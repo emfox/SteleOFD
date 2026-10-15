@@ -59,11 +59,20 @@ def first_cjk(text: str) -> tuple[int, str] | None:
     return None
 
 
+# Directories exempt wholesale, with a one-line reason each. Samples keep the
+# name their producer gave them; renaming one severs its only link upstream.
+ALLOWLIST_DIRS = {
+    "tests/fixtures": "fetched test samples are named by their producer",
+}
+
+
 def is_allowlisted(rel: str) -> bool:
     if rel in ALLOWLIST_FILES:
         return True
     parts = rel.split("/")
-    return any(p in LOCALE_DIR for p in parts)
+    if any(p in LOCALE_DIR for p in parts):
+        return True
+    return any(rel.startswith(d.rstrip("/") + "/") for d in ALLOWLIST_DIRS)
 
 
 def allows_cjk_literals(rel: str) -> bool:

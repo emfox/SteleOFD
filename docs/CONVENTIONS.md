@@ -10,7 +10,7 @@ and reviewable by contributors worldwide, all engineering artifacts use English.
 | Rust/C source: identifiers, comments, docs | English only | No CJK anywhere in `.rs`, `.toml`, `.c`, `.h` |
 | Commit messages, branch names, PR titles and descriptions | English only | Conventional Commits format |
 | Code review comments, issue titles and bodies | English only | |
-| File names, directory names, config keys | English only | |
+| File names, directory names, config keys | English only | Except fetched test samples, which keep the name their producer gave them ([4.1](#41-exemptions-from-the-language-policy)) |
 | `README` | Bilingual | `README.md` (English, default) + `README.zh-CN.md`, cross-linked |
 | Other project documents (`docs/`) | English preferred | Chinese allowed only when a document is explicitly user-facing, and must be named `*.zh-CN.md` |
 | UI strings shown to end users | Any locale | Must live in `locales/<tag>/*.ftl`, never hardcoded |
@@ -116,14 +116,19 @@ exemption list at all.
 documentation. It fails on CJK characters in any of them and on comment blocks
 longer than three lines.
 
-Three exemptions exist, each deliberately narrow:
+Four exemptions exist, each deliberately narrow:
 
 | Exemption | Where | Why |
 | --- | --- | --- |
 | Whole file | `README.zh-CN.md`, `docs/CONVENTIONS.md`, the two checker scripts | These exist to hold or match Chinese |
 | Whole file | anything under `locales/` | Locale catalogues are the translation data |
+| Whole file and name | fetched test samples under `tests/fixtures/` | A sample is named by the producer that wrote it, and renaming one severs the only link back to where it came from |
 | String literals only | `steleofd-i18n/src/format.rs` | Holds `\u`-escaped locale date and time markers |
 | Single line | the `README.md` language switcher | The bilingual pair must cross-link by the other language's own name |
+
+The sample exemption covers names as well as contents, and it is why the corpus
+is fetched rather than committed: none of it is source, none of it is built, and
+a sample that cannot be traced upstream is a sample nobody can explain.
 
 New exemptions should be added to the allowlists in the script with a one-line
 reason, so that every exception stays self-documenting.
