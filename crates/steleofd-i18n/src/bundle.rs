@@ -19,6 +19,7 @@ const ZH_CN_SIGN: &str = include_str!("../../../locales/zh-CN/sign.ftl");
 const ZH_CN_ERROR: &str = include_str!("../../../locales/zh-CN/error.ftl");
 const ZH_CN_EDIT: &str = include_str!("../../../locales/zh-CN/edit.ftl");
 const ZH_CN_SEARCH: &str = include_str!("../../../locales/zh-CN/search.ftl");
+const ZH_CN_CLI: &str = include_str!("../../../locales/zh-CN/cli.ftl");
 
 const EN_US_CORE: &str = include_str!("../../../locales/en-US/core.ftl");
 const EN_US_READER: &str = include_str!("../../../locales/en-US/reader.ftl");
@@ -27,6 +28,7 @@ const EN_US_SIGN: &str = include_str!("../../../locales/en-US/sign.ftl");
 const EN_US_ERROR: &str = include_str!("../../../locales/en-US/error.ftl");
 const EN_US_EDIT: &str = include_str!("../../../locales/en-US/edit.ftl");
 const EN_US_SEARCH: &str = include_str!("../../../locales/en-US/search.ftl");
+const EN_US_CLI: &str = include_str!("../../../locales/en-US/cli.ftl");
 
 /// All resources for one locale.
 struct LocaleResources {
@@ -222,6 +224,7 @@ impl I18nBuilder {
                         EN_US_ERROR,
                         EN_US_EDIT,
                         EN_US_SEARCH,
+                        EN_US_CLI,
                     ],
                 ),
             );
@@ -241,6 +244,7 @@ impl I18nBuilder {
                         ZH_CN_ERROR,
                         ZH_CN_EDIT,
                         ZH_CN_SEARCH,
+                        ZH_CN_CLI,
                     ],
                 ),
             );
@@ -381,6 +385,22 @@ pub fn all_keys() -> &'static [&'static str] {
         "err-resource-limit",
         "err-io",
         "err-unsupported",
+        "cli-pages",
+        "cli-page-size",
+        "cli-version",
+        "cli-embedded-fonts",
+        "cli-signatures",
+        "cli-no-pages",
+        "cli-wrote",
+        "cli-rendered-page",
+        "cli-converted",
+        "cli-search-hit",
+        "cli-audit-clean",
+        "cli-audit-finding",
+        "cli-print-plan",
+        "cli-sign-entry",
+        "cli-sign-none",
+        "cli-error",
     ]
 }
 

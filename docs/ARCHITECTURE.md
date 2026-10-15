@@ -328,7 +328,8 @@ opt-level = "s"         # size first for WASM
 | **P3b printing** | `print`: task planning and rasterization | Done |
 | **P4b facade** | `core`: the feature-trimmed public surface | Done |
 | **P4 verification** | Signature verification in `crypto` and `sign` | Done |
-| **P5 delivery** | CLI, WebAssembly and server delivery paths | Pending |
+| **P5a delivery** | `cli`: the `steleofd` command line tool | Done |
+| **P5b delivery** | WebAssembly, C ABI and HTTP service paths | Pending |
 | **P6 editing** | Command pattern and undo stack in `edit` | Done |
 | **P7 search** | Full-text search over the display list in `search` | Done |
 | **P8 archival** | Archival readiness auditing in `archive` | Done |
@@ -338,9 +339,9 @@ opt-level = "s"         # size first for WASM
 displaying a single OFD page, then broaden capabilities. That yields end-to-end
 feedback early instead of spinning inside abstraction layers.
 
-**Still to build:** the L5 delivery crates (`cli`, `wasm`, `ffi`, `server`), all
-of which sit on the `core` facade. Clause-level conformance is tracked in
-`compliance/gb-t-33190.toml`; 18 of 47 clauses are covered so far, and the
+**Still to build:** the remaining L5 delivery crates (`wasm`, `ffi`, `server`),
+all of which sit on the `core` facade. Clause-level conformance is tracked in
+`compliance/gb-t-33190.toml`; 19 of 47 clauses are covered so far, and the
 register is the single source of truth that `scripts/check_compliance.py` gates
 on.
 

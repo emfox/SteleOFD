@@ -92,6 +92,16 @@ impl Document {
         &self.parsed.document
     }
 
+    /// Version the document declares, such as `1.0`.
+    /// The minor part is appended only when present.
+    pub fn version(&self) -> String {
+        let version = &self.parsed.ofd.version;
+        match &version.sub {
+            Some(sub) if !sub.is_empty() => format!("{}.{}", version.major, sub),
+            _ => version.major.clone(),
+        }
+    }
+
     /// The container, for signature and archival work that reads entries.
     pub fn package(&mut self) -> &mut Package {
         &mut self.package
@@ -270,8 +280,27 @@ fn register_container_fonts(
         registered.push(id);
     }
     let used = used_font_ids(list);
-    used.into_iter().zip(registered).collect()
+    let mut map: HashMap<u32, FontId> = used.iter().copied().zip(registered).collect();
+
+    // Referenced but not embedded: point those ids at one system substitute, so
+    // a document that names a font without shipping it still renders.
+    let unembedded: Vec<u32> = used
+        .into_iter()
+        .filter(|id| !map.contains_key(id))
+        .collect();
+    if !unembedded.is_empty() {
+        let substitute = fonts.registry_mut().register_system(SUBSTITUTE_FAMILY);
+        for id in unembedded {
+            map.insert(id, substitute);
+        }
+    }
+    map
 }
+
+/// Family used when a document references a font it does not embed.
+/// A generic alias every system resolver knows, so the substitute degrades to
+/// whatever sans face the machine has.
+const SUBSTITUTE_FAMILY: &str = "sans-serif";
 
 /// Every font id the display list actually references, sorted.
 fn used_font_ids(list: &DisplayList) -> Vec<u32> {

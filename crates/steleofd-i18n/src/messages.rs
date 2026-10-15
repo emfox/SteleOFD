@@ -113,6 +113,40 @@ pub enum MessageId {
     /// Search input placeholder
     SearchPlaceholder,
 
+    // Command line output
+    /// Page count line in document info
+    CliPages,
+    /// Page size line in document info
+    CliPageSize,
+    /// Version line in document info
+    CliVersion,
+    /// Embedded font count line in document info
+    CliEmbeddedFonts,
+    /// Signature count line in document info
+    CliSignatures,
+    /// The document declares no pages
+    CliNoPages,
+    /// Confirmation that a file was written
+    CliWrote,
+    /// One page rendered at a resolution
+    CliRenderedPage,
+    /// A batch of pages converted to a format
+    CliConverted,
+    /// One search hit with its snippet
+    CliSearchHit,
+    /// The audit found nothing
+    CliAuditClean,
+    /// One audit finding
+    CliAuditFinding,
+    /// Print job plan summary
+    CliPrintPlan,
+    /// One signature with its verification status
+    CliSignEntry,
+    /// The document declares no signatures
+    CliSignNone,
+    /// Prefix for a reported error
+    CliError,
+
     // Error messages
     /// File is not a valid OFD document
     ErrNotOfd,
@@ -197,6 +231,24 @@ impl MessageId {
             Self::SearchResultCount => "search-result-count",
             Self::SearchPlaceholder => "search-placeholder",
 
+            // Command line output
+            Self::CliPages => "cli-pages",
+            Self::CliPageSize => "cli-page-size",
+            Self::CliVersion => "cli-version",
+            Self::CliEmbeddedFonts => "cli-embedded-fonts",
+            Self::CliSignatures => "cli-signatures",
+            Self::CliNoPages => "cli-no-pages",
+            Self::CliWrote => "cli-wrote",
+            Self::CliRenderedPage => "cli-rendered-page",
+            Self::CliConverted => "cli-converted",
+            Self::CliSearchHit => "cli-search-hit",
+            Self::CliAuditClean => "cli-audit-clean",
+            Self::CliAuditFinding => "cli-audit-finding",
+            Self::CliPrintPlan => "cli-print-plan",
+            Self::CliSignEntry => "cli-sign-entry",
+            Self::CliSignNone => "cli-sign-none",
+            Self::CliError => "cli-error",
+
             // Errors
             Self::ErrNotOfd => "err-not-ofd",
             Self::ErrPasswordRequired => "err-password-required",
@@ -271,6 +323,23 @@ impl MessageId {
         // Search
         Self::SearchResultCount,
         Self::SearchPlaceholder,
+        // Command line output
+        Self::CliPages,
+        Self::CliPageSize,
+        Self::CliVersion,
+        Self::CliEmbeddedFonts,
+        Self::CliSignatures,
+        Self::CliNoPages,
+        Self::CliWrote,
+        Self::CliRenderedPage,
+        Self::CliConverted,
+        Self::CliSearchHit,
+        Self::CliAuditClean,
+        Self::CliAuditFinding,
+        Self::CliPrintPlan,
+        Self::CliSignEntry,
+        Self::CliSignNone,
+        Self::CliError,
         // Errors
         Self::ErrNotOfd,
         Self::ErrPasswordRequired,
@@ -303,6 +372,19 @@ impl MessageId {
                 | Self::ErrFontMissing
                 | Self::ErrDanglingReference
                 | Self::ErrResourceLimit
+                | Self::CliPages
+                | Self::CliPageSize
+                | Self::CliVersion
+                | Self::CliEmbeddedFonts
+                | Self::CliSignatures
+                | Self::CliWrote
+                | Self::CliRenderedPage
+                | Self::CliConverted
+                | Self::CliSearchHit
+                | Self::CliAuditFinding
+                | Self::CliPrintPlan
+                | Self::CliSignEntry
+                | Self::CliError
         )
     }
 }

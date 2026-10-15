@@ -6,7 +6,7 @@ use steleofd_error::{FormatError, OfdError, Result, XmlError};
 use steleofd_model::color::ColorRef;
 use steleofd_model::document::{
     CommonData, DocBody, Document as ModelDocument, DrawParamList, Layer, Location, OfdRoot, Page,
-    PageArea, PageBlock, Pages, Template, TemplateList, TemplatePageList, TemplateRef,
+    PageArea, PageBlock, Pages, Template, TemplateList, TemplatePageList, TemplateRef, Version,
 };
 use steleofd_model::object::{
     DashPattern, DrawParam, GraphicsUnit, ImageObject, LineCapStyle, LineJoinStyle, Object,
@@ -23,6 +23,9 @@ pub fn read_ofd_root(xml: &str) -> Result<OfdRoot> {
         return Err(OfdError::Format(FormatError::NotOfd));
     }
     let mut ofd = OfdRoot::default();
+    if let Some(raw) = root.attributes().get("Version") {
+        ofd.version = version_of(raw);
+    }
     loop {
         match cursor.next_event()? {
             Event::Start(node) if node.is("DocBody") => {
@@ -68,6 +71,20 @@ fn base_loc_or_text(node: &Node, cursor: &mut Cursor<'_>) -> Result<Location> {
         return Ok(Location::new(loc));
     }
     Ok(Location::new(cursor.read_text()?))
+}
+
+/// Split a dotted version such as `1.0` into major and minor parts.
+fn version_of(raw: &str) -> Version {
+    match raw.split_once('.') {
+        Some((major, sub)) if !sub.is_empty() => Version {
+            major: major.to_string(),
+            sub: Some(sub.to_string()),
+        },
+        _ => Version {
+            major: raw.to_string(),
+            sub: None,
+        },
+    }
 }
 
 /// Parse `Document.xml` into the document model.
@@ -128,13 +145,14 @@ fn read_page_area(cursor: &mut Cursor<'_>) -> Result<PageArea> {
     Ok(area)
 }
 
-/// Boxes are written either as `Left/Top/Width/Height` or as `x/y/w/h`.
+/// Boxes follow `ST_Box`: four numbers as element text.
+/// The attribute form is tolerated for writers that put the box on the element.
 fn rect_of(node: &Node, cursor: &mut Cursor<'_>) -> Result<Rect> {
     let a = node.attributes();
-    let get = |names: &[&str]| -> Result<f64> {
+    let attr = |names: &[&str]| -> Result<Option<f64>> {
         for name in names {
             if let Some(raw) = a.get(name) {
-                return raw.parse().map_err(|_| {
+                return raw.parse().map(Some).map_err(|_| {
                     OfdError::Xml(XmlError::InvalidAttribute {
                         element: node.local().to_string(),
                         attr: (*name).to_string(),
@@ -143,16 +161,21 @@ fn rect_of(node: &Node, cursor: &mut Cursor<'_>) -> Result<Rect> {
                 });
             }
         }
-        Ok(0.0)
+        Ok(None)
     };
-    let rect = Rect::new(
-        get(&["Left", "x"])?,
-        get(&["Top", "y"])?,
-        get(&["Width", "w"])?,
-        get(&["Height", "h"])?,
+    let from_attrs = (
+        attr(&["Left", "x"])?,
+        attr(&["Top", "y"])?,
+        attr(&["Width", "w"])?,
+        attr(&["Height", "h"])?,
     );
-    cursor.skip_element(node)?;
-    Ok(rect)
+    if let (Some(x), Some(y), Some(w), Some(h)) = from_attrs {
+        cursor.skip_element(node)?;
+        return Ok(Rect::new(x, y, w, h));
+    }
+    let raw = cursor.read_text()?;
+    let values = parse_number_list_n::<4>(node.local(), "box", &raw)?;
+    Ok(Rect::new(values[0], values[1], values[2], values[3]))
 }
 
 fn read_templates(cursor: &mut Cursor<'_>) -> Result<TemplateList> {

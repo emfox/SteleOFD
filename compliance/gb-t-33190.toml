@@ -45,7 +45,10 @@ status = "untested"
 [[item]]
 clause = "7.3"
 title = "Basic data types"
-status = "untested"
+status = "verified"
+tests = [
+    "gb_t_33190_7_3_physical_box_is_element_text",
+]
 
 [[item]]
 clause = "7.4"
@@ -55,6 +58,7 @@ tests = [
     "gb_t_33190_7_4_main_entry_is_required",
     "gb_t_33190_7_4_missing_entry_point_is_an_error",
     "gb_t_33190_7_4_unreachable_doc_root_is_reported",
+    "gb_t_33190_7_4_version_attribute_is_read",
 ]
 
 
