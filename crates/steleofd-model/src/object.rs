@@ -123,6 +123,16 @@ pub enum LineJoinStyle {
     Bevel,
 }
 
+/// How a path decides which points are inside it, from the `Rule` attribute.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum FillRuleStyle {
+    /// Non-zero winding; the standard's default.
+    #[default]
+    NonZero,
+    /// Even-odd, spelled `Even-Odd` in the standard.
+    EvenOdd,
+}
+
 /// Dash pattern in units of line width, starting at `phase`.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct DashPattern {
@@ -194,6 +204,9 @@ pub struct PathObject {
     /// Whether the outline is stroked.
     #[serde(rename = "Stroke", skip_serializing_if = "Option::is_none")]
     pub stroke: Option<bool>,
+    /// Fill rule, `NonZero` (the default) or `Even-Odd`.
+    #[serde(rename = "Rule", skip_serializing_if = "Option::is_none")]
+    pub rule: Option<FillRuleStyle>,
 }
 
 impl PathObject {
@@ -420,6 +433,11 @@ mod tests {
     fn line_styles_have_sensible_defaults() {
         assert_eq!(LineCapStyle::default(), LineCapStyle::Butt);
         assert_eq!(LineJoinStyle::default(), LineJoinStyle::Miter);
+        assert_eq!(
+            FillRuleStyle::default(),
+            FillRuleStyle::NonZero,
+            "the standard defaults a path to the non-zero rule"
+        );
     }
 
     #[test]
@@ -431,6 +449,7 @@ mod tests {
             stroke_color: None,
             fill: Some(true),
             stroke: Some(true),
+            rule: Some(FillRuleStyle::EvenOdd),
         });
 
         let json = serde_json::to_string(&obj).expect("serialize");

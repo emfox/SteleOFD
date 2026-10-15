@@ -145,6 +145,13 @@ fn stroke_style_of(param: Option<&DrawParam>) -> StrokeStyle {
     }
 }
 
+fn fill_rule(rule: Option<steleofd_model::object::FillRuleStyle>) -> PaintRule {
+    match rule {
+        Some(steleofd_model::object::FillRuleStyle::EvenOdd) => PaintRule::EvenOdd,
+        _ => PaintRule::NonZero,
+    }
+}
+
 fn flatten_path(
     p: &PathObject,
     params: &HashMap<String, DrawParam>,
@@ -186,7 +193,7 @@ fn flatten_path(
             fill,
             stroke,
             stroke_style: style,
-            rule: PaintRule::NonZero,
+            rule: fill_rule(p.rule),
         });
         Ok(())
     })

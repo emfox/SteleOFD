@@ -15,8 +15,8 @@ pub use document::{
     Zones,
 };
 pub use object::{
-    DashPattern, DrawParam, GraphicsUnit, ImageObject, LineCapStyle, LineJoinStyle, Object,
-    ObjectRef, PathObject, TextObject,
+    DashPattern, DrawParam, FillRuleStyle, GraphicsUnit, ImageObject, LineCapStyle, LineJoinStyle,
+    Object, ObjectRef, PathObject, TextObject,
 };
 
 /// Reference attribute (`ID` in the standard) identifying an object or resource.

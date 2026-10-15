@@ -9,8 +9,8 @@ use steleofd_model::document::{
     PageArea, PageBlock, Pages, Template, TemplateList, TemplatePageList, TemplateRef, Version,
 };
 use steleofd_model::object::{
-    DashPattern, DrawParam, GraphicsUnit, ImageObject, LineCapStyle, LineJoinStyle, Object,
-    ObjectBase, PathObject, TextCode, TextObject,
+    DashPattern, DrawParam, FillRuleStyle, GraphicsUnit, ImageObject, LineCapStyle, LineJoinStyle,
+    Object, ObjectBase, PathObject, TextCode, TextObject,
 };
 use steleofd_xml::cursor::Event;
 use steleofd_xml::{Cursor, Node, parse_bool, parse_number_list, parse_number_list_n};
@@ -226,18 +226,35 @@ fn read_draw_param(cursor: &mut Cursor<'_>, node: &Node) -> Result<DrawParam> {
         line_width: a.optional_as::<f64>("DrawParam", "LineWidth")?,
         ..Default::default()
     };
-    if let Some(raw) = a.get("LineCap") {
+    // The standard names these `Cap` and `Join`; `LineCap`/`LineJoin` are the
+    // names some writers emit, so both are accepted.
+    if let Some(raw) = a.get("Cap").or_else(|| a.get("LineCap")) {
         param.line_cap = Some(match raw {
             "Round" => LineCapStyle::Round,
             "Square" => LineCapStyle::Square,
             _ => LineCapStyle::Butt,
         });
     }
-    if let Some(raw) = a.get("LineJoin") {
+    if let Some(raw) = a.get("Join").or_else(|| a.get("LineJoin")) {
         param.line_join = Some(match raw {
             "Round" => LineJoinStyle::Round,
             "Bevel" => LineJoinStyle::Bevel,
             _ => LineJoinStyle::Miter,
+        });
+    }
+    // `DashPattern` is an ST_Array attribute and `DashOffset` its phase, not a
+    // child element.
+    let dash = a
+        .get("DashPattern")
+        .map(|raw| parse_number_list::<f64>("DrawParam", "DashPattern", raw))
+        .transpose()?
+        .unwrap_or_default();
+    if !dash.is_empty() || a.get("DashOffset").is_some() {
+        param.dash_pattern = Some(DashPattern {
+            phase: a
+                .optional_as::<f64>("DrawParam", "DashOffset")?
+                .unwrap_or(0.0),
+            pattern: dash,
         });
     }
     if let Some(raw) = a.get("Fill") {
@@ -454,6 +471,11 @@ fn read_path_object(cursor: &mut Cursor<'_>, node: &Node) -> Result<PathObject> 
         },
         stroke: match a.get("Stroke") {
             Some(raw) => Some(parse_bool("PathObject", "Stroke", raw)?),
+            None => None,
+        },
+        rule: match a.get("Rule") {
+            Some("Even-Odd") => Some(FillRuleStyle::EvenOdd),
+            Some(_) => Some(FillRuleStyle::NonZero),
             None => None,
         },
         ..Default::default()
