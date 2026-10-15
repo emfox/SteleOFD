@@ -118,3 +118,214 @@ pub fn replay(page: &PageDisplay, sink: &mut impl PageSink) -> Result<()> {
     Ok(())
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use steleofd_common::Millimeter;
+    use steleofd_display::ImageCodec;
+    use steleofd_display::ops::{Color, Paint};
+    use steleofd_font::FontId;
+    use steleofd_geometry::PathBuilder;
+
+    /// Records the hook sequence so the replay contract can be asserted.
+    #[derive(Default)]
+    struct Recorder {
+        log: Vec<String>,
+        depth: usize,
+    }
+
+    impl PageSink for Recorder {
+        fn save(&mut self) {
+            self.depth += 1;
+            self.log.push("save".into());
+        }
+
+        fn restore(&mut self) {
+            self.depth -= 1;
+            self.log.push("restore".into());
+        }
+
+        fn transform(&mut self, _: Affine) {
+            self.log.push("transform".into());
+        }
+
+        fn clip(&mut self, _: &Path, _: PaintRule) {
+            self.log.push("clip".into());
+        }
+
+        fn path(&mut self, _: PathShape<'_>) {
+            self.log.push("path".into());
+        }
+
+        fn text(&mut self, _: &GlyphRun) {
+            self.log.push("text".into());
+        }
+
+        fn image(&mut self, _: &ImageRef, _: Rect, _: Affine) {
+            self.log.push("image".into());
+        }
+
+        fn linear_gradient(&mut self, _: Point, _: Point, _: GradientShape<'_>) {
+            self.log.push("linear".into());
+        }
+
+        fn radial_gradient(&mut self, _: Point, _: f64, _: GradientShape<'_>) {
+            self.log.push("radial".into());
+        }
+    }
+
+    fn run(font: FontId) -> GlyphRun {
+        GlyphRun {
+            font,
+            size: Millimeter(3.0),
+            glyphs: vec![1],
+            advances: vec![3.0],
+            text: Some("A".into()),
+            cluster_map: None,
+            transform: Affine::translate(1.0, 2.0),
+            fill: None,
+            stroke: None,
+            letter_spacing: 0.0,
+            word_spacing: 0.0,
+            bbox: Rect::new(0.0, 0.0, 3.0, 3.0),
+        }
+    }
+
+    fn page(ops: Vec<DrawOp>) -> PageDisplay {
+        PageDisplay {
+            index: 0,
+            page_box: Rect::A4_PORTRAIT,
+            ops,
+            content_bbox: Rect::EMPTY,
+        }
+    }
+
+    #[test]
+    fn every_op_reaches_the_sink_in_order() {
+        let rect = Path::build(|b| {
+            b.rect(0.0, 0.0, 10.0, 10.0);
+        });
+        let p = page(vec![
+            DrawOp::Save,
+            DrawOp::Transform(Affine::scale(2.0, 2.0)),
+            DrawOp::ClipPath {
+                path: rect.clone(),
+                rule: PaintRule::EvenOdd,
+            },
+            DrawOp::Path {
+                path: rect.clone(),
+                fill: None,
+                stroke: None,
+                stroke_style: Default::default(),
+                rule: PaintRule::NonZero,
+            },
+            DrawOp::Text(run(FontId(1))),
+            DrawOp::Image {
+                image: ImageRef::new(
+                    "i",
+                    std::sync::Arc::new(Vec::new()),
+                    (1, 1),
+                    ImageCodec::Png,
+                ),
+                dst: Rect::new(0.0, 0.0, 1.0, 1.0),
+                transform: Affine::IDENTITY,
+            },
+            DrawOp::LinearGradient {
+                start: Point::new(0.0, 0.0),
+                end: Point::new(1.0, 0.0),
+                stops: Vec::new(),
+                path: rect.clone(),
+            },
+            DrawOp::RadialGradient {
+                center: Point::new(0.0, 0.0),
+                radius: 5.0,
+                stops: Vec::new(),
+                path: rect,
+            },
+            DrawOp::Restore,
+        ]);
+
+        let mut sink = Recorder::default();
+        replay(&p, &mut sink).expect("a balanced stream replays");
+        assert_eq!(
+            sink.log,
+            vec![
+                "save",
+                "transform",
+                "clip",
+                "path",
+                "text",
+                "image",
+                "linear",
+                "radial",
+                "restore"
+            ]
+        );
+        assert_eq!(sink.depth, 0);
+    }
+
+    #[test]
+    fn a_restore_without_a_save_is_refused() {
+        let mut sink = Recorder::default();
+        let err = replay(&page(vec![DrawOp::Restore]), &mut sink)
+            .expect_err("an unbalanced restore must fail");
+        assert!(matches!(
+            err,
+            OfdError::Format(FormatError::CircularReference { .. })
+        ));
+        assert!(sink.log.is_empty(), "the refused op is not forwarded");
+    }
+
+    #[test]
+    fn a_trailing_save_is_left_to_the_sink() {
+        // Replay only guards balance it can see; closing an unclosed save is
+        // the sink's job, since only it knows what an open group means.
+        let mut sink = Recorder::default();
+        replay(&page(vec![DrawOp::Save, DrawOp::Save]), &mut sink).expect("saves always replay");
+        assert_eq!(sink.depth, 2);
+    }
+
+    #[test]
+    fn shapes_borrow_the_stream_rather_than_clone() {
+        let rect = Path::build(|b| {
+            b.rect(0.0, 0.0, 1.0, 1.0);
+        });
+        let p = page(vec![DrawOp::Path {
+            path: rect.clone(),
+            fill: None,
+            stroke: None,
+            stroke_style: Default::default(),
+            rule: PaintRule::NonZero,
+        }]);
+
+        let mut sink = Recorder::default();
+        replay(&p, &mut sink).expect("replay");
+        assert_eq!(sink.log, vec!["path"]);
+    }
+
+    #[test]
+    fn a_nested_restore_keeps_the_sink_balanced() {
+        let mut builder = PathBuilder::new();
+        builder.move_to(0.0, 0.0);
+        let line = builder.finish();
+        let p = page(vec![
+            DrawOp::Save,
+            DrawOp::Save,
+            DrawOp::Path {
+                path: line.clone(),
+                fill: Some(Paint::Solid(Color::BLACK)),
+                stroke: None,
+                stroke_style: Default::default(),
+                rule: PaintRule::NonZero,
+            },
+            DrawOp::Restore,
+            DrawOp::Restore,
+        ]);
+
+        let mut sink = Recorder::default();
+        replay(&p, &mut sink).expect("nested balance replays");
+        assert_eq!(sink.depth, 0);
+        assert_eq!(sink.log.iter().filter(|l| *l == "save").count(), 2);
+        assert_eq!(sink.log.iter().filter(|l| *l == "restore").count(), 2);
+    }
+}
