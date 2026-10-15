@@ -68,12 +68,15 @@ pub fn load_images(package: &mut Package, doc_dir: &str) -> steleofd_error::Resu
 ///
 /// A scanner, not a full parse, so a malformed table costs nothing.
 fn res_base_loc(xml: &str) -> &str {
-    let head = &xml[..xml.len().min(4096)];
+    // Slicing by byte count would cut a multi-byte character in half and panic,
+    // and a resource table may well be written in Chinese, so the head is taken
+    // with `get` and the whole file falls back to the default.
+    let head = xml.get(..xml.len().min(4096)).unwrap_or(xml);
     let Some(at) = head.find("BaseLoc=\"") else {
         return "Res";
     };
     let rest = &head[at + 9..];
-    let end = rest.find('"').unwrap_or_default();
+    let end = rest.find('"').unwrap_or(rest.len());
     let value = rest[..end].trim();
     if value.is_empty() { "Res" } else { value }
 }
