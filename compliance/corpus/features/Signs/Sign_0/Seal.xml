@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ofd:Signature xmlns:ofd="http://www.ofdspec.org/2016">
+  <ofd:SignedInfo>
+    <ofd:Provider ProviderName="SteleOFD conformance corpus" Version="1.0" Company="SteleOFD"/>
+    <ofd:SignatureMethod>Seal</ofd:SignatureMethod>
+    <ofd:SignatureDateTime>2024-01-01T00:00:00</ofd:SignatureDateTime>
+    <ofd:References CheckMethod="SHA1">
+      <ofd:Reference FileRef="Doc_0/Document.xml">
+        <ofd:CheckValue>AAECAwQFBgcICQ==</ofd:CheckValue>
+      </ofd:Reference>
+    </ofd:References>
+    <ofd:StampAnnot ID="Stamp_1" PageRef="1" Boundary="10 250 60 30"/>
+    <ofd:Seal>
+      <ofd:BaseLoc>Signs/Sign_0/Seal.png</ofd:BaseLoc>
+    </ofd:Seal>
+  </ofd:SignedInfo>
+  <ofd:SignedValue>Signs/Sign_0/SignedValue.dat</ofd:SignedValue>
+</ofd:Signature>

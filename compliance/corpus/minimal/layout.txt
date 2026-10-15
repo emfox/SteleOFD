@@ -1,0 +1,5 @@
+# Archive layout for the minimal corpus.
+# <path inside the .ofd>            <source file>
+OFD.xml                             OFD.xml
+Doc_0/Document.xml                  Document.xml
+Doc_0/Pages/Page_0/Content.xml      Content.xml

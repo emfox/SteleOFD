@@ -36,6 +36,8 @@ Annex A.6 is printed as `Definition.xsd`, but A.1 to A.3 include it as
   (`CT_Path`, `CT_Text`, `CT_Layer`, `CT_Color`).
 - **Not yet** checked attribute by attribute: `Res.xsd`, `Signature.xsd`,
   `CustomTags.xsd`, `Extensions.xsd`, `Attachments.xsd`, `Annotation.xsd`.
+  What the corpus has since exercised against them is recorded under
+  `compliance/corpus/features/`.
 
 Treat these files as a validation baseline derived from the normative annex.
 They are not third-party certification, and any conformance claim built on
@@ -45,9 +47,22 @@ them should say so.
 
 ```console
 python3 scripts/extract_schema.py <standard.pdf>          # regenerate
-python3 scripts/validate_ofd.py compliance/corpus/minimal.ofd
+python3 scripts/pack_corpus.py --check                    # archives match sources
+python3 scripts/validate_ofd.py --allow-foreign \
+    $(find compliance/corpus -name '*.ofd' -o -name '*.xml')
 ```
 
 `scripts/validate_ofd.py` routes every XML entry of a container to the schema
 that declares its root element and validates it. CI runs that over everything
 under `compliance/corpus/`.
+
+Two details are worth knowing:
+
+- A container may carry XML in **vocabularies of its own** — the file a
+  `CustomTag` points at, for instance. `--allow-foreign` accepts those; without
+  it they fail loudly, which is what we want for a genuinely misplaced annex A
+  entry.
+- `compliance/corpus/<name>/` is the readable source and `<name>.ofd` is the
+  archive built from it. `scripts/pack_corpus.py` reads the nesting from the
+  `layout.txt` beside each source, and its `--check` mode (run in CI) fails when
+  the committed archive no longer matches its sources.

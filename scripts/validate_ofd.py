@@ -8,6 +8,13 @@ conformant" into "the normative schema accepts them".
 Usage:
     python3 scripts/validate_ofd.py <file.ofd|file.xml>...
     python3 scripts/validate_ofd.py --schema-dir DIR <files>
+    python3 scripts/validate_ofd.py --allow-foreign <files>
+
+`--allow-foreign` accepts XML entries whose root element annex A does not
+declare. A document is free to carry payloads in vocabularies of its own (the
+file a `CustomTag` points at, for instance); those are validated by whoever
+defines the vocabulary, not here. The flag is a deliberate opt-in so that a
+genuinely misplaced annex A entry still fails loudly by default.
 """
 
 from __future__ import annotations
@@ -27,7 +34,7 @@ ROOT_SCHEMA = {
     "Page": "Page.xsd",
     "Res": "Res.xsd",
     "Annotations": "Annotations.xsd",
-    "Annotation": "Annotation.xsd",
+    "PageAnnot": "Annotation.xsd",
     "Signatures": "Signatures.xsd",
     "Signature": "Signature.xsd",
     "CustomTags": "CustomTags.xsd",
@@ -54,24 +61,31 @@ def load_validators(schema_dir: Path) -> dict[str, etree.XMLSchema]:
     return validators
 
 
-def validate(data: bytes, label: str, validators: dict[str, etree.XMLSchema]) -> list[str]:
-    """Return one message per problem found; empty means the entry conforms."""
+def validate(
+    data: bytes,
+    label: str,
+    validators: dict[str, etree.XMLSchema],
+    allow_foreign: bool = False,
+) -> tuple[str, list[str]]:
+    """Validate one entry; return ("ok"|"skip"|"fail", problems)."""
     try:
         document = etree.fromstring(data)
     except etree.XMLSyntaxError as error:
-        return [f"{label}: not well-formed XML: {error}"]
+        return "fail", [f"{label}: not well-formed XML: {error}"]
     root = local_name(document.tag)
     if root in ("", "OFD") and document.nsmap.get(None, OFD_NS) != OFD_NS:
-        return [f"{label}: root element is not in the {OFD_NS} namespace"]
+        return "fail", [f"{label}: root element is not in the {OFD_NS} namespace"]
     name = ROOT_SCHEMA.get(root)
     if name is None:
-        return [f"{label}: root element <{root}> is not declared by annex A"]
+        if allow_foreign:
+            return "skip", []
+        return "fail", [f"{label}: root element <{root}> is not declared by annex A"]
     validator = validators.get(name)
     if validator is None:
-        return [f"{label}: schema {name} is missing from the schema directory"]
+        return "fail", [f"{label}: schema {name} is missing from the schema directory"]
     if validator.validate(document):
-        return []
-    return [f"{label}: {error.message}" for error in validator.error_log]
+        return "ok", []
+    return "fail", [f"{label}: {error.message}" for error in validator.error_log]
 
 
 def entries(path: Path) -> Iterable[tuple[str, bytes]]:
@@ -90,6 +104,11 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("files", nargs="+", type=Path)
     parser.add_argument(
+        "--allow-foreign",
+        action="store_true",
+        help="accept XML entries whose root annex A does not declare",
+    )
+    parser.add_argument(
         "--schema-dir",
         type=Path,
         default=Path(__file__).resolve().parent.parent / "compliance" / "schema" / "annex-a",
@@ -102,21 +121,27 @@ def main() -> int:
 
     problems: list[str] = []
     checked = 0
+    skipped = 0
     for path in args.files:
         if not path.exists():
             problems.append(f"{path}: no such file")
             continue
         for label, data in entries(path):
-            found = validate(data, f"{path}:{label}", validators)
-            if found:
-                problems.extend(found)
-            else:
+            status, found = validate(
+                data, f"{path}:{label}", validators, args.allow_foreign
+            )
+            if status == "ok":
                 checked += 1
                 print(f"OK   {path}:{label}")
+            elif status == "skip":
+                skipped += 1
+                print(f"SKIP {path}:{label}")
+            else:
+                problems.extend(found)
 
     for problem in problems:
         print(f"FAIL {problem}", file=sys.stderr)
-    print(f"{checked} entry/entries conform, {len(problems)} problem(s)")
+    print(f"{checked} entry/entries conform, {skipped} skipped, {len(problems)} problem(s)")
     return 1 if problems else 0
 
 

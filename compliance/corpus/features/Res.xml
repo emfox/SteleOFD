@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ofd:Res xmlns:ofd="http://www.ofdspec.org/2016" BaseLoc="Res">
+  <ofd:DrawParams>
+    <ofd:DrawParam ID="7" LineWidth="1.5" Join="Round" Cap="Round" MiterLimit="4.0">
+      <ofd:FillColor Value="0 0 255"/>
+      <ofd:StrokeColor Value="0 0 0"/>
+    </ofd:DrawParam>
+  </ofd:DrawParams>
+  <ofd:Fonts>
+    <ofd:Font ID="5" FontName="Orbitron-Bold" FamilyName="Orbitron" Charset="unicode" Bold="true"/>
+  </ofd:Fonts>
+  <ofd:MultiMedias>
+    <ofd:MultiMedia ID="8" Type="Video" Format="mp4">
+      <ofd:MediaFile>Res/clip.mp4</ofd:MediaFile>
+    </ofd:MultiMedia>
+    <ofd:MultiMedia ID="9" Type="Image" Format="png">
+      <ofd:MediaFile>Res/photo.png</ofd:MediaFile>
+    </ofd:MultiMedia>
+  </ofd:MultiMedias>
+  <ofd:CompositeGraphicUnits>
+    <ofd:CompositeGraphicUnit ID="11" Width="40" Height="40">
+      <ofd:Thumbnail>9</ofd:Thumbnail>
+      <ofd:Content>
+        <ofd:PathObject ID="13" Boundary="0 0 40 40" Fill="true">
+          <ofd:FillColor Value="0 128 0"/>
+          <ofd:AbbreviatedData>M 0 0 L 40 0 L 40 40 L 0 40 C</ofd:AbbreviatedData>
+        </ofd:PathObject>
+      </ofd:Content>
+    </ofd:CompositeGraphicUnit>
+  </ofd:CompositeGraphicUnits>
+</ofd:Res>

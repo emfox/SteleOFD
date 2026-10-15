@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ofd:PageAnnot xmlns:ofd="http://www.ofdspec.org/2016">
+  <ofd:Annot ID="14" Type="Stamp" Creator="SteleOFD conformance corpus" LastModDate="2024-01-01" Visible="true">
+    <ofd:Remark>A stamp annotation over the page body</ofd:Remark>
+    <ofd:Parameters>
+      <ofd:Parameter Name="Source">corpus</ofd:Parameter>
+    </ofd:Parameters>
+    <ofd:Appearance Boundary="10 250 60 30">
+      <ofd:TextObject ID="16" Boundary="10 250 60 30" Font="5" Size="4">
+        <ofd:FillColor Value="255 0 0"/>
+        <ofd:TextCode X="10" Y="270">APPROVED</ofd:TextCode>
+      </ofd:TextObject>
+    </ofd:Appearance>
+  </ofd:Annot>
+</ofd:PageAnnot>

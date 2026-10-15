@@ -1,0 +1,13 @@
+# Archive layout for the feature corpus.
+# <path inside the .ofd>                    <source file>
+OFD.xml                                     OFD.xml
+Doc_0/Document.xml                          Document.xml
+Doc_0/Extensions.xml                        Extensions.xml
+Doc_0/Res/Res.xml                           Res.xml
+Doc_0/Pages/Page_0/Content.xml              Content.xml
+Doc_0/Annots/Annotations.xml                Annotations.xml
+Doc_0/Annots/Page_0/Annots.xml              Annots/Page_0/Annots.xml
+Doc_0/Tags/CustomTags.xml                   CustomTags.xml
+Doc_0/Tags/Tag_0.xml                        Tags/Tag_0.xml
+Doc_0/Signs/Signs.xml                       Signs.xml
+Doc_0/Signs/Sign_0/Seal.xml                 Signs/Sign_0/Seal.xml

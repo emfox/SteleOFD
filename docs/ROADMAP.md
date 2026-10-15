@@ -18,7 +18,7 @@ criterion, so it is always obvious whether it is done.
 | Delivery forms | `cli`, `wasm`, `ffi`, `server`, `reader`, all on the `core` facade |
 | Standard clauses verified | 47 of 47 in GB/T 33190-2016 (46 `verified`, 1 `partial`) |
 | Languages | `en-US` and `zh-CN`, 75 message keys, parity enforced in CI |
-| CI | fmt, clippy, build, test, all-features test, i18n, language, conformance, XSD validation, fuzz smoke run |
+| CI | fmt, clippy, build, test, all-features test, i18n, language, conformance, XSD validation, corpus freshness, fuzz smoke run |
 
 ## Honest gaps
 
@@ -216,9 +216,37 @@ disagree now fails a test.
 
 ### N6. Corpus and CI (N6-a … N6-b)
 
-- **N6-a** Grow `compliance/corpus` beyond `minimal.ofd` with documents that
-  exercise the features N2 covers, so XSD validation has real input.
-- **N6-b** Add a coverage report (`cargo-llvm-cov`) to CI as a non-blocking
+- **N6-a** `[x]` `compliance/corpus/features/` joins `minimal/`: one eleven-entry
+  document that reaches the parts of annex A the minimal corpus never touched —
+  `Res` (draw params, fonts, multimédia, a composite graphic unit), `Actions`
+  (`URI` and `Goto`), `Bookmarks`, `Annotations`/`PageAnnot`, `CustomTags`,
+  `Extensions` and `Signatures`. All of it conforms to the normative schemas
+  and all of it opens, audits, renders, searches and converts through the CLI.
+
+  Two real defects fell out of writing it, which is the point of a corpus:
+
+  - `scripts/validate_ofd.py` routed a root of `Annotation` to `Annotation.xsd`,
+    but that schema declares **`PageAnnot`** — so annotation descriptors were
+    unroutable. The map now says `PageAnnot`.
+  - `features/` initially pointed `DocumentRes`, `Annotations`, `CustomTags` and
+    `Extensions` at paths prefixed with `Doc_0/`. Clause 5 makes those relative
+    to the document root, so the archive lookup doubled the prefix and `audit`
+    reported ARCH-004. Corrected to `Res/Res.xml`, `Annots/Annotations.xml`,
+    `Tags/CustomTags.xml` and `Extensions.xml`.
+
+  The corpus also forced two contract clarifications rather than code changes.
+  `Signatures`' `MaxSignId`/`@ID` are `xs:ID`, which cannot begin with a digit,
+  so identifiers are names (`Sign_17`); and a `Signature`'s `BaseLoc` is a full
+  archive path, not one relative to the list, matching what `steleofd-sign`
+  reads. A container may carry XML in its own vocabulary (the file a `CustomTag`
+  points at), so `validate_ofd.py` grew an explicit `--allow-foreign` opt-in
+  instead of silently skipping anything annex A does not know.
+
+  `scripts/pack_corpus.py` builds each `<name>.ofd` from the readable
+  `<name>/` sources using the `layout.txt` beside them, and its `--check` mode
+  runs in CI so a source edit cannot leave the committed archive stale.
+
+- **N6-b** `[ ]` Add a coverage report (`cargo-llvm-cov`) to CI as a non-blocking
   signal, then make it blocking once the number is good enough to defend.
 
 ### N7. The desktop reader, first surface (U1-a … U1-c)

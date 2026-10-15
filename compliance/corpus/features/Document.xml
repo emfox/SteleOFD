@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ofd:Document xmlns:ofd="http://www.ofdspec.org/2016">
+  <ofd:CommonData>
+    <ofd:MaxUnitID>12</ofd:MaxUnitID>
+    <ofd:PageArea>
+      <ofd:PhysicalBox>0 0 210 297</ofd:PhysicalBox>
+    </ofd:PageArea>
+    <ofd:DocumentRes>Res/Res.xml</ofd:DocumentRes>
+  </ofd:CommonData>
+  <ofd:Pages>
+    <ofd:Page ID="1" BaseLoc="Pages/Page_0/Content.xml"/>
+  </ofd:Pages>
+  <ofd:Actions>
+    <ofd:Action Event="DO">
+      <ofd:Goto>
+        <ofd:Dest Type="Fit" PageID="1"/>
+      </ofd:Goto>
+    </ofd:Action>
+  </ofd:Actions>
+  <ofd:Bookmarks>
+    <ofd:Bookmark Name="Start">
+      <ofd:Dest Type="Fit" PageID="1"/>
+    </ofd:Bookmark>
+  </ofd:Bookmarks>
+  <ofd:Annotations>Annots/Annotations.xml</ofd:Annotations>
+  <ofd:CustomTags>Tags/CustomTags.xml</ofd:CustomTags>
+  <ofd:Extensions>Extensions.xml</ofd:Extensions>
+</ofd:Document>

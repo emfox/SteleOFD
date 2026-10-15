@@ -77,10 +77,14 @@ jobs:
           python3 scripts/check_compliance.py
           git diff --exit-code docs/COMPLIANCE.md
 
+      - name: Committed corpus archives match their sources
+        run: python3 scripts/pack_corpus.py --check
+
       - name: Corpus validates against annex A schemas
         run: |
           python3 -m pip install --quiet lxml
-          python3 scripts/validate_ofd.py $(find compliance/corpus -name '*.ofd' -o -name '*.xml' | sort)
+          python3 scripts/validate_ofd.py --allow-foreign \
+            $(find compliance/corpus -name '*.ofd' -o -name '*.xml' | sort)
 
   fuzz:
     runs-on: ubuntu-latest
