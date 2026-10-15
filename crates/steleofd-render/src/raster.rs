@@ -61,15 +61,12 @@ impl RasterOutput {
     /// Straight (non-premultiplied) RGBA8 bytes, the exchange format most
     /// encoders and UI toolkits expect.
     pub fn rgba_bytes(&self) -> Vec<u8> {
-        self.pixmap
-            .data()
-            .chunks_exact(4)
-            .flat_map(unpremultiply)
-            .collect()
+        let (pixels, _) = self.pixmap.data().as_chunks::<4>();
+        pixels.iter().flat_map(unpremultiply).collect()
     }
 }
 
-fn unpremultiply(px: &[u8]) -> [u8; 4] {
+fn unpremultiply(px: &[u8; 4]) -> [u8; 4] {
     let a = px[3] as u32;
     if a == 0 || a == 255 {
         return [px[0], px[1], px[2], px[3]];
