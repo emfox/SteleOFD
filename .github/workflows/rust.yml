@@ -111,3 +111,36 @@ jobs:
 
       - name: Fuzz the XML cursor
         run: cargo +nightly fuzz run xml_cursor -- -runs=20000 -max_len=4096
+
+  semver:
+    runs-on: ubuntu-latest
+    # A breaking public-API change should fail here rather than surprise a
+    # downstream user. Until the first release the crates are unpublished, so
+    # there is no baseline to compare against; the job is a no-op then rather
+    # than a false alarm, and starts checking from the first `v*` tag onwards.
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install stable toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Find the latest release tag
+        id: baseline
+        run: |
+          tag=$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || true)
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          if [ -z "$tag" ]; then
+            echo "No release tag yet, so there is no published API to protect."
+          else
+            echo "Comparing against $tag"
+          fi
+
+      - name: Install cargo-semver-checks
+        if: steps.baseline.outputs.tag != ''
+        run: cargo install cargo-semver-checks --locked
+
+      - name: Check the public API against the last release
+        if: steps.baseline.outputs.tag != ''
+        run: cargo semver-checks check-release --baseline-rev ${{ steps.baseline.outputs.tag }}

@@ -200,11 +200,15 @@ disagree now fails a test.
 
 ### N5. Documentation and release hygiene (N5-a … N5-d)
 
-- **N5-a** Bring `README.zh-CN.md` level with `README.md`: roadmap, crate
-  list, coverage numbers, next steps.
-- **N5-b** Add a `CHANGELOG.md` driven by conventional commits.
-- **N5-c** Add `cargo-semver-checks` to CI so a breaking public-API change
-  fails the build rather than surprising a downstream user.
+- **N5-a** `[x]` `README.zh-CN.md` is level with `README.md` again: the same
+  roadmap including the P3b, P4b and P5a-P5d entries, and the same clause
+  coverage (47 of 47, 46 `verified` and `8.4` `partial`).
+- **N5-b** `[x]` `CHANGELOG.md`, following Keep a Changelog and driven by the
+  conventional-commit history.
+- **N5-c** `[x]` `cargo-semver-checks` in CI so a breaking public-API change
+  fails the build rather than surprising a downstream user. The job compares
+  against the latest `v*` tag; with no tag yet it reports that there is no
+  published API to protect and skips, so it is honest now and active later.
 - **N5-d** Add a publish workflow for the `cdylib`, `staticlib` and `wasm`
   artefacts, with the C header and wasm bindings attached.
 
