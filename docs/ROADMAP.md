@@ -14,7 +14,7 @@ criterion, so it is always obvious whether it is done.
 | --- | --- |
 | Crates | 26 (L0 foundation through L5 delivery) |
 | Source | 24,904 lines of Rust, measured with `find crates -name '*.rs'` |
-| Tests | 576 passing, plus 13 inline unit-test modules |
+| Tests | 578 passing, plus 13 inline unit-test modules |
 | Delivery forms | `cli`, `wasm`, `ffi`, `server`, `reader`, all on the `core` facade |
 | Standard clauses verified | 20 of 47 in GB/T 33190-2016 |
 | Languages | `en-US` and `zh-CN`, 75 message keys, parity enforced in CI |
@@ -36,9 +36,10 @@ Each one is a real, verified finding, not a guess.
    testing that was planned does not exist yet.
 3. **The OFD corpus is one file.** `compliance/corpus/minimal.ofd` is the only
    document the XSD validation and the test suites actually read.
-4. **The signed-fixture builder is duplicated four times** across the `sign`,
+4. ~~**The signed-fixture builder is duplicated four times** across the `sign`,
    `wasm`, `ffi` and `server` test suites, each with its own hand-rolled base64,
-   DER and SM2 certificate construction.
+   DER and SM2 certificate construction.~~ Closed by N1: `steleofd-testkit`
+   holds all of it and the four suites import from there.
 5. **`README.zh-CN.md` is behind the English README.** It still shows P3 and P5
    as unfinished and names a next step that no longer exists.
 6. **Six crates have no dedicated integration test directory.** `convert`
@@ -71,12 +72,19 @@ Extract the four copies of the fixture builder into a `steleofd-testkit`
 crate, so a document shape is defined once and each delivery crate pins the
 same bytes.
 
-- **N1-a** Stand up `crates/steleofd-testkit` with the OFD zip builder, the
+- **N1-a** `[x]` `crates/steleofd-testkit` carries the OFD zip builder, the
   base64/DER/SM2-certificate helpers, and the signed and unsigned fixtures.
-- **N1-b** Move `sign`, `wasm`, `ffi` and `server` onto it, deleting the
-  copies. The four suites must keep passing unchanged in count.
-- **N1-c** Publish it as a dev-dependency only; it must never appear in a
-  release build.
+  It brings its own two self-tests, one of which verifies the signed fixture
+  with the engine's own `verify_signature`, so the fixture cannot drift from
+  the engine without a red test.
+- **N1-b** `[x]` `sign`, `wasm`, `ffi` and `server` now import from it; about
+  800 lines of duplicated builders were deleted. The suites kept their case
+  counts (`18`/`14`/`7`/`10`), except `sign`, which regained two `18.2.4`
+  cases the migration had dropped in silence — the conformance register is
+  what caught that, and the workspace total moved from 576 to 578.
+- **N1-c** `[x]` It is a `[dev-dependencies]` entry everywhere and declares
+  `publish = false`; `cargo tree -p <crate> -e normal` finds it in none of
+  the four release graphs.
 
 ### N2. Close the untested-clause gap, lowest risk first (N2-a … N2-e)
 
