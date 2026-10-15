@@ -246,14 +246,17 @@ disagree now fails a test.
   `<name>/` sources using the `layout.txt` beside them, and its `--check` mode
   runs in CI so a source edit cannot leave the committed archive stale.
 
-- **N6-b** `[~]` The `coverage` job is in CI: `cargo-llvm-cov` over the whole
+- **N6-b** `[x]` The `coverage` job is in CI: `cargo-llvm-cov` over the whole
   workspace with every feature on, a summary written into the run page and the
-  `lcov.info` kept as an artifact. It is deliberately **non-blocking**
-  (`continue-on-error`), because a threshold chosen before the figure is known
-  only teaches people to ignore it. Turning it into a gate is the remaining
-  half, and needs a real baseline first — measuring this sandbox is blocked on
-  the same slow toolchain mirror that stalled N3-c, so the number is still to be
-  recorded here.
+  `lcov.info` kept as an artifact. The measured baseline is **87.56% lines,
+  88.16% functions, 88.37% regions** — high because the engine was written
+  test-first and the adapters are thin. The floor is set at **85%**, which is a
+  floor rather than a target: it is low enough that ordinary work never trips
+  it and high enough that losing a module's tests does. It is now a gate, and
+  the measurement no longer depends on this sandbox's slow toolchain mirror:
+  the rustup `llvm-tools-preview` component ships `llvm-cov`/`llvm-profdata`
+  built against the same LLVM the toolchain uses, and the system copies do not
+  (LLVM 18 against rustc's LLVM 21 fails with a raw-profile version mismatch).
 
 ### N7. The desktop reader, first surface (U1-a … U1-c)
 

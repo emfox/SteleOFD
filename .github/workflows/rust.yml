@@ -151,11 +151,8 @@ jobs:
 
   coverage:
     runs-on: ubuntu-latest
-    # A signal, not a gate. The number is published so it can be watched, and
-    # the job stays green whatever it says: a threshold picked before the figure
-    # is known would only teach people to ignore it. Tightening this into a real
-    # gate is N6-b's second half, once the floor is defensible.
-    continue-on-error: true
+    # A gate, with the floor set well under the measured baseline (87.56% lines)
+    # so ordinary work never trips it while losing a module's tests does.
     steps:
       - uses: actions/checkout@v4
 
@@ -186,6 +183,9 @@ jobs:
 
       - name: Summarize into the run page
         run: cargo llvm-cov report --summary-only | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Fail below the floor
+        run: cargo llvm-cov report --fail-under-lines 85
 
       - name: Keep the report for inspection
         uses: actions/upload-artifact@v4
