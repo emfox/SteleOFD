@@ -116,6 +116,98 @@ fn sm2_rejects_malformed_inputs() {
     assert!(sm2_verify(&[0xff; 65], b"m", b"").is_err());
 }
 
+/// The worked example from GM/T 0003.5-2012 appendix A.2: the secret, the
+/// public point it produces and the signature over "message digest".
+struct GmTExample {
+    secret: &'static str,
+    public_x: &'static str,
+    public_y: &'static str,
+    message: &'static str,
+    r: &'static str,
+    s: &'static str,
+}
+
+const GM_T_A2: GmTExample = GmTExample {
+    secret: "3945208F7B2144B13F36E38AC6D39F95889393692860B51A42FB81EF4DF7C5B8",
+    public_x: "09F9DF311E5421A150DD7D161E4BC5C672179FAD1833FC076BB08FF356F35020",
+    public_y: "CCEA490CE26775A52DC6EA718CC1AA600AED05FBF35E084A6632F6072DA9AD13",
+    message: "message digest",
+    r: "F5A03B0648D2C4630EEAC513E1BB81A15944DA3827D5B74143AC7EACEEE720B3",
+    s: "B1B6AA29DF212FD8763182BC0D421CA1BB9038FD1F7F42D4840B69C485BBC1AA",
+};
+
+fn gm_t_public(example: &GmTExample) -> Vec<u8> {
+    let mut key = vec![0x04u8];
+    key.extend_from_slice(&hex(example.public_x));
+    key.extend_from_slice(&hex(example.public_y));
+    key
+}
+
+/// Wrap r and s in the DER `SEQUENCE { INTEGER, INTEGER }` that a signature
+/// file carries, padding a leading zero when the high bit would read as a
+/// negative number.
+fn der_signature(r: &[u8], s: &[u8]) -> Vec<u8> {
+    fn integer(value: &[u8]) -> Vec<u8> {
+        let pad = u8::from(value[0] & 0x80 != 0);
+        let mut out = vec![0x02, value.len() as u8 + pad];
+        if pad == 1 {
+            out.push(0x00);
+        }
+        out.extend_from_slice(value);
+        out
+    }
+    let body: Vec<u8> = [integer(r), integer(s)].concat();
+    let mut out = vec![0x30, body.len() as u8];
+    out.extend_from_slice(&body);
+    out
+}
+
+#[test]
+fn sm2_public_key_matches_the_standard_example() {
+    let pair = Sm2KeyPair::from_secret_bytes(&hex(GM_T_A2.secret)).expect("secret");
+    let public = pair.public_bytes();
+    assert_eq!(public.len(), 65);
+    assert_eq!(public[0], 0x04, "uncompressed point");
+    assert_eq!(&public[1..33], &hex(GM_T_A2.public_x)[..], "affine x");
+    assert_eq!(&public[33..65], &hex(GM_T_A2.public_y)[..], "affine y");
+}
+
+#[test]
+fn sm2_verifies_the_standard_signature() {
+    let public = gm_t_public(&GM_T_A2);
+    let signature = der_signature(&hex(GM_T_A2.r), &hex(GM_T_A2.s));
+    let message = GM_T_A2.message.as_bytes();
+    assert!(
+        sm2_verify(&public, message, &signature).expect("well-formed"),
+        "the worked example must verify under the default identity"
+    );
+}
+
+/// Sign and verify share one implementation of the identity hash, so a wrong
+/// `Z` cancels out and every round-trip test still passes; the vector above
+/// breaks that symmetry. So does the ID, which is hashed in ahead of `M`.
+#[test]
+fn sm2_verification_is_bound_to_the_distinguishing_id() {
+    use signature::Signer;
+
+    let secret = hex(GM_T_A2.secret);
+    let message = GM_T_A2.message.as_bytes();
+
+    // Sign under an identity one character away from the default.
+    let foreign = sm2::dsa::SigningKey::from_slice("1234567812345679", &secret).expect("secret");
+    let signature = foreign.sign(message).to_der().to_vec();
+
+    let verdict = sm2_verify(&gm_t_public(&GM_T_A2), message, &signature).expect("well-formed");
+    assert!(!verdict, "a different identity must not verify");
+}
+
+#[test]
+fn sm2_standard_signature_rejects_a_different_message() {
+    let public = gm_t_public(&GM_T_A2);
+    let signature = der_signature(&hex(GM_T_A2.r), &hex(GM_T_A2.s));
+    assert!(!sm2_verify(&public, b"message digesT", &signature).expect("well-formed"));
+}
+
 #[test]
 fn certificate_parses_der_and_pem() {
     let der = include_bytes!("data/test-cert.der");

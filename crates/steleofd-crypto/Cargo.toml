@@ -20,6 +20,12 @@ pkcs12.workspace = true
 rsa.workspace = true
 tracing.workspace = true
 
+# The identity-hash test signs with a different distinguishing ID on purpose,
+# which means reaching past this crate's fixed one into the upstream API.
+[dev-dependencies]
+sm2.workspace = true
+signature.workspace = true
+
 # wasm32-unknown-unknown has no OS randomness source, and the dependents that
 # pull getrandom in (crypto-bigint, sm2, rand) cannot name the target
 # themselves. Three major versions coexist in the graph, each with its own
