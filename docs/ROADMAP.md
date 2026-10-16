@@ -246,7 +246,13 @@ legal carrier needs.
 - **M3-b** Timestamp countersignature verification.
 - **M3-c** The archival profile. `steleofd-archive` checks an OFD against the
   archival rules; it needs the profile document it checks against named, and
-  the four `deviation` clauses above are the natural first inputs.
+  the four `deviation` clauses above are the natural first inputs. GB/T
+  42133-2022 now supplies the profile, and the four checks a reader can decide
+  from the container are in (`ARCH-101` … `ARCH-104`, covered by
+  `compliance/gb-t-42133.toml`). What remains is everything 42133 asks of an
+  authoring tool: subsetting fonts, stripping optional structures, removing
+  redundant clips and converting images, none of which a read-only checker can
+  do.
 
 ### M4. Server production readiness (M4-a … M4-e)
 

@@ -1,0 +1,83 @@
+# Conformance register for GB/T 42133-2022.
+#
+# This register is deliberately NOT wired to the CI gate. The gate reads
+# compliance/gb-t-33190.toml through scripts/check_compliance.py, which is
+# hard-coded to one standard; adding a second file there would change what the
+# gate means. This file records what has been implemented against 42133 so a
+# reader can see the scope in one place. Its `status` values use the same four
+# words as the 33190 register.
+#
+#   verified  - at least one linked test asserts the clause
+#   partial   - partially asserted, needs more tests
+#   untested  - known clause, no coverage yet
+#   deviation - deliberately not followed; reason in `note`
+#
+# Test names follow `gb_t_42133_<clause>_<slug>`.
+#
+# Scope agreed with the maintainer: the §6 core subset that a format checker
+# can decide by reading a container. The checks report; they never rewrite.
+# Everything 42133 asks of an authoring tool (subsetting, stripping optional
+# structures, converting images) is left out on purpose and marked `untested`.
+
+standard = "GB/T 42133-2022"
+title = "Information technology - Guide for OFD archive application"
+
+[[item]]
+clause = "6.2.1 a)"
+title = "Archival profile: the declared document type is OFD-A"
+status = "verified"
+tests = [
+    "gb_t_42133_6_2_1_a_the_archival_profile_is_declared",
+    "gb_t_42133_6_2_1_a_a_missing_doc_type_is_reported",
+]
+
+[[item]]
+clause = "6.2.2"
+title = "Archival profile: optional structures removed"
+status = "untested"
+note = "Permissions, ViewPreferences, Extensions and Attachments are stripped when archiving; this build reads archives rather than producing them."
+
+[[item]]
+clause = "6.2.6 e)"
+title = "Archival profile: raster image formats"
+status = "verified"
+tests = [
+    "gb_t_42133_6_2_6_e_only_six_raster_formats_are_accepted",
+    "gb_t_42133_6_2_6_e_an_unsupported_image_format_is_reported",
+]
+
+[[item]]
+clause = "6.3.2"
+title = "Archival profile: redundant clip areas removed"
+status = "untested"
+note = "Deciding whether a clip is redundant needs the object's boundary, which is an authoring decision; the reader keeps every clip as written."
+
+[[item]]
+clause = "6.9 a)"
+title = "Archival profile: no action reaching an external resource"
+status = "verified"
+tests = [
+    "gb_t_42133_6_9_a_an_external_action_reference_is_reported",
+]
+
+[[item]]
+clause = "6.11"
+title = "Archival profile: indexing content stays inside the document"
+status = "verified"
+tests = [
+    "gb_t_42133_6_11_a_reference_escaping_the_container_is_reported",
+]
+
+[[item]]
+clause = "6.16"
+title = "Archival profile: no encryption"
+status = "verified"
+tests = [
+    "gb_t_42133_6_16_an_encrypted_container_is_refused",
+]
+
+[[item]]
+clause = "7.2"
+title = "Reading software: format checking and edit suppression"
+status = "untested"
+note = "The rules are about the reading application's behaviour, not the file, so no container-level check can decide them."
