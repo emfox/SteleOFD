@@ -927,8 +927,8 @@ fn gb_t_33190_8_4_a_clipped_object_does_not_clip_its_neighbour() {
 #[test]
 fn gb_t_33190_8_4_a_clip_stays_in_object_space_beside_the_ctm() {
     // Table 33 gives a clip no attribute but its areas, and clause 8.4 states
-    // them in the space the object is drawn in: a `TransFlag` is not in the
-    // standard and must not move the clip out of that space.
+    // them in the space the object is drawn in. A `TransFlag` is a 1.2
+    // extension absent from the 2016 text, so the clip never leaves that space.
     let body = r##"<ImageObject ID="10" Boundary="10 10 20 20" CTM="20 0 0 20 0 0" ResourceID="5">
   %CLIP%
 </ImageObject>"##;

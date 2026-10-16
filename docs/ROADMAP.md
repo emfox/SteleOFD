@@ -307,9 +307,18 @@ Absent features, not wrong ones, so they sit below the correctness band.
   defects in our own fixtures and reader — `FillRule` for `Rule`,
   `Fill`/`Stroke` defaults taken from the wrong model, and path coordinates
   read as absolute where the standard makes them offsets from the boundary
-  corner. The audit also caught one of ours that the comparison could not see:
-  `Clips` was read with a `TransFlag` attribute that appears nowhere in the
-  standard, so the clip always took the default branch.
+  corner. A second reader was then cross-checked on the same four pages, so no
+  conclusion rests on one comparison: `ofdrw` 2.4.0, whose `AWTMaker` fills a
+  `Fill="true"` path and strokes a `Stroke="true"` one exactly as tables 34
+  and 35 say, takes the page box from the page's own area before
+  `CommonData.PageArea`, and — telling in the other direction — carries no
+  shading code at all. On every one of the four points it stands with us.
+  The cross-check also undid one of our own conclusions: `Clips` does read a
+  `TransFlag`, but it is an OFD 1.2 extension, not in the 2016 XSD, and the
+  spec default is `true` where real files, the official reader samples among
+  them, write `false`. We had guessed the default backwards. The attribute is
+  gone; the clip stays in object space unconditionally, which is what the 2016
+  text says and what every sample does.
 
 ### M6. The reader, completed (M6-a … M6-f)
 
