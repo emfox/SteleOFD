@@ -21,6 +21,12 @@ pub struct ColorRef {
     /// Gradient instead of a flat colour, when the writer used a shading.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub shading: Option<Shading>,
+    /// Clause 7.13: the `ColorSpaces` entry this value's channels name.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub space: Option<crate::RefId>,
+    /// Index into the named space's palette, for an indexed colour.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub index: Option<i32>,
 }
 
 /// One colour stop of a shading.
@@ -194,6 +200,8 @@ impl ColorRef {
         value: String::new(),
         alpha: None,
         shading: None,
+        space: None,
+        index: None,
     };
 
     /// Build from an `#RRGGBB` string.
@@ -202,6 +210,8 @@ impl ColorRef {
             value: hex.into(),
             alpha: None,
             shading: None,
+            space: None,
+            index: None,
         }
     }
 
@@ -211,7 +221,16 @@ impl ColorRef {
             value: String::new(),
             alpha: None,
             shading: Some(shading),
+            space: None,
+            index: None,
         }
+    }
+
+    /// Attach the clause 7.13 space and palette index the value names.
+    pub fn with_space(mut self, space: impl Into<String>, index: Option<i32>) -> Self {
+        self.space = Some(space.into());
+        self.index = index;
+        self
     }
 
     /// Attach an alpha value.
