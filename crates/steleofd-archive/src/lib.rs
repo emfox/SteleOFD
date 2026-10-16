@@ -6,7 +6,9 @@
 #![warn(missing_docs)]
 
 pub mod audit;
+pub mod profile;
 pub mod report;
 
 pub use audit::{Auditor, audit};
+pub use profile::{Archived, archive};
 pub use report::{Finding, Report, Severity};
