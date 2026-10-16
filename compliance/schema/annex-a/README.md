@@ -32,19 +32,27 @@ The `easyofd` wiki republishes annex A as text. Comparing its names against
 these files turned up **eleven differences, every one of them the wiki's**:
 `Seqment` for `Segment` (A.13), `Sianature`/`SiqnedInfo`/`Siqnatures` for
 `Signature`/`SignedInfo`/`Signatures` (A.7, A.8), `OuadraticBezier` for
-`QuadraticBezier` (A.6), `Pointl`/`RotationAnglet` for point and angle names
-(A.6), `Deltay`/`y` for `DeltaY`/`Y` (A.13), `DefaultCs` for `DefaultCS`
-(A.2) and `Backqround` for `Background` (A.13). They are all `g` → `q` or a
-case flip, and the wiki contradicts itself: its own body tables spell
-`Segment`, `DeltaY` and `DefaultCS` correctly, so its XSD pages are the
-outlier.
+`QuadraticBezier` and `Pointl` for `Point1` (A.6), `RotationAnglet` for
+`RotationAngle` (A.5), `Deltay` for `DeltaY` and `y` for `Y` (A.13),
+`DefaultCs` for `DefaultCS` (A.2) and `Backqround` for `Background` (A.13).
+They are all `g` → `q`, a case flip, or a spurious trailing letter, and the
+wiki contradicts itself: its own body tables spell `Segment`, `DeltaY` and
+`DefaultCS` correctly, so its XSD pages are the outlier.
 
-The printed standard settles it. Annex A pages 101, 115, 127, 130 and 131
-carry `DefaultCS`, `QuadraticBezier`, `DeltaY`, `Segment` and `Background`, and
-carry none of the wiki's spellings. The rebuild here agrees with the printed
-annex, so no change followed from the comparison — which is the useful result:
-an independent transcription is now on record as disagreeing, and we are on
-the standard's side.
+The printed standard settles it, page by page and glyph by glyph. Its annex A
+renders under `pdftoppm -r 400` as legible type, so each disputed name can be
+read directly rather than inferred: `DefaultCS` and `Background` on the
+printed page 94 (PDF 101), `QuadraticBezier` with `Point1`/`Point2`/`Point3`,
+`CubicBezier` and `RotationAngle` on the printed page 108 (PDF 115),
+`Segment` and `DeltaY` on the printed pages 120 and 124 (PDF 127 and 131), and
+`Signature`/`Signatures`/`SignedInfo` on the printed pages 109 and 110 (PDF
+116 and 117). Every one carries our spelling; none carries the wiki's.
+
+`scripts/cross_check_schema.py` automates the same comparison: it OCRs the
+annex and, for each disputed name, requires the printed page to carry ours and
+to carry the wiki's variant zero times. All eleven pairs pass. The result is
+that no change followed from the comparison — an independent transcription is
+now on record as disagreeing, and we are on the standard's side.
 
 ## Trustworthiness
 

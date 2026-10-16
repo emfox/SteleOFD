@@ -4,9 +4,10 @@
 The XSD files under `compliance/schema/annex-a` were rebuilt from the printed
 annex A, which is a scanned image in every PDF in circulation. A third-party
 wiki republishes the same annex as text and disagrees with us in eleven places,
-all of them `g` to `q` or a case flip. This script settles such a dispute the
-only way that counts: it renders the annex A pages of the standard PDF, OCRs
-them, and reports which spelling the printed page carries.
+all of them `g` to `q`, a case flip, or a spurious trailing letter. This script
+settles such a dispute the only way that counts: it renders the annex A pages
+of the standard PDF, OCRs them, and reports which spelling the printed page
+carries.
 
 Usage:
     python3 scripts/cross_check_schema.py <standard.pdf>
@@ -30,8 +31,10 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 SCHEMA_DIR = REPO / "compliance" / "schema" / "annex-a"
 
-# Each pair is a spelling we use and the mistake to rule out. The first is
-# expected on the printed page, the second must be absent.
+# Each pair is a spelling we use and the mistake the wiki makes. The first is
+# expected on the printed page, the second must be absent. The wiki's eleven
+# differences are all here, including the bare `Y` of `TextCode`, which the
+# printed page carries as a capital against the wiki's lower-case `y`.
 CHECKS = [
     ("Segment", "Seqment"),
     ("DeltaY", "Deltay"),
@@ -39,8 +42,10 @@ CHECKS = [
     ("QuadraticBezier", "OuadraticBezier"),
     ("Background", "Backqround"),
     ("Signature", "Sianature"),
+    ("Signatures", "Siqnatures"),
     ("SignedInfo", "SiqnedInfo"),
     ("RotationAngle", "RotationAnglet"),
+    ("Point1", "Pointl"),
 ]
 
 # Annex A sits at the back of the 135-page standard; the pages below carry the
@@ -110,6 +115,22 @@ def main() -> int:
         else:
             verdict = "printed page agrees with us"
         print(f"{good:24s} {printed:9d} {mistake:9d}   {verdict}")
+
+    # `Y` cannot be counted on its own: the scan also spells `xs:boolean`,
+    # `Boundary` and every `y`-bearing word. Match it in its attribute context,
+    # where the printed page either has `"Y"` or the wiki's `"y"`.
+    good = 'attribute name = "Y"'
+    bad = 'attribute name = "y"'
+    printed = combined.count(good)
+    mistake = combined.count(bad)
+    if printed == 0:
+        verdict = "not found in the scanned range"
+    elif mistake > 0:
+        verdict = "the printed page carries both, inspect by hand"
+        failures += 1
+    else:
+        verdict = "printed page agrees with us"
+    print(f"{'TextCode Y':24s} {printed:9d} {mistake:9d}   {verdict}")
 
     if failures:
         print(f"\n{failures} check(s) need a human", file=sys.stderr)
