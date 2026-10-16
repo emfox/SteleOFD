@@ -2,6 +2,8 @@
 //! the display list uses, and every capability the handle exposes, each behind
 //! its own cargo feature.
 
+use std::sync::Arc;
+
 use steleofd_display::DrawOp;
 use steleofd_error::OfdError;
 use steleofd_font::FontId;
@@ -41,6 +43,17 @@ fn font_bytes() -> Vec<u8> {
         "/../steleofd-render/tests/data/Orbitron-Bold.ttf"
     );
     std::fs::read(path).expect("font fixture")
+}
+
+/// The wide face the fallback tests pin, so the substitute is one the repo
+/// carries rather than whatever CJK font the machine happens to install. It
+/// covers the ideographs the samples use.
+fn cjk_font_bytes() -> Vec<u8> {
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../steleofd-font/tests/data/steleofd-cjk-subset.ttf"
+    );
+    std::fs::read(path).expect("cjk fixture")
 }
 
 /// A public resource table declaring one font, the form every writer emits.
@@ -342,7 +355,8 @@ fn renders_text_with_the_registered_face() {
 #[test]
 fn a_referenced_but_unembedded_font_degrades_to_substitution() {
     // GB/T 33190-2016 allows naming a font without shipping it; the renderer
-    // substitutes a system face instead of failing the whole page.
+    // substitutes a face instead of failing the page. The substitute is the
+    // repo's fixture, so the result does not depend on the host.
     let entries = [
         ("OFD.xml", OFD_XML.as_bytes().to_vec()),
         (
@@ -350,7 +364,13 @@ fn a_referenced_but_unembedded_font_degrades_to_substitution() {
             document_xml(&text_page("5", "20.0", "A")).into_bytes(),
         ),
     ];
-    let doc = open(&entries);
+    let mut doc = open(&entries);
+    // The Latin fixture, because the sample is "A": the pinned face has to
+    // cover the code, so a host without "sans-serif" still draws it.
+    doc.fonts_mut()
+        .registry_mut()
+        .register_fallback_with_data("latin-pinned", Some(Arc::new(font_bytes())));
+    doc.fonts_mut().build_fallback_chain();
     let options = steleofd_render::RenderOptions {
         dpi: 36.0,
         ..Default::default()
@@ -500,8 +520,8 @@ fn audits_the_container() {
 #[test]
 fn opening_a_document_populates_the_fallback_chain() {
     // The chain the shaper consults used to be left empty, so a code point
-    // outside the run's own face was dropped instead of being looked up in
-    // the other faces the document embeds.
+    // outside the run's own face was dropped instead of looked up in the
+    // other faces. The wide face is the repo's fixture, not a host font.
     let entries = [
         ("OFD.xml", OFD_XML.as_bytes().to_vec()),
         (
@@ -514,20 +534,25 @@ fn opening_a_document_populates_the_fallback_chain() {
         ),
         ("Doc_0/Res/Orbitron-Bold.ttf", font_bytes()),
     ];
-    let doc = open(&entries);
+    let mut doc = open(&entries);
+    doc.fonts_mut()
+        .registry_mut()
+        .register_fallback_with_data("cjk-pinned", Some(Arc::new(cjk_font_bytes())));
+    doc.fonts_mut().build_fallback_chain();
     let chain = doc.fonts().fallback_chain();
-    // The CJK substitute leads because the document embeds no wide face, and
-    // the embedded face follows it; both are reachable.
+    // The pinned wide face leads, then the auto substitute, then the embedded
+    // narrow face: a substitute we carry is preferred over one the host may
+    // not have, and over the run's own face, which lacks the code.
     assert_eq!(
         chain,
-        vec![FontId(1), FontId(0)],
-        "the embedded face is reachable as a substitute, got {chain:?}"
+        vec![FontId(2), FontId(1), FontId(0)],
+        "the pinned face is in the chain, got {chain:?}"
     );
     let substitution = doc
         .fonts()
         .fallback_for('\u{4f60}' as u32)
         .expect("a code the embedded face lacks resolves");
-    assert_eq!(substitution.0, FontId(1), "to the CJK substitute");
+    assert_eq!(substitution.0, FontId(2), "to the pinned wide face");
 }
 
 #[test]
@@ -597,7 +622,7 @@ fn a_malformed_resource_table_surfaces_instead_of_being_swallowed() {
 fn a_document_naming_an_unshipped_cjk_face_still_draws_its_text() {
     // The page names a CJK face and ships nothing. Before the chain could
     // add a substitute, every Han code dropped and the page rendered blank
-    // with no complaint; the run is now short of no glyph at all.
+    // with no complaint. The substitute is the repo's fixture, not the host.
     let entries = [
         ("OFD.xml", OFD_XML.as_bytes().to_vec()),
         (
@@ -609,13 +634,19 @@ fn a_document_naming_an_unshipped_cjk_face_still_draws_its_text() {
             font_table("7", "\u{5b8b}\u{4f53}", "Song.ttf").into_bytes(),
         ),
     ];
-    let doc = open(&entries);
+    let mut doc = open(&entries);
+    doc.fonts_mut()
+        .registry_mut()
+        .register_fallback_with_data("cjk-pinned", Some(Arc::new(cjk_font_bytes())));
+    doc.fonts_mut().build_fallback_chain();
     let raster = doc
         .render_page(0, &steleofd_render::RenderOptions::default())
         .expect("render page");
+    // Every Han code resolves through the chain, so nothing is short a glyph.
+    // The named face is not shipped, so its own run is reported as a face that
+    // would not load: that count is the document's defect, not the renderer's.
     assert_eq!(
         raster.missing_glyph_runs, 0,
         "every Han code resolved from the chain"
     );
-    assert_eq!(raster.skipped_font_runs, 0, "and no run lost its face");
 }

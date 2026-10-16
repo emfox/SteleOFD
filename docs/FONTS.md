@@ -52,17 +52,23 @@ pins today's behaviour so the day it changes, the test fails.
    substituted, since an index only means anything against the face it came
    from. When no wide face is registered at all — the common case for a
    document that names a CJK face without shipping one — the chain adds a
-   substitute resolved from `default_cjk_family`, so such a page draws its
-   text instead of rendering blank. Reporting catches up with it: every
+   substitute resolved from `default_cjk_family`. A caller that would rather
+   not depend on the host can pin its own: `FontRegistry::register_fallback_with_data`
+   registers a substitute that carries its bytes, and such a face is consulted
+   ahead of a system one that may not resolve. A run whose own face will not
+   load at all is given one more chance through the chain
+   (`steleofd_display::run_face`), so a document naming a face it never shipped
+   still draws instead of rendering blank. Reporting catches up with it: every
    backend counts a run that reaches the output short a glyph
    (`missing_glyph_runs`) and the raster backend counts a run whose face would
    not load (`skipped_font_runs`), both apart from `dropped_runs`. Two limits
    remain. The registry is still filled from the ids the pages actually name,
    so a face a document declares but never draws with never joins the chain.
-   And a substitute is chained only where one can be resolved, so a build with
-   no system fonts — wasm, or `system-fonts` off — still drops what it cannot
-   cover. `tests/font.rs` and `tests/core.rs` pin both the chain and the
-   substitution.
+   And a substitute is chained only where one can be resolved or pinned, so a
+   build with no system fonts and none supplied — wasm, or `system-fonts` off
+   with nothing pinned — still drops what it cannot cover. `tests/font.rs` and
+   `tests/core.rs` pin both the chain and the substitution, each from the
+   repo's own fixtures rather than a host font.
 5. **No subsetting on the way out.** Embedded faces are carried whole. A
    document that embeds a 20 MB CJK collection pays for it in every conversion,
    which is M2-b.

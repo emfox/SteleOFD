@@ -26,6 +26,32 @@ fn manager_with_fixture() -> (FontManager, FontId) {
     (manager, id)
 }
 
+/// The wide face the chain tests pin, so a substitute is one the repo carries
+/// rather than whatever CJK font the host happens to install.
+fn cjk_bytes() -> Vec<u8> {
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/data/steleofd-cjk-subset.ttf"
+    );
+    std::fs::read(path).expect("cjk fixture")
+}
+
+/// A manager with the fixture face registered and the wide fixture pinned as
+/// the chain's substitute, so every step runs without a system font.
+fn manager_with_pinned_substitute() -> (FontManager, FontId, FontId) {
+    let mut manager = FontManager::new();
+    let narrow = manager.registry_mut().register_embedded(
+        "Res/Orbitron-Bold.ttf",
+        "Orbitron",
+        Arc::new(font_bytes()),
+    );
+    let wide = manager
+        .registry_mut()
+        .register_fallback_with_data("cjk-pinned", Some(Arc::new(cjk_bytes())));
+    manager.build_fallback_chain();
+    (manager, narrow, wide)
+}
+
 #[test]
 fn an_embedded_face_loads_and_reports_its_family() {
     let (manager, id) = manager_with_fixture();
@@ -333,13 +359,11 @@ fn building_the_chain_twice_changes_nothing() {
 
 #[test]
 fn a_code_the_face_lacks_is_outlined_from_the_chain() {
-    // A document that names a font it does not ship registers a substitute.
-    // A code point the substitute lacks used to drop, leaving the page blank;
-    // it now resolves against the CJK link the chain adds.
-    let mut manager = FontManager::new();
-    let narrow = manager.registry_mut().register_system("sans-serif");
-    manager.build_fallback_chain();
-    let face = manager.face(narrow).expect("the substitute loads");
+    // A code point the run's own face lacks used to drop, leaving the page
+    // blank; it now resolves against the wide link the chain carries. The
+    // wide face is the pinned fixture, so no system font is needed.
+    let (manager, narrow, wide) = manager_with_pinned_substitute();
+    let face = manager.face(narrow).expect("the embedded face loads");
 
     let latin = manager
         .outline_for_code(&face, 'A' as u16, false)
@@ -349,7 +373,7 @@ fn a_code_the_face_lacks_is_outlined_from_the_chain() {
     let han = manager
         .outline_for_code(&face, '\u{4f60}' as u16, false)
         .expect("a Han code resolves from the chain");
-    assert_ne!(han.1.id(), narrow, "from the CJK substitute, not the face");
+    assert_eq!(han.1.id(), wide, "from the pinned wide face, not the run's");
     assert!(
         han.1.has_codepoint('\u{4f60}' as u32),
         "and that is the face that covers it"
@@ -360,10 +384,8 @@ fn a_code_the_face_lacks_is_outlined_from_the_chain() {
 fn a_resolved_glyph_id_is_never_substituted() {
     // A glyph index only means anything against the face it was resolved for,
     // so it must not be looked up in the chain even when that face lacks it.
-    let mut manager = FontManager::new();
-    let narrow = manager.registry_mut().register_system("sans-serif");
-    manager.build_fallback_chain();
-    let face = manager.face(narrow).expect("the substitute loads");
+    let (manager, narrow, _) = manager_with_pinned_substitute();
+    let face = manager.face(narrow).expect("the embedded face loads");
     // Glyph id 43981 is arbitrary; the point is the code path, not the glyph.
     assert!(
         manager.outline_for_code(&face, 43981, true).is_none(),
