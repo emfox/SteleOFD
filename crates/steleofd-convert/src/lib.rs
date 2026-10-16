@@ -13,7 +13,7 @@ pub mod svg;
 #[cfg(feature = "pdf")]
 pub mod pdf;
 
-pub use replay::{GradientShape, PageSink, PathShape, replay};
+pub use replay::{PageSink, PaintShape, PathShape, paint_shape, replay};
 pub use svg::{SvgOptions, SvgSink, page_to_svg, pages_to_svg};
 
 #[cfg(feature = "pdf")]

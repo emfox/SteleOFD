@@ -2,32 +2,55 @@
 //! The display list keeps object-local geometry plus explicit transform ops,
 //! so every backend replays one state machine instead of trusting coordinates.
 
-use steleofd_common::{Point, Rect};
-use steleofd_display::ops::{GradientStop, Paint, PaintRule, StrokeStyle};
+use steleofd_common::Rect;
+use steleofd_display::ops::{Paint, PaintRule, StrokeStyle};
 use steleofd_display::{DrawOp, GlyphRun, ImageRef, PageDisplay};
 use steleofd_error::{FormatError, OfdError, Result};
 use steleofd_geometry::{Affine, Path};
+
+/// The paint for one fill or stroke, resolved by the backend.
+/// A gradient is stated on the object itself, so a sink can resolve it from
+/// the shape alone instead of having to remember an earlier op.
+#[derive(Clone, Copy)]
+pub enum PaintShape<'a> {
+    /// A flat colour.
+    Solid(&'a steleofd_display::ops::Color),
+    /// A linear shading to be resolved against the path it fills.
+    Linear(&'a steleofd_display::LinearGradientSpec),
+    /// A radial shading: the cone between its two circles.
+    Radial(&'a steleofd_display::RadialGradientSpec),
+    /// A tiled image fill.
+    Pattern(&'a ImageRef),
+}
+
+/// Split a paint into the shape a sink resolves it from.
+pub fn paint_shape(paint: &Paint) -> PaintShape<'_> {
+    match paint {
+        Paint::Solid(c) => PaintShape::Solid(c),
+        Paint::LinearGradient(spec) => PaintShape::Linear(spec),
+        Paint::RadialGradient(spec) => PaintShape::Radial(spec),
+        Paint::Pattern(image) => PaintShape::Pattern(image),
+    }
+}
+
+/// A glyph run carries its paint directly, but a sink resolves the same shape,
+/// so both routes go through one function.
+pub fn text_paint_shape(paint: &Paint) -> PaintShape<'_> {
+    paint_shape(paint)
+}
 
 /// A path with its paint, as the op stream describes it.
 pub struct PathShape<'a> {
     /// Geometry in current-state coordinates.
     pub path: &'a Path,
     /// Fill paint; `None` leaves the interior untouched.
-    pub fill: Option<&'a Paint>,
+    pub fill: Option<PaintShape<'a>>,
     /// Stroke paint; `None` leaves the outline untouched.
-    pub stroke: Option<&'a Paint>,
+    pub stroke: Option<PaintShape<'a>>,
     /// Stroke geometry parameters.
     pub stroke_style: &'a StrokeStyle,
     /// Rule deciding which regions the path covers.
     pub rule: PaintRule,
-}
-
-/// A gradient fill clipped to a path.
-pub struct GradientShape<'a> {
-    /// Colour stops in draw order.
-    pub stops: &'a [GradientStop],
-    /// Region the gradient is painted into.
-    pub path: &'a Path,
 }
 
 /// Backend hooks for one page of a display list.
@@ -59,20 +82,6 @@ pub trait PageSink {
 
     /// Draw an image.
     fn image(&mut self, image: &ImageRef, dst: Rect, transform: Affine);
-
-    /// Fill a path with a linear gradient.
-    fn linear_gradient(&mut self, start: Point, end: Point, shape: GradientShape<'_>);
-
-    /// Fill a path with a radial gradient, the cone clause 8.3.4 draws
-    /// between its two circles.
-    fn radial_gradient(
-        &mut self,
-        center: Point,
-        radius: f64,
-        end: Point,
-        end_radius: f64,
-        shape: GradientShape<'_>,
-    );
 }
 
 /// Replay one page into `sink`, rejecting an unbalanced restore.
@@ -104,8 +113,8 @@ pub fn replay(page: &PageDisplay, sink: &mut impl PageSink) -> Result<()> {
                 rule,
             } => sink.path(PathShape {
                 path,
-                fill: fill.as_ref(),
-                stroke: stroke.as_ref(),
+                fill: fill.as_ref().map(paint_shape),
+                stroke: stroke.as_ref().map(paint_shape),
                 stroke_style,
                 rule: *rule,
             }),
@@ -115,26 +124,6 @@ pub fn replay(page: &PageDisplay, sink: &mut impl PageSink) -> Result<()> {
                 dst,
                 transform,
             } => sink.image(image, *dst, *transform),
-            DrawOp::LinearGradient {
-                start,
-                end,
-                stops,
-                path,
-            } => sink.linear_gradient(*start, *end, GradientShape { stops, path }),
-            DrawOp::RadialGradient {
-                center,
-                radius,
-                end,
-                end_radius,
-                stops,
-                path,
-            } => sink.radial_gradient(
-                *center,
-                *radius,
-                *end,
-                *end_radius,
-                GradientShape { stops, path },
-            ),
         }
     }
     Ok(())
@@ -143,9 +132,10 @@ pub fn replay(page: &PageDisplay, sink: &mut impl PageSink) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use steleofd_common::Millimeter;
+    use steleofd_common::{Millimeter, Point};
     use steleofd_display::ImageCodec;
     use steleofd_display::ops::{Color, Paint};
+    use steleofd_display::{LinearGradientSpec, RadialGradientSpec};
     use steleofd_font::FontId;
     use steleofd_geometry::PathBuilder;
 
@@ -185,14 +175,6 @@ mod tests {
 
         fn image(&mut self, _: &ImageRef, _: Rect, _: Affine) {
             self.log.push("image".into());
-        }
-
-        fn linear_gradient(&mut self, _: Point, _: Point, _: GradientShape<'_>) {
-            self.log.push("linear".into());
-        }
-
-        fn radial_gradient(&mut self, _: Point, _: f64, _: Point, _: f64, _: GradientShape<'_>) {
-            self.log.push("radial".into());
         }
     }
 
@@ -253,19 +235,22 @@ mod tests {
                 dst: Rect::new(0.0, 0.0, 1.0, 1.0),
                 transform: Affine::IDENTITY,
             },
-            DrawOp::LinearGradient {
-                start: Point::new(0.0, 0.0),
-                end: Point::new(1.0, 0.0),
-                stops: Vec::new(),
+            DrawOp::Path {
                 path: rect.clone(),
-            },
-            DrawOp::RadialGradient {
-                center: Point::new(0.0, 0.0),
-                radius: 5.0,
-                end: Point::new(0.0, 0.0),
-                end_radius: 9.0,
-                stops: Vec::new(),
-                path: rect,
+                fill: Some(Paint::LinearGradient(Box::new(LinearGradientSpec {
+                    start: Point::new(0.0, 0.0),
+                    end: Point::new(1.0, 0.0),
+                    stops: Vec::new(),
+                }))),
+                stroke: Some(Paint::RadialGradient(Box::new(RadialGradientSpec {
+                    center: Point::new(0.0, 0.0),
+                    radius: 5.0,
+                    end: Point::new(0.0, 0.0),
+                    end_radius: 9.0,
+                    stops: Vec::new(),
+                }))),
+                stroke_style: Default::default(),
+                rule: PaintRule::NonZero,
             },
             DrawOp::Restore,
         ]);
@@ -281,8 +266,7 @@ mod tests {
                 "path",
                 "text",
                 "image",
-                "linear",
-                "radial",
+                "path",
                 "restore"
             ]
         );

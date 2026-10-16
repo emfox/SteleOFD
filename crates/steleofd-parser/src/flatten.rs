@@ -8,7 +8,8 @@ use std::sync::Arc;
 use steleofd_common::{Point, Rect};
 use steleofd_display::ops::{Color, GradientStop, LineCap, LineJoin};
 use steleofd_display::{
-    DisplayListBuilder, DrawOp, GlyphRun, ImageCodec, ImageRef, Paint, PaintRule, StrokeStyle,
+    DisplayListBuilder, DrawOp, GlyphRun, ImageCodec, ImageRef, LinearGradientSpec, Paint,
+    PaintRule, RadialGradientSpec, StrokeStyle,
 };
 use steleofd_error::{FormatError, OfdError, Result};
 use steleofd_font::FontId;
@@ -195,49 +196,34 @@ fn solid(color: &ColorRef) -> Result<Paint> {
     Ok(Paint::Solid(Color::rgba(r, g, b, alpha)))
 }
 
-/// Resolve a colour into a paint, emitting a gradient op first when the colour
-/// turns out to be a shading. Clause 8.3.4 draws a shading as its own graphic
-/// unit, so the gradient op carries the path and the paint returned is a marker.
-fn paint_of(color: &ColorRef, path: &Path, builder: &mut DisplayListBuilder) -> Result<Paint> {
+/// Resolve a colour into a paint. A colour carrying a shading becomes a
+/// gradient paint that travels with the object, so no backend depends on
+/// having seen some earlier op to know what the fill is.
+fn paint_of(color: &ColorRef, _path: &Path, _builder: &mut DisplayListBuilder) -> Result<Paint> {
     match color.shading() {
         None => solid(color),
         Some(Shading::Axial {
             start,
             end,
             segments,
-        }) => {
-            let stops = stops_of(segments)?;
-            let index = builder.len();
-            builder.push(DrawOp::LinearGradient {
-                start: Point::new(start.0, start.1),
-                end: Point::new(end.0, end.1),
-                stops,
-                path: path.clone(),
-            });
-            Ok(Paint::LinearGradientRef(index))
-        }
+        }) => Ok(Paint::LinearGradient(Box::new(LinearGradientSpec {
+            start: Point::new(start.0, start.1),
+            end: Point::new(end.0, end.1),
+            stops: stops_of(segments)?,
+        }))),
         Some(Shading::Radial {
             start,
             start_radius,
             end,
             end_radius,
             segments,
-        }) => {
-            let stops = stops_of(segments)?;
-            let index = builder.len();
-            // Clause 8.3.4 describes the shading as the cone between two
-            // circles, so both travel with the op; how a backend paints a
-            // two-circle cone is its own business.
-            builder.push(DrawOp::RadialGradient {
-                center: Point::new(start.0, start.1),
-                radius: *start_radius,
-                end: Point::new(end.0, end.1),
-                end_radius: *end_radius,
-                stops,
-                path: path.clone(),
-            });
-            Ok(Paint::RadialGradientRef(index))
-        }
+        }) => Ok(Paint::RadialGradient(Box::new(RadialGradientSpec {
+            center: Point::new(start.0, start.1),
+            radius: *start_radius,
+            end: Point::new(end.0, end.1),
+            end_radius: *end_radius,
+            stops: stops_of(segments)?,
+        }))),
     }
 }
 

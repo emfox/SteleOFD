@@ -162,7 +162,7 @@ pub fn render_page(
                 let total = total_transform(&state, &page.page_box, options.dpi);
                 let ts_path = to_ts_path(path, total)?;
                 if let Some(paint) = fill {
-                    let p = solid_paint(paint);
+                    let p = paint_for(paint, total).unwrap_or_else(|| solid_paint(paint));
                     pixmap.fill_path(
                         &ts_path,
                         &p,
@@ -172,7 +172,7 @@ pub fn render_page(
                     );
                 }
                 if let Some(paint) = stroke {
-                    let p = solid_paint(paint);
+                    let p = paint_for(paint, total).unwrap_or_else(|| solid_paint(paint));
                     let ts_stroke = to_ts_stroke(stroke_style, &state, options.dpi);
                     pixmap.stroke_path(
                         &ts_path,
@@ -206,55 +206,6 @@ pub fn render_page(
                 )? {
                     ImageOutcome::Drawn => {}
                     ImageOutcome::Failed => skipped_image_ops += 1,
-                }
-            }
-            DrawOp::LinearGradient {
-                start,
-                end,
-                stops,
-                path,
-            } => {
-                let total = total_transform(&state, &page.page_box, options.dpi);
-                let shader = linear_shader(*start, *end, stops, total);
-                fill_with_shader(&mut pixmap, path, shader, total, state.clip.as_ref())?;
-            }
-            DrawOp::RadialGradient {
-                center,
-                radius,
-                end,
-                end_radius,
-                stops,
-                path,
-            } => {
-                let total = total_transform(&state, &page.page_box, options.dpi);
-                match steleofd_display::radial_form(*center, *radius, *end, *end_radius, stops) {
-                    steleofd_display::RadialForm::Cone(cone) => {
-                        let shader = focal_shader(&cone, total);
-                        fill_with_shader(&mut pixmap, path, shader, total, state.clip.as_ref())?;
-                    }
-                    steleofd_display::RadialForm::Cylinder { start, end } => {
-                        // Equal circles: the shading varies along the axis
-                        // between the centres, which a linear gradient paints.
-                        let shader = linear_shader(start, end, stops, total);
-                        fill_with_shader(&mut pixmap, path, shader, total, state.clip.as_ref())?;
-                    }
-                    steleofd_display::RadialForm::Flat(color) => {
-                        // Neither circle has extent: one flat colour keeps the
-                        // region painted instead of dropping it.
-                        let paint = TsPaint {
-                            shader: Shader::SolidColor(to_color(&color)),
-                            anti_alias: true,
-                            ..TsPaint::default()
-                        };
-                        let ts_path = to_ts_path(path, total)?;
-                        pixmap.fill_path(
-                            &ts_path,
-                            &paint,
-                            FillRule::Winding,
-                            Transform::identity(),
-                            state.clip.as_ref(),
-                        );
-                    }
                 }
             }
         }
@@ -350,14 +301,67 @@ fn fill_rule(rule: PaintRule) -> FillRule {
 }
 
 fn solid_paint(paint: &Paint) -> TsPaint<'static> {
-    // Gradient and pattern references are emitted as dedicated gradient ops;
-    // a solid fallback keeps malformed references visible but harmless.
+    // Anything but a flat colour has no single value to paint here; a pattern
+    // falls back to black so a malformed reference stays visible rather than
+    // silently dropping the fill. Gradients never reach this function.
     let color = match paint {
         Paint::Solid(c) => to_color(c),
         _ => tiny_skia::Color::BLACK,
     };
     TsPaint {
         shader: Shader::SolidColor(color),
+        anti_alias: true,
+        ..TsPaint::default()
+    }
+}
+
+/// The paint for a fill or stroke, resolving a gradient to its shader. A
+/// gradient is stated on the object itself, so this needs nothing from the
+/// surrounding display list.
+fn paint_for(paint: &Paint, total: Transform) -> Option<TsPaint<'static>> {
+    match paint {
+        Paint::Solid(_) => Some(solid_paint(paint)),
+        Paint::LinearGradient(spec) => Some(shader_paint(linear_shader(
+            spec.start,
+            spec.end,
+            &spec.stops,
+            total,
+        ))),
+        Paint::RadialGradient(spec) => {
+            let paint = match steleofd_display::radial_form(
+                spec.center,
+                spec.radius,
+                spec.end,
+                spec.end_radius,
+                &spec.stops,
+            ) {
+                steleofd_display::RadialForm::Cone(cone) => {
+                    shader_paint(focal_shader(&cone, total))
+                }
+                // Equal circles: the shading varies along the axis between the
+                // centres, which a linear gradient paints.
+                steleofd_display::RadialForm::Cylinder { start, end } => {
+                    shader_paint(linear_shader(start, end, &spec.stops, total))
+                }
+                // Neither circle has extent: one flat colour keeps the region
+                // painted instead of dropping it.
+                steleofd_display::RadialForm::Flat(color) => TsPaint {
+                    shader: Shader::SolidColor(to_color(&color)),
+                    anti_alias: true,
+                    ..TsPaint::default()
+                },
+            };
+            Some(paint)
+        }
+        // A pattern is not resolvable here; the caller keeps it visible with
+        // the fallback rather than dropping the whole fill.
+        Paint::Pattern(_) => None,
+    }
+}
+
+fn shader_paint(shader: Shader<'static>) -> TsPaint<'static> {
+    TsPaint {
+        shader,
         anti_alias: true,
         ..TsPaint::default()
     }
@@ -806,33 +810,11 @@ fn focal_shader(cone: &steleofd_display::FocalCone, total: Transform) -> Shader<
     .unwrap_or(flat)
 }
 
-fn fill_with_shader(
-    pixmap: &mut Pixmap,
-    path: &Path,
-    shader: Shader<'static>,
-    total: Transform,
-    clip: Option<&Mask>,
-) -> Result<()> {
-    let ts_path = to_ts_path(path, total)?;
-    let paint = TsPaint {
-        shader,
-        anti_alias: true,
-        ..TsPaint::default()
-    };
-    pixmap.fill_path(
-        &ts_path,
-        &paint,
-        FillRule::Winding,
-        Transform::identity(),
-        clip,
-    );
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use steleofd_display::ops::GradientStop as DisplayStop;
+    use steleofd_display::{LinearGradientSpec, RadialGradientSpec};
 
     use steleofd_display::{
         DisplayListBuilder, DrawOp, ImageCodec, ImageRef, Paint, PaintRule, StrokeStyle,
@@ -1026,20 +1008,25 @@ mod tests {
     #[test]
     fn a_linear_gradient_runs_light_to_dark() {
         let manager = FontManager::new();
-        let page = page_with(vec![DrawOp::LinearGradient {
-            start: steleofd_common::Point::new(0.0, 10.0),
-            end: steleofd_common::Point::new(20.0, 10.0),
-            stops: vec![
-                DisplayStop {
-                    offset: 0.0,
-                    color: Color::rgba(0, 0, 0, 255),
-                },
-                DisplayStop {
-                    offset: 1.0,
-                    color: Color::rgba(255, 255, 255, 255),
-                },
-            ],
+        let page = page_with(vec![DrawOp::Path {
             path: rect_path(0.0, 0.0, 20.0, 20.0),
+            fill: Some(Paint::LinearGradient(Box::new(LinearGradientSpec {
+                start: steleofd_common::Point::new(0.0, 10.0),
+                end: steleofd_common::Point::new(20.0, 10.0),
+                stops: vec![
+                    DisplayStop {
+                        offset: 0.0,
+                        color: Color::rgba(0, 0, 0, 255),
+                    },
+                    DisplayStop {
+                        offset: 1.0,
+                        color: Color::rgba(255, 255, 255, 255),
+                    },
+                ],
+            }))),
+            stroke: None,
+            stroke_style: Default::default(),
+            rule: PaintRule::NonZero,
         }]);
         let out = render(&page, &manager);
         let left = pixel_at(&out, 5, 38)[0] as i32;
@@ -1053,22 +1040,27 @@ mod tests {
         // The shape the corpus writes: no StartRadius, so the first stop sits
         // at the centre and the last on the circle the clause names.
         let manager = FontManager::new();
-        let page = page_with(vec![DrawOp::RadialGradient {
-            center: steleofd_common::Point::new(10.0, 10.0),
-            radius: 0.0,
-            end: steleofd_common::Point::new(10.0, 10.0),
-            end_radius: 8.0,
-            stops: vec![
-                DisplayStop {
-                    offset: 0.0,
-                    color: Color::rgba(0, 0, 0, 255),
-                },
-                DisplayStop {
-                    offset: 1.0,
-                    color: Color::rgba(255, 255, 255, 255),
-                },
-            ],
+        let page = page_with(vec![DrawOp::Path {
             path: rect_path(0.0, 0.0, 20.0, 20.0),
+            fill: Some(Paint::RadialGradient(Box::new(RadialGradientSpec {
+                center: steleofd_common::Point::new(10.0, 10.0),
+                radius: 0.0,
+                end: steleofd_common::Point::new(10.0, 10.0),
+                end_radius: 8.0,
+                stops: vec![
+                    DisplayStop {
+                        offset: 0.0,
+                        color: Color::rgba(0, 0, 0, 255),
+                    },
+                    DisplayStop {
+                        offset: 1.0,
+                        color: Color::rgba(255, 255, 255, 255),
+                    },
+                ],
+            }))),
+            stroke: None,
+            stroke_style: Default::default(),
+            rule: PaintRule::NonZero,
         }]);
         let out = render(&page, &manager);
         let centre = pixel_at(&out, 38, 38);
@@ -1096,16 +1088,21 @@ mod tests {
         // first stop instead and the rest of the drawing survives.
         let manager = FontManager::new();
         let page = page_with(vec![
-            DrawOp::RadialGradient {
-                center: steleofd_common::Point::new(5.0, 5.0),
-                radius: 0.0,
-                end: steleofd_common::Point::new(6.0, 5.0),
-                end_radius: 0.0,
-                stops: vec![DisplayStop {
-                    offset: 0.0,
-                    color: Color::rgba(255, 0, 0, 255),
-                }],
+            DrawOp::Path {
                 path: rect_path(0.0, 0.0, 8.0, 8.0),
+                fill: Some(Paint::RadialGradient(Box::new(RadialGradientSpec {
+                    center: steleofd_common::Point::new(5.0, 5.0),
+                    radius: 0.0,
+                    end: steleofd_common::Point::new(6.0, 5.0),
+                    end_radius: 0.0,
+                    stops: vec![DisplayStop {
+                        offset: 0.0,
+                        color: Color::rgba(255, 0, 0, 255),
+                    }],
+                }))),
+                stroke: None,
+                stroke_style: Default::default(),
+                rule: PaintRule::NonZero,
             },
             fill_rect_op(12.0, 12.0, 4.0, 4.0, Color::rgba(0, 0, 255, 255)),
         ]);

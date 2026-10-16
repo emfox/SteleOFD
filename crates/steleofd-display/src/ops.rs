@@ -63,34 +63,6 @@ pub enum DrawOp {
         /// Placement transform.
         transform: Affine,
     },
-
-    /// Draw a linear gradient clipped to a path.
-    LinearGradient {
-        /// Gradient start point.
-        start: Point,
-        /// Gradient end point.
-        end: Point,
-        /// Colour stops.
-        stops: Vec<GradientStop>,
-        /// Region the gradient is painted into.
-        path: Path,
-    },
-
-    /// Draw a radial gradient clipped to a path.
-    RadialGradient {
-        /// Centre of the start circle.
-        center: Point,
-        /// Radius of the start circle.
-        radius: f64,
-        /// Centre of the end circle.
-        end: Point,
-        /// Radius of the end circle.
-        end_radius: f64,
-        /// Colour stops.
-        stops: Vec<GradientStop>,
-        /// Region the gradient is painted into.
-        path: Path,
-    },
 }
 
 /// Straight sRGB colour with alpha, each channel in `0..=255`.
@@ -155,12 +127,40 @@ impl Color {
 pub enum Paint {
     /// Uniform colour.
     Solid(Color),
-    /// Index into the gradient table built from [`DrawOp::LinearGradient`].
-    LinearGradientRef(usize),
-    /// Index into the gradient table built from [`DrawOp::RadialGradient`].
-    RadialGradientRef(usize),
+    /// A linear shading: a gradient axis and its stops.
+    LinearGradient(Box<LinearGradientSpec>),
+    /// A radial shading: the cone between two circles.
+    RadialGradient(Box<RadialGradientSpec>),
     /// Tiled image.
     Pattern(ImageRef),
+}
+
+/// A linear shading an object carries with it, so a backend never has to have
+/// seen an earlier op to paint it; clause 8.3.4's standalone shading and a
+/// fill that folds one in both arrive as this.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LinearGradientSpec {
+    /// Gradient start point, in the object's content space.
+    pub start: Point,
+    /// Gradient end point, in the object's content space.
+    pub end: Point,
+    /// Colour stops, at least two.
+    pub stops: Vec<GradientStop>,
+}
+
+/// A radial shading an object carries with it: two circles describe the cone.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RadialGradientSpec {
+    /// Centre of the starting circle.
+    pub center: Point,
+    /// Radius of the starting circle.
+    pub radius: f64,
+    /// Centre of the ending circle.
+    pub end: Point,
+    /// Radius of the ending circle.
+    pub end_radius: f64,
+    /// Colour stops, at least two.
+    pub stops: Vec<GradientStop>,
 }
 
 /// One colour stop of a gradient.

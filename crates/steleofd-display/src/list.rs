@@ -164,9 +164,6 @@ fn op_bbox(op: &DrawOp) -> Option<Rect> {
         DrawOp::Path { path, .. } => Some(path.bounding_box()),
         DrawOp::Text(run) => Some(run.bbox),
         DrawOp::Image { dst, .. } => Some(*dst),
-        DrawOp::LinearGradient { path, .. } | DrawOp::RadialGradient { path, .. } => {
-            Some(path.bounding_box())
-        }
         _ => None,
     }
 }
@@ -189,6 +186,7 @@ fn transformed_rect(r: Rect, t: &Affine) -> Rect {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::LinearGradientSpec;
     use crate::ops::{Color, Paint, PaintRule, StrokeStyle};
     use crate::resource::{ImageCodec, ImageRef};
     use crate::text::GlyphRun;
@@ -415,15 +413,20 @@ mod tests {
     }
 
     #[test]
-    fn gradients_contribute_the_clip_path_not_the_endpoints() {
+    fn a_gradient_fill_bounds_by_its_path_not_its_axis() {
         // A gradient's start and end may lie far outside the shape it fills, so
-        // only the clip path is a safe bound.
+        // only the path is a safe bound.
         let mut b = DisplayListBuilder::new(Rect::A4_PORTRAIT);
-        b.push(DrawOp::LinearGradient {
-            start: Point::new(-500.0, -500.0),
-            end: Point::new(500.0, 500.0),
-            stops: Vec::new(),
+        b.push(DrawOp::Path {
             path: rect_path(10.0, 10.0, 20.0, 20.0),
+            fill: Some(Paint::LinearGradient(Box::new(LinearGradientSpec {
+                start: Point::new(-500.0, -500.0),
+                end: Point::new(500.0, 500.0),
+                stops: Vec::new(),
+            }))),
+            stroke: None,
+            stroke_style: Default::default(),
+            rule: PaintRule::NonZero,
         });
         let bbox = b.finish(0).content_bbox;
         assert!((bbox.x - 10.0).abs() < 1e-9);

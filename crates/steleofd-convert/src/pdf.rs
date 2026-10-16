@@ -5,17 +5,15 @@
 use std::fmt::Write as _;
 
 use lopdf::{Dictionary, Document, Object, ObjectId, Stream};
-use steleofd_common::{Point, Rect};
-use steleofd_display::ops::{
-    Color, GradientStop, LineCap, LineJoin, Paint, PaintRule, StrokeStyle,
-};
-use steleofd_display::{GlyphRun, ImageRef};
+use steleofd_common::Rect;
+use steleofd_display::ops::{Color, GradientStop, LineCap, LineJoin, PaintRule, StrokeStyle};
+use steleofd_display::{GlyphRun, ImageRef, LinearGradientSpec, RadialGradientSpec};
 use steleofd_error::{ConvertError, OfdError, Result};
 use steleofd_font::FontManager;
 use steleofd_geometry::{Affine, Path, PathSegment};
 use steleofd_render::arc_cubics;
 
-use crate::replay::{GradientShape, PageSink, PathShape, replay};
+use crate::replay::{PageSink, PaintShape, PathShape, replay};
 use crate::{ConversionStats, TextExport};
 
 /// Points per millimetre.
@@ -63,10 +61,6 @@ pub struct PdfSink<'a> {
     images: Vec<PendingImage>,
     /// All shadings in creation order; the name is the position.
     shadings: Vec<PendingShading>,
-    /// Per-kind index into `shadings`, for gradient paint references.
-    linear_refs: Vec<usize>,
-    /// Per-kind index into `shadings`, for gradient paint references.
-    radial_refs: Vec<usize>,
     /// Distinct alpha values, each becoming one ExtGState.
     alphas: Vec<f64>,
     /// Whether live text was emitted, which needs the Helvetica resource.
@@ -87,8 +81,6 @@ impl<'a> PdfSink<'a> {
             clips: vec![0],
             images: Vec::new(),
             shadings: Vec::new(),
-            linear_refs: Vec::new(),
-            radial_refs: Vec::new(),
             alphas: Vec::new(),
             live_text: false,
             stats: ConversionStats::default(),
@@ -300,8 +292,8 @@ impl<'a> PdfSink<'a> {
                 .then(run.transform);
             let total = self.to_pt(glyph);
             self.write_path(&outline, total);
-            let mut setup = match fill {
-                Paint::Solid(c) => {
+            let mut setup = match crate::replay::text_paint_shape(fill) {
+                PaintShape::Solid(c) => {
                     let mut s = format!("{} rg", rgb(c));
                     if c.a != 255 {
                         s.push_str(&self.alpha_state(c.a as f64 / 255.0));
@@ -436,9 +428,11 @@ impl PageSink for PdfSink<'_> {
         let total = self.to_pt(Affine::IDENTITY);
         let mut setup = String::new();
         let mut operator = String::new();
+        // A gradient carries its own axis, so it is registered into the
+        // document the moment it is painted: no earlier op has to be matched.
         let gradient = match shape.fill {
-            Some(Paint::LinearGradientRef(i)) => self.linear_refs.get(*i).copied(),
-            Some(Paint::RadialGradientRef(i)) => self.radial_refs.get(*i).copied(),
+            Some(PaintShape::Linear(spec)) => Some(self.register_linear(spec, total)),
+            Some(PaintShape::Radial(spec)) => Some(self.register_radial(spec, total)),
             _ => None,
         };
         let mut shaded = false;
@@ -453,7 +447,7 @@ impl PageSink for PdfSink<'_> {
         } else {
             match shape.fill {
                 None => {}
-                Some(Paint::Solid(c)) => {
+                Some(PaintShape::Solid(c)) => {
                     let _ = write!(setup, "{} rg", rgb(c));
                     if c.a != 255 {
                         setup.push_str(&self.alpha_state(c.a as f64 / 255.0));
@@ -475,7 +469,7 @@ impl PageSink for PdfSink<'_> {
             setup.push_str(&stroke_prefix(shape.stroke_style, &self.ctm));
             if let Some(paint) = shape.stroke {
                 match paint {
-                    Paint::Solid(c) => {
+                    PaintShape::Solid(c) => {
                         let _ = write!(setup, " {} RG", rgb(c));
                         if c.a != 255 {
                             setup.push_str(&self.alpha_state(c.a as f64 / 255.0));
@@ -542,54 +536,39 @@ impl PageSink for PdfSink<'_> {
             num(total.f)
         ));
     }
+}
 
-    fn linear_gradient(&mut self, start: Point, end: Point, shape: GradientShape<'_>) {
-        if shape.stops.is_empty() {
-            return;
-        }
-        let total = self.to_pt(Affine::IDENTITY);
-        let (x0, y0) = total.apply(start.x, start.y);
-        let (x1, y1) = total.apply(end.x, end.y);
+impl PdfSink<'_> {
+    /// Register a linear shading and return the name `Sh{index}` it gets.
+    fn register_linear(&mut self, spec: &LinearGradientSpec, total: Affine) -> String {
+        let (x0, y0) = total.apply(spec.start.x, spec.start.y);
+        let (x1, y1) = total.apply(spec.end.x, spec.end.y);
+        self.stats.gradients += 1;
         let index = self.shadings.len();
-        self.linear_refs.push(index);
         self.shadings.push(PendingShading {
             radial: false,
             coords: vec![x0, y0, x1, y1],
-            stops: shape.stops.to_vec(),
+            stops: spec.stops.clone(),
         });
-        self.stats.gradients += 1;
-        self.fill_shading(shape.path, &format!("Sh{index}"));
+        format!("Sh{index}")
     }
 
-    fn radial_gradient(
-        &mut self,
-        center: Point,
-        radius: f64,
-        end: Point,
-        end_radius: f64,
-        shape: GradientShape<'_>,
-    ) {
-        if shape.stops.is_empty() {
-            return;
-        }
-        let total = self.to_pt(Affine::IDENTITY);
-        let (cx, cy) = total.apply(center.x, center.y);
-        let (ex, ey) = total.apply(end.x, end.y);
+    /// Register the clause's two-circle cone as a radial shading. PDF's radial
+    /// shading is that same cone, so the geometry travels as written.
+    fn register_radial(&mut self, spec: &RadialGradientSpec, total: Affine) -> String {
+        let (cx, cy) = total.apply(spec.center.x, spec.center.y);
+        let (ex, ey) = total.apply(spec.end.x, spec.end.y);
         // The page transform is axis preserving up to the y flip, so a radius
         // scales with the mean factor.
         let scale = total.scale_factor();
+        self.stats.gradients += 1;
         let index = self.shadings.len();
-        self.radial_refs.push(index);
-        // PDF's radial shading is the very cone the clause describes: two
-        // circles, with the parameter running from the first to the second,
-        // so the geometry travels as written.
         self.shadings.push(PendingShading {
             radial: true,
-            coords: vec![cx, cy, radius * scale, ex, ey, end_radius * scale],
-            stops: shape.stops.to_vec(),
+            coords: vec![cx, cy, spec.radius * scale, ex, ey, spec.end_radius * scale],
+            stops: spec.stops.clone(),
         });
-        self.stats.gradients += 1;
-        self.fill_shading(shape.path, &format!("Sh{index}"));
+        format!("Sh{index}")
     }
 }
 
@@ -910,7 +889,7 @@ fn num(v: f64) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use steleofd_common::Millimeter;
+    use steleofd_common::{Millimeter, Point};
     use steleofd_display::ops::Paint;
     use steleofd_font::FontId;
 
@@ -1074,20 +1053,27 @@ mod tests {
 
     #[test]
     fn a_linear_gradient_becomes_a_shading_pattern() {
-        let p = page(vec![steleofd_display::DrawOp::LinearGradient {
-            start: Point::new(0.0, 0.0),
-            end: Point::new(10.0, 0.0),
-            stops: vec![
-                GradientStop {
-                    offset: 0.0,
-                    color: Color::WHITE,
-                },
-                GradientStop {
-                    offset: 1.0,
-                    color: Color::BLACK,
-                },
-            ],
+        let p = page(vec![steleofd_display::DrawOp::Path {
             path: rect(0.0, 0.0, 10.0, 10.0),
+            fill: Some(steleofd_display::ops::Paint::LinearGradient(Box::new(
+                LinearGradientSpec {
+                    start: Point::new(0.0, 0.0),
+                    end: Point::new(10.0, 0.0),
+                    stops: vec![
+                        GradientStop {
+                            offset: 0.0,
+                            color: Color::WHITE,
+                        },
+                        GradientStop {
+                            offset: 1.0,
+                            color: Color::BLACK,
+                        },
+                    ],
+                },
+            ))),
+            stroke: None,
+            stroke_style: Default::default(),
+            rule: PaintRule::NonZero,
         }]);
         let bytes = page_to_pdf(&p, &PdfOptions::default()).expect("convert");
         let doc = Document::load_from(&bytes[..]).expect("parse");
@@ -1110,16 +1096,23 @@ mod tests {
 
     #[test]
     fn a_radial_gradient_uses_shading_type_three() {
-        let p = page(vec![steleofd_display::DrawOp::RadialGradient {
-            center: Point::new(5.0, 5.0),
-            radius: 1.0,
-            end: Point::new(8.0, 5.0),
-            end_radius: 5.0,
-            stops: vec![GradientStop {
-                offset: 0.0,
-                color: Color::WHITE,
-            }],
+        let p = page(vec![steleofd_display::DrawOp::Path {
             path: rect(0.0, 0.0, 10.0, 10.0),
+            fill: Some(steleofd_display::ops::Paint::RadialGradient(Box::new(
+                RadialGradientSpec {
+                    center: Point::new(5.0, 5.0),
+                    radius: 1.0,
+                    end: Point::new(8.0, 5.0),
+                    end_radius: 5.0,
+                    stops: vec![GradientStop {
+                        offset: 0.0,
+                        color: Color::WHITE,
+                    }],
+                },
+            ))),
+            stroke: None,
+            stroke_style: Default::default(),
+            rule: PaintRule::NonZero,
         }]);
         let bytes = page_to_pdf(&p, &PdfOptions::default()).expect("convert");
         let doc = Document::load_from(&bytes[..]).expect("parse");
@@ -1169,24 +1162,31 @@ mod tests {
 
     #[test]
     fn a_multi_stop_gradient_stitches_its_intervals() {
-        let p = page(vec![steleofd_display::DrawOp::LinearGradient {
-            start: Point::new(0.0, 0.0),
-            end: Point::new(10.0, 0.0),
-            stops: vec![
-                GradientStop {
-                    offset: 0.0,
-                    color: Color::WHITE,
-                },
-                GradientStop {
-                    offset: 0.5,
-                    color: Color::rgba(255, 0, 0, 255),
-                },
-                GradientStop {
-                    offset: 1.0,
-                    color: Color::BLACK,
-                },
-            ],
+        let p = page(vec![steleofd_display::DrawOp::Path {
             path: rect(0.0, 0.0, 10.0, 10.0),
+            fill: Some(steleofd_display::ops::Paint::LinearGradient(Box::new(
+                LinearGradientSpec {
+                    start: Point::new(0.0, 0.0),
+                    end: Point::new(10.0, 0.0),
+                    stops: vec![
+                        GradientStop {
+                            offset: 0.0,
+                            color: Color::WHITE,
+                        },
+                        GradientStop {
+                            offset: 0.5,
+                            color: Color::rgba(255, 0, 0, 255),
+                        },
+                        GradientStop {
+                            offset: 1.0,
+                            color: Color::BLACK,
+                        },
+                    ],
+                },
+            ))),
+            stroke: None,
+            stroke_style: Default::default(),
+            rule: PaintRule::NonZero,
         }]);
         let bytes = page_to_pdf(&p, &PdfOptions::default()).expect("convert");
         let doc = Document::load_from(&bytes[..]).expect("parse");

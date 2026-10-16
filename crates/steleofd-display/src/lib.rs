@@ -14,7 +14,7 @@ pub mod shading;
 pub mod text;
 
 pub use list::{DisplayList, DisplayListBuilder, PageDisplay, PageRef};
-pub use ops::{DrawOp, Paint, PaintRule, StrokeStyle};
+pub use ops::{DrawOp, LinearGradientSpec, Paint, PaintRule, RadialGradientSpec, StrokeStyle};
 pub use page::{PageInfo, RenderQuality, Viewport};
 pub use resource::{ImageCodec, ImageRef, ResolvedFont, ResolvedResources};
 pub use shading::{FocalCone, RadialForm, radial_form};

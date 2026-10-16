@@ -4,17 +4,15 @@
 
 use std::fmt::Write as _;
 
-use steleofd_common::{Point, Rect};
-use steleofd_display::ops::{
-    Color, GradientStop, LineCap, LineJoin, Paint, PaintRule, StrokeStyle,
-};
-use steleofd_display::{GlyphRun, ImageCodec, ImageRef};
+use steleofd_common::Rect;
+use steleofd_display::ops::{Color, LineCap, LineJoin, PaintRule, StrokeStyle};
+use steleofd_display::{GlyphRun, ImageCodec, ImageRef, LinearGradientSpec, RadialGradientSpec};
 use steleofd_error::Result;
 use steleofd_font::FontManager;
 use steleofd_geometry::{Affine, Path, PathSegment};
 
 use crate::base64;
-use crate::replay::{GradientShape, PageSink, PathShape, replay};
+use crate::replay::{PageSink, PaintShape, PathShape, replay, text_paint_shape};
 use crate::{ConversionStats, TextExport};
 
 /// Options for SVG export.
@@ -36,8 +34,6 @@ pub struct SvgSink<'a> {
     stack: Vec<Affine>,
     levels: Vec<usize>,
     depth: usize,
-    linear: Vec<String>,
-    radial: Vec<String>,
     seq: usize,
     stats: ConversionStats,
 }
@@ -55,8 +51,6 @@ impl<'a> SvgSink<'a> {
             stack: Vec::new(),
             levels: vec![0],
             depth: 2,
-            linear: Vec::new(),
-            radial: Vec::new(),
             seq: 0,
             stats: ConversionStats::default(),
         }
@@ -121,18 +115,74 @@ impl<'a> SvgSink<'a> {
         }
     }
 
-    fn paint_ref(&self, paint: &Paint) -> String {
-        match paint {
-            Paint::Solid(c) => hex(c),
-            Paint::LinearGradientRef(i) => match self.linear.get(*i) {
-                Some(id) => format!("url(#{id})"),
-                None => "#000000".to_string(),
-            },
-            Paint::RadialGradientRef(i) => match self.radial.get(*i) {
-                Some(id) => format!("url(#{id})"),
-                None => "#000000".to_string(),
-            },
-            Paint::Pattern(_) => "#000000".to_string(),
+    /// The `fill`/`stroke` value for a paint. A gradient is defined inline,
+    /// because the paint carries its own axis, so no earlier op is needed.
+    fn paint_ref(&mut self, shape: PaintShape<'_>) -> String {
+        match shape {
+            PaintShape::Solid(c) => hex(c),
+            PaintShape::Linear(spec) => self.define_linear(spec),
+            PaintShape::Radial(spec) => self.define_radial(spec),
+            PaintShape::Pattern(_) => "#000000".to_string(),
+        }
+    }
+
+    /// Define a `<linearGradient>` and return the `url(#id)` that uses it.
+    fn define_linear(&mut self, spec: &LinearGradientSpec) -> String {
+        if spec.stops.is_empty() {
+            return "#000000".to_string();
+        }
+        self.seq += 1;
+        let id = format!("grad{}", self.seq);
+        self.stats.gradients += 1;
+        self.line(format!(
+            "<linearGradient id=\"{id}\" gradientUnits=\"userSpaceOnUse\" x1=\"{}\" y1=\"{}\" x2=\"{}\" y2=\"{}\">{}</linearGradient>",
+            num(spec.start.x),
+            num(spec.start.y),
+            num(spec.end.x),
+            num(spec.end.y),
+            stops_markup(&spec.stops)
+        ));
+        format!("url(#{id})")
+    }
+
+    /// Define a `<radialGradient>` for the clause's two-circle cone and return
+    /// the `url(#id)` that uses it. Equal circles leave no apex, so colour
+    /// varies along the axis and a linear gradient paints it.
+    fn define_radial(&mut self, spec: &RadialGradientSpec) -> String {
+        if spec.stops.is_empty() {
+            return "#000000".to_string();
+        }
+        match steleofd_display::radial_form(
+            spec.center,
+            spec.radius,
+            spec.end,
+            spec.end_radius,
+            &spec.stops,
+        ) {
+            steleofd_display::RadialForm::Cone(cone) => {
+                self.seq += 1;
+                let id = format!("grad{}", self.seq);
+                self.stats.gradients += 1;
+                self.line(format!(
+                    "<radialGradient id=\"{id}\" gradientUnits=\"userSpaceOnUse\" cx=\"{}\" cy=\"{}\" r=\"{}\" fx=\"{}\" fy=\"{}\">{}</radialGradient>",
+                    num(cone.circle.x),
+                    num(cone.circle.y),
+                    num(cone.radius.max(0.0)),
+                    num(cone.apex.x),
+                    num(cone.apex.y),
+                    stops_markup(&cone.stops)
+                ));
+                format!("url(#{id})")
+            }
+            steleofd_display::RadialForm::Cylinder { start, end } => {
+                let linear = LinearGradientSpec {
+                    start,
+                    end,
+                    stops: spec.stops.clone(),
+                };
+                self.define_linear(&linear)
+            }
+            steleofd_display::RadialForm::Flat(color) => hex(&color),
         }
     }
 }
@@ -208,8 +258,9 @@ impl PageSink for SvgSink<'_> {
         let mut attrs = format!("d=\"{}\"", path_data(shape.path));
         match shape.fill {
             Some(paint) => {
-                let _ = write!(attrs, " fill=\"{}\"", self.paint_ref(paint));
-                if let Paint::Solid(c) = paint
+                let reference = self.paint_ref(paint);
+                let _ = write!(attrs, " fill=\"{reference}\"");
+                if let PaintShape::Solid(c) = paint
                     && c.a != 255
                 {
                     let _ = write!(attrs, " fill-opacity=\"{}\"", opacity(c));
@@ -222,8 +273,9 @@ impl PageSink for SvgSink<'_> {
         }
         match shape.stroke {
             Some(paint) => {
-                let _ = write!(attrs, " stroke=\"{}\"", self.paint_ref(paint));
-                if let Paint::Solid(c) = paint
+                let reference = self.paint_ref(paint);
+                let _ = write!(attrs, " stroke=\"{reference}\"");
+                if let PaintShape::Solid(c) = paint
                     && c.a != 255
                 {
                     let _ = write!(attrs, " stroke-opacity=\"{}\"", opacity(c));
@@ -278,85 +330,6 @@ impl PageSink for SvgSink<'_> {
             ));
         }
     }
-
-    fn linear_gradient(&mut self, start: Point, end: Point, shape: GradientShape<'_>) {
-        if shape.stops.is_empty() {
-            return;
-        }
-        self.seq += 1;
-        let id = format!("grad{}", self.seq);
-        self.linear.push(id.clone());
-        self.stats.gradients += 1;
-        self.line(format!(
-            "<linearGradient id=\"{id}\" gradientUnits=\"userSpaceOnUse\" x1=\"{}\" y1=\"{}\" x2=\"{}\" y2=\"{}\">{}</linearGradient>",
-            num(start.x),
-            num(start.y),
-            num(end.x),
-            num(end.y),
-            stops_markup(shape.stops)
-        ));
-        self.fill_with_gradient(shape.path, &id, PaintRule::NonZero);
-    }
-
-    fn radial_gradient(
-        &mut self,
-        center: Point,
-        radius: f64,
-        end: Point,
-        end_radius: f64,
-        shape: GradientShape<'_>,
-    ) {
-        if shape.stops.is_empty() {
-            return;
-        }
-        self.seq += 1;
-        let id = format!("grad{}", self.seq);
-        // The clause's cone reduces to the focal form SVG paints: a point at
-        // the apex and a circle at the far end, with the stops moved along the
-        // axis. Equal circles leave no apex, and colour varies along the line.
-        match steleofd_display::radial_form(center, radius, end, end_radius, shape.stops) {
-            steleofd_display::RadialForm::Cone(cone) => {
-                self.stats.gradients += 1;
-                self.radial.push(id.clone());
-                self.line(format!(
-                    "<radialGradient id=\"{id}\" gradientUnits=\"userSpaceOnUse\" cx=\"{}\" cy=\"{}\" r=\"{}\" fx=\"{}\" fy=\"{}\">{}</radialGradient>",
-                    num(cone.circle.x),
-                    num(cone.circle.y),
-                    num(cone.radius.max(0.0)),
-                    num(cone.apex.x),
-                    num(cone.apex.y),
-                    stops_markup(&cone.stops)
-                ));
-                self.fill_with_gradient(shape.path, &id, PaintRule::NonZero);
-            }
-            steleofd_display::RadialForm::Cylinder { start, end } => {
-                self.stats.gradients += 1;
-                self.linear.push(id.clone());
-                self.line(format!(
-                    "<linearGradient id=\"{id}\" gradientUnits=\"userSpaceOnUse\" x1=\"{}\" y1=\"{}\" x2=\"{}\" y2=\"{}\">{}</linearGradient>",
-                    num(start.x),
-                    num(start.y),
-                    num(end.x),
-                    num(end.y),
-                    stops_markup(shape.stops)
-                ));
-                self.fill_with_gradient(shape.path, &id, PaintRule::NonZero);
-            }
-            steleofd_display::RadialForm::Flat(color) => {
-                // Neither circle has extent, so the shading is one colour.
-                let faded = if color.a == 255 {
-                    String::new()
-                } else {
-                    format!(" fill-opacity=\"{}\"", opacity(&color))
-                };
-                self.line(format!(
-                    "<path d=\"{}\" fill=\"{}\"{faded}/>",
-                    path_data(shape.path),
-                    hex(&color)
-                ));
-            }
-        }
-    }
 }
 
 impl SvgSink<'_> {
@@ -390,12 +363,10 @@ impl SvgSink<'_> {
                 .then(Affine::translate(offset, 0.0))
                 .then(run.transform);
             let path = outline.transformed(&glyph);
-            let mut attrs = format!(
-                "d=\"{}\" fill=\"{}\"",
-                path_data(&path),
-                self.paint_ref(fill)
-            );
-            if let Paint::Solid(c) = fill
+            let fill = text_paint_shape(fill);
+            let reference = self.paint_ref(fill);
+            let mut attrs = format!("d=\"{}\" fill=\"{reference}\"", path_data(&path));
+            if let PaintShape::Solid(c) = fill
                 && c.a != 255
             {
                 let _ = write!(attrs, " fill-opacity=\"{}\"", opacity(c));
@@ -431,31 +402,13 @@ impl SvgSink<'_> {
             format!("transform=\"matrix({})\"", matrix_attr(run.transform))
         };
         let fill = match &run.fill {
-            Some(paint) => self.paint_ref(paint),
+            Some(paint) => self.paint_ref(text_paint_shape(paint)),
             None => "#000000".to_string(),
         };
         self.line(format!(
             "<text {placement} font-size=\"{}\" fill=\"{fill}\">{}</text>",
             num(run.size.value()),
             escape_text(text)
-        ));
-    }
-
-    /// Paint a path with a gradient, clipped to that path by construction.
-    fn fill_with_gradient(&mut self, path: &Path, id: &str, rule: PaintRule) {
-        let rule_attr = match rule {
-            PaintRule::NonZero => String::new(),
-            PaintRule::EvenOdd => " clip-rule=\"evenodd\"".to_string(),
-        };
-        self.seq += 1;
-        let clip = format!("clip{}", self.seq);
-        self.line(format!(
-            "<clipPath id=\"{clip}\" clipPathUnits=\"userSpaceOnUse\"><path d=\"{}\"{rule_attr}/></clipPath>",
-            path_data(path)
-        ));
-        self.line(format!(
-            "<path d=\"{}\" fill=\"url(#{id})\" clip-path=\"url(#{clip})\"/>",
-            path_data(path)
         ));
     }
 }
@@ -501,7 +454,7 @@ fn stroke_attrs(style: &StrokeStyle) -> String {
 }
 
 /// `<stop>` children of a gradient element.
-fn stops_markup(stops: &[GradientStop]) -> String {
+fn stops_markup(stops: &[steleofd_display::ops::GradientStop]) -> String {
     let mut out = String::new();
     for stop in stops {
         let _ = write!(
@@ -682,9 +635,9 @@ pub fn pages_to_svg(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use steleofd_common::Millimeter;
+    use steleofd_common::{Millimeter, Point};
     use steleofd_display::DrawOp;
-    use steleofd_display::ops::Paint;
+    use steleofd_display::ops::{GradientStop, Paint};
     use steleofd_font::FontId;
 
     /// A real face, so outlining runs for real rather than degrading.
@@ -859,22 +812,27 @@ mod tests {
     }
 
     #[test]
-    fn a_linear_gradient_becomes_a_def_and_a_clipped_fill() {
-        let stops = vec![
-            GradientStop {
-                offset: 0.0,
-                color: Color::WHITE,
-            },
-            GradientStop {
-                offset: 1.0,
-                color: Color::BLACK,
-            },
-        ];
-        let p = page(vec![DrawOp::LinearGradient {
+    fn a_linear_gradient_becomes_a_def_and_a_fill() {
+        let spec = LinearGradientSpec {
             start: Point::new(0.0, 0.0),
             end: Point::new(100.0, 0.0),
-            stops,
+            stops: vec![
+                GradientStop {
+                    offset: 0.0,
+                    color: Color::WHITE,
+                },
+                GradientStop {
+                    offset: 1.0,
+                    color: Color::BLACK,
+                },
+            ],
+        };
+        let p = page(vec![DrawOp::Path {
             path: rect(0.0, 0.0, 100.0, 50.0),
+            fill: Some(Paint::LinearGradient(Box::new(spec))),
+            stroke: None,
+            stroke_style: Default::default(),
+            rule: PaintRule::NonZero,
         }]);
         let svg = page_to_svg(&p, &SvgOptions::default()).expect("convert");
         assert!(svg.contains("<linearGradient id=\"grad1\" gradientUnits=\"userSpaceOnUse\" x1=\"0\" y1=\"0\" x2=\"100\" y2=\"0\">"));
@@ -884,18 +842,23 @@ mod tests {
     }
 
     #[test]
-    fn a_radial_gradient_becomes_a_def_and_a_clipped_fill() {
-        let stops = vec![GradientStop {
-            offset: 0.5,
-            color: Color::WHITE,
-        }];
-        let p = page(vec![DrawOp::RadialGradient {
+    fn a_radial_gradient_becomes_a_def_and_a_fill() {
+        let spec = RadialGradientSpec {
             center: Point::new(10.0, 10.0),
             radius: 0.0,
             end: Point::new(10.0, 10.0),
             end_radius: 25.0,
-            stops,
+            stops: vec![GradientStop {
+                offset: 0.5,
+                color: Color::WHITE,
+            }],
+        };
+        let p = page(vec![DrawOp::Path {
             path: rect(0.0, 0.0, 20.0, 20.0),
+            fill: Some(Paint::RadialGradient(Box::new(spec))),
+            stroke: None,
+            stroke_style: Default::default(),
+            rule: PaintRule::NonZero,
         }]);
         let svg = page_to_svg(&p, &SvgOptions::default()).expect("convert");
         // The clause's start circle is a point here, so the cone reduces to
