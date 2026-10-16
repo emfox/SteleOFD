@@ -25,3 +25,12 @@ default = ["pdf"]
 pdf     = ["dep:lopdf"]
 office  = []
 ocr     = []
+
+[dev-dependencies]
+criterion.workspace = true
+steleofd-core.workspace = true
+steleofd-testkit = { path = "../steleofd-testkit" }
+
+[[bench]]
+name = "convert"
+harness = false

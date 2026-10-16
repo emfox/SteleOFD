@@ -202,10 +202,15 @@ All 26 crates are in place, and the five delivery forms (`cli`, `wasm`, `ffi`,
 `server`, `reader`) sit on the same `core` facade. What comes next is tracked in
 [`docs/ROADMAP.md`](docs/ROADMAP.md), which starts with the reader interface
 the engine is built to serve. Clause-level coverage lives in
-[`compliance/gb-t-33190.toml`](compliance/gb-t-33190.toml); all 47 clauses
-are covered, 46 of them `verified` and one (`8.4`, partial clip areas) `partial`.
+[`compliance/gb-t-33190.toml`](compliance/gb-t-33190.toml) and the method
+behind it in [`compliance/CLAUSES.md`](compliance/CLAUSES.md): 74 clauses are
+registered, 66 of them covered, and the eight that are not carry a `deviation`
+note saying why.
 What the engine can and cannot draw with is set out face by face in
 [`docs/FONTS.md`](docs/FONTS.md).
+
+Performance baselines, and how to run them, are in
+[`docs/PERFORMANCE.md`](docs/PERFORMANCE.md).
 
 ## Contributing
 

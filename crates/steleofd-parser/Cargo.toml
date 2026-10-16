@@ -19,3 +19,10 @@ tracing.workspace = true
 
 [dev-dependencies]
 proptest.workspace = true
+criterion.workspace = true
+steleofd-render.workspace = true
+steleofd-testkit = { path = "../steleofd-testkit" }
+
+[[bench]]
+name = "parse"
+harness = false
