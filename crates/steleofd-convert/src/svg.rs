@@ -292,8 +292,8 @@ impl PageSink for SvgSink<'_> {
         // The clause's cone reduces to the focal form SVG paints: a point at
         // the apex and a circle at the far end, with the stops moved along the
         // axis. Equal circles leave no apex, and colour varies along the line.
-        match steleofd_display::shading::radial_form(center, radius, end, end_radius, shape.stops) {
-            steleofd_display::shading::RadialForm::Cone(cone) => {
+        match steleofd_display::radial_form(center, radius, end, end_radius, shape.stops) {
+            steleofd_display::RadialForm::Cone(cone) => {
                 self.stats.gradients += 1;
                 self.radial.push(id.clone());
                 self.line(format!(
@@ -307,7 +307,7 @@ impl PageSink for SvgSink<'_> {
                 ));
                 self.fill_with_gradient(shape.path, &id, PaintRule::NonZero);
             }
-            steleofd_display::shading::RadialForm::Cylinder { start, end } => {
+            steleofd_display::RadialForm::Cylinder { start, end } => {
                 self.stats.gradients += 1;
                 self.linear.push(id.clone());
                 self.line(format!(
@@ -320,7 +320,7 @@ impl PageSink for SvgSink<'_> {
                 ));
                 self.fill_with_gradient(shape.path, &id, PaintRule::NonZero);
             }
-            steleofd_display::shading::RadialForm::Flat(color) => {
+            steleofd_display::RadialForm::Flat(color) => {
                 // Neither circle has extent, so the shading is one colour.
                 let faded = if color.a == 255 {
                     String::new()

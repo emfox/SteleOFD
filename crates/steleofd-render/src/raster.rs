@@ -215,24 +215,18 @@ pub fn render_page(
                 path,
             } => {
                 let total = total_transform(&state, &page.page_box, options.dpi);
-                match steleofd_display::shading::radial_form(
-                    *center,
-                    *radius,
-                    *end,
-                    *end_radius,
-                    stops,
-                ) {
-                    steleofd_display::shading::RadialForm::Cone(cone) => {
+                match steleofd_display::radial_form(*center, *radius, *end, *end_radius, stops) {
+                    steleofd_display::RadialForm::Cone(cone) => {
                         let shader = focal_shader(&cone, total);
                         fill_with_shader(&mut pixmap, path, shader, total, state.clip.as_ref())?;
                     }
-                    steleofd_display::shading::RadialForm::Cylinder { start, end } => {
+                    steleofd_display::RadialForm::Cylinder { start, end } => {
                         // Equal circles: the shading varies along the axis
                         // between the centres, which a linear gradient paints.
                         let shader = linear_shader(start, end, stops, total);
                         fill_with_shader(&mut pixmap, path, shader, total, state.clip.as_ref())?;
                     }
-                    steleofd_display::shading::RadialForm::Flat(color) => {
+                    steleofd_display::RadialForm::Flat(color) => {
                         // Neither circle has extent: one flat colour keeps the
                         // region painted instead of dropping it.
                         let paint = TsPaint {
@@ -718,7 +712,7 @@ fn linear_shader(
 /// Paint a reduced cone: a point at the apex, a circle at the far end.
 /// A gradient tiny-skia refuses to place degrades to the first stop's colour:
 /// a shading is one fill among many, and losing it must not lose the page.
-fn focal_shader(cone: &steleofd_display::shading::FocalCone, total: Transform) -> Shader<'static> {
+fn focal_shader(cone: &steleofd_display::FocalCone, total: Transform) -> Shader<'static> {
     let ts_stops: Vec<tiny_skia::GradientStop> = cone
         .stops
         .iter()
