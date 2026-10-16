@@ -35,7 +35,7 @@ the note a person would need to start them.
 | --- | --- |
 | Crates | 26 (L0 foundation through L5 delivery) |
 | Source | 48,635 lines of Rust, measured with `find crates -name '*.rs'` |
-| Tests | 1,098 passing |
+| Tests | 1,105 passing |
 | Delivery forms | `cli`, `wasm`, `ffi`, `server`, `reader`, all on the `core` facade |
 | Standard clauses | 74 registered in GB/T 33190-2016: 73 `verified`, 1 `deviation` (`8.1.6`, with a stated reason) |
 | Languages | `en-US` and `zh-CN`, 73 engine message keys plus 32 reader keys, parity enforced in CI |
@@ -51,26 +51,30 @@ Each one is a real, verified finding, not a guess.
    element, so there is nothing in a document to assert against; the reason
    travels in the register. The register in `compliance/gb-t-33190.toml` is the
    source of truth and lists the status of each clause by name.
-2. **The documented format support outran the code, until now.** Five cargo
-   features (`render`'s `backend-canvas`/`backend-svg`/`backend-pdf`, and
-   `convert`'s `office`/`ocr`) were declared and referenced nowhere, while
-   `README` advertised "HTML and Office" conversion. The three empty render
-   backends are gone; `office` and `ocr` stay as named placeholders with a
-   comment saying nothing consumes them. M5-f is where they would land.
+2. **The documented format support outran the code.** Five cargo features
+   (`render`'s `backend-canvas`/`backend-svg`/`backend-pdf`, and `convert`'s
+   `office`/`ocr`) were declared and referenced nowhere, while `README`
+   advertised "HTML and Office" conversion. The three empty render backends are
+   gone; `office` and `ocr` stay as named placeholders with a comment saying
+   nothing consumes them. M5-f is where they would land. The README now says the
+   same thing the code does.
 3. **The OFD corpus is one file.** `compliance/corpus/minimal.ofd` is the only
-   document the XSD validation and the test suites actually read. Every
-   conformance test builds its own fixture with our own writer, so a construct
-   our writer never emits is a construct we have never read. M0-c and M5-f.
-4. **`README.zh-CN.md` is behind the English README.** It still shows P3 and P5
-   as unfinished and names a next step that no longer exists.
-5. **The reader exists but is barely a reader.** It opens, rasterizes,
-   navigates, searches, verifies, exports and takes the keyboard. What is still
-   missing is print, annotation display, document comparison and a packaged
-   build. See M6.
-6. **A placed `CompositeObject` draws nothing.** The reader for
-   `CompositeGraphicUnits` exists and is tested, but nothing calls it at open,
-   so a document that places a vector graphic gets a stand-in image op with
-   empty bytes. Clause 13.1 is `partial` for this reason. See M0-a.
+   document the XSD validation and the test suites actually read, so a construct
+   our writer never emits is a construct we have never read outside
+   `tests/third_party.rs` and the standard's own fetched samples. M0-c and M5-f.
+4. **`README.zh-CN.md` has fallen behind the English README twice.** It stated
+   the project was at P3 and P5, then carried the pre-inflation clause figures.
+   It is level again as of this pass, but the maintenance rule is the reason it
+   is listed here: every count in it is a copy, and a copy drifts.
+5. **The reader is now a reader.** It opens, rasterizes, navigates, searches,
+   verifies, prints, shows annotations and seals, compares two revisions,
+   exports and takes the keyboard, and `release.yml` builds and checksums it for
+   Linux, macOS and Windows. What is still missing is a signing key, so the
+   builds are unsigned. See M6.
+6. **A placed `CompositeObject` draws its own content.** The `13.1` stand-in op
+   is gone: the resource table is read at open and a placed unit emits its own
+   vector content. The reader for `CompositeGraphicUnits` is reached, not merely
+   tested. See M0-a.
 7. **The server was the weakest delivery form.** `cli`, `wasm`, `ffi` and
    `reader` were usable; `server` had an in-memory store, no authentication and
    no drain. All three are in now, so it is a deployable service rather than a
@@ -122,7 +126,7 @@ regenerated, never hand-edited.
 
 ### N5. Documentation and release hygiene (N5-a … N5-d)
 
-- **N5-a** `[x]` ~~`README.zh-CN.md` level with `README.md` again.~~ (behind once more; see Honest gaps 4)
+- **N5-a** `[x]` ~~`README.zh-CN.md` level with `README.md` again.~~ (fell behind twice more; see Honest gaps 4)
 - **N5-b** `[x]` ~~`CHANGELOG.md`, following Keep a Changelog, driven by the conventional-commit history.~~
 - **N5-c** `[x]` ~~`cargo-semver-checks` in CI, comparing against the latest `v*` tag.~~
 - **N5-d** `[x]` ~~A release workflow on a `v*` tag, building `cdylib`, `staticlib` and wasm artefacts.~~
@@ -175,17 +179,19 @@ page.
 
 ## Mid term: make it fast and complete
 
-This is where every open task lives. Order within it is by the ranking rule at
-the top of this document: wrong output first, then what unblocks what, then
+This is where the remaining work lives. Order within it is by the ranking rule
+at the top of this document: wrong output first, then what unblocks what, then
 enforcement, then the rest. Exit criterion: the engine holds a performance
-budget it is measured against, and every clause the project claims to
-implement is either `verified` or `deviation` with a stated reason — no
-`partial` left.
+budget it is measured against, and every clause the project claims to implement
+is either `verified` or `deviation` with a stated reason — no `partial` left.
+The second half of that criterion already holds: the register carries no
+`partial` row, only one `deviation` (`8.1.6`) and 73 `verified`.
 
 ### M0. Correctness on real documents (M0-a … M0-c)
 
-The top band. Each of these is a document that renders wrong today, not a
-feature that is absent, which is why they precede everything else.
+The top band. Each of these was a document that rendered wrong, not a feature
+that was absent, which is why they came before everything else. All three are
+closed; the band is kept as the record of what it took.
 
 - **M0-a** `[x]` ~~Resolve a placed `CompositeObject` to its vector resource.
   Clause 13.1 is `verified`: the resource table is read at open and a placed
@@ -494,9 +500,11 @@ engine crossing into a browser; a browser *reader* is a product built on it.
 The near term is finished; everything open is mid term. Within it the bands
 run in order:
 
-**M0 first.** These are documents that render wrong today, and the two
-`partial` clauses are what stands between the conformance number and the word
-"done". M0-a and M0-b are independent of each other and of everything else.
+**M0 first.** These are documents that render wrong today, and they were the
+last clause gaps standing between the conformance number and the word "done".
+All three are closed: `13.1`, `8.4` and the corpus tolerance tests are
+`verified`. M0-a and M0-b were independent of each other and of everything
+else.
 
 **M1 second, but start it in parallel with M0.** A golden-image suite is worth
 more the earlier it exists, because it is what stops M0-a and M0-b from
@@ -509,11 +517,12 @@ buys nothing.
 **M3 fourth.** M3-a is independent. M3-c is the reason M0 matters: an archival
 check over a document that renders wrong is checking the wrong bytes.
 
-**M4 through M7 last.** M4 is done — the server is deployable. M5 depends on
-M1-a, because every item in it is a rendering change and none of them can be
-verified without golden images; M5-c, M5-e are done. M2-b, M3-a, M3-b, M3-c,
-M6-a, M6-b, M6-c, M6-d, M6-e, M6-f and M7-a are done too, so what is left is
-M5's remaining rendering work.
+**M4 through M7.** M4 is done — the server is deployable. M5 depends on M1-a,
+because every item in it is a rendering change and none of them can be verified
+without golden images; M5-a, M5-b, M5-c and M5-e are done, and M5-d is down to
+one recorded SVG limit. M6 and M7 are done. So what is left in the mid term is
+M5-d and M5-f, the two items that are last because they are the ones no
+existing test could catch on its own.
 
 Far term is deliberately not scheduled. It describes a direction, not dates.
 
