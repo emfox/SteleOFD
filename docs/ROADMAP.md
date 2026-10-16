@@ -335,12 +335,14 @@ Absent features, not wrong ones, so they sit below the correctness band.
   remain and are recorded rather than hidden: SVG has no mesh gradient and no
   mirrored repeat, so a mesh keeps its mean colour and a reflecting pattern its
   cell's first fill there.
-- **M5-e** Move the JBIG2 codec out of `display`. The IR crate carries a full
-  decoder (`display/src/jbig2.rs`, via `hayro-jbig2`) that only `render` and
-  `convert` call; the IR layer should hold data structures, not codecs. A
-  small `steleofd-codec` crate (or an existing lower one) is the home.
-  Deferred because it touches `display`'s public surface and three downstream
-  import paths.
+- **M5-e** `[x]` ~~Move the JBIG2 codec out of `display`. The IR crate carries a
+  full decoder (`display/src/jbig2.rs`, via `hayro-jbig2`) that only `render`
+  and `convert` call; the IR layer should hold data structures, not codecs.~~
+  The decoder now lives in `steleofd-io`, the L0 crate that owns byte-level
+  capability, and `display` no longer depends on `hayro-jbig2`. The parser,
+  render and convert crates reach it through `steleofd_io::jbig2`, and the
+  codec-specific `dimensions_for` helper is gone: the one caller matches on the
+  codec itself, so the codec crate holds no image-set type.
 - **M5-f** Interoperability. Test against documents produced by other real OFD
   implementations (M0-c is the corpus half of this), round-trip the
   standard's own examples if the working group publishes any, and the Office
@@ -495,10 +497,10 @@ check over a document that renders wrong is checking the wrong bytes.
 
 **M4 through M7 last.** M4 is done — the server is deployable. M5 depends on
 M1-a, because every item in it is a rendering change and none of them can be
-verified without golden images. M3-a, M6-a, M6-b, M6-c, M6-e, M7-a, M2-b and
-M5-b are done, so what is left is the rest of M5's rendering work, the reader
-item that needs a decision (M6-d), and the signature items that need a decision
-(M3-b, M3-c).
+verified without golden images; M5-e is done. M2-b, M3-a, M6-a, M6-b, M6-c,
+M6-e and M7-a are done too, so what is left is M5's remaining rendering work,
+the reader item that needs a decision (M6-d), and the signature items that need
+a decision (M3-b, M3-c).
 
 Far term is deliberately not scheduled. It describes a direction, not dates.
 
