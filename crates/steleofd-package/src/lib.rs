@@ -73,6 +73,9 @@ pub struct Package {
     limits: PackageLimits,
     /// Entry paths in archive order, captured once so callers need not re-walk.
     paths: Vec<String>,
+    /// Whether any entry is ZIP-encrypted, captured at open because reading the
+    /// central directory is what `&mut self` would otherwise be needed for.
+    encrypted: bool,
 }
 
 impl std::fmt::Debug for Package {
@@ -122,9 +125,14 @@ impl Package {
 
         let mut paths = Vec::with_capacity(count);
         let mut seen = HashSet::with_capacity(count);
+        let mut encrypted = false;
 
         for i in 0..count {
-            let file = archive.by_index(i).map_err(map_zip_error)?;
+            // Raw access reads the central directory only: it neither
+            // decompresses nor needs a password, so an encrypted entry is
+            // recorded rather than refused at open time.
+            let file = archive.by_index_raw(i).map_err(map_zip_error)?;
+            encrypted |= file.encrypted();
 
             // Reject traversal rather than sanitising: a container that tries it
             // is malformed or hostile, and rewriting the path would hide that
@@ -153,6 +161,7 @@ impl Package {
             archive,
             limits,
             paths,
+            encrypted,
         })
     }
 
@@ -174,6 +183,12 @@ impl Package {
     /// Limits in force for this container.
     pub fn limits(&self) -> PackageLimits {
         self.limits
+    }
+
+    /// Whether any entry carries ZIP-level encryption. Archival profiles forbid
+    /// it, so the check is a property of the container rather than a read.
+    pub fn is_encrypted(&self) -> bool {
+        self.encrypted
     }
 
     /// Whether a path exists in the archive.
