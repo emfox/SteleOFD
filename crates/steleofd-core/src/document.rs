@@ -42,7 +42,7 @@ impl Document {
         let mut list = DisplayList { page_count, pages };
         let mut fonts = FontManager::new();
         let doc_dir = parsed.doc_dir.clone();
-        let registered = register_container_fonts(&mut package, &doc_dir, &mut fonts, &list);
+        let registered = register_container_fonts(&mut package, &doc_dir, &mut fonts, &list)?;
         remap_fonts(&mut list, &registered);
         // The chain is built last, once every face the document declares has
         // been registered, so it covers all of them rather than the first.
@@ -261,10 +261,10 @@ fn register_container_fonts(
     doc_dir: &str,
     fonts: &mut FontManager,
     list: &DisplayList,
-) -> HashMap<u32, FontId> {
+) -> Result<HashMap<u32, FontId>> {
     let mut map: HashMap<u32, FontId> = HashMap::new();
     let used = used_font_ids(list);
-    let declared = steleofd_parser::fonts::load_fonts(package, doc_dir).unwrap_or_default();
+    let declared = steleofd_parser::fonts::load_fonts(package, doc_dir)?;
     for id in &used {
         let Some(resource) = declared.get(id) else {
             continue;
@@ -294,7 +294,7 @@ fn register_container_fonts(
             map.insert(id, substitute);
         }
     }
-    map
+    Ok(map)
 }
 
 /// Family used when a document references a font it does not embed.

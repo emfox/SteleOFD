@@ -540,3 +540,25 @@ fn the_chain_only_holds_faces_the_pages_reference() {
         "only the face the page names is registered, got {chain:?}"
     );
 }
+
+#[test]
+fn a_malformed_resource_table_surfaces_instead_of_being_swallowed() {
+    // Font loading used to end in `unwrap_or_default`, so a resource table
+    // that existed but would not parse left the document with no fonts and
+    // no complaint. The failure is now the caller's to see.
+    let entries = [
+        ("OFD.xml", OFD_XML.as_bytes().to_vec()),
+        (
+            "Doc_0/Document.xml",
+            document_xml(&text_page("7", "4.0", "Hi")).into_bytes(),
+        ),
+        ("Doc_0/PublicRes.xml", b"<Res><Fonts><Font ".to_vec()),
+    ];
+    let borrowed: Vec<(&str, &[u8])> = entries
+        .iter()
+        .map(|(path, data)| (*path, data.as_slice()))
+        .collect();
+    let bytes = build_archive(&borrowed).expect("build fixture");
+    let err = steleofd_core::Document::open_bytes(&bytes).expect_err("must fail");
+    assert!(matches!(err, OfdError::Xml(_)), "got {err:?}");
+}
