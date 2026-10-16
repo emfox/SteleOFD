@@ -49,23 +49,6 @@ pub(crate) fn rgb(c: &Color) -> String {
     )
 }
 
-/// `r g b` for the mean colour of a mesh, used where no shading can be written.
-pub(crate) fn mesh_rgb(spec: &steleofd_display::MeshSpec) -> String {
-    if spec.points.is_empty() {
-        return "0 0 0".to_string();
-    }
-    let n = spec.points.len() as u32;
-    let sum = spec.points.iter().fold((0u32, 0u32, 0u32), |acc, v| {
-        (
-            acc.0 + v.color.r as u32,
-            acc.1 + v.color.g as u32,
-            acc.2 + v.color.b as u32,
-        )
-    });
-    let mean = Color::rgba((sum.0 / n) as u8, (sum.1 / n) as u8, (sum.2 / n) as u8, 255);
-    rgb(&mean)
-}
-
 /// `r g b` for the first fill in a pattern's cell, used where no tiling pattern
 /// can be written. An empty cell is left black.
 pub(crate) fn pattern_rgb(spec: &steleofd_display::PatternSpec) -> String {

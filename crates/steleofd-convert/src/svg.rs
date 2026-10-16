@@ -126,11 +126,82 @@ impl<'a> SvgSink<'a> {
             // the region painted rather than dropping a fill that the reader
             // does draw.
             PaintShape::Mesh(spec) => mesh_average(spec),
-            // SVG has a native pattern, but the cell is a nested display list
-            // this sink does not re-enter; the cell's first solid fill keeps
-            // the region visible instead of dropping it.
-            PaintShape::Pattern(spec) => pattern_average(spec),
+            PaintShape::Pattern(spec) => self.define_pattern(spec),
         }
+    }
+
+    /// Define a `<pattern>` tiling the cell across the area. The element spans
+    /// one step, so `XStep` and `YStep` become its width and height. SVG has
+    /// no mirrored repeat, so a reflecting pattern keeps its flat stand-in.
+    fn define_pattern(&mut self, spec: &steleofd_display::PatternSpec) -> String {
+        if spec.width <= 0.0 || spec.height <= 0.0 {
+            return pattern_average(spec);
+        }
+        if spec.reflect != steleofd_display::Reflect::Normal {
+            return pattern_average(spec);
+        }
+        self.seq += 1;
+        let id = format!("pat{}", self.seq);
+        let step_x = if spec.step_x > 0.0 {
+            spec.step_x
+        } else {
+            spec.width
+        };
+        let step_y = if spec.step_y > 0.0 {
+            spec.step_y
+        } else {
+            spec.height
+        };
+        let mut cell = String::new();
+        for op in &spec.cell.ops {
+            self.pattern_op(op, &mut cell);
+        }
+        self.line(format!(
+            "<pattern id=\"{id}\" patternUnits=\"userSpaceOnUse\" x=\"0\" y=\"0\" \
+             width=\"{w}\" height=\"{h}\">{cell}</pattern>",
+            w = num(step_x),
+            h = num(step_y),
+        ));
+        format!("url(#{id})")
+    }
+
+    /// Emit one op of a pattern's cell as an SVG element, at cell scale.
+    /// A nested gradient or pattern falls back to its flat stand-in, since
+    /// re-entering the def machinery from inside a cell is not worth it.
+    fn pattern_op(&mut self, op: &steleofd_display::DrawOp, out: &mut String) {
+        let steleofd_display::DrawOp::Path {
+            path,
+            fill,
+            stroke,
+            stroke_style,
+            rule,
+        } = op
+        else {
+            return;
+        };
+        let mut attrs = format!("d=\"{}\"", path_data(path));
+        match fill {
+            Some(steleofd_display::Paint::Solid(c)) => {
+                let _ = write!(attrs, " fill=\"{}\"", hex(c));
+                if c.a != 255 {
+                    let _ = write!(attrs, " fill-opacity=\"{}\"", opacity(c));
+                }
+            }
+            Some(_) => attrs.push_str(" fill=\"#000000\""),
+            None => attrs.push_str(" fill=\"none\""),
+        }
+        if *rule == PaintRule::EvenOdd {
+            attrs.push_str(" fill-rule=\"evenodd\"");
+        }
+        match stroke {
+            Some(steleofd_display::Paint::Solid(c)) => {
+                let _ = write!(attrs, " stroke=\"{}\"", hex(c));
+                let _ = write!(attrs, " stroke-width=\"{}\"", num(stroke_style.width));
+            }
+            Some(_) => attrs.push_str(" stroke=\"#000000\""),
+            None => attrs.push_str(" stroke=\"none\""),
+        }
+        let _ = writeln!(out, "<path {attrs}/>");
     }
 
     /// Define a `<linearGradient>` and return the `url(#id)` that uses it.

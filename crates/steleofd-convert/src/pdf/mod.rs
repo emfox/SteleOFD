@@ -7,7 +7,7 @@ use std::fmt::Write as _;
 use lopdf::{Dictionary, Document, Object, ObjectId, Stream};
 use steleofd_common::Rect;
 use steleofd_display::ops::{Color, GradientStop, LineCap, LineJoin, PaintRule, StrokeStyle};
-use steleofd_display::{GlyphRun, ImageRef, LinearGradientSpec, RadialGradientSpec};
+use steleofd_display::{GlyphRun, ImageRef, LinearGradientSpec, MeshSpec, RadialGradientSpec};
 use steleofd_error::{ConvertError, OfdError, Result};
 use steleofd_font::FontManager;
 use steleofd_geometry::{Affine, Path, PathSegment};
@@ -46,6 +46,17 @@ struct PendingShading {
     coords: Vec<f64>,
     /// Colour stops.
     stops: Vec<GradientStop>,
+    /// A Gouraud mesh's triangles, each vertex a position and a colour. When
+    /// present the shading is written as PDF `ShadingType 4`, not a gradient.
+    mesh: Option<MeshShading>,
+}
+
+/// A Gouraud mesh ready to be written as a PDF free-form triangle shading.
+struct MeshShading {
+    /// Vertices, each `(x, y, r, g, b)` in the page's point space.
+    vertices: Vec<(f64, f64, u8, u8, u8)>,
+    /// Vertex indices, three per triangle.
+    triangles: Vec<[usize; 3]>,
 }
 
 /// Builds one PDF page by replaying a display list into it.
@@ -434,6 +445,7 @@ impl PageSink for PdfSink<'_> {
         let gradient = match shape.fill {
             Some(PaintShape::Linear(spec)) => Some(self.register_linear(spec, total)),
             Some(PaintShape::Radial(spec)) => Some(self.register_radial(spec, total)),
+            Some(PaintShape::Mesh(spec)) => Some(self.register_mesh(spec, total)),
             _ => None,
         };
         let mut shaded = false;
@@ -453,15 +465,6 @@ impl PageSink for PdfSink<'_> {
                     if c.a != 255 {
                         setup.push_str(&self.alpha_state(c.a as f64 / 255.0));
                     }
-                    operator.push_str(match shape.rule {
-                        PaintRule::NonZero => " f",
-                        PaintRule::EvenOdd => " f*",
-                    });
-                }
-                // A mesh has no PDF shading equivalent here, so its mean
-                // vertex colour keeps the region filled.
-                Some(PaintShape::Mesh(spec)) => {
-                    let _ = write!(setup, "{} rg", mesh_rgb(spec));
                     operator.push_str(match shape.rule {
                         PaintRule::NonZero => " f",
                         PaintRule::EvenOdd => " f*",
@@ -564,6 +567,7 @@ impl PdfSink<'_> {
             radial: false,
             coords: vec![x0, y0, x1, y1],
             stops: spec.stops.clone(),
+            mesh: None,
         });
         format!("Sh{index}")
     }
@@ -582,6 +586,39 @@ impl PdfSink<'_> {
             radial: true,
             coords: vec![cx, cy, spec.radius * scale, ex, ey, spec.end_radius * scale],
             stops: spec.stops.clone(),
+            mesh: None,
+        });
+        format!("Sh{index}")
+    }
+
+    /// Register a Gouraud mesh as a PDF free-form triangle shading. Each
+    /// vertex keeps its own colour, so the triangles interpolate exactly as
+    /// the raster backend does, rather than collapsing to one mean colour.
+    fn register_mesh(&mut self, spec: &MeshSpec, total: Affine) -> String {
+        self.stats.gradients += 1;
+        let vertices: Vec<(f64, f64, u8, u8, u8)> = spec
+            .points
+            .iter()
+            .map(|v| {
+                let (x, y) = total.apply(v.x, v.y);
+                (x, y, v.color.r, v.color.g, v.color.b)
+            })
+            .collect();
+        let triangles: Vec<[usize; 3]> = spec
+            .triangles
+            .iter()
+            .filter(|t: &&[usize; 3]| t.iter().all(|i| *i < vertices.len()))
+            .copied()
+            .collect();
+        let index = self.shadings.len();
+        self.shadings.push(PendingShading {
+            radial: false,
+            coords: Vec::new(),
+            stops: Vec::new(),
+            mesh: Some(MeshShading {
+                vertices,
+                triangles,
+            }),
         });
         format!("Sh{index}")
     }
@@ -661,6 +698,9 @@ fn finish_document(doc: &mut Document, page_ids: Vec<ObjectId>) -> Result<Vec<u8
 
 /// Build the shading pattern that paints one gradient.
 fn shading_pattern(shading: &PendingShading, doc: &mut Document) -> Result<Stream> {
+    if let Some(mesh) = &shading.mesh {
+        return mesh_pattern(mesh);
+    }
     let mut dict = Dictionary::new();
     dict.set("PatternType", Object::Integer(2));
     let mut inner = Dictionary::new();
@@ -686,6 +726,80 @@ fn shading_pattern(shading: &PendingShading, doc: &mut Document) -> Result<Strea
     inner.set("Function", Object::Reference(stops_function(shading, doc)?));
     dict.set("Shading", Object::Dictionary(inner));
     Ok(Stream::new(dict, Vec::new()))
+}
+
+/// Build a shading pattern that paints one Gouraud mesh. PDF's `ShadingType 4`
+/// is a free-form triangle mesh with a colour per vertex, which is exactly the
+/// clause's model, so every triangle is written as one shading-4 element.
+fn mesh_pattern(mesh: &MeshShading) -> Result<Stream> {
+    let mut data: Vec<u8> = Vec::new();
+    for tri in &mesh.triangles {
+        write_mesh_triangle(&mut data, mesh, tri);
+    }
+    let mut inner = Dictionary::new();
+    inner.set("ShadingType", Object::Integer(4));
+    inner.set("ColorSpace", Object::Name(b"DeviceRGB".to_vec()));
+    inner.set("BitsPerCoordinate", Object::Integer(16));
+    inner.set("BitsPerComponent", Object::Integer(8));
+    inner.set("BitsPerFlag", Object::Integer(8));
+    let xs: Vec<f64> = mesh.vertices.iter().map(|v| v.0).collect();
+    let ys: Vec<f64> = mesh.vertices.iter().map(|v| v.1).collect();
+    let (min_x, max_x) = extent(&xs);
+    let (min_y, max_y) = extent(&ys);
+    inner.set(
+        "Decode",
+        Object::Array(vec![
+            Object::Real(min_x as f32),
+            Object::Real(max_x as f32),
+            Object::Real(min_y as f32),
+            Object::Real(max_y as f32),
+            Object::Real(0.0),
+            Object::Real(1.0),
+            Object::Real(0.0),
+            Object::Real(1.0),
+            Object::Real(0.0),
+            Object::Real(1.0),
+        ]),
+    );
+    let mut dict = Dictionary::new();
+    dict.set("PatternType", Object::Integer(2));
+    dict.set("Shading", Object::Dictionary(inner));
+    Ok(Stream::new(dict, data))
+}
+
+/// One triangle as a shading-4 element: flag 0, then each vertex as
+/// 16-bit x, 16-bit y and three 8-bit colour channels, all big-endian bytes.
+fn write_mesh_triangle(out: &mut Vec<u8>, mesh: &MeshShading, tri: &[usize; 3]) {
+    for (position, index) in tri.iter().enumerate() {
+        let (x, y, r, g, b) = mesh.vertices[*index];
+        let flag = if position == 0 { 0u8 } else { 2u8 };
+        out.push(flag);
+        out.extend_from_slice(&quantise(x).to_be_bytes());
+        out.extend_from_slice(&quantise(y).to_be_bytes());
+        out.extend_from_slice(&[r, g, b]);
+    }
+}
+
+/// A coordinate in the 16-bit range PDF's `Decode` maps onto the axis.
+fn quantise(value: f64) -> u16 {
+    let clamped = value.clamp(0.0, 1.0);
+    (clamped * 65535.0).round() as u16
+}
+
+/// The smallest and largest of a coordinate list, defaulting to the unit range
+/// for an empty mesh so the `Decode` array stays well-formed.
+fn extent(values: &[f64]) -> (f64, f64) {
+    let mut min = f64::INFINITY;
+    let mut max = f64::NEG_INFINITY;
+    for v in values {
+        min = min.min(*v);
+        max = max.max(*v);
+    }
+    if min.is_finite() && max.is_finite() && min < max {
+        (min, max)
+    } else {
+        (0.0, 1.0)
+    }
 }
 
 /// Build the colour function of a gradient: one exponential interval per pair
@@ -759,14 +873,15 @@ fn stops_function(shading: &PendingShading, doc: &mut Document) -> Result<Object
 mod content;
 
 use content::{
-    channel_array, convert_error, curve_op, image_xobject, mesh_rgb, num, pattern_rgb, pdf_string,
-    point_op, rgb, stroke_prefix,
+    channel_array, convert_error, curve_op, image_xobject, num, pattern_rgb, pdf_string, point_op,
+    rgb, stroke_prefix,
 };
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use steleofd_common::{Millimeter, Point};
+    use steleofd_display::MeshVertex;
     use steleofd_display::ops::Paint;
     use steleofd_font::FontId;
 
