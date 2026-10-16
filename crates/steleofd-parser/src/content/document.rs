@@ -241,9 +241,18 @@ pub(crate) fn read_color(node: &Node, cursor: &mut Cursor<'_>) -> Result<ColorRe
     let a = node.attributes();
     let value = a.get("Value").unwrap_or("").to_string();
     let alpha = a.optional_as::<u8>("FillColor", "Alpha")?.unwrap_or(255);
+    // Clause 7.13: a `Value`'s channels are read in the named colour space,
+    // `Index` picking a palette entry. Both travel with the colour so
+    // flattening can resolve them against the document's table.
+    let space = a.get("ColorSpace").map(str::to_string);
+    let index = a.optional_as::<i32>("FillColor", "Index")?;
     let element = node.local();
+    let finish = |color: ColorRef| match &space {
+        Some(id) => color.with_space(id.clone(), index),
+        None => color,
+    };
     if node.is_self_closing() {
-        return Ok(ColorRef::from_hex(value).with_alpha(alpha));
+        return Ok(finish(ColorRef::from_hex(value).with_alpha(alpha)));
     }
     let mut shading = None;
     loop {
@@ -269,7 +278,7 @@ pub(crate) fn read_color(node: &Node, cursor: &mut Cursor<'_>) -> Result<ColorRe
     let mut color = ColorRef::from_hex(value).with_alpha(alpha);
     color.shading = shading;
     let _ = element;
-    Ok(color)
+    Ok(finish(color))
 }
 
 /// `AxialShd`: a linear gradient axis with its colour stops.

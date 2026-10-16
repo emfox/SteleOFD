@@ -108,6 +108,7 @@ impl<'a> Parser<'a> {
         let mut builder =
             steleofd_display::DisplayListBuilder::new(page_box).with_max_depth(self.max_depth);
         let params = params::for_page(self.package, &doc.doc_dir, page_ref, &doc.draw_params)?;
+        let colors = flatten::color_table(&doc.color_spaces);
         let composites = composite_table(doc);
 
         if let Some(tpls) = &page.templates {
@@ -125,11 +126,11 @@ impl<'a> Parser<'a> {
                     })?
                     .clone();
                 let block = self.load_template(doc, &template)?;
-                flatten::flatten_block(&block, &params, &composites, &mut builder)?;
+                flatten::flatten_block(&block, &params, &colors, &composites, &mut builder)?;
             }
         }
         if let Some(inline) = &page.content {
-            flatten::flatten_block(inline, &params, &composites, &mut builder)?;
+            flatten::flatten_block(inline, &params, &colors, &composites, &mut builder)?;
         }
         let mut page = builder.finish(index);
         // The flattened list names image resources but holds no bytes, so they

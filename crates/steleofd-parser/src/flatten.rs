@@ -35,16 +35,34 @@ pub fn no_composites() -> CompositeTable {
     CompositeTable::new()
 }
 
+/// The colour spaces a document declares, keyed by resource id. Clause 7.13:
+/// a colour naming one is read in that space, not as sRGB.
+pub type ColorTable = HashMap<String, steleofd_model::ColorSpace>;
+
+/// An empty colour table, for callers that have no document behind them.
+pub fn no_colors() -> ColorTable {
+    ColorTable::new()
+}
+
+/// Table of a document's colour spaces, keyed by resource id.
+pub fn color_table(list: &steleofd_model::ColorSpaceList) -> ColorTable {
+    list.items
+        .iter()
+        .map(|c| (c.id.as_str().to_string(), c.clone()))
+        .collect()
+}
+
 /// Flatten a whole page or template block onto the builder.
 pub fn flatten_block(
     block: &PageBlock,
     params: &HashMap<String, DrawParam>,
+    colors: &ColorTable,
     composites: &CompositeTable,
     builder: &mut DisplayListBuilder,
 ) -> Result<()> {
     for layer in &block.layers {
         for object in &layer.objects {
-            flatten_object(object, params, composites, builder)?;
+            flatten_object(object, params, colors, composites, builder)?;
         }
     }
     Ok(())
@@ -53,6 +71,7 @@ pub fn flatten_block(
 fn flatten_object(
     object: &Object,
     params: &HashMap<String, DrawParam>,
+    colors: &ColorTable,
     composites: &CompositeTable,
     builder: &mut DisplayListBuilder,
 ) -> Result<()> {
@@ -61,10 +80,10 @@ fn flatten_object(
         return Ok(());
     }
     match object {
-        Object::PathObject(p) => flatten_path(p, params, builder),
-        Object::TextObject(t) => flatten_text(t, params, builder),
+        Object::PathObject(p) => flatten_path(p, params, colors, builder),
+        Object::TextObject(t) => flatten_text(t, params, colors, builder),
         Object::ImageObject(i) => flatten_image(i, builder),
-        Object::CompositeObject(c) => flatten_composite(c, params, composites, builder),
+        Object::CompositeObject(c) => flatten_composite(c, params, colors, composites, builder),
         Object::Unknown(_) => Ok(()),
     }
 }
@@ -158,25 +177,104 @@ fn with_object_space(
     result
 }
 
-fn solid(color: &ColorRef) -> Result<Paint> {
+fn solid(color: &ColorRef, colors: &ColorTable) -> Result<Paint> {
     // A colour carrying a shading has no flat value: the gradient is the
     // colour. Text reaches here without going through `paint_of`, so such a
     // run read as invalid and took the document with it.
     let (r, g, b) = if color.shading.is_some() {
         (0, 0, 0)
     } else {
-        color.to_rgb()?
+        resolve_rgb(color, colors)?
     };
     let alpha = color.clone().alpha();
     Ok(Paint::Solid(Color::rgba(r, g, b, alpha)))
 }
 
+/// GB/T 33190 clause 7.13: a colour that names a declared space has its
+/// channels read in that space, `Index` picking a palette entry when the
+/// space carries one. Anything that does not resolve falls back to sRGB.
+fn resolve_rgb(color: &ColorRef, colors: &ColorTable) -> Result<(u8, u8, u8)> {
+    let Some(space) = color.space.as_ref().and_then(|id| colors.get(id.as_str())) else {
+        return color.to_rgb();
+    };
+    if let Some(entry) = palette_entry(space, color.index)? {
+        return Ok(entry);
+    }
+    // An empty `Value` has no channels to read in any space, so the space
+    // cannot change the answer.
+    if color.value.trim().is_empty() {
+        return color.to_rgb();
+    }
+    let channels = color.channels()?;
+    Ok(convert_by_kind(space.kind, &channels))
+}
+
+/// The palette entry the index names, `Ok(None)` when the space has no
+/// palette or the colour carries no index.
+fn palette_entry(
+    space: &steleofd_model::ColorSpace,
+    index: Option<i32>,
+) -> Result<Option<(u8, u8, u8)>> {
+    let Some(index) = index else {
+        return Ok(None);
+    };
+    if space.palette.is_empty() {
+        return Ok(None);
+    }
+    let at = usize::try_from(index)
+        .ok()
+        .filter(|i| *i < space.palette.len());
+    let Some(entry) = at.map(|i| space.palette[i].as_str()) else {
+        return Ok(None);
+    };
+    let samples: Vec<u8> = entry
+        .split_whitespace()
+        .filter_map(|t| t.parse::<f64>().ok())
+        .map(|v| v.clamp(0.0, 255.0) as u8)
+        .collect();
+    if samples.is_empty() {
+        return Ok(None);
+    }
+    Ok(Some(convert_by_kind(space.kind, &samples)))
+}
+
+/// Sample channels in a declared space down to sRGB.
+fn convert_by_kind(kind: steleofd_model::ColorSpaceKind, channels: &[u8]) -> (u8, u8, u8) {
+    match kind {
+        steleofd_model::ColorSpaceKind::Gray => {
+            let g = channels[0];
+            (g, g, g)
+        }
+        steleofd_model::ColorSpaceKind::Rgb => match channels {
+            [r, g, b, ..] => (*r, *g, *b),
+            [g] => (*g, *g, *g),
+            _ => (0, 0, 0),
+        },
+        steleofd_model::ColorSpaceKind::Cmyk => match channels {
+            [c, m, y, k, ..] => (from_cmyk(*c, *k), from_cmyk(*m, *k), from_cmyk(*y, *k)),
+            _ => (0, 0, 0),
+        },
+    }
+}
+
+/// One CMYK channel to RGB, the same reduction `ColorRef` uses, so a colour
+/// means the same thing whether or not it names a CMYK space.
+fn from_cmyk(channel: u8, key: u8) -> u8 {
+    let ink = u16::from(channel) * u16::from(255 - key) / 255 + u16::from(key);
+    255 - ink.min(255) as u8
+}
+
 /// Resolve a colour into a paint. A colour carrying a shading becomes a
 /// gradient paint that travels with the object, so no backend depends on
 /// having seen some earlier op to know what the fill is.
-fn paint_of(color: &ColorRef, _path: &Path, _builder: &mut DisplayListBuilder) -> Result<Paint> {
+fn paint_of(
+    color: &ColorRef,
+    _path: &Path,
+    colors: &ColorTable,
+    _builder: &mut DisplayListBuilder,
+) -> Result<Paint> {
     match color.shading() {
-        None => solid(color),
+        None => solid(color, colors),
         Some(Shading::Axial {
             start,
             end,
@@ -215,6 +313,7 @@ fn paint_of(color: &ColorRef, _path: &Path, _builder: &mut DisplayListBuilder) -
 fn pattern_spec(spec: &PatternSpec) -> Result<steleofd_display::PatternSpec> {
     let cell_box = Rect::new(0.0, 0.0, spec.width.max(0.0), spec.height.max(0.0));
     let params = HashMap::new();
+    let colors = no_colors();
     let composites = no_composites();
     let mut builder = DisplayListBuilder::new(cell_box);
     if let Some(raw) = &spec.ctm {
@@ -224,7 +323,7 @@ fn pattern_spec(spec: &PatternSpec) -> Result<steleofd_display::PatternSpec> {
     let block = PageBlock {
         layers: spec.layers.clone(),
     };
-    flatten_block(&block, &params, &composites, &mut builder)?;
+    flatten_block(&block, &params, &colors, &composites, &mut builder)?;
     let cell = builder.finish(0);
     Ok(steleofd_display::PatternSpec {
         cell: Box::new(cell),
@@ -407,6 +506,7 @@ fn fill_rule(rule: Option<steleofd_model::object::FillRuleStyle>) -> PaintRule {
 fn flatten_path(
     p: &PathObject,
     params: &HashMap<String, DrawParam>,
+    colors: &ColorTable,
     builder: &mut DisplayListBuilder,
 ) -> Result<()> {
     let param = resolve_param(&p.base, params)?;
@@ -433,12 +533,12 @@ fn flatten_path(
         .unwrap_or(&black);
     with_object_space(&p.base, params, builder, |b| {
         let fill = if fill_on {
-            Some(paint_of(fill_color, &path, b)?)
+            Some(paint_of(fill_color, &path, colors, b)?)
         } else {
             None
         };
         let stroke = if stroke_on {
-            Some(paint_of(stroke_color, &path, b)?)
+            Some(paint_of(stroke_color, &path, colors, b)?)
         } else {
             None
         };
@@ -456,6 +556,7 @@ fn flatten_path(
 fn flatten_text(
     t: &TextObject,
     params: &HashMap<String, DrawParam>,
+    colors: &ColorTable,
     builder: &mut DisplayListBuilder,
 ) -> Result<()> {
     if !t.has_text() {
@@ -472,6 +573,7 @@ fn flatten_text(
                 .as_ref()
                 .or(param.and_then(|d| d.fill_color.as_ref()))
                 .unwrap_or(&default_color()),
+            colors,
         )?)
     } else {
         None
@@ -482,6 +584,7 @@ fn flatten_text(
                 .as_ref()
                 .or(param.and_then(|d| d.stroke_color.as_ref()))
                 .unwrap_or(&default_color()),
+            colors,
         )?)
     } else {
         None
@@ -662,6 +765,7 @@ fn flatten_image(i: &ImageObject, builder: &mut DisplayListBuilder) -> Result<()
 fn flatten_composite(
     c: &steleofd_model::object::CompositeObject,
     params: &HashMap<String, DrawParam>,
+    colors: &ColorTable,
     composites: &CompositeTable,
     builder: &mut DisplayListBuilder,
 ) -> Result<()> {
@@ -672,7 +776,7 @@ fn flatten_composite(
     with_object_space(&c.base, params, builder, |b| {
         if let Some(block) = unit.and_then(|u| u.content.as_ref()) {
             // The graphic's own objects, drawn inside the placement box.
-            flatten_block(block, params, composites, b)
+            flatten_block(block, params, colors, composites, b)
         } else if let Some(sub) = unit.and_then(|u| u.substitution.as_ref()) {
             // No vector content: paint the stand-in, whose bytes the image
             // resolver fills in later, exactly as an image object's are.
@@ -705,7 +809,7 @@ mod tests {
             layers: vec![Layer { id: None, objects }],
         };
         let mut b = builder();
-        flatten_block(&block, params, &no_composites(), &mut b)?;
+        flatten_block(&block, params, &no_colors(), &no_composites(), &mut b)?;
         Ok(b.finish(0).ops)
     }
 
@@ -907,7 +1011,14 @@ mod tests {
             ],
         };
         let mut b = builder();
-        flatten_block(&block, &HashMap::new(), &no_composites(), &mut b).expect("flatten");
+        flatten_block(
+            &block,
+            &HashMap::new(),
+            &no_colors(),
+            &no_composites(),
+            &mut b,
+        )
+        .expect("flatten");
         assert_eq!(b.finish(0).ops.len(), 2);
     }
 }
