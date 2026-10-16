@@ -13,9 +13,11 @@ rendering intent (*"filling uses the even-odd rule"*), a term, or a paragraph of
 prose has nothing to assert against and is not a register row.
 
 So the honest statement of coverage was never *"47 of 47"*. It is *"every
-clause the register lists is verified or explicitly partial"*, and it is the
-register that decides which clauses those are. That distinction is what this
-survey exists to make checkable rather than assumed.
+clause the register lists is verified or explicitly a deviation with a stated
+reason"*, and it is the register that decides which clauses those are. That
+distinction is what this survey exists to make checkable rather than assumed.
+There is no third status: the register carries 74 rows, 73 `verified` and one
+`deviation` (`8.1.6`), and no `partial`.
 
 ## Method
 
@@ -44,8 +46,8 @@ format; none is a rendering nuance.
 | `Permissions`, `Watermark`, `Print`, `Edit`, `Export`, `ValidPeriod` | `Document.xsd` | No | now `7.12` (`8.1.6` for the print-quality pair) |
 | `ColorSpaces` — declared colour space profiles | `Res.xsd` (`ColorSpace`, `Palette`, `Profile`, `BitsPerComponent`) | No | now `7.13` |
 | `Page/Thumbnail`, `Res/Thumbnail` | `Page.xsd`, `Res.xsd` | Page thumbnail read only as a *rendering quality* enum in `display`, not as the resource it is | now `7.14` |
-| `Pattern` and `GouraudShd` fills | `Page.xsd` (`CT_Color` choice) | Parsed far enough to be **skipped** — `content.rs` steps over both | now `8.3.5`, `8.3.6` |
-| `LaGourandShd` | `Page.xsd` | No | deviation, recorded |
+| `Pattern` and `GouraudShd` fills | `Page.xsd` (`CT_Color` choice) | Read and painted; the two Gouraud models resolve to one triangle mesh and a `Pattern` cell tiles across its area | now `8.3.5`, `8.3.6` |
+| `LaGouraudShd` | `Page.xsd` | Read and painted, same mesh path as `GouraudShd` | now `8.3.7` |
 | `8.1.1`, `8.1.2`, `8.1.4` — page/object space clauses | body of the standard | The neighbouring `8.1.3` and `8.1.5` are rows, these are not | now `8.1.1`, `8.1.2`, `8.1.4` |
 | `8.2.3` — line width and miter limit | body | Implemented, no register row | now `8.2.3` |
 | `8.3.1`, `8.3.3` — colour space and transparency | body | Implemented, no register row | now `8.3.1`, `8.3.3` |
@@ -61,14 +63,15 @@ format; none is a rendering nuance.
 - **Rendering intent with nothing to assert.** *"The current point moves to
   ..."* is a sentence about a drawing model, not a byte in the file. It belongs
   in a rendering test's commentary, which is where most of them are.
-- **`LaGourandShd`.** The schema carries the element and the standard describes
-  it, but it appears in no document in either corpus, and the algorithm it names
-  is a well-known mesh shading. Reading it into the model without a single
-  sample to check against would be a claim, not coverage. It is recorded as a
-  `deviation` row with the reason, so the gap is visible rather than silent.
 - **Terms, abbreviations and bibliography.** Clauses 2, 3 and 4 by number; they
   define words.
 - **Annexes B onwards.** Informative, and about migration between formats.
+
+The one construct that used to sit here as a `deviation` — `LaGouraudShd` — has
+since been read and painted alongside `GouraudShd`, and is now `8.3.7` in the
+register. The only remaining `deviation` is `8.1.6` `PrintQuality`, which is a
+different kind of gap: the element is absent from the vendored Annex A schema, so
+there is nothing in a document to read at all.
 
 ## Adding a row
 
