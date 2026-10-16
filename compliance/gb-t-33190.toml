@@ -149,9 +149,8 @@ tests = []
 [[item]]
 clause = "7.14"
 title = "Thumbnail resource"
-status = "deviation"
-note = "the page thumbnail is skipped as a resource; no sample carries one"
-tests = []
+status = "verified"
+tests = ["gb_t_33190_7_14_a_thumbnail_is_read_and_may_be_absent"]
 
 [[item]]
 clause = "8.1.1"

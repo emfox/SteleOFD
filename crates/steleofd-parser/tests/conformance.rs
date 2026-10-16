@@ -1749,3 +1749,36 @@ fn gb_t_33190_7_10_a_page_resource_table_shadows_the_document_one() {
         page.ops
     );
 }
+
+#[test]
+fn gb_t_33190_7_14_a_thumbnail_is_read_and_may_be_absent() {
+    // Clause 7.14: a vector graphic may name a preview image by reference id.
+    // The reference is kept as a plain id — resolving it to bytes is the
+    // image loader's job, not the reader's — and a unit without one reads back
+    // as `None` rather than borrowing some other resource's id.
+    let list = steleofd_parser::content::read_composite_graphic_units(
+        r#"<?xml version="1.0" encoding="UTF-8"?>
+<Res BaseLoc="Res">
+  <CompositeGraphicUnits>
+    <CompositeGraphicUnit ID="5" Width="50" Height="30">
+      <Thumbnail>4</Thumbnail>
+      <Content><Layer ID="1"/></Content>
+    </CompositeGraphicUnit>
+    <CompositeGraphicUnit ID="6" Width="10" Height="10">
+      <Content><Layer ID="1"/></Content>
+    </CompositeGraphicUnit>
+  </CompositeGraphicUnits>
+</Res>"#,
+    )
+    .expect("composite graphic units");
+
+    assert_eq!(
+        list.items[0].thumbnail.as_deref(),
+        Some("4"),
+        "the declared thumbnail id is kept verbatim"
+    );
+    assert_eq!(
+        list.items[1].thumbnail, None,
+        "a unit with no thumbnail does not inherit its neighbour's"
+    );
+}
