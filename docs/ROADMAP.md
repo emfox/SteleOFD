@@ -365,8 +365,12 @@ not have. Ranked by how often a real reader needs them.
   model is there and only the view is missing.~~
   The document names its index, the parser joins marks back to pages, and the
   reader lists them by page and turns to the one picked.
-- **M6-c** Signature appearance rendering — the visual half of the `18.2.3`
-  model that is already read.
+- **M6-c** `[x]` ~~Signature appearance rendering — the visual half of the `18.2.3`
+  model that is already read.~~
+  `read_seals` resolves the seal image beside the descriptor and joins each
+  `StampAnnot` to it; `Document::seals` maps the `PageRef` id to a page index,
+  and the reader stamps each seal onto its page's raster. An image a package
+  does not ship keeps its placement with empty bytes rather than vanishing.
 - **M6-d** Signed, installable builds for the platforms people actually deploy
   on, and an offline story.
 - **M6-e** A document comparison view for two revisions of the same file.
@@ -462,9 +466,9 @@ check over a document that renders wrong is checking the wrong bytes.
 **M4 through M7 last.** M4 is independent of everything above it and could
 start any time the maintainers want a deployable server. M5 depends on M1-a,
 because every item in it is a rendering change and none of them can be
-verified without golden images. M6-a, M6-b, M7-a, M2-b and M5-b are done, so
-what is left is the rest of M5's rendering work and the deeper signature
-items in M3.
+verified without golden images. M6-a, M6-b, M6-c, M7-a, M2-b and M5-b are done,
+so what is left is the rest of M5's rendering work, the reader items that
+need a decision (M6-d, M6-e), and the deeper signature items in M3.
 
 Far term is deliberately not scheduled. It describes a direction, not dates.
 
