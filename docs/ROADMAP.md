@@ -190,30 +190,25 @@ implement is either `verified` or `deviation` with a stated reason — no
 The top band. Each of these is a document that renders wrong today, not a
 feature that is absent, which is why they precede everything else.
 
-- **M0-a** Resolve a placed `CompositeObject` to its vector resource. Clause
-  13.1 is `partial` because `flatten_composite` emits a stand-in `Image` op
-  with empty bytes and never looks up the `CompositeGraphicUnit` the
-  `ResourceID` names. The reader for the unit exists
-  (`content::read_composite_graphic_units`) but nothing calls it at open, so
-  the table is not even in `ParsedDocument`. A document that places a vector
-  graphic draws a blank where it should draw the graphic.
-- **M0-b** Read a `Text` clip area, closing `8.4`. Only a `Path` area is read
-  today and a `Text` area is refused with an explicit error. A clip built from
-  text is legitimate and currently narrows nothing.
-- **M0-c** Tolerance tests over the corpus. Every conformance test so far
-  builds its fixture with our own writer, so a construct our writer never
-  emits is a construct we have never read. Feeds M5-f.
+- **M0-a** `[x]` ~~Resolve a placed `CompositeObject` to its vector resource.
+  Clause 13.1 is `verified`: the resource table is read at open and a placed
+  unit draws its own content.~~
+- **M0-b** `[x]` ~~Read a `Text` clip area, closing `8.4`. A text area emits
+  `DrawOp::ClipText` and every backend resolves the glyph outlines.~~
+- **M0-c** `[x]` ~~Tolerance tests over the corpus. The standard's own clause
+  samples are fetched and parsed in CI, and the third-party corpus is already
+  covered; GIF, undecodable images and a `./`-rooted `DocRoot` were the three
+  defects it found.~~
 
 ### M1. Enforcement before features (M1-a … M1-c)
 
 A guard is worth more than the feature it protects: the feature gets rewritten,
 the guard does not.
 
-- **M1-a** A golden-image suite: render the corpus to PNG, compare against
-  committed references, gate on a pixel-difference threshold. Nothing else in
-  this list keeps the renderers honest — the existing tests assert ops, not
-  pixels, so a backend can paint the right ops wrong and stay green. Blocks
-  M0-a and M0-b from regressing, so it lands early despite being new work.
+- **M1-a** `[x]` ~~A golden-image suite: render to PNG, compare against
+  committed references, gate on a pixel-difference threshold. It found the
+  gradient defect the op-level tests could not see: a shape whose fill was a
+  shading painted black unless its standalone gradient op was matched first.~~
 - **M1-b** A documented performance budget: pages per second for render, and
   the document size the parser handles within a stated latency.
   `docs/PERFORMANCE.md` holds the measured numbers; the budget is what turns
