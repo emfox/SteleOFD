@@ -952,3 +952,62 @@ fn a_face_whose_run_carries_code_points_is_carried_whole() {
         .expect("registered");
     assert_eq!(entry.data.as_ref().expect("bytes").len(), whole.len());
 }
+
+#[cfg(feature = "sign")]
+fn timestamped_descriptor(check_value: &str, token: &[u8]) -> String {
+    format!(
+        r#"<Signature ID="s">
+  <SignedInfo><References CheckMethod="SM3">
+    <Reference FileRef="Doc_0/Document.xml"><CheckValue>{check_value}</CheckValue></Reference>
+  </References></SignedInfo>
+  <SignedValue>{check_value}</SignedValue>
+  <Timestamp>{}</Timestamp>
+</Signature>"#,
+        steleofd_testkit::base64_of(token)
+    )
+}
+
+#[cfg(feature = "sign")]
+#[test]
+fn each_signature_reports_whether_its_timestamp_binds_it() {
+    // Clause 18.2.4: the trusted time is proved over the signed value, so the
+    // facade has to hand back a verdict per signature, not a bare token.
+    let bound = b"the signed value".to_vec();
+    let (token, _tsa) =
+        steleofd_testkit::timestamp_token(&steleofd_testkit::TimestampSpec::over(&bound));
+    let descriptor = timestamped_descriptor("AAAA", &token);
+    let entries = [
+        ("OFD.xml", OFD_XML_SIGNED.as_bytes().to_vec()),
+        (
+            "Doc_0/Document.xml",
+            document_xml(r#"<Page ID="1"/>"#).into_bytes(),
+        ),
+        ("Doc_0/Signs/Signs.xml", signs_xml()),
+        ("Doc_0/Signs/Sign_0.xml", descriptor.into_bytes()),
+    ];
+    let mut doc = open(&entries);
+    let verdicts = doc.verify_timestamps().expect("timestamp verdicts");
+    assert_eq!(verdicts.len(), 1);
+    // AAAA decodes to three zero bytes, which the token does not cover.
+    assert_eq!(verdicts[0], steleofd_core::TimestampStatus::Unbound);
+}
+
+#[cfg(feature = "sign")]
+#[test]
+fn a_signature_with_no_timestamp_reports_absent() {
+    let entries = [
+        ("OFD.xml", OFD_XML_SIGNED.as_bytes().to_vec()),
+        (
+            "Doc_0/Document.xml",
+            document_xml(r#"<Page ID="1"/>"#).into_bytes(),
+        ),
+        ("Doc_0/Signs/Signs.xml", signs_xml()),
+        (
+            "Doc_0/Signs/Sign_0.xml",
+            seal_descriptor("1", "1 2 3 4").into_bytes(),
+        ),
+    ];
+    let mut doc = open(&entries);
+    let verdicts = doc.verify_timestamps().expect("timestamp verdicts");
+    assert_eq!(verdicts, vec![steleofd_core::TimestampStatus::Absent]);
+}
