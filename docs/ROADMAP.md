@@ -331,10 +331,11 @@ Absent features, not wrong ones, so they sit below the correctness band.
   what it can paint. The Gouraud mesh and the `Pattern` cell now do too: a mesh
   reaches PDF as a `ShadingType 4` free-form triangle shading, one colour per
   vertex, so the file interpolates rather than showing a mean colour, and a
-  `Pattern` reaches SVG as a native `<pattern>` spanning one step. Two limits
-  remain and are recorded rather than hidden: SVG has no mesh gradient and no
-  mirrored repeat, so a mesh keeps its mean colour and a reflecting pattern its
-  cell's first fill there.
+  `Pattern` reaches SVG as a native `<pattern>` spanning one step. A reflecting
+  pattern reaches SVG too, as a 2x2 block of mirrored copies that then tiles
+  normally, so the reflection is real rather than a repeated cell. One limit
+  remains and is recorded rather than hidden: SVG 1.1 has no mesh gradient, so a
+  mesh keeps its mean colour there.
 - **M5-e** `[x]` ~~Move the JBIG2 codec out of `display`. The IR crate carries a
   full decoder (`display/src/jbig2.rs`, via `hayro-jbig2`) that only `render`
   and `convert` call; the IR layer should hold data structures, not codecs.~~
