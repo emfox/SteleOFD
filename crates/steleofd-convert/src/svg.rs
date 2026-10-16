@@ -586,6 +586,7 @@ fn data_uri(image: &ImageRef) -> Option<String> {
         ImageCodec::Png => "image/png",
         ImageCodec::Tiff => "image/tiff",
         ImageCodec::Bmp => "image/bmp",
+        ImageCodec::Gif => "image/gif",
         ImageCodec::Jbig2 | ImageCodec::Raw => return None,
     };
     Some(format!(

@@ -78,6 +78,8 @@ pub enum ImageCodec {
     Tiff,
     /// BMP.
     Bmp,
+    /// GIF, which the standard's own test documents embed.
+    Gif,
     /// JBIG2, common for bi-level scanned pages where it saves a lot of space.
     Jbig2,
     /// Uncompressed bitmap.
@@ -96,6 +98,7 @@ impl ImageCodec {
             "png" => Self::Png,
             "tif" | "tiff" => Self::Tiff,
             "bmp" => Self::Bmp,
+            "gif" => Self::Gif,
             "jbig2" | "jb2" => Self::Jbig2,
             _ => Self::Raw,
         }
