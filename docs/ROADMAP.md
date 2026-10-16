@@ -353,11 +353,14 @@ not have. Ranked by how often a real reader needs them.
 
 ### M7. Repository hygiene
 
-- **M7-a** Split the aging files. `parser/src/content.rs` (1,560),
+- **[x] M7-a** ~~Split the aging files. `parser/src/content.rs` (1,560),
   `convert/src/pdf.rs` (1,442), `render/src/raster.rs` (1,306) and
   `reader/src/app.rs` (1,055) have outgrown one screen of scrolling. Pure
   reorganisation, no behaviour change; worth one deliberate pass rather than a
-  drip.
+  drip.~~ Done: each file became a module root with its parts beside it, and
+  the largest is now under 700 lines. Every function body was checked to be
+  byte-identical, and the reader's `#[cfg(test)]` block stayed in the root so
+  test names did not move.
 
 ---
 
@@ -435,9 +438,9 @@ check over a document that renders wrong is checking the wrong bytes.
 **M4 through M7 last.** M4 is independent of everything above it and could
 start any time the maintainers want a deployable server. M5 depends on M1-a,
 because every item in it is a rendering change and none of them can be
-verified without golden images. M6-a and M6-b are done; the cheapest item left
-is M7-a, the only one that touches no behaviour at all, so it can ride along
-with any other band.
+verified without golden images. M6-a and M6-b are done, and M7-a with them, so
+the cheapest item left is M5-e or M2-b: both are single-concern changes to
+code that already has its tests.
 
 Far term is deliberately not scheduled. It describes a direction, not dates.
 
