@@ -6,6 +6,7 @@
 
 pub mod api;
 pub mod config;
+pub mod drain;
 pub mod dto;
 pub mod error;
 pub mod ratelimit;
@@ -13,6 +14,7 @@ pub mod store;
 pub mod tenancy;
 
 pub use config::{BadSetting, Settings};
+pub use drain::{Deadline, Drain};
 pub use error::ApiError;
 pub use ratelimit::{Caller, Limiter, RateLimit, Verdict};
 pub use store::Store;

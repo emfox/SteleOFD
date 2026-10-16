@@ -4,7 +4,7 @@
 use std::process::ExitCode;
 
 use steleofd_server::api;
-use steleofd_server::{AppState, Settings, Store};
+use steleofd_server::{AppState, Drain, Settings, Store};
 
 #[tokio::main]
 async fn main() -> ExitCode {
@@ -57,15 +57,43 @@ async fn run() -> Result<(), String> {
         "per-caller rate limit"
     );
 
-    axum::serve(listener, app)
-        .with_graceful_shutdown(shutdown())
+    let drain = Drain::new();
+    let serving = axum::serve(listener, app).with_graceful_shutdown(signal(drain.clone()));
+
+    // A stop may come from a signal or from the process being asked to quit;
+    // either way the socket has stopped accepting by the time the future
+    // resolves, and only in-flight work is left. It gets the grace period.
+    let serving = tokio::spawn(async move { serving.await.map_err(|e| e.to_string()) });
+    drain.wait().await;
+    tracing::info!(
+        grace_seconds = settings.drain.duration().as_secs_f64(),
+        "stopping; letting in-flight work finish"
+    );
+    let drained = tokio::time::timeout(settings.drain.duration(), serving)
         .await
-        .map_err(|err| format!("the server stopped: {err}"))
+        .map_err(|_| "in-flight work did not finish within the grace period".to_owned())?
+        .map_err(|err| format!("the server task failed: {err}"))?;
+    drained.map_err(|err| format!("the server stopped: {err}"))?;
+    tracing::info!("stopped cleanly");
+    Ok(())
 }
 
-/// Resolve once the process is interrupted, so in-flight work can finish.
-async fn shutdown() {
-    if let Err(err) = tokio::signal::ctrl_c().await {
-        tracing::warn!(error = %err, "no interrupt handler, waiting for a signal");
+/// Resolve once the process is asked to stop, having announced it on `drain`
+/// so in-flight work is not cut off. A signal handler that cannot be installed
+/// leaves the wait pending, which is what keeps the process serving.
+async fn signal(drain: Drain) {
+    let mut term = match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
+        Ok(stream) => stream,
+        Err(err) => {
+            tracing::warn!(error = %err, "no SIGTERM handler; waiting for an interrupt");
+            let _ = tokio::signal::ctrl_c().await;
+            drain.stop();
+            return;
+        }
+    };
+    tokio::select! {
+        _ = tokio::signal::ctrl_c() => {}
+        _ = term.recv() => {}
     }
+    drain.stop();
 }

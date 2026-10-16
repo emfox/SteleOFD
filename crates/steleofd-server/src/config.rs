@@ -17,6 +17,9 @@ pub const API_KEYS: &str = "STELEOFD_API_KEYS";
 /// Environment variable setting the per-caller request rate and burst, as
 /// `rate,burst`. Unset means a limit generous enough never to be met.
 pub const RATE_LIMIT: &str = "STELEOFD_RATE_LIMIT";
+/// Environment variable setting how many seconds in-flight work is given to
+/// finish after a stop is asked for. Unset means the generous default.
+pub const DRAIN_TIMEOUT: &str = "STELEOFD_DRAIN_TIMEOUT";
 
 /// Default listen address: loopback only, so a trial run is not a service.
 pub const DEFAULT_BIND: SocketAddr = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::LOCALHOST, 8080));
@@ -37,6 +40,8 @@ pub struct Settings {
     pub api_keys: crate::tenancy::KeyRing,
     /// How often each caller may ask for work.
     pub rate_limit: crate::ratelimit::RateLimit,
+    /// How long in-flight work may take to finish after a stop.
+    pub drain: crate::drain::Deadline,
 }
 
 impl Default for Settings {
@@ -48,6 +53,7 @@ impl Default for Settings {
             data_dir: None,
             api_keys: crate::tenancy::KeyRing::new(),
             rate_limit: crate::ratelimit::RateLimit::generous(),
+            drain: crate::drain::Deadline::generous(),
         }
     }
 }
@@ -80,6 +86,10 @@ impl Settings {
                 Some(spec) => parse_rate(&spec)?,
                 None => defaults.rate_limit,
             },
+            drain: match text(DRAIN_TIMEOUT) {
+                Some(spec) => parse_drain(&spec)?,
+                None => defaults.drain,
+            },
         })
     }
 }
@@ -96,6 +106,19 @@ fn parse_rate(spec: &str) -> Result<crate::ratelimit::RateLimit, BadSetting> {
         return Err(bad());
     }
     Ok(limit)
+}
+
+/// Parse a grace period in seconds, refusing zero: a drain of no time is a
+/// kill, which is the opposite of what the setting is for.
+fn parse_drain(spec: &str) -> Result<crate::drain::Deadline, BadSetting> {
+    let bad = || BadSetting::new(DRAIN_TIMEOUT, spec);
+    let seconds: f64 = spec.trim().parse().map_err(|_| bad())?;
+    if !seconds.is_finite() || seconds <= 0.0 {
+        return Err(bad());
+    }
+    Ok(crate::drain::Deadline::new(
+        std::time::Duration::from_secs_f64(seconds),
+    ))
 }
 
 /// One setting that could not be read.
