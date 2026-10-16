@@ -128,9 +128,16 @@ fn the_golden_documents_render_to_distinct_pictures() {
 
 #[test]
 fn a_reference_png_is_readable_at_the_expected_size() {
-    let doc = &DOCS[0];
-    let actual = decode(&render(doc), doc.name);
-    // A 100x60mm page at 96 DPI is 378x227 pixels, rounded up by `size_px`.
-    assert_eq!(actual.width(), 378, "width");
-    assert_eq!(actual.height(), 227, "height");
+    // A 100x60mm page at 96 DPI is 378x227 pixels and a 297x100mm one is
+    // 1123x378, both rounded up by `size_px`. Asserting the pair keeps the
+    // size path itself under test, now that the fixtures no longer share a box.
+    for (doc, want) in [(&DOCS[0], (378, 227)), (&DOCS[8], (1123, 378))] {
+        let actual = decode(&render(doc), doc.name);
+        assert_eq!(
+            (actual.width(), actual.height()),
+            want,
+            "{} is laid out at the wrong size",
+            doc.name
+        );
+    }
 }
