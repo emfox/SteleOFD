@@ -8,6 +8,24 @@ work is no longer "build the next crate" but "make what exists trustworthy,
 then make it fast, then make it complete". Each horizon states its exit
 criterion, so it is always obvious whether it is done.
 
+Within each horizon the open tasks are ordered by **what the project is for**,
+then by what unblocks what. The README says OFD is the legal carrier for
+official documents, licences, invoices and archives, so the ranking puts
+legal validity and archival correctness first, rendering correctness second,
+and performance and looks last. Finishing an item is not what earns it an
+early slot; hurting a real document is what costs it one.
+
+Ranking rule, applied to every open task:
+
+1. **Wrong output on a real document** — a reader that renders a legal
+   document incorrectly is worse than one that renders it slowly.
+2. **Blocks the thing above it** — a task that unblocks several others moves
+   up regardless of its own size.
+3. **Enforcement** — a check that stops a regression is worth more than the
+   feature it guards, because the feature will be rewritten and the check
+   will not.
+4. **Everything else** — order within this band is by size, smallest first.
+
 Finished tasks are one line: struck through, no explanation. Open tasks carry
 the note a person would need to start them.
 
@@ -17,9 +35,9 @@ the note a person would need to start them.
 | --- | --- |
 | Crates | 26 (L0 foundation through L5 delivery) |
 | Source | 38,687 lines of Rust, measured with `find crates -name '*.rs'` |
-| Tests | 922 passing, plus 33 inline unit-test modules |
+| Tests | 927 passing, plus 33 inline unit-test modules |
 | Delivery forms | `cli`, `wasm`, `ffi`, `server`, `reader`, all on the `core` facade |
-| Standard clauses | 74 registered in GB/T 33190-2016, 70 covered, 4 `deviation` with a stated reason |
+| Standard clauses | 74 registered in GB/T 33190-2016: 68 `verified`, 2 `partial` (`8.4`, `13.1`), 4 `deviation` with a stated reason |
 | Languages | `en-US` and `zh-CN`, 88 message keys, parity enforced in CI |
 | CI | fmt, clippy, build, test, all-features test, i18n, language, conformance, XSD validation, corpus freshness, fuzz smoke run |
 
@@ -28,39 +46,48 @@ the note a person would need to start them.
 These are the things a new contributor would otherwise discover the hard way.
 Each one is a real, verified finding, not a guess.
 
-1. **Two clauses stay short of `verified`.** `8.4` is `partial` because only a
-   `Path` clip area is read and a `Text` area is rejected with an explicit
-   error; `8.4` is the one place the register and the code disagree on
-   purpose. The register in `compliance/gb-t-33190.toml` is the source of
-   truth and lists the status of each by name.
+1. **Two clauses are `partial`, four are `deviation`.** `8.4` is `partial`
+   because only a `Path` clip area is read and a `Text` area is rejected with
+   an explicit error. `13.1` is `partial` because a `CompositeObject` is
+   flattened to a stand-in image op with empty bytes — the vector resource's
+   own block is never resolved, so a placed vector graphic draws nothing.
+   The four `deviation` entries (`8.1.6`, `8.3.5`, `8.3.6`, `8.3.7`) each
+   carry their reason in the register. The register in
+   `compliance/gb-t-33190.toml` is the source of truth and lists the status of
+   each by name.
 2. **The documented format support outran the code, until now.** Five cargo
    features (`render`'s `backend-canvas`/`backend-svg`/`backend-pdf`, and
    `convert`'s `office`/`ocr`) were declared and referenced nowhere, while
    `README` advertised "HTML and Office" conversion. The three empty render
    backends are gone; `office` and `ocr` stay as named placeholders with a
-   comment saying nothing consumes them. M6 is where they would land.
+   comment saying nothing consumes them. M5-f is where they would land.
 3. **The OFD corpus is one file.** `compliance/corpus/minimal.ofd` is the only
-   document the XSD validation and the test suites actually read.
+   document the XSD validation and the test suites actually read. Every
+   conformance test builds its own fixture with our own writer, so a construct
+   our writer never emits is a construct we have never read. M0-c and M5-f.
 4. **`README.zh-CN.md` is behind the English README.** It still shows P3 and P5
    as unfinished and names a next step that no longer exists.
-5. **Six crates have no dedicated integration test directory.** `xml`, `model`,
-   `font`, `display` and `render` are covered only by inline unit tests, not by
-   tests that drive the public API as a consumer would.
-6. **No release automation.** No `CHANGELOG`, no version-bump or publish
-   workflow, no `cargo-semver-checks` gate. `Cargo.toml` declares `0.1.0`
-   everywhere and nothing tracks whether a change breaks a public API.
-7. **The reader exists but is barely a reader.** It opens, rasterizes,
+5. **The reader exists but is barely a reader.** It opens, rasterizes,
    navigates, searches, verifies, exports and takes the keyboard. What is still
-   missing is annotation display, document comparison and a packaged build.
-   See M7.
+   missing is print, annotation display, document comparison and a packaged
+   build. See M6.
+6. **A placed `CompositeObject` draws nothing.** The reader for
+   `CompositeGraphicUnits` exists and is tested, but nothing calls it at open,
+   so a document that places a vector graphic gets a stand-in image op with
+   empty bytes. Clause 13.1 is `partial` for this reason. See M0-a.
+7. **The server is the weakest delivery form.** `cli`, `wasm`, `ffi` and
+   `reader` are all usable; `server` has an in-memory store, no authentication
+   and no drain. See M4.
 
 ---
 
-## Near term: earn the word "done"
+## Near term: earn the word "done" — finished
 
-Nothing here adds capability. Everything here makes the existing crates
-trustworthy to someone who did not write them. Exit criterion: a new
+Nothing here added capability. Everything here made the existing crates
+trustworthy to someone who did not write them. Exit criterion was: a new
 contributor can clone, test, and trust the project without asking a question.
+The criterion is met; every task below is closed, and the section is kept as
+the record of what it took.
 
 ### N1. A shared test kit (N1-a … N1-c)
 
@@ -151,63 +178,152 @@ page.
 
 ## Mid term: make it fast and complete
 
-Exit criterion: the engine holds a performance budget it is measured against,
-and every clause the project claims to implement is either verified or
-explicitly documented as a deviation.
+This is where every open task lives. Order within it is by the ranking rule at
+the top of this document: wrong output first, then what unblocks what, then
+enforcement, then the rest. Exit criterion: the engine holds a performance
+budget it is measured against, and every clause the project claims to
+implement is either `verified` or `deviation` with a stated reason — no
+`partial` left.
 
-### M1. Performance baselines (M1-a … M1-c)
+### M0. Correctness on real documents (M0-a … M0-c)
 
-- **M1-a** `[x]` ~~Four benchmark targets over a generated document, reporting per-page and per-object costs.~~
-- **M1-b** A documented performance budget: pages per second for render, and the document size the parser handles within a stated latency. `docs/PERFORMANCE.md` holds the measured numbers; the budget is what turns them into a pass/fail line.
-- **M1-c** A CI job that runs the benchmarks and fails only on a large, deliberate regression.
+The top band. Each of these is a document that renders wrong today, not a
+feature that is absent, which is why they precede everything else.
 
-### M2. Font pipeline hardening (M2-a … M2-c)
+- **M0-a** Resolve a placed `CompositeObject` to its vector resource. Clause
+  13.1 is `partial` because `flatten_composite` emits a stand-in `Image` op
+  with empty bytes and never looks up the `CompositeGraphicUnit` the
+  `ResourceID` names. The reader for the unit exists
+  (`content::read_composite_graphic_units`) but nothing calls it at open, so
+  the table is not even in `ParsedDocument`. A document that places a vector
+  graphic draws a blank where it should draw the graphic.
+- **M0-b** Read a `Text` clip area, closing `8.4`. Only a `Path` area is read
+  today and a `Text` area is refused with an explicit error. A clip built from
+  text is legitimate and currently narrows nothing.
+- **M0-c** Tolerance tests over the corpus. Every conformance test so far
+  builds its fixture with our own writer, so a construct our writer never
+  emits is a construct we have never read. Feeds M5-f.
 
-- **M2-a** `[x]` ~~Faces resolved by declared id, bare CFF read, and the CJK/Latin/RTL matrix in `docs/FONTS.md`.~~
-- **M2-b** Subset embedded fonts instead of carrying whole faces. A document that embeds a 20 MB CJK collection pays for it in every conversion.
-- **M2-c** `[ ]` **mostly open.** The chain is built (`build_fallback_chain`, wired into `Document::open`), every backend reports runs that reach the page short a glyph (`missing_glyph_runs`), a run whose face will not load costs its own run rather than the page (`skipped_font_runs`), and the raster backend now matches the vector ones. What is left is the reader that acts on the chain: nothing re-shapes a run against a fallback face yet, so a code point the run's own face lacks is still dropped rather than looked up in the other faces. Two smaller limits ride along: the registry is filled only from the ids the pages name, so a declared-but-unused face never joins the chain, and a substitute is chained only where one can be resolved. See `docs/FONTS.md` gap 4.
+### M1. Enforcement before features (M1-a … M1-c)
 
-### M3. Rendering completeness (M3-a … M3-d)
+A guard is worth more than the feature it protects: the feature gets rewritten,
+the guard does not.
 
-- **M3-a** Colour spaces beyond sRGB, and CMYK for print. The declaration side is done: clause 7.13's `ColorSpaces` table is read at open and `ParsedDocument::color_spaces` carries each space's type, depth, profile and palette. What is left is the painting side — no backend consumes the table yet, so an image naming a CMYK space is still decoded as sRGB.
-- **M3-b** Blending and transparency modes.
-- **M3-c** Bring each test-verified drawing feature to full parity. The first is done: `RadialShd` end centre and radius now travel with the op and each backend reduces the cone to what it can paint.
-- **M3-d** A golden-image suite: render the corpus to PNG, compare against committed references, gate on a pixel-difference threshold.
-- **M3-e** Move the JBIG2 codec out of `display`. The IR crate carries a full decoder (`display/src/jbig2.rs`, via `hayro-jbig2`) that only `render` and `convert` call; the IR layer should hold data structures, not codecs. A small `steleofd-codec` crate (or an existing lower one) is the home. Deferred because it touches `display`'s public surface and three downstream import paths.
-- **M3-f** The three shading and fill models still standing as deviations: `Pattern` (8.3.5), `GouraudShd` (8.3.6) and `LaGouraudShd` (8.3.7). Each needs a painter, not just a reader — a tiling model for `Pattern`, a triangle and a lattice mesh for the two Gouraud forms. The reader currently recognises and refuses them (`unsupported_shading`), which is honest but not coverage. `8.1.6` PrintQuality stays a deviation for a different reason: the element is absent from the vendored Annex A schema entirely, so there is nothing to read.
+- **M1-a** A golden-image suite: render the corpus to PNG, compare against
+  committed references, gate on a pixel-difference threshold. Nothing else in
+  this list keeps the renderers honest — the existing tests assert ops, not
+  pixels, so a backend can paint the right ops wrong and stay green. Blocks
+  M0-a and M0-b from regressing, so it lands early despite being new work.
+- **M1-b** A documented performance budget: pages per second for render, and
+  the document size the parser handles within a stated latency.
+  `docs/PERFORMANCE.md` holds the measured numbers; the budget is what turns
+  them into a pass/fail line.
+- **M1-c** A CI job that runs the benchmarks and fails only on a large,
+  deliberate regression.
 
-### M4. Signature depth (M4-a … M4-c)
+### M2. Fonts, the other correctness surface (M2-a … M2-b)
 
-- **M4-a** `18.2.2` signature scope and `18.2.3` signature appearance, verified and implemented rather than tolerated.
-- **M4-b** Seal and incremental update, so a signed document can be extended without breaking its signature.
-- **M4-c** Timestamp countersignature verification.
+Faces are resolved by declared id and bare CFF is read (done; the CJK/Latin/RTL
+matrix is in `docs/FONTS.md`).
 
-### M5. Server production readiness (M5-a … M5-e)
+- **M2-a** Act on the fallback chain in the reader. The chain is built
+  (`build_fallback_chain`, wired into `Document::open`), every backend reports
+  runs that reach the page short a glyph (`missing_glyph_runs`), a run whose
+  face will not load costs its own run rather than the page
+  (`skipped_font_runs`), and the raster backend matches the vector ones. What
+  is left is the reader that acts on the chain: nothing re-shapes a run
+  against a fallback face yet, so a code point the run's own face lacks is
+  still dropped rather than looked up in the other faces. Two smaller limits
+  ride along: the registry is filled only from the ids the pages name, so a
+  declared-but-unused face never joins the chain, and a substitute is chained
+  only where one can be resolved. See `docs/FONTS.md` gap 4.
+- **M2-b** Subset embedded fonts instead of carrying whole faces. A document
+  that embeds a 20 MB CJK collection pays for it in every conversion. Ranked
+  below M2-a because it costs size, not correctness.
 
-- **M5-a** Replace the in-memory store with a persistent one.
-- **M5-b** Authentication and per-tenant authorisation.
-- **M5-c** Rate limiting and a real request timeout budget.
-- **M5-d** OpenAPI documentation generated from the route definitions.
-- **M5-e** Graceful drain, so a rolling deploy does not cut a render in half.
+### M3. Signature depth (M3-a … M3-c)
 
-### M6. Interoperability (M6-a … M6-c)
+`18.2.2` and `18.2.3` are already `verified`; what remains is the depth a
+legal carrier needs.
 
-- **M6-a** Test against documents produced by other real OFD implementations, not only our own builder.
-- **M6-b** Round-trip tests against the standard's own examples, if the working group publishes any.
-- **M6-c** Office conversion. The `office` feature on `convert` and `core` is a named placeholder that compiles and changes nothing; this is where it gains an implementation. OCR (the `ocr` feature) rides with it.
+- **M3-a** Seal and incremental update, so a signed document can be extended
+  without breaking its signature. This is the one that matters legally: a
+  document that cannot be signed twice cannot carry a countersignature.
+- **M3-b** Timestamp countersignature verification.
+- **M3-c** The archival profile. `steleofd-archive` checks an OFD against the
+  archival rules; it needs the profile document it checks against named, and
+  the four `deviation` clauses above are the natural first inputs.
 
-### M7. The reader, completed
+### M4. Server production readiness (M4-a … M4-e)
 
-- **M7-a** Annotation display and navigation, once clause 15 is verified.
-- **M7-b** Signature appearance rendering, once `18.2.3` is implemented.
-- **M7-c** A document comparison view for two revisions of the same file.
-- **M7-d** Print, straight from the reader's current view.
-- **M7-e** Signed, installable builds for the platforms people actually deploy on, and an offline story.
-- **M7-f** Move the reader's interface strings out of `steleofd-i18n`. The engine crate defines product-facing ids (`ReaderFitWidth`, `ReaderSearchTitle`, …); they belong with the reader, so the engine catalogue holds engine messages only and the two change at their own pace. Deferred because it moves `i18n`'s public API, the CI parity script and every reader call site at once.
+Ranks here rather than lower because the `server` crate is one of the four
+delivery forms the README advertises, and it is the one furthest from being
+deployable.
 
-### M8. Repository hygiene
+- **M4-a** Replace the in-memory store with a persistent one.
+- **M4-b** Authentication and per-tenant authorisation.
+- **M4-c** Rate limiting and a real request timeout budget.
+- **M4-d** Graceful drain, so a rolling deploy does not cut a render in half.
+- **M4-e** OpenAPI documentation generated from the route definitions.
 
-- **M8-a** Split the aging files. `convert/src/pdf.rs` (1,442), `parser/src/content.rs` (1,365), `render/src/raster.rs` (1,312) and `reader/src/app.rs` (1,055) have outgrown one screen of scrolling. Pure reorganisation, no behaviour change; worth one deliberate pass rather than a drip.
+### M5. Rendering completeness (M5-a … M5-f)
+
+Absent features, not wrong ones, so they sit below the correctness band.
+
+- **M5-a** Paint the colour spaces clause 7.13 declares. The declaration side
+  is done: the `ColorSpaces` table is read at open and
+  `ParsedDocument::color_spaces` carries each space's type, depth, profile and
+  palette. What is left is the painting side — no backend consumes the table
+  yet, so an image naming a CMYK space is still decoded as sRGB.
+- **M5-b** The three shading and fill models still standing as deviations:
+  `Pattern` (8.3.5), `GouraudShd` (8.3.6) and `LaGouraudShd` (8.3.7). Each
+  needs a painter, not just a reader. `8.1.6` PrintQuality stays a deviation
+  for a different reason: the element is absent from the vendored Annex A
+  schema entirely, so there is nothing to read.
+- **M5-c** Blending and transparency modes.
+- **M5-d** Bring each test-verified drawing feature to full parity. The first
+  is done — `RadialShd` end centre and radius travel with the op and each
+  backend reduces the cone to what it can paint — so this is the remaining
+  list, worked one feature per pass.
+- **M5-e** Move the JBIG2 codec out of `display`. The IR crate carries a full
+  decoder (`display/src/jbig2.rs`, via `hayro-jbig2`) that only `render` and
+  `convert` call; the IR layer should hold data structures, not codecs. A
+  small `steleofd-codec` crate (or an existing lower one) is the home.
+  Deferred because it touches `display`'s public surface and three downstream
+  import paths.
+- **M5-f** Interoperability. Test against documents produced by other real OFD
+  implementations (M0-c is the corpus half of this), round-trip the
+  standard's own examples if the working group publishes any, and the Office
+  conversion the `office` feature on `convert` and `core` names as a
+  placeholder. OCR rides with it.
+
+### M6. The reader, completed (M6-a … M6-f)
+
+The reader works; these are the parts of a reader people expect that it does
+not have. Ranked by how often a real reader needs them.
+
+- **M6-a** Print, straight from the reader's current view. `steleofd-print`
+  exists and nothing calls it from the reader, so this is wiring, not writing.
+- **M6-b** Annotation display and navigation. Clause 15 is verified, so the
+  model is there and only the view is missing.
+- **M6-c** Signature appearance rendering — the visual half of the `18.2.3`
+  model that is already read.
+- **M6-d** Signed, installable builds for the platforms people actually deploy
+  on, and an offline story.
+- **M6-e** A document comparison view for two revisions of the same file.
+- **M6-f** Move the reader's interface strings out of `steleofd-i18n`. The
+  engine crate defines product-facing ids (`ReaderFitWidth`,
+  `ReaderSearchTitle`, …); they belong with the reader, so the engine catalogue
+  holds engine messages only. Deferred because it moves `i18n`'s public API,
+  the CI parity script and every reader call site at once.
+
+### M7. Repository hygiene
+
+- **M7-a** Split the aging files. `parser/src/content.rs` (1,560),
+  `convert/src/pdf.rs` (1,442), `render/src/raster.rs` (1,306) and
+  `reader/src/app.rs` (1,055) have outgrown one screen of scrolling. Pure
+  reorganisation, no behaviour change; worth one deliberate pass rather than a
+  drip.
 
 ---
 
@@ -263,18 +379,31 @@ engine crossing into a browser; a browser *reader* is a product built on it.
 
 ## Sequencing
 
-Near term runs in order, because N1 unblocks N2 and N4, and N2 is what makes
-the conformance number in the README mean something. N3 and N5 can run
-alongside it, since they touch different crates.
+The near term is finished; everything open is mid term. Within it the bands
+run in order:
 
-The reader (N7 to N9) depends on the `core` facade, which is finished, so it
-does not wait on N2: the interface needs a working renderer, not a
-conformance number. U1 can proceed while the clause work runs. M7 depends on
-N2, because annotations and signature appearance are clauses 15 and 18.2.3,
-and there is no point drawing a panel for a feature that is not yet verified.
+**M0 first.** These are documents that render wrong today, and the two
+`partial` clauses are what stands between the conformance number and the word
+"done". M0-a and M0-b are independent of each other and of everything else.
 
-Mid term starts when the near-term exit criterion is met. M1 first, because a
-performance budget cannot be enforced without a baseline to measure against.
+**M1 second, but start it in parallel with M0.** A golden-image suite is worth
+more the earlier it exists, because it is what stops M0-a and M0-b from
+regressing the moment they land. M1-b and M1-c depend on M1-a for something to
+compare against, and M1-b needs M1-a's output to define a pixel budget.
+
+**M2 third.** M2-a needs nothing from M0 or M1, so it can run alongside them.
+M2-b depends on M2-a in the sense that subsetting a face the chain cannot use
+buys nothing.
+
+**M3 fourth.** M3-a is independent. M3-c is the reason M0 matters: an archival
+check over a document that renders wrong is checking the wrong bytes.
+
+**M4 through M7 last.** M4 is independent of everything above it and could
+start any time the maintainers want a deployable server. M5 depends on M1-a,
+because every item in it is a rendering change and none of them can be
+verified without golden images. M6-a and M6-b are pure wiring over finished
+models and are the cheapest items on the list. M7-a is the only one that
+touches no behaviour at all, so it can ride along with any other band.
 
 Far term is deliberately not scheduled. It describes a direction, not dates.
 
