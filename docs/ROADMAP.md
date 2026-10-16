@@ -289,7 +289,15 @@ Absent features, not wrong ones, so they sit below the correctness band.
   implementations (M0-c is the corpus half of this), round-trip the
   standard's own examples if the working group publishes any, and the Office
   conversion the `office` feature on `convert` and `core` names as a
-  placeholder. OCR rides with it.
+  placeholder. OCR rides with it. First pass done: the nine-page golden book
+  was rendered by another vendor's reader and compared page by page. Five pages
+  agree to anti-aliasing; the four that differ are the oracle's own shortfalls
+  — `Clip` drops the object, `AxialShd` and `RadialShd` paint solid black, and
+  a page box wider than `CommonData.PageArea` is ignored. The comparison paid
+  for itself in the other direction too: it exposed three defects in our own
+  fixtures and reader — `FillRule` for `Rule`, `Fill`/`Stroke` defaults taken
+  from the wrong model, and path coordinates read as absolute where the
+  standard makes them offsets from the boundary corner.
 
 ### M6. The reader, completed (M6-a … M6-f)
 
