@@ -47,6 +47,9 @@ pub struct RasterOutput {
     /// Runs that drew with at least one glyph missing from their face, so the
     /// page shows fewer marks than it should.
     pub missing_glyph_runs: usize,
+    /// Runs skipped because their face could not be loaded at all. The page
+    /// still renders; the marks those runs would have made are absent.
+    pub skipped_font_runs: usize,
     pixmap: Pixmap,
 }
 
@@ -106,6 +109,7 @@ pub fn render_page(
     };
     let mut stack: Vec<State> = Vec::new();
     let mut missing_glyph_runs = 0usize;
+    let mut skipped_font_runs = 0usize;
 
     for op in &page.ops {
         match op {
@@ -173,8 +177,10 @@ pub fn render_page(
                 }
             }
             DrawOp::Text(run) => {
-                if draw_text(&mut pixmap, run, &state, page.page_box, fonts, options)? {
-                    missing_glyph_runs += 1;
+                match draw_text(&mut pixmap, run, &state, page.page_box, fonts, options)? {
+                    TextOutcome::Drawn => {}
+                    TextOutcome::ShortGlyphs => missing_glyph_runs += 1,
+                    TextOutcome::NoFace => skipped_font_runs += 1,
                 }
             }
             DrawOp::Image {
@@ -252,6 +258,7 @@ pub fn render_page(
         width,
         height,
         missing_glyph_runs,
+        skipped_font_runs,
         pixmap,
     })
 }
@@ -520,27 +527,35 @@ pub fn arc_cubics(
     out
 }
 
+/// What a text run contributed to the page.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TextOutcome {
+    /// Every glyph the run named was drawn.
+    Drawn,
+    /// The run drew, but at least one glyph had no outline in its face.
+    ShortGlyphs,
+    /// The run's face could not be loaded, so the run was skipped.
+    NoFace,
+}
+
 fn draw_text(
     pixmap: &mut Pixmap,
     run: &GlyphRun,
     state: &State,
     page_box: Rect,
     fonts: &FontManager,
-    _options: &RenderOptions,
-) -> Result<bool> {
+    options: &RenderOptions,
+) -> Result<TextOutcome> {
     if run.glyphs.is_empty() {
-        return Ok(false);
+        return Ok(TextOutcome::Drawn);
     }
-    let face = fonts.face(run.font)?;
-    let total = total_transform(state, &page_box, 0.0).to_owned().to_owned();
-    let _ = total;
-    let total = total_transform(state, &page_box, {
-        // The DPI is folded into `total_transform`; recover it from the run
-        // size instead of threading the option down here.
-        96.0
-    });
-    let _ = total;
-    draw_text_inner(pixmap, run, state, page_box, face, _options)
+    // A face that will not load costs its own run, not the whole page: the
+    // rest of the page is still worth rendering, and the caller can see how
+    // many runs were lost from `skipped_font_runs`.
+    let Ok(face) = fonts.face(run.font) else {
+        return Ok(TextOutcome::NoFace);
+    };
+    draw_text_inner(pixmap, run, state, page_box, face, options)
 }
 
 fn draw_text_inner(
@@ -550,7 +565,7 @@ fn draw_text_inner(
     page_box: Rect,
     face: Arc<steleofd_font::FontFace>,
     options: &RenderOptions,
-) -> Result<bool> {
+) -> Result<TextOutcome> {
     let mut offset = 0.0f64;
     let mut missing = false;
     for (i, &gid) in run.glyphs.iter().enumerate() {
@@ -575,7 +590,11 @@ fn draw_text_inner(
             pixmap.fill_path(&ts_path, &p, FillRule::Winding, Transform::identity(), None);
         }
     }
-    Ok(missing)
+    Ok(if missing {
+        TextOutcome::ShortGlyphs
+    } else {
+        TextOutcome::Drawn
+    })
 }
 
 fn draw_image(
@@ -1157,7 +1176,9 @@ mod tests {
     }
 
     #[test]
-    fn a_missing_font_is_reported() {
+    fn a_run_with_an_unloadable_face_is_skipped_and_counted() {
+        // An unknown font id means the face cannot be loaded. That costs the
+        // run, not the page: rendering succeeds and the count records the loss.
         let manager = FontManager::new();
         let run = steleofd_display::GlyphRun {
             font: FontId(7),
@@ -1175,8 +1196,9 @@ mod tests {
             bbox: Rect::new(0.0, 0.0, 3.0, 3.0),
         };
         let page = page_with(vec![DrawOp::Text(run)]);
-        let err = render_page(&page, &manager, &RenderOptions::default()).expect_err("must fail");
-        assert!(err.to_string().contains("Font"), "{err}");
+        let out = render_page(&page, &manager, &RenderOptions::default()).expect("render");
+        assert_eq!(out.skipped_font_runs, 1);
+        assert_eq!(out.missing_glyph_runs, 0);
     }
 
     #[test]

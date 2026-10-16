@@ -135,10 +135,10 @@ mod tests {
     }
 
     #[test]
-    fn a_text_run_referencing_an_unknown_font_fails_the_page() {
-        // The raster backend resolves faces eagerly, so a font id that was
-        // never registered aborts the page instead of skipping the run. The
-        // vector backends fall back to live text instead.
+    fn a_text_run_referencing_an_unknown_font_costs_only_its_own_run() {
+        // A font id that was never registered used to abort the whole page.
+        // The run is now skipped and counted instead, so the rest of the page
+        // still renders and the caller can see what was lost.
         let fonts = FontManager::new();
         let run = GlyphRun {
             font: FontId(42),
@@ -155,12 +155,12 @@ mod tests {
             word_spacing: 0.0,
             bbox: Rect::new(10.0, 10.0, 10.0, 10.0),
         };
-        let err = page_to_png(
+        let png = page_to_png(
             &page(vec![DrawOp::Text(run)]),
             &fonts,
             &RenderOptions::default(),
         )
-        .expect_err("an unregistered font must surface, not silently vanish");
-        assert!(matches!(err, OfdError::Font(_)), "got {err:?}");
+        .expect("the page still renders");
+        assert!(!png.is_empty());
     }
 }
