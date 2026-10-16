@@ -38,7 +38,10 @@ fn label(key: MessageId) -> String {
 /// Run frames until the pages are rasterized, since rendering is off the draw
 /// path and a frame is what collects a finished raster.
 fn pump_until_rendered(harness: &mut Harness<'static, App>, pages: &[usize]) {
-    for _ in 0..2000 {
+    // Rendering is off the draw path, so a frame collects a finished raster;
+    // the budget is wall clock because a shared runner can stall the worker.
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+    while std::time::Instant::now() < deadline {
         harness.run();
         if pages
             .iter()
@@ -442,7 +445,8 @@ fn a_finished_export_is_announced_in_the_status_bar() {
     app.open_bytes(&bytes, Some("many.ofd"))
         .expect("the fixture opens");
     app.export_to(steleofd_reader::ExportFormat::Pdf, vec![0], out.clone());
-    for _ in 0..2000 {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+    while std::time::Instant::now() < deadline {
         app.poll();
         if !app.is_exporting() {
             break;
@@ -491,7 +495,10 @@ fn a_finished_print_job_is_announced_in_the_status_bar() {
     app.open_bytes(&bytes, Some("many.ofd"))
         .expect("the fixture opens");
     app.print_to(app.print_pages(), app.print_settings());
-    for _ in 0..2000 {
+    // A shared runner can stall the print worker, so wait on the clock rather
+    // than on a fixed iteration count; a real hang still fails the assert.
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+    while std::time::Instant::now() < deadline {
         app.poll();
         if !app.is_printing() {
             break;

@@ -32,7 +32,10 @@ fn open_pages(pages: usize) -> App {
 /// the queue the way a frame does; the bound fails loudly if it never answers.
 fn wait_for_page(app: &mut App, page: usize) {
     app.page_image(page).expect("the request is accepted");
-    for _ in 0..2000 {
+    // The worker runs on another thread, so the budget is wall clock: a shared
+    // runner can stall it well past a laptop, and a real hang still panics.
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+    while std::time::Instant::now() < deadline {
         app.poll();
         if app.cached(page).is_some() {
             return;
@@ -129,7 +132,8 @@ fn a_page_rasterizes_and_is_reused() {
 fn asking_for_the_same_page_every_frame_still_delivers_it() {
     let mut app = open();
     let page = app.current_page();
-    for _ in 0..2000 {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+    while std::time::Instant::now() < deadline {
         // What a frame does: ask for the visible page, then collect results.
         let _ = app.canvas();
         app.poll();
@@ -793,7 +797,10 @@ fn verifying_with_nothing_open_is_harmless() {
 /// is off the draw path, so the queue is pumped the way a frame pumps it, and
 /// the bound fails loudly rather than hanging forever.
 fn wait_for_export(app: &mut App) -> bool {
-    for _ in 0..2000 {
+    // Export crosses a thread boundary like rendering, so the budget is wall
+    // clock and a shared runner is given a full minute before the job is lost.
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+    while std::time::Instant::now() < deadline {
         app.poll();
         if !app.is_exporting() {
             return true;
@@ -1309,7 +1316,11 @@ fn closing_the_document_forgets_the_annotations() {
 /// export, printing is off the draw path, so the queue is pumped the way a
 /// frame pumps it and the bound fails loudly rather than hanging forever.
 fn wait_for_print(app: &mut App) -> bool {
-    for _ in 0..2000 {
+    // The budget is wall clock, not iterations: a shared runner can stall the
+    // worker well past what a laptop sees, so wait a full minute before
+    // calling a job lost. The polling itself stays cheap.
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+    while std::time::Instant::now() < deadline {
         app.poll();
         if !app.is_printing() {
             return true;
@@ -1520,7 +1531,8 @@ mod language {
         // not make a cached raster wrong, so throwing it away would be waste.
         let mut app = open_pages(3);
         app.page_image(0).expect("the request is accepted");
-        for _ in 0..2000 {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+        while std::time::Instant::now() < deadline {
             app.poll();
             if app.cached(0).is_some() {
                 break;
