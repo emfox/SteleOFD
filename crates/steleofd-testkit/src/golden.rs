@@ -139,7 +139,7 @@ pub const ARCS_XML: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
   <Area><PhysicalBox>0 0 100 60</PhysicalBox></Area>
   <Content>
     <Layer ID="2">
-      <PathObject ID="3" Boundary="25 2 50 50" Fill="true" Stroke="false">
+      <PathObject ID="3" Boundary="0 0 100 60" Fill="true" Stroke="false">
         <FillColor Value="230 140 20"/>
         <AbbreviatedData>M 25 27 A 25 25 0 0 1 75 27 A 25 25 0 0 1 25 27 Z</AbbreviatedData>
       </PathObject>
