@@ -6,10 +6,9 @@ use axum::Router;
 use axum::body::{Body, Bytes};
 use axum::http::{HeaderMap, Request, StatusCode};
 use steleofd_core::Document;
-use steleofd_server::Store;
-use steleofd_server::api;
 use steleofd_server::config::Settings;
 use steleofd_server::dto::{Opened, SearchHit, SignatureStatus};
+use steleofd_server::{AppState, KeyRing, Store, api};
 use steleofd_testkit::{SIGN_FILE, fixture_bytes};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tower::ServiceExt;
@@ -17,8 +16,35 @@ use uuid::Uuid;
 
 const MAX_BODY: usize = 8 << 20;
 
+/// A router over an open (unauthenticated) service, which is the default.
 fn app(capacity: usize) -> Router {
-    api::router(Store::new(capacity), MAX_BODY)
+    api::router(AppState::open(Store::new(capacity)), MAX_BODY)
+}
+
+/// A router that requires one of `spec`, parsed as `tenant:key,tenant:key`.
+fn guarded(capacity: usize, spec: &str) -> Router {
+    let keys = KeyRing::parse(spec).expect("a usable key ring");
+    api::router(AppState::guarded(Store::new(capacity), keys), MAX_BODY)
+}
+
+/// The same request as [`get`], carrying a bearer key.
+fn get_as(uri: &str, key: &str) -> Request<Body> {
+    Request::builder()
+        .uri(uri)
+        .header("authorization", format!("Bearer {key}"))
+        .body(Body::empty())
+        .expect("request")
+}
+
+/// An upload carrying a key, so an authenticated caller can post.
+fn upload_as(uri: &str, bytes: Vec<u8>, key: &str) -> Request<Body> {
+    Request::builder()
+        .method("POST")
+        .uri(uri)
+        .header("content-type", "application/octet-stream")
+        .header("authorization", format!("Bearer {key}"))
+        .body(Body::from(bytes))
+        .expect("request")
 }
 
 /// Send one request through the router and split the answer apart.
@@ -266,13 +292,13 @@ async fn an_uploaded_id_still_answers_after_a_restart() {
 
     let id = {
         let store = Store::persistent(4, &dir).expect("a store");
-        let router = api::router(store, MAX_BODY);
+        let router = api::router(AppState::open(store), MAX_BODY);
         open_fixture(&router, false).await
     };
 
     let restarted = Store::persistent(4, &dir).expect("a new store");
     assert_eq!(restarted.len(), 1, "the earlier upload was adopted");
-    let router = api::router(restarted, MAX_BODY);
+    let router = api::router(AppState::open(restarted), MAX_BODY);
     let (status, _, body) =
         call(&router, get(&format!("/api/v1/documents/{id}/pages/0/png"))).await;
     assert_eq!(status, StatusCode::OK, "the restarted store renders it");
@@ -341,4 +367,124 @@ fn settings_come_from_the_environment_or_the_defaults() {
         Settings::from(|name| (name == "STELEOFD_MAX_DOCUMENTS").then(|| "0".to_owned())).is_err(),
         "a zero capacity is refused"
     );
+}
+
+#[tokio::test]
+async fn a_guarded_service_answers_health_without_a_key() {
+    // Health is how a load balancer decides to route, so it stays open even
+    // when the rest of the service is closed.
+    let router = guarded(4, "acme:secret");
+    let (status, _, body) = call(&router, get("/healthz")).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(String::from_utf8_lossy(&body).contains(r#""status":"ok""#));
+}
+
+#[tokio::test]
+async fn a_guarded_service_refuses_a_call_with_no_key() {
+    let router = guarded(4, "acme:secret");
+    let (status, _, body) = call(&router, upload("/api/v1/documents", fixture_bytes(false))).await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    let failure: serde_json::Value = serde_json::from_slice(&body).expect("a failure body");
+    assert!(
+        failure["error"].as_str().unwrap().contains("API key"),
+        "the message says what to send: {body:?}"
+    );
+}
+
+#[tokio::test]
+async fn a_guarded_service_refuses_a_key_it_does_not_know() {
+    let router = guarded(4, "acme:secret");
+    let (status, _, _) = call(
+        &router,
+        upload_as("/api/v1/documents", fixture_bytes(false), "wrong"),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn a_known_key_opens_and_reads_a_document() {
+    let router = guarded(4, "acme:secret");
+    let (status, _, body) = call(
+        &router,
+        upload_as("/api/v1/documents", fixture_bytes(false), "secret"),
+    )
+    .await;
+    assert_eq!(
+        status,
+        StatusCode::CREATED,
+        "{}",
+        String::from_utf8_lossy(&body)
+    );
+    let opened: Opened = serde_json::from_slice(&body).expect("an id and its facts");
+
+    let (status, _, _) = call(
+        &router,
+        get_as(&format!("/api/v1/documents/{}", opened.id), "secret"),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "the owner reads its own document");
+}
+
+#[tokio::test]
+async fn one_tenant_cannot_read_anothers_document() {
+    // The point of tenancy: a valid key for one organisation is not a valid
+    // key for another organisation's document, and the refusal is a 404 so
+    // the id's existence does not leak.
+    let router = guarded(4, "acme:secret,rival:other");
+    let (_, _, body) = call(
+        &router,
+        upload_as("/api/v1/documents", fixture_bytes(false), "secret"),
+    )
+    .await;
+    let opened: Opened = serde_json::from_slice(&body).expect("an id and its facts");
+
+    let uri = format!("/api/v1/documents/{}", opened.id);
+    let (status, _, _) = call(&router, get_as(&uri, "other")).await;
+    assert_eq!(
+        status,
+        StatusCode::NOT_FOUND,
+        "another tenant sees nothing, not a 403 that reveals the id"
+    );
+    let (status, _, _) = call(&router, get_as(&uri, "secret")).await;
+    assert_eq!(status, StatusCode::OK, "the owner still reads it");
+}
+
+#[tokio::test]
+async fn one_tenant_cannot_release_anothers_document() {
+    let router = guarded(4, "acme:secret,rival:other");
+    let (_, _, body) = call(
+        &router,
+        upload_as("/api/v1/documents", fixture_bytes(false), "secret"),
+    )
+    .await;
+    let opened: Opened = serde_json::from_slice(&body).expect("an id and its facts");
+    let uri = format!("/api/v1/documents/{}", opened.id);
+
+    let (status, _, _) = call(
+        &router,
+        Request::builder()
+            .method("DELETE")
+            .uri(&uri)
+            .header("authorization", "Bearer other")
+            .body(Body::empty())
+            .expect("request"),
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND, "the delete is refused");
+    let (status, _, _) = call(&router, get_as(&uri, "secret")).await;
+    assert_eq!(status, StatusCode::OK, "and the document is still there");
+}
+
+#[tokio::test]
+async fn an_open_service_keeps_working_when_a_key_is_offered() {
+    // An open service must not break for a caller that always sends a key;
+    // the key is simply not required, so every caller is the same tenant.
+    let router = app(4);
+    let (status, _, _) = call(
+        &router,
+        upload_as("/api/v1/documents", fixture_bytes(false), "anything"),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED);
 }
