@@ -75,9 +75,10 @@ Each one is a real, verified finding, not a guess.
    `CompositeGraphicUnits` exists and is tested, but nothing calls it at open,
    so a document that places a vector graphic gets a stand-in image op with
    empty bytes. Clause 13.1 is `partial` for this reason. See M0-a.
-7. **The server is the weakest delivery form.** `cli`, `wasm`, `ffi` and
-   `reader` are all usable; `server` has an in-memory store, no authentication
-   and no drain. See M4.
+7. **The server was the weakest delivery form.** `cli`, `wasm`, `ffi` and
+   `reader` were usable; `server` had an in-memory store, no authentication and
+   no drain. All three are in now, so it is a deployable service rather than a
+   prototype. See M4.
 
 ---
 
@@ -262,14 +263,27 @@ legal carrier needs.
 ### M4. Server production readiness (M4-a … M4-e)
 
 Ranks here rather than lower because the `server` crate is one of the four
-delivery forms the README advertises, and it is the one furthest from being
-deployable.
+delivery forms the README advertises, and it was the one furthest from being
+deployable. All five are done.
 
-- **M4-a** Replace the in-memory store with a persistent one.
-- **M4-b** Authentication and per-tenant authorisation.
-- **M4-c** Rate limiting and a real request timeout budget.
-- **M4-d** Graceful drain, so a rolling deploy does not cut a render in half.
-- **M4-e** OpenAPI documentation generated from the route definitions.
+- **[x] M4-a** ~~Replace the in-memory store with a persistent one.~~
+  `Store::persistent` writes each document under a directory and a sidecar
+  recording its tenant, and adopts what an earlier process left, so an id
+  survives a restart. `STELEOFD_DATA_DIR` selects it; unset stays memory only.
+- **[x] M4-b** ~~Authentication and per-tenant authorisation.~~
+  A key ring read from `STELEOFD_API_KEYS` resolves a caller to a tenant, and
+  every document is scoped to its uploader. With no keys every caller shares
+  one implicit tenant, so a trial run needs no setup.
+- **[x] M4-c** ~~Rate limiting and a real request timeout budget.~~
+  A per-caller token bucket with a burst, plus a request timeout set past the
+  slowest route (PDF conversion) so a slow render is not cut off by it.
+- **[x] M4-d** ~~Graceful drain, so a rolling deploy does not cut a render in
+  half.~~ A stop is announced, the socket stops accepting, and in-flight work
+  gets a bounded grace period above the request timeout.
+- **[x] M4-e** ~~OpenAPI documentation generated from the route definitions.~~
+  Hand-written rather than derived, but `openapi::PATHS` is the single list the
+  router and the description are both held to, so a route on one and not the
+  other fails a test rather than a reader.
 
 ### M5. Rendering completeness (M5-a … M5-f)
 
@@ -463,12 +477,11 @@ buys nothing.
 **M3 fourth.** M3-a is independent. M3-c is the reason M0 matters: an archival
 check over a document that renders wrong is checking the wrong bytes.
 
-**M4 through M7 last.** M4 is independent of everything above it and could
-start any time the maintainers want a deployable server. M5 depends on M1-a,
-because every item in it is a rendering change and none of them can be
+**M4 through M7 last.** M4 is done — the server is deployable. M5 depends on
+M1-a, because every item in it is a rendering change and none of them can be
 verified without golden images. M6-a, M6-b, M6-c, M7-a, M2-b and M5-b are done,
-so what is left is the rest of M5's rendering work, the reader items that
-need a decision (M6-d, M6-e), and the deeper signature items in M3.
+so what is left is the rest of M5's rendering work, the reader items that need
+a decision (M6-d, M6-e), and the deeper signature items in M3.
 
 Far term is deliberately not scheduled. It describes a direction, not dates.
 

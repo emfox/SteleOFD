@@ -278,6 +278,62 @@ pub fn read_seals(
         .collect())
 }
 
+/// What one signature covers, and what the container holds that it does not.
+/// Clause 18.2.2 scopes a signature to the files its `References` name, so a
+/// document can be extended without moving an earlier seal. This is that scope
+/// made inspectable: a carrier asks which parts were fixed at signing time.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Coverage {
+    /// Id of the signature, as its descriptor writes it.
+    pub id: Option<String>,
+    /// Archive path of the descriptor, so a caller can tell two apart.
+    pub base_loc: String,
+    /// The files this signature protects, in reference order.
+    pub covered: Vec<String>,
+    /// Entries the container holds that no reference names: content that
+    /// arrived after this signature was applied, when it is the newest one.
+    pub uncovered: Vec<String>,
+}
+
+/// Report what each signature in the list covers. The union of every
+/// signature's covered set is subtracted from the container, so a file that
+/// any signature protects is not reported as vulnerable to a later edit.
+pub fn read_coverage(package: &mut Package, list_loc: &str) -> Result<Vec<Coverage>, OfdError> {
+    let refs = read_sign_list(package, list_loc)?;
+    let mut reports = Vec::new();
+    let mut protected: std::collections::HashSet<String> = std::collections::HashSet::new();
+    for entry in &refs {
+        let signature = read_signature(package, &entry.base_loc)?;
+        let covered: Vec<String> = signature
+            .references
+            .iter()
+            .map(|reference| reference.file_ref.clone())
+            .collect();
+        protected.extend(covered.iter().cloned());
+        reports.push(Coverage {
+            id: entry.id.clone(),
+            base_loc: entry.base_loc.clone(),
+            covered,
+            uncovered: Vec::new(),
+        });
+    }
+    // The descriptor files themselves are part of the container, and listing
+    // one as uncovered would be noise: it is not content a reader draws.
+    protected.extend(refs.iter().map(|entry| entry.base_loc.clone()));
+    protected.insert(list_loc.to_string());
+    let mut uncovered: Vec<String> = package
+        .entries()
+        .iter()
+        .filter(|path| !protected.contains(path.as_str()))
+        .cloned()
+        .collect();
+    uncovered.sort();
+    for report in &mut reports {
+        report.uncovered.clone_from(&uncovered);
+    }
+    Ok(reports)
+}
+
 /// A signed-value file holds the proof either as raw DER or as base64 text.
 fn b64_ish(bytes: &[u8]) -> Vec<u8> {
     match std::str::from_utf8(bytes) {

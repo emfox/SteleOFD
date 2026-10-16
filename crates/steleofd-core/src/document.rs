@@ -217,6 +217,22 @@ impl Document {
         steleofd_sign::read_sign_list(&mut self.package, &loc)
     }
 
+    /// What each signature covers, and what the container holds outside every
+    /// signature's scope. Clause 18.2.2: a signature protects the files its
+    /// references name, so this is how a carrier sees what arrived afterwards.
+    #[cfg(feature = "sign")]
+    pub fn signature_coverage(&mut self) -> Result<Vec<steleofd_sign::Coverage>> {
+        let loc = self
+            .parsed
+            .ofd
+            .doc_bodies
+            .first()
+            .and_then(|body| body.signatures.as_ref())
+            .map(|loc| loc.value.clone())
+            .ok_or_else(no_signatures)?;
+        steleofd_sign::read_coverage(&mut self.package, &loc)
+    }
+
     /// Verify every signature in the list, in document order.
     #[cfg(feature = "sign")]
     pub fn verify_signatures(&mut self) -> Result<Vec<steleofd_sign::VerifyStatus>> {
