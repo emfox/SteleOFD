@@ -19,7 +19,7 @@ SteleOFD 是 [GB/T 33190-2016《电子文件存储与交换格式 版式文档�
 | 能力 | |
 |---|---|
 | 阅读渲染 | GB/T 33190 渲染，无损缩放，超大文档分片加载 |
-| 格式转换 | OFD ↔ PDF / 图片 / SVG / HTML / Office，支持批量与合并 |
+| 格式转换 | OFD ↔ PDF / SVG / PNG，支持批量与合并；Office 与 OCR 仅在路线图中，尚未实现 |
 | 电子签章 | 国密 SM2/SM3/SM4 及国际算法验签，符合 GB/T 38540-2020 |
 | 多端交付 | 同一内核编译为 CLI、WASM、C ABI 与 HTTP 服务 |
 | 国际化 | 基于 Fluent 的消息层，内置 en-US / zh-CN |
@@ -83,14 +83,13 @@ Content.xml (嵌套模板树)
        ▼  仅此处解析一次
 DisplayList (拍平 + 绝对 CTM + 资源已解析)
        │
-       ├──► render    raster / canvas / svg
+       ├──► render    raster
        ├──► print
-       ├──► convert   PDF / Office
+       ├──► convert   PDF / SVG / PNG
        └──► search    文本提取
 ```
 
-浏览器可以拿到 Canvas 指令流而不是位图。体积约为位图的十分之一，缩放时矢量重绘而非
-重采样，因此始终锐利。
+Office 与 OCR 转换在路线图中，尚未落地。
 
 ### 引擎层不放文案
 

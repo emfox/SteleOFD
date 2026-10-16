@@ -17,8 +17,6 @@ tracing.workspace = true
 
 [features]
 default = ["backend-raster"]
-# Backends are pluggable: bitmap for server and CLI, command stream for browsers.
+# The raster backend is the one that exists. A command-stream backend for
+# browsers is planned; it lands as its own feature when it lands, not before.
 backend-raster   = []
-backend-canvas   = []
-backend-svg      = []
-backend-pdf      = []

@@ -21,7 +21,7 @@ Status: early. The workspace and interfaces are in place, the engine is not.
 | Capability | |
 |---|---|
 | Reading and rendering | GB/T 33190 rendering, lossless zoom, sharded loading for large documents |
-| Conversion | OFD to and from PDF, images, SVG, HTML and Office; batch and merge |
+| Conversion | OFD to and from PDF, SVG and PNG; batch and merge. Office and OCR are planned, not built |
 | Signatures | SM2/SM3/SM4 and international algorithms, per GB/T 38540-2020 |
 | Delivery | One engine built as a CLI, WebAssembly, a C ABI library and an HTTP service |
 | Localization | Fluent message layer, en-US and zh-CN |
@@ -91,15 +91,13 @@ Content.xml (nested template tree)
        v  parsed once
 DisplayList (flattened, absolute CTM, resources resolved)
        |
-       +--> render    raster / canvas / svg
+       +--> render    raster
        +--> print
-       +--> convert   PDF / Office
+       +--> convert   PDF / SVG / PNG
        +--> search    text extraction
 ```
 
-A browser can be handed the Canvas command stream instead of a bitmap. It is
-about a tenth the size and stays sharp when zoomed, because the vectors are
-redrawn rather than resampled.
+Office and OCR conversion are on the roadmap, not in the code.
 
 ### No user-facing text in the engine
 

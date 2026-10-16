@@ -52,9 +52,9 @@ way.
          v
   DisplayList (flattened, absolute CTM, resources resolved)
          |
-         +--> render    raster / canvas / svg     screen and images
+         +--> render    raster                    screen and images
          +--> print                               printing
-         +--> convert   PDF / Office
+         +--> convert   PDF / SVG / PNG           Office and OCR are planned
          +--> search    text extraction
 ```
 
@@ -76,21 +76,18 @@ carrying absolute transforms, and every backend consumes only that IR.
 tiny-skia, no lopdf), only on geometry and fonts, and the whole IR is
 serializable. That is what lets it cross process and language boundaries.
 
-### 2.2 Pluggable render backends
+### 2.2 The render backend
 
 ```rust
 [features]
 default = ["backend-raster"]
 backend-raster = []   # tiny-skia bitmap, PNG for server and CLI
-backend-canvas = []   # Canvas 2D command stream, replayed by browser JS
-backend-svg    = []
-backend-pdf    = []
 ```
 
-One Rust engine compiles to different shapes: the server emits bitmaps while the
-browser receives a **command stream** rather than an image. The stream is about a
-tenth the size of a bitmap and re-zooms vectorially without refetching, staying
-sharp at 200% or 300%.
+There is one backend today. A **command stream** backend for browsers is
+planned: it would ship a vector command list about a tenth the size of a
+bitmap, re-zooming without refetching and staying sharp at 200% or 300%. It
+adds its own feature when it exists; the feature is not declared in advance.
 
 ### 2.3 No user-facing text in the engine
 
@@ -159,10 +156,10 @@ exemption, because a C ABI requires it. Two designs were reworked to reach this:
 | L2 | `steleofd-font` | Font registry, metrics, shaping, system fallback |
 | L2 | `steleofd-display` | **Display list IR**, the architectural keystone |
 | L2 | `steleofd-parser` | `Content.xml` to `DisplayList` |
-| L2 | `steleofd-render` | Pluggable backends: raster, canvas, svg, pdf |
+| L2 | `steleofd-render` | Raster backend: display list to pixels |
 | L3 | `steleofd-crypto` | SM2, SM3, SM4, X.509, PKCS#12 |
 | L3 | `steleofd-sign` | Electronic seals and verification per GB/T 38540 |
-| L3 | `steleofd-convert` | Format interconversion: PDF, image, SVG, Office, OCR |
+| L3 | `steleofd-convert` | Format interconversion: PDF, SVG, PNG (Office, OCR planned) |
 | L3 | `steleofd-edit` | Command-pattern editing with an undo stack |
 | L3 | `steleofd-search` | Full-text search and reverse glyph-to-Unicode lookup |
 | L3 | `steleofd-archive` | Archival compliance validation (OFD-A) |
@@ -183,25 +180,27 @@ Features trim binary size per delivery form:
 [features]
 default  = ["render", "sign", "convert", "pdf"]
 render   = ["dep:steleofd-render", "steleofd-render/backend-raster"]
-canvas   = ["dep:steleofd-render", "steleofd-render/backend-canvas"]
 print    = ["dep:steleofd-print"]
 sign     = ["dep:steleofd-sign", "dep:steleofd-crypto"]
 convert  = ["dep:steleofd-convert", "dep:steleofd-render"]
 pdf      = ["convert", "steleofd-convert/pdf"]
-office   = ["convert", "steleofd-convert/office"]
-ocr      = ["convert", "steleofd-convert/ocr"]
+office   = ["convert", "steleofd-convert/office"]   # not implemented yet
+ocr      = ["convert", "steleofd-convert/ocr"]      # not implemented yet
 edit     = ["dep:steleofd-edit"]
 search   = ["dep:steleofd-search"]
 archive  = ["dep:steleofd-archive"]
 async    = ["dep:rayon"]
 ```
 
+`office` and `ocr` compile and change nothing; they exist so the capability has
+a name before it has an implementation. Everything else is wired.
+
 Typical combinations:
 
 | Delivery form | Enabled features |
 |---|---|
 | Server-side conversion service | `convert, pdf, archive, async` |
-| Browser preview SDK | `canvas, sign` |
+| Browser preview SDK | `sign` (a canvas backend is planned) |
 | Web reader, full featured | `render, sign, convert, print, edit, search` |
 | Embedded slim build | `render`, English only |
 

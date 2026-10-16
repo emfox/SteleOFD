@@ -32,13 +32,14 @@ default = ["render", "sign", "convert", "pdf"]
 
 # Capability features, to trim binary size per delivery form.
 render   = ["dep:steleofd-render", "steleofd-render/backend-raster"]
-canvas   = ["dep:steleofd-render", "steleofd-render/backend-canvas"]
 print    = ["dep:steleofd-print"]
 sign     = ["dep:steleofd-sign", "dep:steleofd-crypto"]
 # Convert pulls in the raster backend anyway (PNG output goes through it),
 # so naming the dependency here costs no extra compilation.
 convert  = ["dep:steleofd-convert", "dep:steleofd-render"]
 pdf      = ["convert", "steleofd-convert/pdf"]
+# Not implemented yet; they forward to convert's placeholder features and
+# change nothing. Kept so the capability has a name. See roadmap M6.
 office   = ["convert", "steleofd-convert/office"]
 ocr      = ["convert", "steleofd-convert/ocr"]
 edit     = ["dep:steleofd-edit"]
