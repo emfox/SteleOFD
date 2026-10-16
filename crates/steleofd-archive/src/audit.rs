@@ -1,13 +1,23 @@
-//! Archival readiness checks derived from GB/T 33190-2016.
-//! Nothing here claims OFD/A conformance: this reports only what the standard
-//! itself requires of a self-contained document.
+//! Archival readiness checks derived from GB/T 33190-2016 and GB/T 42133-2022.
+//! Nothing here claims OFD/A conformance: this reports only what the standards
+//! themselves require of a document kept for the long term.
 
 use steleofd_error::Result;
-use steleofd_package::{ENTRY_POINT, Package, parent_of, resolve};
+use steleofd_package::{ENTRY_POINT, EntryKind, Package, parent_of, resolve};
 use steleofd_xml::Cursor;
 use steleofd_xml::cursor::Event;
 
 use crate::report::{Finding, Report, Severity};
+
+/// The document type an archival document declares, clause 6.2.1 a).
+pub const OFD_A_DOC_TYPE: &str = "OFD-A";
+
+/// The only raster formats clause 6.2.6 e) lets an archived page hold. Anything
+/// else has to be converted before archiving, so seeing another one is worth a
+/// warning rather than a refusal: the bytes may still be readable.
+const ARCHIVAL_IMAGE_EXTENSIONS: &[&str] = &[
+    "bmp", "jpg", "jpeg", "png", "jbig2", "jb2", "jp2", "jpx", "jpf", "tif", "tiff",
+];
 
 /// Where a single reference to another entry was found.
 struct Reference {
@@ -62,6 +72,7 @@ impl Auditor {
         }
 
         let root = read(package, ENTRY_POINT)?;
+        self.check_archival_profile(package, &root, &mut report)?;
         let references = references(&root, REFERENCING)?;
         // Clause 7.4: DocInfo lives under OFD.xml, not under Document.xml.
         if text_of(&root, "DocID").is_none_or(|id| id.is_empty()) {
@@ -84,15 +95,70 @@ impl Auditor {
         }
 
         for reference in &references {
-            if let Some(finding) = self.check(package, "", ENTRY_POINT, reference) {
-                report.push(finding);
-            }
+            self.check(package, "", ENTRY_POINT, reference, &mut report);
         }
 
         for document in references.iter().filter(|r| r.element == "DocRoot") {
             self.audit_document(package, &document.value, &mut report)?;
         }
         Ok(report)
+    }
+
+    /// The checks that come from GB/T 42133-2022 rather than GB/T 33190:
+    /// clause 6.2.1 a) wants the profile declared, 6.16 forbids encryption,
+    /// and 6.2.6 e) narrows the raster formats a page may hold.
+    fn check_archival_profile(
+        &self,
+        package: &Package,
+        root: &str,
+        report: &mut Report,
+    ) -> Result<()> {
+        match doc_type(root) {
+            Some(value) if value == OFD_A_DOC_TYPE => {}
+            Some(value) => report.push(Finding::new(
+                "ARCH-101",
+                Severity::Warning,
+                "6.2.1 a)",
+                ENTRY_POINT,
+                format!("DocType is {value:?}, but an archival document declares \"OFD-A\""),
+            )),
+            None => report.push(Finding::new(
+                "ARCH-101",
+                Severity::Warning,
+                "6.2.1 a)",
+                ENTRY_POINT,
+                "no DocType, so the document does not declare the archival profile",
+            )),
+        }
+        // Clause 6.16: a document kept for the long term is stored in the
+        // clear, so an encrypted container cannot be archived as it stands.
+        if package.is_encrypted() {
+            report.push(Finding::new(
+                "ARCH-102",
+                Severity::Error,
+                "6.16",
+                ENTRY_POINT,
+                "the container carries ZIP encryption, but an archived document is plain",
+            ));
+        }
+        // Clause 6.2.6 e): any raster image is one of six formats. The
+        // extension is the only hint available without decoding the bytes.
+        for path in package.entries().iter() {
+            if package.kind_of(path) != Some(EntryKind::Image) {
+                continue;
+            }
+            if is_archival_image(path) {
+                continue;
+            }
+            report.push(Finding::new(
+                "ARCH-104",
+                Severity::Warning,
+                "6.2.6 e)",
+                path.clone(),
+                "the image is not one of the six formats an archived page may hold",
+            ));
+        }
+        Ok(())
     }
 
     /// Follow the entries a document points at. A reference to a resource
@@ -116,9 +182,7 @@ impl Auditor {
             let table = read(package, &table_path)?;
             let table_base = parent_of(&table_path);
             for file in references(&table, RESOURCE_FILES)? {
-                if let Some(finding) = self.check(package, &table_base, &table_path, &file) {
-                    report.push(finding);
-                }
+                self.check(package, &table_base, &table_path, &file, report);
             }
         }
         Ok(())
@@ -138,9 +202,7 @@ impl Auditor {
             if reference.element == "DocRoot" {
                 continue;
             }
-            if let Some(finding) = self.check(package, &base, path, &reference) {
-                report.push(finding);
-            }
+            self.check(package, &base, path, &reference, report);
             if reference.element != "Page" {
                 continue;
             }
@@ -152,28 +214,27 @@ impl Auditor {
             let page_xml = read(package, &page_path)?;
             self.audit_resource_tables(package, &page_path, report)?;
             for nested in references(&page_xml, PAGE_RESOURCES)? {
-                if let Some(finding) = self.check(package, &res_base, &page_path, &nested) {
-                    report.push(finding);
-                }
+                self.check(package, &res_base, &page_path, &nested, report);
             }
         }
         Ok(())
     }
 
-    /// Classify one reference, returning a finding when it is unusable.
+    /// Classify one reference, recording any finding it raises.
     fn check(
         &self,
         package: &Package,
         base: &str,
         found_in: &str,
         reference: &Reference,
-    ) -> Option<Finding> {
+        report: &mut Report,
+    ) {
         let value = reference.value.trim();
         if value.is_empty() {
-            return None;
+            return;
         }
         if is_external(value) {
-            return Some(Finding::new(
+            report.push(Finding::new(
                 "ARCH-007",
                 Severity::Error,
                 "6.2",
@@ -183,26 +244,41 @@ impl Auditor {
                     reference.element
                 ),
             ));
+            // Clause 6.9 a) forbids actions that reach an external resource,
+            // and 6.11 says the same of indexing content, so the same
+            // reference is reported under the archival clause as well.
+            report.push(Finding::new(
+                "ARCH-103",
+                Severity::Error,
+                "6.2, 6.9 a), 6.11",
+                found_in,
+                format!(
+                    "{} reaches {value:?} outside the container, which an archived document may not do",
+                    reference.element
+                ),
+            ));
+            return;
         }
         if escapes(value) {
-            return Some(Finding::new(
+            report.push(Finding::new(
                 "ARCH-008",
                 Severity::Error,
                 "6.2",
                 found_in,
                 format!("{} escapes the container with {value:?}", reference.element),
             ));
+            return;
         }
         let resolved = resolve(base, value);
         if package.contains(&resolved) {
-            return None;
+            return;
         }
         let (code, clause) = match reference.element.as_str() {
             "DocRoot" => ("ARCH-002", "7.4"),
             "Page" => ("ARCH-003", "7.6"),
             _ => ("ARCH-004", "7.9"),
         };
-        Some(Finding::new(
+        report.push(Finding::new(
             code,
             Severity::Error,
             clause,
@@ -211,7 +287,7 @@ impl Auditor {
                 "{} refers to {value:?}, which the container does not hold",
                 reference.element
             ),
-        ))
+        ));
     }
 }
 
@@ -284,6 +360,27 @@ fn text_of(xml: &str, name: &str) -> Option<String> {
             _ => {}
         }
     }
+}
+
+/// `DocType` of the root element, or `None` when it is absent.
+fn doc_type(xml: &str) -> Option<String> {
+    let mut cursor = Cursor::new(xml);
+    loop {
+        match cursor.next_event().ok()? {
+            Event::Start(node) if node.local() == "OFD" => {
+                return node.attributes().get("DocType").map(|v| v.to_string());
+            }
+            Event::Eof => return None,
+            _ => {}
+        }
+    }
+}
+
+/// Whether an image entry carries one of the formats clause 6.2.6 e) allows.
+fn is_archival_image(path: &str) -> bool {
+    let lower = path.to_ascii_lowercase();
+    let extension = lower.rsplit('.').next().unwrap_or("");
+    ARCHIVAL_IMAGE_EXTENSIONS.contains(&extension)
 }
 
 #[cfg(test)]

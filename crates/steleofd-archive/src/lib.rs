@@ -1,6 +1,6 @@
 //! steleofd-archive
-//! Archival readiness auditing derived from GB/T 33190-2016.
-//! This is not OFD/A certification; the checks cover self-containment only.
+//! Archival readiness auditing from GB/T 33190-2016 and GB/T 42133-2022. It
+//! reports what those standards require; it certifies nothing and rewrites nothing.
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
