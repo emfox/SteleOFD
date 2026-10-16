@@ -136,12 +136,10 @@ pub(crate) fn paint_for(paint: &Paint, total: Transform) -> Option<TsPaint<'stat
             };
             Some(paint)
         }
-        // A pattern is not resolvable here; the caller keeps it visible with
-        // the fallback rather than dropping the whole fill.
-        Paint::Pattern(_) => None,
-        // A mesh is painted per pixel by `mesh::paint_mesh`, which needs the
-        // pixmap and the outline; `paint_for` has neither.
-        Paint::Mesh(_) => None,
+        // A mesh is painted per pixel by `mesh::paint_mesh` and a pattern tiled
+        // by `pattern::paint_pattern`; both need the pixmap, so neither is a
+        // shader `paint_for` can build.
+        Paint::Mesh(_) | Paint::Pattern(_) => None,
     }
 }
 

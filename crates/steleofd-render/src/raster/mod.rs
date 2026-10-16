@@ -162,19 +162,36 @@ pub fn render_page(
                 let total = total_transform(&state, &page.page_box, options.dpi);
                 let ts_path = to_ts_path(path, total)?;
                 if let Some(paint) = fill {
-                    if let Paint::Mesh(spec) = paint {
+                    match paint {
                         // A mesh cannot be a tiny-skia shader, so it is painted
                         // per pixel and masked by the outline being filled.
-                        mesh::paint_mesh(&mut pixmap, spec, &ts_path, state.clip.as_ref(), total);
-                    } else {
-                        let p = paint_for(paint, total).unwrap_or_else(|| solid_paint(paint));
-                        pixmap.fill_path(
+                        Paint::Mesh(spec) => mesh::paint_mesh(
+                            &mut pixmap,
+                            spec,
                             &ts_path,
-                            &p,
-                            fill_rule(*rule),
-                            Transform::identity(),
                             state.clip.as_ref(),
-                        );
+                            total,
+                        ),
+                        // A pattern is vector content, so it is rasterized once
+                        // and tiled; the same mask confines the repeat.
+                        Paint::Pattern(spec) => pattern::paint_pattern(
+                            &mut pixmap,
+                            spec,
+                            &ts_path,
+                            state.clip.as_ref(),
+                            fonts,
+                            total,
+                        ),
+                        _ => {
+                            let p = paint_for(paint, total).unwrap_or_else(|| solid_paint(paint));
+                            pixmap.fill_path(
+                                &ts_path,
+                                &p,
+                                fill_rule(*rule),
+                                Transform::identity(),
+                                state.clip.as_ref(),
+                            );
+                        }
                     }
                 }
                 if let Some(paint) = stroke {
@@ -229,6 +246,7 @@ pub fn render_page(
 
 mod gradient;
 mod mesh;
+mod pattern;
 mod shape;
 mod text;
 
@@ -240,6 +258,28 @@ use shape::{
 use text::{ImageOutcome, TextOutcome, draw_image, draw_text};
 
 pub use shape::{Cubic, arc_cubics};
+
+/// Rasterize a pattern cell at `scale` pixels per millimetre, so a tile and the
+/// page it repeats on agree. The cell carries its own bounds, which become the
+/// page box of the little display list it is rendered as.
+pub(crate) fn render_cell(
+    spec: &steleofd_display::PatternSpec,
+    scale: f64,
+    fonts: &FontManager,
+) -> Option<Pixmap> {
+    let mut cell = spec.cell.as_ref().clone();
+    cell.page_box = Rect::new(0.0, 0.0, spec.width.max(1e-6), spec.height.max(1e-6));
+    let options = RenderOptions {
+        dpi: scale * 25.4,
+        // A tile is transparent where its cell draws nothing, or the repeats
+        // would paint over each other with an opaque background.
+        background: None,
+        ..RenderOptions::default()
+    };
+    render_page(&cell, fonts, &options)
+        .ok()
+        .map(|out| out.pixmap)
+}
 
 #[cfg(test)]
 mod tests {
