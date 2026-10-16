@@ -67,7 +67,7 @@ jobs:
           RUSTFLAGS: ""
         run: |
           set -o pipefail
-          cargo clippy --workspace --all-targets --message-format=short -- -D warnings 2>&1 | tee clippy.log
+          cargo clippy --workspace --all-targets --all-features --message-format=short -- -D warnings 2>&1 | tee clippy.log
           status=$?
           # Surface each finding as an annotation, so it is readable on the
           # commit rather than only in a log nobody opens. A clean run leaves
@@ -76,8 +76,10 @@ jobs:
             | while IFS= read -r line; do echo "::error::$line"; done || true
           exit $status
 
-      - name: Build
-        run: cargo build --workspace
+      # One build, then the test steps reuse it. `cargo test` would otherwise
+      # recompile the same crates for each flag set it is invoked with.
+      - name: Build every target and feature
+        run: cargo build --workspace --all-targets --all-features
 
       - name: Test
         run: cargo test --workspace
