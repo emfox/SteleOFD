@@ -3,6 +3,7 @@
 
 use steleofd_common::Rect;
 use steleofd_display::DrawOp;
+use steleofd_display::ops::Color;
 use steleofd_display::ops::Paint;
 use steleofd_geometry::Affine;
 use steleofd_model::{ActionEvent, ActionKind, GotoTarget};
@@ -803,6 +804,132 @@ fn gb_t_33190_8_3_4_segments_keep_their_positions_and_colours() {
         stops[2].color,
         steleofd_display::ops::Color::rgba(0, 0, 255, 128)
     );
+}
+
+#[test]
+fn gb_t_33190_8_3_6_gouraud_shading_carries_its_coloured_vertices() {
+    // A GouraudShd lists its vertices as Point children, each with the colour
+    // sampled there; the strip form makes one triangle per consecutive triple.
+    let ops = page_ops(
+        r##"<PathObject ID="10" Boundary="0 0 10 10" Fill="true">
+  <AbbreviatedData>M 0 0 L 10 0 L 10 10 Z</AbbreviatedData>
+  <FillColor><GouraudShd>
+    <Point X="0" Y="0"><Color Value="#FF0000"/></Point>
+    <Point X="10" Y="0"><Color Value="#00FF00"/></Point>
+    <Point X="0" Y="10"><Color Value="#0000FF"/></Point>
+  </GouraudShd></FillColor>
+</PathObject>"##,
+        "",
+    );
+    let DrawOp::Path {
+        fill: Some(Paint::Mesh(spec)),
+        ..
+    } = &ops[0]
+    else {
+        panic!("expected a path filled with a mesh, got {ops:?}");
+    };
+    assert_eq!(spec.points.len(), 3, "one vertex per Point");
+    assert_eq!((spec.points[0].x, spec.points[0].y), (0.0, 0.0));
+    assert_eq!(spec.points[2].color, Color::rgba(0, 0, 255, 255));
+    assert_eq!(
+        spec.triangles,
+        vec![[0, 1, 2]],
+        "a strip makes one triangle"
+    );
+}
+
+#[test]
+fn gb_t_33190_8_3_6_a_gouraud_mesh_with_several_strips_keeps_them_apart() {
+    // Six vertices are two triangles, not one six-vertex fan, so the mesh
+    // covers exactly the triangles the writer drew.
+    let ops = page_ops(
+        r##"<PathObject ID="10" Boundary="0 0 10 10" Fill="true">
+  <AbbreviatedData>M 0 0 L 10 0 L 10 10 Z</AbbreviatedData>
+  <FillColor><GouraudShd>
+    <Point X="0" Y="0"><Color Value="#FF0000"/></Point>
+    <Point X="5" Y="0"><Color Value="#00FF00"/></Point>
+    <Point X="0" Y="5"><Color Value="#0000FF"/></Point>
+    <Point X="5" Y="5"><Color Value="#FFFF00"/></Point>
+    <Point X="10" Y="5"><Color Value="#FF00FF"/></Point>
+    <Point X="5" Y="10"><Color Value="#00FFFF"/></Point>
+  </GouraudShd></FillColor>
+</PathObject>"##,
+        "",
+    );
+    let DrawOp::Path {
+        fill: Some(Paint::Mesh(spec)),
+        ..
+    } = &ops[0]
+    else {
+        panic!("expected a path filled with a mesh, got {ops:?}");
+    };
+    assert_eq!(spec.points.len(), 6);
+    assert_eq!(
+        spec.triangles,
+        vec![[0, 1, 2], [3, 4, 5]],
+        "each triple is its own triangle"
+    );
+}
+
+#[test]
+fn gb_t_33190_8_3_7_a_lattice_mesh_tiles_its_points_into_quads() {
+    // LaGouraudShd names a lattice: VerticesPerRow says how many vertices a row
+    // holds, and each 2x2 cell becomes two triangles.
+    let ops = page_ops(
+        r##"<PathObject ID="10" Boundary="0 0 10 10" Fill="true">
+  <AbbreviatedData>M 0 0 L 10 0 L 10 10 Z</AbbreviatedData>
+  <FillColor><LaGouraudShd VerticesPerRow="2">
+    <Point X="0" Y="0"><Color Value="#FF0000"/></Point>
+    <Point X="10" Y="0"><Color Value="#00FF00"/></Point>
+    <Point X="0" Y="10"><Color Value="#0000FF"/></Point>
+    <Point X="10" Y="10"><Color Value="#FFFF00"/></Point>
+  </LaGouraudShd></FillColor>
+</PathObject>"##,
+        "",
+    );
+    let DrawOp::Path {
+        fill: Some(Paint::Mesh(spec)),
+        ..
+    } = &ops[0]
+    else {
+        panic!("expected a path filled with a lattice mesh, got {ops:?}");
+    };
+    assert_eq!(spec.points.len(), 4);
+    assert_eq!(
+        spec.triangles,
+        vec![[0, 1, 2], [1, 3, 2]],
+        "one 2x2 cell makes two triangles"
+    );
+}
+
+#[test]
+fn gb_t_33190_8_3_7_a_lattice_wider_than_it_is_tall_makes_every_cell() {
+    // Three vertices per row over two rows: two cells across, one down, so four
+    // triangles.
+    let ops = page_ops(
+        r##"<PathObject ID="10" Boundary="0 0 10 10" Fill="true">
+  <AbbreviatedData>M 0 0 L 10 0 L 10 10 Z</AbbreviatedData>
+  <FillColor><LaGouraudShd VerticesPerRow="3">
+    <Point X="0" Y="0"><Color Value="#FF0000"/></Point>
+    <Point X="5" Y="0"><Color Value="#00FF00"/></Point>
+    <Point X="10" Y="0"><Color Value="#0000FF"/></Point>
+    <Point X="0" Y="10"><Color Value="#FFFF00"/></Point>
+    <Point X="5" Y="10"><Color Value="#FF00FF"/></Point>
+    <Point X="10" Y="10"><Color Value="#00FFFF"/></Point>
+  </LaGouraudShd></FillColor>
+</PathObject>"##,
+        "",
+    );
+    let DrawOp::Path {
+        fill: Some(Paint::Mesh(spec)),
+        ..
+    } = &ops[0]
+    else {
+        panic!("expected a path filled with a lattice mesh, got {ops:?}");
+    };
+    assert_eq!(spec.triangles.len(), 4, "two cells across, one row down");
+    assert_eq!(spec.triangles[0], [0, 1, 3]);
+    assert_eq!(spec.triangles[1], [1, 4, 3]);
 }
 
 #[test]
