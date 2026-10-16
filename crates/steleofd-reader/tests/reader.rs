@@ -1070,6 +1070,7 @@ mod keyboard {
     fn the_command_keys_reach_the_expensive_actions() {
         assert_eq!(press(Key::O, ctrl()), Some(Action::Open));
         assert_eq!(press(Key::S, ctrl()), Some(Action::ExportPdf));
+        assert_eq!(press(Key::P, ctrl()), Some(Action::Print));
         assert_eq!(press(Key::F, ctrl()), Some(Action::ToggleSearch));
         assert_eq!(press(Key::Slash, ctrl()), Some(Action::FocusSearch));
     }
@@ -1183,6 +1184,135 @@ mod keyboard {
         app.apply(Action::ToggleSignatures);
         assert!(!app.signatures_open());
     }
+}
+
+/// Lay out and print the pages on screen, and wait for the sheets. Like
+/// export, printing is off the draw path, so the queue is pumped the way a
+/// frame pumps it and the bound fails loudly rather than hanging forever.
+fn wait_for_print(app: &mut App) -> bool {
+    for _ in 0..2000 {
+        app.poll();
+        if !app.is_printing() {
+            return true;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(2));
+    }
+    false
+}
+
+#[test]
+fn a_print_job_covers_the_pages_on_screen() {
+    // Printing what the reader is looking at is the whole point of the menu
+    // entry: a spread prints as two pages, not as the whole document.
+    let mut app = open_pages(6);
+    app.set_layout(steleofd_reader::viewer::Layout::Facing);
+    app.go_to(2);
+    assert_eq!(app.print_pages(), vec![2, 3], "a spread is both pages");
+}
+
+#[test]
+fn asking_to_print_before_a_document_is_open_does_nothing() {
+    // The button is disabled with nothing open, but the state must refuse too:
+    // a reachable widget must not be able to start a job with no document.
+    let mut app = App::new();
+    app.request_print();
+    assert!(!app.wants_print());
+    assert!(app.take_print_request().is_none());
+}
+
+#[test]
+fn the_print_request_is_handed_out_once() {
+    let mut app = open();
+    app.request_print();
+    assert_eq!(
+        app.take_print_request(),
+        Some(vec![0]),
+        "the request names the pages to lay out"
+    );
+    assert!(
+        app.take_print_request().is_none(),
+        "a second read would start the job twice"
+    );
+}
+
+#[test]
+fn printing_the_pages_on_screen_produces_rasters_for_each_of_them() {
+    let mut app = open_pages(4);
+    app.set_layout(steleofd_reader::viewer::Layout::Facing);
+    app.go_to(0);
+    let pages = app.print_pages();
+    let settings = app.print_settings();
+    app.print_to(pages, settings);
+    assert!(wait_for_print(&mut app), "the print worker never answered");
+    assert!(app.error().is_none(), "printing failed: {:?}", app.error());
+    let report = app.print_report().expect("the reader reports the job");
+    assert_eq!(report.sheets.len(), 2, "the spread laid out as two pages");
+    assert_eq!(report.sheet_count, 2, "single-sided, so one sheet each");
+    assert!(
+        report
+            .sheets
+            .iter()
+            .all(|sheet| sheet.width > 0 && sheet.height > 0),
+        "every sheet rasterized: {:?}",
+        report.sheets
+    );
+    // The plan carries the page each sheet came from, so a caller can tell
+    // which page landed where rather than only how many there were.
+    let planned: Vec<usize> = report.sheets.iter().map(|s| s.page_index).collect();
+    assert_eq!(planned, vec![0, 1]);
+}
+
+#[test]
+fn a_print_job_of_no_pages_never_starts() {
+    // Nothing to print is not a zero-page job; it is no job at all.
+    let mut app = open();
+    app.print_to(Vec::new(), app.print_settings());
+    assert!(!app.is_printing(), "an empty job was submitted anyway");
+    assert!(app.print_report().is_none());
+}
+
+#[test]
+fn closing_the_document_forgets_the_print_report() {
+    let mut app = open_pages(2);
+    app.print_to(app.print_pages(), app.print_settings());
+    assert!(wait_for_print(&mut app), "the print worker never answered");
+    assert!(app.print_report().is_some());
+    app.close();
+    assert!(
+        app.print_report().is_none(),
+        "a report must not outlive the document it describes"
+    );
+    assert!(!app.is_printing(), "and the worker goes with it");
+}
+
+#[test]
+fn the_status_bar_names_the_pages_the_sheets_and_the_paper() {
+    let mut app = open_pages(2);
+    app.set_layout(steleofd_reader::viewer::Layout::Facing);
+    app.go_to(0);
+    app.print_to(app.print_pages(), app.print_settings());
+    assert!(wait_for_print(&mut app), "the print worker never answered");
+    let label = app.print_label().expect("the job reported");
+    // Two pages on two sheets, on the paper the document itself declares. The
+    // counts are separate because they differ: a duplexed job would say one.
+    assert!(
+        label.contains("2 page") && label.contains("2 sheet"),
+        "the label names both counts: {label}"
+    );
+    assert!(
+        !label.contains('$'),
+        "the label is a rendered sentence, not a template: {label}"
+    );
+}
+
+#[test]
+fn the_paper_names_come_from_the_catalogue() {
+    // A paper size is a word like any other, so it is translated rather than
+    // hardcoded in the reader's source.
+    use steleofd_i18n::{I18n, Locale, MessageId};
+    let english = I18n::with_locale(Locale::en_us());
+    assert_eq!(english.text(MessageId::ReaderPaperA4), "A4");
+    assert!(!english.text(MessageId::ReaderPrintDone).is_empty());
 }
 
 /// Switching language, which has to redraw every label from the catalogue.

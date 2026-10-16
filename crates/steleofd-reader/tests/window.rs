@@ -456,6 +456,54 @@ fn a_finished_export_is_announced_in_the_status_bar() {
 }
 
 #[test]
+fn asking_to_print_reaches_the_host_without_a_destination() {
+    // Printing is bounded by the paper the reader has, not by a file, so the
+    // window reports the request and does not wait for a dialog.
+    let mut app = App::new();
+    let bytes = steleofd_testkit::multipage_archive(3);
+    app.open_bytes(&bytes, Some("many.ofd"))
+        .expect("the fixture opens");
+    let mut harness = harness(app);
+
+    harness.get_by_label(&label(MessageId::ReaderPrint)).click();
+    harness.run();
+    assert!(
+        harness.state().wants_print(),
+        "the print button did not reach the state the host reads"
+    );
+}
+
+#[test]
+fn the_print_button_is_disabled_until_a_document_is_open() {
+    let harness = harness(App::new());
+    let text = label(MessageId::ReaderPrint);
+    let button = harness.get_by_label(&text);
+    assert!(
+        button.accesskit_node().is_disabled(),
+        "there is nothing to print with no document open"
+    );
+}
+
+#[test]
+fn a_finished_print_job_is_announced_in_the_status_bar() {
+    let mut app = App::new();
+    let bytes = steleofd_testkit::multipage_archive(2);
+    app.open_bytes(&bytes, Some("many.ofd"))
+        .expect("the fixture opens");
+    app.print_to(app.print_pages(), app.print_settings());
+    for _ in 0..2000 {
+        app.poll();
+        if !app.is_printing() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(2));
+    }
+    let harness = harness(app);
+    let label = harness.state().print_label().expect("the job reported");
+    harness.get_by_label_contains(&label);
+}
+
+#[test]
 fn the_menu_offers_both_languages_in_their_own_names() {
     // A reader who cannot read the menu's current language still has to be
     // able to find theirs, so the entries are endonyms rather than translations.

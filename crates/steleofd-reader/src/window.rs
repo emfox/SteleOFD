@@ -539,6 +539,12 @@ fn draw_status(ui: &mut Ui, app: &mut App) {
                     ui.label(egui::RichText::new(label).weak());
                     ui.separator();
                 }
+                // A print job is the newest thing after an export, so it speaks
+                // next: the reader wants to know how many sheets went out.
+                if let Some(label) = app.print_label() {
+                    ui.label(egui::RichText::new(label).weak());
+                    ui.separator();
+                }
                 let info = app.info_label();
                 if !info.is_empty() {
                     ui.label(egui::RichText::new(info).weak());
