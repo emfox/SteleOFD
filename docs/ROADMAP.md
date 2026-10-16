@@ -16,10 +16,10 @@ the note a person would need to start them.
 | Measure | Value |
 | --- | --- |
 | Crates | 26 (L0 foundation through L5 delivery) |
-| Source | 37,725 lines of Rust, measured with `find crates -name '*.rs'` |
-| Tests | 910 passing, plus 33 inline unit-test modules |
+| Source | 38,687 lines of Rust, measured with `find crates -name '*.rs'` |
+| Tests | 922 passing, plus 33 inline unit-test modules |
 | Delivery forms | `cli`, `wasm`, `ffi`, `server`, `reader`, all on the `core` facade |
-| Standard clauses | 74 registered in GB/T 33190-2016, 66 covered, 8 `deviation` with a stated reason |
+| Standard clauses | 74 registered in GB/T 33190-2016, 70 covered, 4 `deviation` with a stated reason |
 | Languages | `en-US` and `zh-CN`, 88 message keys, parity enforced in CI |
 | CI | fmt, clippy, build, test, all-features test, i18n, language, conformance, XSD validation, corpus freshness, fuzz smoke run |
 
@@ -169,11 +169,12 @@ explicitly documented as a deviation.
 
 ### M3. Rendering completeness (M3-a … M3-d)
 
-- **M3-a** Colour spaces beyond sRGB, and CMYK for print.
+- **M3-a** Colour spaces beyond sRGB, and CMYK for print. The declaration side is done: clause 7.13's `ColorSpaces` table is read at open and `ParsedDocument::color_spaces` carries each space's type, depth, profile and palette. What is left is the painting side — no backend consumes the table yet, so an image naming a CMYK space is still decoded as sRGB.
 - **M3-b** Blending and transparency modes.
 - **M3-c** Bring each test-verified drawing feature to full parity. The first is done: `RadialShd` end centre and radius now travel with the op and each backend reduces the cone to what it can paint.
 - **M3-d** A golden-image suite: render the corpus to PNG, compare against committed references, gate on a pixel-difference threshold.
 - **M3-e** Move the JBIG2 codec out of `display`. The IR crate carries a full decoder (`display/src/jbig2.rs`, via `hayro-jbig2`) that only `render` and `convert` call; the IR layer should hold data structures, not codecs. A small `steleofd-codec` crate (or an existing lower one) is the home. Deferred because it touches `display`'s public surface and three downstream import paths.
+- **M3-f** The three shading and fill models still standing as deviations: `Pattern` (8.3.5), `GouraudShd` (8.3.6) and `LaGouraudShd` (8.3.7). Each needs a painter, not just a reader — a tiling model for `Pattern`, a triangle and a lattice mesh for the two Gouraud forms. The reader currently recognises and refuses them (`unsupported_shading`), which is honest but not coverage. `8.1.6` PrintQuality stays a deviation for a different reason: the element is absent from the vendored Annex A schema entirely, so there is nothing to read.
 
 ### M4. Signature depth (M4-a … M4-c)
 
