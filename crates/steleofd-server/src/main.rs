@@ -4,7 +4,7 @@
 use std::process::ExitCode;
 
 use steleofd_server::api;
-use steleofd_server::{Settings, Store};
+use steleofd_server::{AppState, Settings, Store};
 
 #[tokio::main]
 async fn main() -> ExitCode {
@@ -32,7 +32,9 @@ async fn run() -> Result<(), String> {
             .map_err(|err| format!("cannot use {}: {err}", dir.display()))?,
         None => Store::new(settings.max_documents),
     };
-    let app = api::router(store, settings.max_body_bytes);
+    let authenticated = !settings.api_keys.is_open();
+    let state = AppState::guarded(store, settings.api_keys.clone());
+    let app = api::router(state, settings.max_body_bytes);
     let listener = tokio::net::TcpListener::bind(settings.bind)
         .await
         .map_err(|err| format!("cannot bind {}: {err}", settings.bind))?;
@@ -43,6 +45,11 @@ async fn run() -> Result<(), String> {
     match settings.data_dir {
         Some(dir) => tracing::info!(directory = %dir.display(), "documents are persisted"),
         None => tracing::info!("documents are held in memory only"),
+    }
+    if authenticated {
+        tracing::info!(tenants = settings.api_keys.len(), "API keys are required");
+    } else {
+        tracing::warn!("no API keys set, so every caller shares one tenant");
     }
 
     axum::serve(listener, app)

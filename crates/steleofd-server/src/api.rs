@@ -17,7 +17,8 @@ use uuid::Uuid;
 
 use crate::dto::{self, DocumentInfo, Health, Opened, SearchHit, SignatureStatus};
 use crate::error::ApiError;
-use crate::store::{self, Shared, Store};
+use crate::store::{self, Shared};
+use crate::{AppState, Tenant};
 
 /// Resolution used when a PNG request leaves `dpi` out.
 const DEFAULT_DPI: f64 = 96.0;
@@ -45,7 +46,7 @@ pub struct SearchQuery {
 /// Build the router the service runs. CORS is permissive because the callers
 /// are browser front ends and OA portals; the body limit is what keeps an
 /// upload from filling memory.
-pub fn router(store: Store, max_body_bytes: usize) -> Router {
+pub fn router(state: AppState, max_body_bytes: usize) -> Router {
     Router::new()
         .route("/healthz", get(health))
         .route("/api/v1/documents", post(open))
@@ -59,24 +60,26 @@ pub fn router(store: Store, max_body_bytes: usize) -> Router {
         .layer(RequestBodyLimitLayer::new(max_body_bytes))
         .layer(CorsLayer::permissive())
         .layer(TraceLayer::new_for_http())
-        .with_state(store)
+        .with_state(state)
 }
 
 /// Report that the service is up, and how much it is holding.
-async fn health(State(store): State<Store>) -> Json<Health> {
+async fn health(State(state): State<AppState>) -> Json<Health> {
     Json(Health {
         status: "ok",
-        documents: store.len(),
+        documents: state.store.len(),
         version: env!("CARGO_PKG_VERSION"),
     })
 }
 
-/// Open an uploaded document and keep it under a fresh id.
+/// Open an uploaded document and keep it under a fresh id, owned by the
+/// caller's tenant.
 async fn open(
-    State(store): State<Store>,
+    State(state): State<AppState>,
+    tenant: Tenant,
     body: Bytes,
 ) -> Result<(StatusCode, Json<Opened>), ApiError> {
-    if store.is_full() {
+    if state.store.is_full() {
         return Err(ApiError::new(
             StatusCode::SERVICE_UNAVAILABLE,
             "too many open documents",
@@ -91,23 +94,28 @@ async fn open(
         Ok::<_, steleofd_error::OfdError>((doc, info))
     })
     .await??;
-    let id = store.insert(opened.0, &stored)?;
+    let id = state.store.insert(tenant.id(), opened.0, &stored)?;
     Ok((StatusCode::CREATED, Json(Opened { id, info: opened.1 })))
 }
 
 /// Report the facts of an open document.
 async fn info(
-    State(store): State<Store>,
+    State(state): State<AppState>,
+    tenant: Tenant,
     Path(id): Path<Uuid>,
 ) -> Result<Json<DocumentInfo>, ApiError> {
-    let doc = shared(store, id)?;
+    let doc = shared(&state, &tenant, id)?;
     let info = blocking(move || DocumentInfo::of(&mut store::lock(&doc))).await?;
     Ok(Json(info))
 }
 
 /// Release an open document.
-async fn close(State(store): State<Store>, Path(id): Path<Uuid>) -> Result<StatusCode, ApiError> {
-    if store.remove(id) {
+async fn close(
+    State(state): State<AppState>,
+    tenant: Tenant,
+    Path(id): Path<Uuid>,
+) -> Result<StatusCode, ApiError> {
+    if state.store.remove(tenant.id(), id) {
         Ok(StatusCode::NO_CONTENT)
     } else {
         Err(ApiError::unknown_document(id))
@@ -116,11 +124,12 @@ async fn close(State(store): State<Store>, Path(id): Path<Uuid>) -> Result<Statu
 
 /// Rasterize one page and answer with PNG bytes.
 async fn png(
-    State(store): State<Store>,
+    State(state): State<AppState>,
+    tenant: Tenant,
     Path((id, page)): Path<(Uuid, usize)>,
     Query(query): Query<PngQuery>,
 ) -> Result<Response, ApiError> {
-    let doc = shared(store, id)?;
+    let doc = shared(&state, &tenant, id)?;
     let dpi = query.dpi.unwrap_or(DEFAULT_DPI).clamp(MIN_DPI, MAX_DPI);
     let bytes = blocking(move || {
         let options = RenderOptions {
@@ -135,38 +144,45 @@ async fn png(
 
 /// Convert one page and answer with an SVG document.
 async fn svg(
-    State(store): State<Store>,
+    State(state): State<AppState>,
+    tenant: Tenant,
     Path((id, page)): Path<(Uuid, usize)>,
 ) -> Result<Response, ApiError> {
-    let doc = shared(store, id)?;
+    let doc = shared(&state, &tenant, id)?;
     let text = blocking(move || store::lock(&doc).to_svg(page)).await??;
     Ok(([(header::CONTENT_TYPE, "image/svg+xml")], text).into_response())
 }
 
 /// Convert the whole document and answer with PDF bytes.
-async fn pdf(State(store): State<Store>, Path(id): Path<Uuid>) -> Result<Response, ApiError> {
-    let doc = shared(store, id)?;
+async fn pdf(
+    State(state): State<AppState>,
+    tenant: Tenant,
+    Path(id): Path<Uuid>,
+) -> Result<Response, ApiError> {
+    let doc = shared(&state, &tenant, id)?;
     let bytes = blocking(move || store::lock(&doc).to_pdf()).await??;
     Ok(([(header::CONTENT_TYPE, "application/pdf")], bytes).into_response())
 }
 
 /// Search every page of an open document.
 async fn search(
-    State(store): State<Store>,
+    State(state): State<AppState>,
+    tenant: Tenant,
     Path(id): Path<Uuid>,
     Query(query): Query<SearchQuery>,
 ) -> Result<Json<Vec<SearchHit>>, ApiError> {
-    let doc = shared(store, id)?;
+    let doc = shared(&state, &tenant, id)?;
     let hits = blocking(move || dto::search_hits(&store::lock(&doc), &query.needle)).await?;
     Ok(Json(hits))
 }
 
 /// Verify every signature of an open document.
 async fn verify(
-    State(store): State<Store>,
+    State(state): State<AppState>,
+    tenant: Tenant,
     Path(id): Path<Uuid>,
 ) -> Result<Json<Vec<SignatureStatus>>, ApiError> {
-    let doc = shared(store, id)?;
+    let doc = shared(&state, &tenant, id)?;
     let statuses = blocking(move || dto::signature_statuses(&mut store::lock(&doc))).await??;
     Ok(Json(statuses))
 }
@@ -176,9 +192,10 @@ fn png_response(bytes: Vec<u8>) -> Response {
     ([(header::CONTENT_TYPE, "image/png")], bytes).into_response()
 }
 
-/// The document behind an id, or a 404 naming what was missing.
-fn shared(store: Store, id: Uuid) -> Result<Shared, ApiError> {
-    match store.get(id) {
+/// The document behind an id, if the caller's tenant owns it. An id owned by
+/// another tenant answers as missing, so its existence does not leak.
+fn shared(state: &AppState, tenant: &Tenant, id: Uuid) -> Result<Shared, ApiError> {
+    match state.store.get(tenant.id(), id) {
         Ok(Some(doc)) => Ok(doc),
         Ok(None) => Err(ApiError::unknown_document(id)),
         Err(err) => Err(ApiError::storage(err)),

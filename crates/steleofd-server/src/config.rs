@@ -11,6 +11,9 @@ pub const MAX_DOCUMENTS: &str = "STELEOFD_MAX_DOCUMENTS";
 /// Environment variable naming the directory documents are kept in. When it is
 /// set, an id survives a restart; when it is unset the store is memory only.
 pub const DATA_DIR: &str = "STELEOFD_DATA_DIR";
+/// Environment variable naming the API keys, as `tenant:key,tenant:key`. When
+/// it is unset the service accepts every caller as one shared tenant.
+pub const API_KEYS: &str = "STELEOFD_API_KEYS";
 
 /// Default listen address: loopback only, so a trial run is not a service.
 pub const DEFAULT_BIND: SocketAddr = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::LOCALHOST, 8080));
@@ -26,6 +29,9 @@ pub struct Settings {
     pub max_documents: usize,
     /// Directory documents are kept in, when the service is persistent.
     pub data_dir: Option<std::path::PathBuf>,
+    /// The API keys the service accepts. Empty means every caller is one
+    /// shared tenant.
+    pub api_keys: crate::tenancy::KeyRing,
 }
 
 impl Default for Settings {
@@ -35,6 +41,7 @@ impl Default for Settings {
             max_body_bytes: 64 << 20,
             max_documents: 256,
             data_dir: None,
+            api_keys: crate::tenancy::KeyRing::new(),
         }
     }
 }
@@ -58,6 +65,11 @@ impl Settings {
             max_body_bytes: number(MAX_BODY, text, defaults.max_body_bytes)?,
             max_documents: number(MAX_DOCUMENTS, text, defaults.max_documents)?,
             data_dir: text(DATA_DIR).filter(|dir| !dir.is_empty()).map(Into::into),
+            api_keys: match text(API_KEYS) {
+                Some(spec) => crate::tenancy::KeyRing::parse(&spec)
+                    .map_err(|_| BadSetting::new(API_KEYS, &spec))?,
+                None => defaults.api_keys,
+            },
         })
     }
 }
