@@ -280,16 +280,20 @@ tests = []
 [[item]]
 clause = "8.3.6"
 title = "Gouraud shading"
-status = "deviation"
-note = "recognised and skipped; no sample carries one, and the mesh model is unwritten"
-tests = []
+status = "verified"
+tests = [
+  "gb_t_33190_8_3_6_gouraud_shading_carries_its_coloured_vertices",
+  "gb_t_33190_8_3_6_a_gouraud_mesh_with_several_strips_keeps_them_apart",
+]
 
 [[item]]
 clause = "8.3.7"
 title = "Lattice-form Gouraud shading"
-status = "deviation"
-note = "not read; the schema element is unused by every sample in both corpora"
-tests = []
+status = "verified"
+tests = [
+  "gb_t_33190_8_3_7_a_lattice_mesh_tiles_its_points_into_quads",
+  "gb_t_33190_8_3_7_a_lattice_wider_than_it_is_tall_makes_every_cell",
+]
 
 [[item]]
 clause = "8.4"

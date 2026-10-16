@@ -282,9 +282,14 @@ Absent features, not wrong ones, so they sit below the correctness band.
   yet, so an image naming a CMYK space is still decoded as sRGB.
 - **M5-b** The three shading and fill models still standing as deviations:
   `Pattern` (8.3.5), `GouraudShd` (8.3.6) and `LaGouraudShd` (8.3.7). Each
-  needs a painter, not just a reader. `8.1.6` PrintQuality stays a deviation
-  for a different reason: the element is absent from the vendored Annex A
-  schema entirely, so there is nothing to read.
+  needs a painter, not just a reader. `GouraudShd` and `LaGouraudShd` are done:
+  the parser resolves both to one triangle mesh (a strip of triples, or a
+  `VerticesPerRow` lattice), the mesh travels on the paint as `Paint::Mesh`, and
+  the raster backend writes each triangle's interpolated colours per pixel
+  before masking them to the filled path. `Pattern` still needs a tiler of its
+  `CellContent`. `8.1.6` PrintQuality stays a deviation for a different reason:
+  the element is absent from the vendored Annex A schema entirely, so there is
+  nothing to read.
 - **M5-c** Blending and transparency modes.
 - **M5-d** Bring each test-verified drawing feature to full parity. The first
   is done — `RadialShd` end centre and radius travel with the op and each
