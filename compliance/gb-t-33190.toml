@@ -558,6 +558,9 @@ status = "verified"
 tests = [
     "gb_t_33190_18_2_4_certificate_key_verifies_the_check_value",
     "gb_t_33190_18_2_4_tampered_content_fails_the_check_value",
+    "gb_t_33190_18_2_4_a_timestamp_bound_to_the_signature_verifies",
+    "gb_t_33190_18_2_4_a_timestamp_over_other_bytes_is_unbound",
+    "gb_t_33190_18_2_4_a_timestamp_whose_proof_is_wrong_is_unverified",
 ]
 
 [[item]]

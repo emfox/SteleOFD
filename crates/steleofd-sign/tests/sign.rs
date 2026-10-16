@@ -678,7 +678,7 @@ fn a_signature_without_a_timestamp_says_so() {
 }
 
 #[test]
-fn a_timestamp_bound_to_the_signature_verifies() {
+fn gb_t_33190_18_2_4_a_timestamp_bound_to_the_signature_verifies() {
     let mut sig = Signature {
         check_value: b"the signature value".to_vec(),
         ..Signature::default()
@@ -693,7 +693,7 @@ fn a_timestamp_bound_to_the_signature_verifies() {
 }
 
 #[test]
-fn a_timestamp_over_other_bytes_is_unbound() {
+fn gb_t_33190_18_2_4_a_timestamp_over_other_bytes_is_unbound() {
     let mut sig = Signature {
         check_value: b"the signature value".to_vec(),
         ..Signature::default()
@@ -708,7 +708,7 @@ fn a_timestamp_over_other_bytes_is_unbound() {
 }
 
 #[test]
-fn a_timestamp_whose_proof_is_wrong_is_unverified() {
+fn gb_t_33190_18_2_4_a_timestamp_whose_proof_is_wrong_is_unverified() {
     let mut sig = Signature {
         check_value: b"the signature value".to_vec(),
         ..Signature::default()
