@@ -452,16 +452,18 @@ status = "verified"
 tests = [
   "gb_t_33190_13_a_composite_object_places_a_vector_resource",
   "gb_t_33190_13_a_vector_resource_holds_its_own_page_block",
+  "gb_t_33190_13_a_composite_object_draws_its_resources_content",
 ]
 
 [[item]]
 clause = "13.1"
 title = "Composite graphics unit"
-status = "partial"
-note = "the unit and its page block are read, but a placed CompositeObject is not resolved to the unit's content"
+status = "verified"
+note = "a placed CompositeObject resolves to the unit's content, or to its substitution image when the unit carries no vector content"
 tests = [
   "gb_t_33190_13_a_composite_object_places_a_vector_resource",
   "gb_t_33190_13_a_vector_resource_holds_its_own_page_block",
+  "gb_t_33190_13_a_composite_object_draws_its_resources_content",
 ]
 
 [[item]]

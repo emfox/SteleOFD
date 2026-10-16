@@ -1254,20 +1254,54 @@ fn gb_t_33190_12_a_movie_action_points_at_a_video_resource() {
 #[test]
 fn gb_t_33190_13_a_composite_object_places_a_vector_resource() {
     // A composite object is a placed vector graphic: the page object carries
-    // only a resource id, and the graphic itself lives in the resource file.
+    // only a resource id, and the graphic lives in the resource file. With the
+    // resource absent there is nothing to draw, so the page is left empty.
     let ops = page_ops(
         r#"<CompositeObject ID="30" Boundary="10 10 50 30" ResourceID="5"/>"#,
         "",
     );
-    match ops.iter().find(|op| matches!(op, DrawOp::Image { .. })) {
-        Some(DrawOp::Image { image, dst, .. }) => {
-            assert_eq!(image.id, "5", "the placement names the resource");
-            // The placement fills the object's unit square; the transform ops
-            // in the list carry it onto the boundary.
-            assert_eq!(*dst, Rect::new(0.0, 0.0, 1.0, 1.0));
-        }
-        other => panic!("expected an image placement, got {other:?}"),
-    }
+    assert!(
+        !ops.iter().any(|op| matches!(op, DrawOp::Image { .. })),
+        "a composite whose resource cannot be found draws nothing, got {ops:?}"
+    );
+}
+
+#[test]
+fn gb_t_33190_13_a_composite_object_draws_its_resources_content() {
+    // With the resource present, the composite places the graphic's own
+    // objects, pulling its content block in at the object's position.
+    let entries = [
+        ("OFD.xml", OFD_XML.to_string()),
+        (
+            "Doc_0/Document.xml",
+            document_xml(
+                r#"<Page ID="1"><Content><Layer>
+                     <CompositeObject ID="30" Boundary="0 0 50 30" ResourceID="5"/>
+                   </Layer></Content></Page>"#,
+            ),
+        ),
+        (
+            "Doc_0/DocumentRes.xml",
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+<Res BaseLoc="Res"><CompositeGraphicUnits>
+  <CompositeGraphicUnit ID="5" Width="50" Height="30">
+    <Content><Layer ID="1">
+      <PathObject ID="6" Boundary="0 0 50 30">
+        <AbbreviatedData>M 0 0 L 50 0 L 50 30 Z</AbbreviatedData>
+      </PathObject>
+    </Layer></Content>
+  </CompositeGraphicUnit>
+</CompositeGraphicUnits></Res>"#
+                .to_string(),
+        ),
+    ];
+    let mut parser = open(&entries);
+    let doc = parser.open_document().expect("open document");
+    let ops = parser.page_display(&doc, 0).expect("flatten page").ops;
+    assert!(
+        ops.iter().any(|op| matches!(op, DrawOp::Path { .. })),
+        "the composite's own path is drawn, got {ops:?}"
+    );
 }
 
 #[test]
