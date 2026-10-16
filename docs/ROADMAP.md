@@ -404,10 +404,15 @@ not have. Ranked by how often a real reader needs them.
   `StampAnnot` to it; `Document::seals` maps the `PageRef` id to a page index,
   and the reader stamps each seal onto its page's raster. An image a package
   does not ship keeps its placement with empty bytes rather than vanishing.
-- **M6-d** Signed, installable builds for the platforms people actually deploy
-  on, and an offline story. Deferred: this needs release infrastructure and a
-  decision about signing keys and which platforms are targets, not code in the
-  crate.
+- **M6-d** Installable builds for the platforms people deploy on, and an
+  offline story. `release.yml` builds the desktop reader for Linux, macOS and
+  Windows from one job per system plus the C ABI library and the WebAssembly
+  bindings, and every artefact ships beside a `SHA256SUMS` manifest:
+  `scripts/release_checksums.py` generates it next to the bytes so it can never
+  describe a file the tag did not build, and verifies a directory of downloads
+  offline (its `selftest` mode is a CI step). The builds are **unsigned** —
+  there is no signing key in the project — so the checksum is stated to be the
+  only trust anchor rather than implying a signature that is not there.
 - **M6-e** `[x]` ~~A document comparison view for two revisions of the same
   file.~~ `Document::compare` diffs two flattened display lists page by page and
   names each page's change (added, removed, resized, text, graphics), and the
