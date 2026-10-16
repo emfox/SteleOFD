@@ -262,14 +262,15 @@ legal carrier needs.
   profile (RFC 3161 or a national equivalent) and which container to read it
   from, not an implementation.
 - **M3-c** The archival profile. `steleofd-archive` checks an OFD against the
-  archival rules; it needs the profile document it checks against named, and
-  the four `deviation` clauses above are the natural first inputs. GB/T
-  42133-2022 now supplies the profile, and the four checks a reader can decide
-  from the container are in (`ARCH-101` … `ARCH-104`, covered by
-  `compliance/gb-t-42133.toml`). What remains is everything 42133 asks of an
+  archival rules; GB/T 42133-2022 supplies the profile, and the four checks a
+  reader can decide from the container are in (`ARCH-101` … `ARCH-104`, covered
+  by `compliance/gb-t-42133.toml`). What remains is everything 42133 asks of an
   authoring tool: subsetting fonts, stripping optional structures, removing
   redundant clips and converting images, none of which a read-only checker can
-  do.
+  do. Deferred as authoring-tool scope: each is a transformation with its own
+  fidelity trade-offs (a subset font that loses a glyph a later edit needs, an
+  image conversion that loses a transparency layer), so the set to build and how
+  a caller drives it need a decision, not just an implementation.
 
 ### M4. Server production readiness (M4-a … M4-e)
 
@@ -400,7 +401,9 @@ not have. Ranked by how often a real reader needs them.
   and the reader stamps each seal onto its page's raster. An image a package
   does not ship keeps its placement with empty bytes rather than vanishing.
 - **M6-d** Signed, installable builds for the platforms people actually deploy
-  on, and an offline story.
+  on, and an offline story. Deferred: this needs release infrastructure and a
+  decision about signing keys and which platforms are targets, not code in the
+  crate.
 - **M6-e** `[x]` ~~A document comparison view for two revisions of the same
   file.~~ `Document::compare` diffs two flattened display lists page by page and
   names each page's change (added, removed, resized, text, graphics), and the
