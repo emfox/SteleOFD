@@ -324,10 +324,13 @@ Absent features, not wrong ones, so they sit below the correctness band.
   masked to the path. `8.1.6` PrintQuality stays a deviation for a different
   reason: the element is absent from the vendored Annex A schema entirely, so
   there is nothing to read.
-- **M5-c** Blending and transparency modes. Deferred: the 2016 schema has no
-  blend-mode element or attribute — only the per-object `Alpha` the engine
-  already honours — so this needs a non-standard extension and a decision about
-  it, not an implementation.
+- **M5-c** Blending and transparency modes. Closed as deliberately not
+  supported: GB/T 33190-2016 defines no blend-mode element or attribute, and its
+  only transparency control is the per-object `Alpha` the engine already honours
+  in every backend. There is no gap to fill, so the finding is recorded in
+  `docs/INTEROP.md` §6 rather than left as an open item. A producer that writes a
+  blend mode anyway is writing a non-standard extension, which the reader
+  ignores like any unrecognised attribute.
 - **M5-d** Bring each test-verified drawing feature to full parity. `RadialShd`
   end centre and radius travel with the op and each backend reduces the cone to
   what it can paint. The Gouraud mesh and the `Pattern` cell now do too: a mesh
@@ -502,9 +505,9 @@ check over a document that renders wrong is checking the wrong bytes.
 
 **M4 through M7 last.** M4 is done — the server is deployable. M5 depends on
 M1-a, because every item in it is a rendering change and none of them can be
-verified without golden images; M5-e is done. M2-b, M3-a, M3-b, M6-a, M6-b,
-M6-c, M6-e and M7-a are done too, so what is left is M5's remaining rendering
-work, M6-d's release infrastructure, and M6-f's i18n boundary move.
+verified without golden images; M5-c, M5-e are done. M2-b, M3-a, M3-b, M3-c,
+M6-a, M6-b, M6-c, M6-e and M7-a are done too, so what is left is M5's remaining
+rendering work, M6-d's release infrastructure, and M6-f's i18n boundary move.
 
 Far term is deliberately not scheduled. It describes a direction, not dates.
 

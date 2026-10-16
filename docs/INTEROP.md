@@ -184,7 +184,30 @@ says and what every sample does. The regression test is
 `gb_t_33190_8_4_a_clip_stays_in_object_space_beside_the_ctm`
 (`crates/steleofd-parser/tests/conformance.rs`).
 
-## 6. What this changed in our own code
+## 6. Blending: no mode to support, so nothing is left unsupported
+
+The maintainer asked whether the engine should honour a blend mode, so the
+first move was to look for one. There is none to find.
+
+GB/T 33190-2016 carries **no blend-mode element or attribute**. A search of
+the vendored Annex A schemas for any name containing `blend` returns nothing,
+and the only transparency control the standard defines is the per-object
+`Alpha` on a fill or stroke colour (`Page.xsd`, `CT_Color`) — which the engine
+already honours, in every backend.
+
+| Name | Where the standard defines it | Read today? |
+| --- | --- | --- |
+| `Alpha` on `FillColor`/`StrokeColor` | `Page.xsd`, `CT_Color` | Yes |
+| A blend mode (`Multiply`, `Screen`, …) | nowhere | Nothing to read |
+
+So the fix is not to implement a mode but to **stop implying one is missing**:
+the item is recorded as deliberately not supported rather than deferred, and
+`Alpha` is documented as the whole of the standard's transparency model. A
+blend mode that a producer writes anyway travels in a non-standard extension,
+which the reader ignores the same way it ignores every unrecognised attribute —
+it does not fail, and it does not guess at an effect the standard never named.
+
+## 7. What this changed in our own code
 
 The comparison paid for itself in the other direction. The four oracle gaps
 above are external; these were ours, found while establishing them:
@@ -196,7 +219,7 @@ above are external; these were ours, found while establishing them:
 | Path coordinates read as absolute, not offsets from the boundary corner | parser | made relative, clause 8.1.4 |
 | `Clips` read with a nonexistent `TransFlag` | parser, model | attribute removed (section 5) |
 
-## 7. Reproducing
+## 8. Reproducing
 
 The golden fixtures and the writer are in
 [`crates/steleofd-testkit`](../crates/steleofd-testkit). Regression compares
