@@ -4,12 +4,14 @@ use steleofd_crypto::Sm2KeyPair;
 use steleofd_error::OfdError;
 use steleofd_package::Package;
 use steleofd_sign::{
-    Reference, Signature, SignatureKind, VerifyStatus, read_coverage, read_seals, read_sign_list,
-    read_signature, signed_digest, verify_descriptor, verify_signature, verify_with_public_key,
+    Reference, Signature, SignatureKind, TimestampStatus, VerifyStatus, read_coverage, read_seals,
+    read_sign_list, read_signature, signed_digest, verify_descriptor, verify_signature,
+    verify_timestamp, verify_with_public_key,
 };
 use steleofd_testkit::{
-    DOCUMENT_ENTRY, OFD_XML_SIGNED, SIGN_FILE, SIGNS_ENTRY, SIGNS_XML, descriptor, open_package,
-    open_package_bytes, signed_descriptor_entries, signed_fixture,
+    DOCUMENT_ENTRY, OFD_XML_SIGNED, SIGN_FILE, SIGNS_ENTRY, SIGNS_XML, TimestampSpec, base64_of,
+    descriptor, open_package, open_package_bytes, signed_descriptor_entries, signed_fixture,
+    timestamp_token,
 };
 
 const SIG_FILE: &str = "Signs/Sign_0.xml";
@@ -608,5 +610,119 @@ fn gb_t_33190_18_2_2_a_later_signature_slides_under_the_earlier_one() {
         reports[0].uncovered.is_empty(),
         "both content files are protected now, got {:?}",
         reports[0].uncovered
+    );
+}
+
+/// A descriptor carrying a `<Timestamp>` element, the way a countersigned
+/// signature writes one: the token is base64 DER beside the proof.
+fn descriptor_with_timestamp(id: &str, refs: &[(&str, &str)], tok: &[u8]) -> String {
+    let mut xml = format!(r#"<Signature ID="{id}"><SignedInfo>"#);
+    if let Some((method, _)) = refs.first() {
+        xml.push_str(&format!(r#"<References CheckMethod="{method}">"#));
+    } else {
+        xml.push_str("<References>");
+    }
+    for (_, file) in refs {
+        xml.push_str(&format!(
+            r#"<Reference FileRef="{file}"><CheckValue></CheckValue></Reference>"#
+        ));
+    }
+    xml.push_str("</References></SignedInfo>");
+    xml.push_str(&format!(r#"<Timestamp>{}</Timestamp>"#, base64_of(tok)));
+    xml.push_str("</Signature>");
+    xml
+}
+
+#[test]
+fn a_descriptor_timestamp_reads_as_a_token() {
+    let imprint = steleofd_crypto::sm3(b"the signature value").to_vec();
+    let (token, _tsa) = timestamp_token(&TimestampSpec {
+        imprint: imprint.clone(),
+        gen_time: "20260101000000Z".into(),
+        serial: 5,
+    });
+    let entries = vec![
+        ("Signs/Signs.xml", signs_xml()),
+        (
+            SIG_FILE,
+            descriptor_with_timestamp("s", &[("SM3", DOCUMENT_ENTRY)], &token).into_bytes(),
+        ),
+    ];
+    let mut package = open(&entries);
+    let sig = read_signature(&mut package, SIG_FILE).expect("descriptor");
+    let parsed = sig
+        .timestamp_token()
+        .expect("the timestamp parses")
+        .expect("a token is present");
+    assert_eq!(parsed.gen_time, "20260101000000Z");
+    assert_eq!(parsed.serial_number, "5");
+    assert_eq!(parsed.imprint, imprint);
+}
+
+#[test]
+fn a_signature_without_a_timestamp_says_so() {
+    let entries = vec![
+        ("Signs/Signs.xml", signs_xml()),
+        (
+            SIG_FILE,
+            descriptor("s", &[("SM3", DOCUMENT_ENTRY)]).into_bytes(),
+        ),
+    ];
+    let mut package = open(&entries);
+    let sig = read_signature(&mut package, SIG_FILE).expect("descriptor");
+    assert!(sig.timestamp.is_none());
+    assert_eq!(
+        verify_timestamp(&sig).expect("no token is not an error"),
+        TimestampStatus::Absent
+    );
+}
+
+#[test]
+fn a_timestamp_bound_to_the_signature_verifies() {
+    let mut sig = Signature {
+        check_value: b"the signature value".to_vec(),
+        ..Signature::default()
+    };
+    let (token, _tsa) = timestamp_token(&TimestampSpec::over(&sig.check_value));
+    sig.timestamp = Some(token);
+    assert_eq!(
+        verify_timestamp(&sig).expect("token verifies"),
+        TimestampStatus::Bound,
+        "the imprint is this signature's digest, so the stamp is its own"
+    );
+}
+
+#[test]
+fn a_timestamp_over_other_bytes_is_unbound() {
+    let mut sig = Signature {
+        check_value: b"the signature value".to_vec(),
+        ..Signature::default()
+    };
+    let (token, _tsa) = timestamp_token(&TimestampSpec::over(b"a different signature value"));
+    sig.timestamp = Some(token);
+    assert_eq!(
+        verify_timestamp(&sig).expect("token parses"),
+        TimestampStatus::Unbound,
+        "a stamp over another value must not read as this signature's"
+    );
+}
+
+#[test]
+fn a_timestamp_whose_proof_is_wrong_is_unverified() {
+    let mut sig = Signature {
+        check_value: b"the signature value".to_vec(),
+        ..Signature::default()
+    };
+    let (mut token, _tsa) = timestamp_token(&TimestampSpec::over(&sig.check_value));
+    // Flip the last byte of the token, which is inside the TSA signature.
+    if let Some(last) = token.last_mut() {
+        *last ^= 0xff;
+    }
+    sig.timestamp = Some(token);
+    let status = verify_timestamp(&sig).expect("a broken proof still parses");
+    assert_ne!(
+        status,
+        TimestampStatus::Bound,
+        "a tampered token must not read as bound"
     );
 }

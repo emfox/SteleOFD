@@ -54,12 +54,27 @@ pub fn tst_info_der(spec: &TimestampSpec) -> Vec<u8> {
     let message_imprint = tlv(0x30, &[algorithm, tlv(0x04, &spec.imprint)].concat());
     let version = tlv(0x02, &[0x01]);
     let policy = oid(&[1, 2, 156, 10197, 1, 1]);
-    let serial = tlv(0x02, &spec.serial.to_be_bytes());
+    let serial = integer(spec.serial);
     let gen_time = tlv(0x18, spec.gen_time.as_bytes());
     tlv(
         0x30,
         &[version, policy, message_imprint, serial, gen_time].concat(),
     )
+}
+
+/// A DER `INTEGER` in its shortest form, so the parser does not reject the
+/// padding `to_be_bytes` would leave in front of a small serial number.
+fn integer(value: u64) -> Vec<u8> {
+    let bytes = value.to_be_bytes();
+    let first = bytes
+        .iter()
+        .position(|b| *b != 0)
+        .unwrap_or(bytes.len() - 1);
+    let mut body = bytes[first..].to_vec();
+    if body[0] & 0x80 != 0 {
+        body.insert(0, 0);
+    }
+    tlv(0x02, &body)
 }
 
 /// The CMS `ContentInfo` wrapping a signed `TSTInfo`, with the TSA certificate
