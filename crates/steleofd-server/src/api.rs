@@ -9,7 +9,7 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde::Deserialize;
-use steleofd_core::Document;
+use steleofd_core::{Document, RenderOptions};
 use tower_http::cors::CorsLayer;
 use tower_http::limit::RequestBodyLimitLayer;
 use tower_http::trace::TraceLayer;
@@ -120,7 +120,7 @@ async fn png(
     let doc = shared(store, id)?;
     let dpi = query.dpi.unwrap_or(DEFAULT_DPI).clamp(MIN_DPI, MAX_DPI);
     let bytes = blocking(move || {
-        let options = steleofd_render::RenderOptions {
+        let options = RenderOptions {
             dpi,
             ..Default::default()
         };

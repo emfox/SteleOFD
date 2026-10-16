@@ -2,8 +2,7 @@
 
 use std::collections::HashMap;
 
-use steleofd_core::Document;
-use steleofd_render::RenderOptions;
+use steleofd_core::{Document, RenderOptions};
 
 /// The resolution bounds the reader will rasterize at.
 pub const MIN_DPI: f32 = 24.0;

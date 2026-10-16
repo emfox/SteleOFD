@@ -2,7 +2,7 @@
 //! No HTTP types live here, so every shape is testable on the host.
 
 use serde::{Deserialize, Serialize};
-use steleofd_core::Document;
+use steleofd_core::{Document, SearchOptions, VerifyStatus};
 use steleofd_error::OfdError;
 use steleofd_font::FontSource;
 use uuid::Uuid;
@@ -88,7 +88,7 @@ pub struct Health {
 /// The options are fixed to match the other bindings: case-insensitive,
 /// substring matches, no cap on the hit count.
 pub fn search_hits(doc: &Document, needle: &str) -> Vec<SearchHit> {
-    let options = steleofd_search::SearchOptions {
+    let options = SearchOptions {
         case_sensitive: false,
         whole_word: false,
         max_hits: None,
@@ -112,7 +112,7 @@ pub fn signature_statuses(doc: &mut Document) -> Result<Vec<SignatureStatus>, Of
         .zip(&statuses)
         .map(|(sig, status)| SignatureStatus {
             location: sig.base_loc.clone(),
-            valid: matches!(status, steleofd_sign::VerifyStatus::Valid),
+            valid: matches!(status, VerifyStatus::Valid),
         })
         .collect())
 }

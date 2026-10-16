@@ -14,9 +14,6 @@ crate-type = ["cdylib", "staticlib", "rlib"]
 steleofd-core = { workspace = true, features = ["sign", "convert", "search", "pdf"] }
 steleofd-error.workspace = true
 steleofd-font.workspace = true
-steleofd-render.workspace = true
-steleofd-search.workspace = true
-steleofd-sign.workspace = true
 
 [build-dependencies]
 cbindgen = "0.29"

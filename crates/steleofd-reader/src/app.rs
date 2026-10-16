@@ -2,7 +2,7 @@
 
 use std::path::{Path, PathBuf};
 
-use steleofd_core::Document;
+use steleofd_core::{Document, SearchOptions, VerifyStatus};
 use steleofd_i18n::{I18n, MessageId};
 
 use crate::export_worker::{ExportFormat, ExportQueue, ExportRequest};
@@ -100,10 +100,10 @@ pub enum Verdict {
 
 impl Verdict {
     /// Translate the engine's two-state answer into the reader's three.
-    fn from_status(status: steleofd_sign::VerifyStatus) -> Self {
+    fn from_status(status: VerifyStatus) -> Self {
         match status {
-            steleofd_sign::VerifyStatus::Valid => Self::Valid,
-            steleofd_sign::VerifyStatus::Tampered => Self::Tampered,
+            VerifyStatus::Valid => Self::Valid,
+            VerifyStatus::Tampered => Self::Tampered,
         }
     }
 }
@@ -638,7 +638,7 @@ impl App {
         let Some(doc) = self.doc.as_ref() else {
             return;
         };
-        let options = steleofd_search::SearchOptions::default();
+        let options = SearchOptions::default();
         self.hits = doc
             .search(&self.query, options)
             .into_iter()

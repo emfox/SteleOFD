@@ -12,7 +12,7 @@ use std::sync::Once;
 use serde::Serialize;
 use wasm_bindgen::prelude::*;
 
-use steleofd_core::Document;
+use steleofd_core::{Document, RenderOptions, SearchOptions};
 
 use crate::shapes::DocumentInfo;
 
@@ -57,7 +57,7 @@ impl OfdDocument {
 
     /// Rasterize one page and hand back PNG bytes.
     pub fn render_png(&self, page: usize, dpi: f64) -> Result<Vec<u8>, JsError> {
-        let options = steleofd_render::RenderOptions {
+        let options = RenderOptions {
             dpi,
             ..Default::default()
         };
@@ -71,7 +71,7 @@ impl OfdDocument {
 
     /// Full-text search over every page.
     pub fn search(&self, needle: &str) -> Result<JsValue, JsError> {
-        let options = steleofd_search::SearchOptions {
+        let options = SearchOptions {
             case_sensitive: false,
             whole_word: false,
             max_hits: None,

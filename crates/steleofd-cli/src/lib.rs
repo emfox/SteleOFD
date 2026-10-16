@@ -11,16 +11,13 @@ use std::path::{Path, PathBuf};
 use anyhow::Result;
 use clap::Parser;
 use steleofd_archive::Severity;
-use steleofd_core::Document;
+use steleofd_core::{Document, RenderOptions, SearchOptions, VerifyStatus};
 use steleofd_error::{FontError, FormatError, OfdError};
 use steleofd_font::FontSource;
 use steleofd_i18n::format::LocalizedFormat;
 use steleofd_i18n::{I18n, Locale, MessageId};
 use steleofd_io::FileSource;
 use steleofd_print::{PaperSize, PrintSettings};
-use steleofd_render::RenderOptions;
-use steleofd_search::SearchOptions;
-use steleofd_sign::VerifyStatus;
 
 use crate::cli::{Cli, Command, FormatArg, PaperArg};
 

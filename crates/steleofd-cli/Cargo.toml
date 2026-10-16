@@ -17,9 +17,6 @@ steleofd-i18n.workspace = true
 steleofd-io.workspace = true
 steleofd-archive.workspace = true
 steleofd-print.workspace = true
-steleofd-render.workspace = true
-steleofd-search.workspace = true
-steleofd-sign.workspace = true
 clap = { version = "4", features = ["derive"] }
 anyhow.workspace = true
 tracing.workspace = true

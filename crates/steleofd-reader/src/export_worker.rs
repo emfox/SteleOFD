@@ -148,7 +148,7 @@ fn write(doc: &steleofd_core::Document, request: &ExportRequest) -> (Vec<PathBuf
             Err(err) => (Vec::new(), Some(err.to_string())),
         },
         ExportFormat::Png => {
-            let options = steleofd_render::RenderOptions {
+            let options = steleofd_core::RenderOptions {
                 dpi: f64::from(request.dpi),
                 ..Default::default()
             };

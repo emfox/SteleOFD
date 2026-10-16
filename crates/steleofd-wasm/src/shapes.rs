@@ -3,10 +3,9 @@
 //! the browser gets these objects, and `Intl` formats their numbers.
 
 use serde::Serialize;
-use steleofd_core::Document;
+use steleofd_core::{Document, SearchOptions, VerifyStatus};
 use steleofd_error::OfdError;
 use steleofd_font::FontSource;
-use steleofd_search::SearchOptions;
 
 /// What an open document declares, at a glance.
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -86,7 +85,7 @@ pub fn signature_statuses(doc: &mut Document) -> Result<Vec<SignatureData>, OfdE
         .zip(&statuses)
         .map(|(sig, status)| SignatureData {
             location: sig.base_loc.clone(),
-            valid: matches!(status, steleofd_sign::VerifyStatus::Valid),
+            valid: matches!(status, VerifyStatus::Valid),
         })
         .collect())
 }

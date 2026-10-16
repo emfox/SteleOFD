@@ -2,8 +2,7 @@
 //! the methods that never build a JS value. The JS-returning methods only
 //! run under wasm, where a browser supplies the runtime.
 
-use steleofd_core::Document;
-use steleofd_search::SearchOptions;
+use steleofd_core::{Document, SearchOptions};
 use steleofd_testkit::{SIGN_FILE, fixture_bytes};
 use steleofd_wasm::OfdDocument;
 use steleofd_wasm::shapes::{

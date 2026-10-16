@@ -12,9 +12,6 @@ crate-type = ["cdylib", "rlib"]
 steleofd-core = { workspace = true, features = ["render", "sign", "convert", "search"] }
 steleofd-error.workspace = true
 steleofd-font.workspace = true
-steleofd-render.workspace = true
-steleofd-search.workspace = true
-steleofd-sign.workspace = true
 wasm-bindgen.workspace = true
 serde.workspace = true
 serde-wasm-bindgen = "0.6"

@@ -2,7 +2,7 @@
 //! No C types live here, so every shape is unit-testable on the host: the
 //! boundary in [`crate::lib`] only moves these values across.
 
-use steleofd_core::Document;
+use steleofd_core::{Document, SearchOptions, VerifyStatus};
 use steleofd_error::OfdError;
 use steleofd_font::FontSource;
 
@@ -67,7 +67,7 @@ pub struct SignatureData {
 /// The options are fixed to match the other bindings: case-insensitive,
 /// substring matches, no cap on the hit count.
 pub fn search_hits(doc: &Document, needle: &str) -> Vec<SearchHitData> {
-    let options = steleofd_search::SearchOptions {
+    let options = SearchOptions {
         case_sensitive: false,
         whole_word: false,
         max_hits: None,
@@ -91,7 +91,7 @@ pub fn signature_statuses(doc: &mut Document) -> Result<Vec<SignatureData>, OfdE
         .zip(&statuses)
         .map(|(sig, status)| SignatureData {
             location: sig.base_loc.clone(),
-            valid: matches!(status, steleofd_sign::VerifyStatus::Valid),
+            valid: matches!(status, VerifyStatus::Valid),
         })
         .collect())
 }

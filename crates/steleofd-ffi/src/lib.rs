@@ -361,7 +361,7 @@ pub extern "C" fn steleofd_render_png(
             dpi: dpi.to_bits(),
         },
         |inner| {
-            let options = steleofd_render::RenderOptions {
+            let options = steleofd_core::RenderOptions {
                 dpi,
                 ..Default::default()
             };

@@ -17,9 +17,6 @@ path = "src/main.rs"
 steleofd-core = { workspace = true, features = ["render", "sign", "convert", "search", "pdf"] }
 steleofd-error.workspace = true
 steleofd-font.workspace = true
-steleofd-render.workspace = true
-steleofd-search.workspace = true
-steleofd-sign.workspace = true
 axum.workspace = true
 tokio.workspace = true
 tower-http = { version = "0.6", features = ["cors", "limit", "trace"] }

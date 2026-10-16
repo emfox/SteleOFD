@@ -4941,9 +4941,6 @@ dependencies = [
  "steleofd-io",
  "steleofd-package",
  "steleofd-print",
- "steleofd-render",
- "steleofd-search",
- "steleofd-sign",
  "tracing",
  "tracing-subscriber",
 ]
@@ -5063,9 +5060,6 @@ dependencies = [
  "steleofd-core",
  "steleofd-error",
  "steleofd-font",
- "steleofd-render",
- "steleofd-search",
- "steleofd-sign",
  "steleofd-testkit",
 ]
 
@@ -5184,9 +5178,6 @@ dependencies = [
  "steleofd-core",
  "steleofd-error",
  "steleofd-i18n",
- "steleofd-render",
- "steleofd-search",
- "steleofd-sign",
  "steleofd-testkit",
 ]
 
@@ -5230,9 +5221,6 @@ dependencies = [
  "steleofd-core",
  "steleofd-error",
  "steleofd-font",
- "steleofd-render",
- "steleofd-search",
- "steleofd-sign",
  "steleofd-testkit",
  "tokio",
  "tower",
@@ -5278,9 +5266,6 @@ dependencies = [
  "steleofd-core",
  "steleofd-error",
  "steleofd-font",
- "steleofd-render",
- "steleofd-search",
- "steleofd-sign",
  "steleofd-testkit",
  "tracing-wasm",
  "wasm-bindgen",
