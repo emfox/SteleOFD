@@ -1,6 +1,6 @@
 # SteleOFD Rust Architecture
 
-> Version v0.1 | 24 crates | `cargo check --workspace` clean
+> Version v0.1 | 26 crates | `cargo check --workspace` clean
 > Brand: SteleOFD (external); code prefix: `steleofd-*`
 
 ---
@@ -9,7 +9,7 @@
 
 ```
 +--------------------------------------------------------------------+
-| L5 adapters   steleofd-cli / -wasm / -ffi / -server                |
+| L5 adapters   steleofd-cli / -wasm / -ffi / -server / -reader      |
 |               The only layer aware of a concrete delivery form     |
 +--------------------------------------------------------------------+
 | L4 facade     steleofd-core                                        |
@@ -235,25 +235,33 @@ sign-count = { $count ->
 
 ### 5.3 Directory layout
 
+There are two catalogues, not one, and they live beside the layer that shows
+their strings:
+
 ```
-locales/
+crates/steleofd-i18n/locales/        # engine messages, keyed MessageId
 ├── en-US/          <- fallback locale, must always be complete
 │   ├── core.ftl        application level
-│   ├── reader.ftl      reader module
 │   ├── convert.ftl     conversion module
 │   ├── sign.ftl        signature module
 │   ├── edit.ftl        edit module
 │   ├── search.ftl      search module
 │   └── error.ftl       error messages
 └── zh-CN/          <- same structure
+
+crates/steleofd-reader/locales/      # reader interface, keyed ReaderMessage
+├── en-US/reader.ftl
+└── zh-CN/reader.ftl
 ```
 
-`reader.ftl` is consumed by `crates/steleofd-reader`, the native desktop
-reader, whose layout and per-frame flow are fixed in
-[`UI-SPEC.md`](UI-SPEC.md). The other modules are reachable through the CLI
-today.
+The reader owns its own `ReaderMessage` list and its own `reader.ftl`, and merges
+it into the engine bundle with `I18nBuilder::add_resource`, reaching its strings
+through the key-based `I18n::text_key`. The engine never names a widget it does
+not own, which is why `steleofd-i18n` holds engine messages only. The reader's
+layout and per-frame flow are fixed in [`UI-SPEC.md`](UI-SPEC.md).
 
-**Current state:** 75 message keys across 2 locales, with identical key sets.
+**Current state:** 73 engine keys and 32 reader keys, each across 2 locales with
+identical key sets within its catalogue.
 
 ### 5.4 Conventions and safeguards
 
@@ -332,7 +340,7 @@ opt-level = "s"         # size first for WASM
 
 | Phase | Content | Status |
 |---|---|---|
-| **P0 skeleton** | 24-crate layering, error taxonomy, display list IR, i18n layer | Done |
+| **P0 skeleton** | 26-crate layering, error taxonomy, display list IR, i18n layer | Done |
 | **P1 parsing** | `model`, `xml`, `package`, `parser` implementing OFD structure parsing | Done |
 | **P2 rendering** | Raster backend in `render`, completing open-to-display | Done |
 | **P3 conversion** | `convert`: OFD to PDF, PNG, SVG | Done |
@@ -354,33 +362,44 @@ feedback early instead of spinning inside abstraction layers.
 
 **Still to build:** the original sequence is complete; what comes next is tracked
 in [`ROADMAP.md`](ROADMAP.md). Clause-level conformance is tracked in
-`compliance/gb-t-33190.toml`; 20 of 47 clauses are covered so far, and the
+`compliance/gb-t-33190.toml`; 74 clauses are registered, 73 of them `verified`
+and one — `8.1.6` `PrintQuality` — a `deviation` with a stated reason. The
 register is the single source of truth that `scripts/check_compliance.py` gates
 on.
 
 ---
 
-## 8. Decided
+## 8. Decisions, and how they aged
+
+Each of these was open when the document was written. They are kept with their
+outcome rather than deleted, because the reasoning is what a new contributor
+actually needs.
 
 1. **Clipping uses the backend's native support.** The raster backend relies on
-   `tiny-skia` clipping and blending. Blend modes it cannot express degrade to a
-  `RenderError` rather than a silently wrong image. A self-built clip stack is
-   deferred; see the `TODO` in `crates/steleofd-render/src/lib.rs`.
-2. **Fonts are embedded in full.** PDF and SVG export embed the whole font rather
-   than a subset. Subsetting, which can cut output size by an order of magnitude
-   for CJK, is tracked as a separate later item.
-3. **No render cache yet.** Bitmap caching, page-window pruning and eviction stay
-   out of scope until raster rendering works and a real large document can be
-   measured.
-
-## 9. Open decisions
-
-1. **Render backend priority:** raster first (server and CLI images) or canvas first
-   (browser)?
-2. **Chinese national cryptography:** pure Rust using the `sm2`, `sm3` and `sm4`
-   crates, which suit WASM and cross-compilation, or binding GmSSL, which is more
-   complete but brings a C toolchain? The pure Rust path means handling X.509 chain
-   validation details ourselves.
-3. **Domestic OS support:** is a native build and test matrix on Kylin and UnionTech
-   UOS required? This affects dependency choices such as `font-kit`.
-4. **Chinese product name:** deferred until the brand strategy is settled.
+   `tiny-skia` clipping. This stands; no self-built clip stack was needed. One
+   correction from the interoperability audit: `Clips` carries no `TransFlag`
+   meaningful to a 2016 reader — the attribute is an OFD 1.2 extension, so the
+   parser ignores it and the clip stays in object space. See
+   [`INTEROP.md`](INTEROP.md).
+2. **Fonts are embedded in full — superseded.** PDF and SVG export now subset:
+   `steleofd-font::subset` rebuilds `glyf`/`loca`/`cmap`/`maxp`/`hmtx`/`hhea`/
+   `head` down to the glyphs a document uses, and a face it cannot rewrite (CFF,
+   or no `cmap`) is carried whole. A 20 MB CJK collection no longer costs 20 MB
+   per conversion.
+3. **No render cache yet.** Still true and still deliberate: raster rendering
+   works and is measured against the budget in [`PERFORMANCE.md`](PERFORMANCE.md),
+   but bitmap caching and eviction are not in scope until a real large document
+   shows they are needed.
+4. **Render backend priority: raster first — settled.** Raster is the backend the
+   CLI, server and reader all share, and it is what the golden-image suite gates.
+   There is no separate canvas backend; a browser shell would re-zoom the
+   vectors, and that backend is a far-term candidate rather than a decision.
+5. **Chinese national cryptography: pure Rust — settled.** The project uses the
+   pure-Rust `sm2`/`sm3`/`sm4` path, which keeps WASM and cross-compilation
+   working and needs no C toolchain. X.509 validation is handled in
+   `steleofd-crypto`. `GmSSL` stays listed as a reference implementation, not a
+   dependency.
+6. **Domestic OS support:** open. No native build or test matrix on Kylin or
+   UnionTech UOS is in place; the release workflow builds Linux, macOS and
+   Windows. This stays open because it needs a decision rather than code.
+7. **Chinese product name:** deferred, as before.
