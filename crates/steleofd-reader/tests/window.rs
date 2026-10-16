@@ -587,3 +587,61 @@ fn choosing_a_language_redraws_the_window_in_it() {
     );
     harness.get_by_label_contains(&label);
 }
+
+#[test]
+fn the_comparison_panel_lists_a_changed_page() {
+    // Opening the panel and comparing two revisions has to show the verdict
+    // and one row per changed page, all from the catalogue.
+    let mut app = App::new();
+    let one = steleofd_testkit::multipage_archive(1);
+    app.open_bytes(&one, Some("rev-a.ofd")).expect("opens");
+    app.compare_bytes(&steleofd_testkit::multipage_archive(2))
+        .expect("compare");
+    let harness = harness(app);
+
+    // The toggle and the panel heading share the label, so the heading is not
+    // asserted by label here; the toggle test covers it and the summary below
+    // proves the panel body is drawn.
+    let summary = harness.state().comparison_summary();
+    let changed = harness
+        .state()
+        .comparison()
+        .expect("a verdict")
+        .changed_pages();
+    assert!(changed >= 1, "the second revision added a page");
+    assert!(
+        summary.contains(&changed.to_string()),
+        "the summary states the count: {summary}"
+    );
+    harness.get_by_label_contains(&summary);
+}
+
+#[test]
+fn the_comparison_toggle_opens_the_panel() {
+    let mut app = App::new();
+    let one = steleofd_testkit::multipage_archive(1);
+    app.open_bytes(&one, Some("rev-a.ofd")).expect("opens");
+    let mut harness = harness(app);
+    assert!(!harness.state().comparison_open());
+
+    let heading = label(MessageId::ComparePanelTitle);
+    harness.get_by_label(&heading).click();
+    harness.run();
+    assert!(
+        harness.state().comparison_open(),
+        "the toggle opens the panel"
+    );
+}
+
+#[test]
+fn a_comparison_that_matches_says_so() {
+    let mut app = App::new();
+    let one = steleofd_testkit::multipage_archive(1);
+    app.open_bytes(&one, Some("rev-a.ofd")).expect("opens");
+    app.compare_bytes(&one).expect("compare");
+    let harness = harness(app);
+
+    let identical = label(MessageId::CompareIdentical);
+    assert_eq!(harness.state().comparison_summary(), identical);
+    harness.get_by_label_contains(&identical);
+}

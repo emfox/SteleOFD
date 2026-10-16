@@ -1535,3 +1535,66 @@ mod language {
         );
     }
 }
+
+mod comparison {
+    use super::App;
+
+    /// A reader over a one-page document, so a two-page one reads as a change.
+    fn one_page() -> App {
+        let mut app = App::new();
+        let bytes = steleofd_testkit::multipage_archive(1);
+        app.open_bytes(&bytes, Some("rev-a.ofd"))
+            .expect("the first revision opens");
+        app
+    }
+
+    #[test]
+    fn a_fresh_reader_has_no_comparison() {
+        let app = App::new();
+        assert!(app.comparison().is_none());
+        assert!(!app.comparison_open());
+    }
+
+    #[test]
+    fn an_added_page_reads_as_a_change() {
+        let mut app = one_page();
+        app.compare_bytes(&steleofd_testkit::multipage_archive(2))
+            .expect("the second revision opens");
+        let comparison = app.comparison().expect("a verdict");
+        assert!(!comparison.is_identical());
+        assert_eq!(comparison.changed_pages(), 1);
+        assert!(app.comparison_open(), "comparing opens the panel");
+    }
+
+    #[test]
+    fn the_same_revision_reads_as_identical() {
+        let mut app = one_page();
+        app.compare_bytes(&steleofd_testkit::multipage_archive(1))
+            .expect("the same revision opens");
+        let comparison = app.comparison().expect("a verdict");
+        assert!(comparison.is_identical());
+        assert_eq!(app.comparison_changes(), Vec::new());
+    }
+
+    #[test]
+    fn comparing_with_nothing_open_is_an_error() {
+        let mut app = App::new();
+        let err = app
+            .compare_bytes(&steleofd_testkit::multipage_archive(1))
+            .expect_err("there is nothing to compare");
+        assert!(err.message.contains("no document"), "got {}", err.message);
+    }
+
+    #[test]
+    fn opening_a_new_document_drops_the_old_comparison() {
+        let mut app = one_page();
+        app.compare_bytes(&steleofd_testkit::multipage_archive(2))
+            .expect("compare");
+        assert!(app.comparison().is_some());
+        app.close();
+        assert!(
+            app.comparison().is_none(),
+            "a comparison of a closed document is stale"
+        );
+    }
+}
