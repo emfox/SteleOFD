@@ -8,6 +8,9 @@ pub const BIND: &str = "STELEOFD_BIND";
 pub const MAX_BODY: &str = "STELEOFD_MAX_BODY";
 /// Environment variable naming how many documents may stay open.
 pub const MAX_DOCUMENTS: &str = "STELEOFD_MAX_DOCUMENTS";
+/// Environment variable naming the directory documents are kept in. When it is
+/// set, an id survives a restart; when it is unset the store is memory only.
+pub const DATA_DIR: &str = "STELEOFD_DATA_DIR";
 
 /// Default listen address: loopback only, so a trial run is not a service.
 pub const DEFAULT_BIND: SocketAddr = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::LOCALHOST, 8080));
@@ -21,6 +24,8 @@ pub struct Settings {
     pub max_body_bytes: usize,
     /// How many documents may stay open at once.
     pub max_documents: usize,
+    /// Directory documents are kept in, when the service is persistent.
+    pub data_dir: Option<std::path::PathBuf>,
 }
 
 impl Default for Settings {
@@ -29,6 +34,7 @@ impl Default for Settings {
             bind: DEFAULT_BIND,
             max_body_bytes: 64 << 20,
             max_documents: 256,
+            data_dir: None,
         }
     }
 }
@@ -51,6 +57,7 @@ impl Settings {
             bind,
             max_body_bytes: number(MAX_BODY, text, defaults.max_body_bytes)?,
             max_documents: number(MAX_DOCUMENTS, text, defaults.max_documents)?,
+            data_dir: text(DATA_DIR).filter(|dir| !dir.is_empty()).map(Into::into),
         })
     }
 }

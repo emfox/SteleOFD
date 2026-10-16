@@ -27,6 +27,15 @@ impl ApiError {
     pub fn unknown_document(id: Uuid) -> Self {
         Self::new(StatusCode::NOT_FOUND, format!("no open document {id}"))
     }
+
+    /// The store could not read or write the copy it keeps. That is the
+    /// service's own fault, not the caller's, so it is a 500.
+    pub fn storage(err: std::io::Error) -> Self {
+        Self::new(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("the document store failed: {err}"),
+        )
+    }
 }
 
 /// The body every failure carries: the engine's own message, verbatim.
@@ -51,6 +60,12 @@ impl From<OfdError> for ApiError {
     fn from(err: OfdError) -> Self {
         let status = status_of(&err);
         Self::new(status, err.to_string())
+    }
+}
+
+impl From<std::io::Error> for ApiError {
+    fn from(err: std::io::Error) -> Self {
+        Self::storage(err)
     }
 }
 

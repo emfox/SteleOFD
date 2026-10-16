@@ -27,7 +27,11 @@ async fn run() -> Result<(), String> {
         )
         .init();
 
-    let store = Store::new(settings.max_documents);
+    let store = match &settings.data_dir {
+        Some(dir) => Store::persistent(settings.max_documents, dir)
+            .map_err(|err| format!("cannot use {}: {err}", dir.display()))?,
+        None => Store::new(settings.max_documents),
+    };
     let app = api::router(store, settings.max_body_bytes);
     let listener = tokio::net::TcpListener::bind(settings.bind)
         .await
@@ -36,6 +40,10 @@ async fn run() -> Result<(), String> {
         .local_addr()
         .map_err(|err| format!("cannot read the bound address: {err}"))?;
     tracing::info!(address = %local, "steleofd-server is listening");
+    match settings.data_dir {
+        Some(dir) => tracing::info!(directory = %dir.display(), "documents are persisted"),
+        None => tracing::info!("documents are held in memory only"),
+    }
 
     axum::serve(listener, app)
         .with_graceful_shutdown(shutdown())

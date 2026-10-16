@@ -82,13 +82,16 @@ async fn open(
             "too many open documents",
         ));
     }
+    // `Bytes` is a refcounted handle, so the clone is what the store keeps
+    // while the closure consumes the original to parse.
+    let stored = body.clone();
     let opened = blocking(move || {
         let mut doc = Document::open_bytes(&body)?;
         let info = DocumentInfo::of(&mut doc);
         Ok::<_, steleofd_error::OfdError>((doc, info))
     })
     .await??;
-    let id = store.insert(opened.0);
+    let id = store.insert(opened.0, &stored)?;
     Ok((StatusCode::CREATED, Json(Opened { id, info: opened.1 })))
 }
 
@@ -175,7 +178,11 @@ fn png_response(bytes: Vec<u8>) -> Response {
 
 /// The document behind an id, or a 404 naming what was missing.
 fn shared(store: Store, id: Uuid) -> Result<Shared, ApiError> {
-    store.get(id).ok_or_else(|| ApiError::unknown_document(id))
+    match store.get(id) {
+        Ok(Some(doc)) => Ok(doc),
+        Ok(None) => Err(ApiError::unknown_document(id)),
+        Err(err) => Err(ApiError::storage(err)),
+    }
 }
 
 /// Hand CPU-bound work to a blocking thread, where it belongs.
