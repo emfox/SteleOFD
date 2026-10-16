@@ -206,7 +206,35 @@ fn a_doc_root_may_carry_a_leading_slash() {
     assert!(fixture.flatten(&doc).contains("invoice"));
 }
 
-/// `<Color>` may write each channel with its own `#` and in hex, as
+/// GB/T 33190 6.2.003 writes `DocRoot` as `./Doc_0/Document.xml`, a relative
+/// form with an explicit current-directory segment. Read verbatim it named an
+/// entry no archive holds, so the document was refused as if corrupted.
+#[test]
+fn a_doc_root_may_be_written_with_a_current_directory_segment() {
+    let mut fixture = Fixture::build(&[
+        (
+            "OFD.xml",
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+<OFD Version="1.0"><DocBody><DocRoot>./Doc_0/Document.xml</DocRoot></DocBody></OFD>"#
+                .to_string(),
+        ),
+        (
+            "Doc_0/Document.xml",
+            document_xml("", r#"<Page ID="1" BaseLoc="Pages/Page_0/Content.xml"/>"#),
+        ),
+        (
+            "Doc_0/Pages/Page_0/Content.xml",
+            content_xml(
+                r#"<TextObject ID="2" Boundary="0 0 100 10" Font="3" Size="3">
+                     <TextCode X="0" Y="5" DeltaX="3">invoice</TextCode>
+                   </TextObject>"#,
+            ),
+        ),
+    ]);
+    let doc = fixture.parse();
+    assert_eq!(doc.doc_dir, "Doc_0");
+    assert!(fixture.flatten(&doc).contains("invoice"));
+}
 /// `#ee #20 #25`. Read as one six-digit hex string, it failed -- while the
 /// same document's `#0 #0 #0` passed, which is how the bug hid.
 #[test]
