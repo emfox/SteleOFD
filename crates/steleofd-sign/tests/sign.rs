@@ -4,7 +4,7 @@ use steleofd_crypto::Sm2KeyPair;
 use steleofd_error::OfdError;
 use steleofd_package::Package;
 use steleofd_sign::{
-    Reference, Signature, SignatureKind, VerifyStatus, read_sign_list, read_signature,
+    Reference, Signature, SignatureKind, VerifyStatus, read_seals, read_sign_list, read_signature,
     signed_digest, verify_descriptor, verify_signature, verify_with_public_key,
 };
 use steleofd_testkit::{
@@ -480,5 +480,61 @@ fn gb_t_33190_18_4_validation_reports_the_scope_it_checked() {
         verify_with_public_key(&mut package, &sig, &pair.public_bytes()).expect("verify"),
         VerifyStatus::Valid,
         "the checked scope is the referenced files and nothing else"
+    );
+}
+
+#[test]
+fn gb_t_33190_18_2_3_a_seal_resolves_to_its_image_and_placements() {
+    // The descriptor names the seal relative to its own file, so resolution
+    // joins the two: every stamp comes back with the image bytes beside the
+    // place it is drawn on.
+    let xml = br#"<Signature ID="s">
+      <SignedInfo><References CheckMethod="SM3">
+        <Reference FileRef="a.bin"><CheckValue>AAAA</CheckValue></Reference>
+      </References></SignedInfo>
+      <StampAnnot ID="1" PageRef="3" Boundary="10 20 30 40"/>
+      <StampAnnot ID="2" PageRef="4" Boundary="50 60 20 20"/>
+      <Seal><BaseLoc>Res/Seal.esl</BaseLoc></Seal>
+    </Signature>"#
+        .to_vec();
+    let image = b"seal-bytes".to_vec();
+    let mut package = open(&[
+        ("Signs/Sign_0.xml", xml),
+        ("Signs/Res/Seal.esl", image.clone()),
+    ]);
+    let sig = read_signature(&mut package, "Signs/Sign_0.xml").expect("descriptor");
+    let seals = read_seals(&mut package, "Signs/Sign_0.xml", &sig).expect("seals");
+    assert_eq!(seals.len(), 2, "one placement per stamp");
+    assert_eq!(seals[0].id, "1");
+    assert_eq!(seals[0].page_ref, "3");
+    assert_eq!(seals[0].image, image, "the seal image resolves beside it");
+    assert_eq!(
+        seals[1].boundary,
+        steleofd_common::Rect::new(50.0, 60.0, 20.0, 20.0)
+    );
+}
+
+#[test]
+fn gb_t_33190_18_2_3_a_seal_with_no_image_still_places() {
+    // A descriptor may name a seal the package does not ship, or none at all;
+    // the placement still travels so a reader can draw its placeholder rather
+    // than lose the stamp.
+    let xml = br#"<Signature ID="s">
+      <SignedInfo><References CheckMethod="SM3">
+        <Reference FileRef="a.bin"><CheckValue>AAAA</CheckValue></Reference>
+      </References></SignedInfo>
+      <StampAnnot ID="1" PageRef="3" Boundary="10 20 30 40"/>
+      <Seal><BaseLoc>Res/Missing.esl</BaseLoc></Seal>
+    </Signature>"#
+        .to_vec();
+    let mut package = open(&[("Signs/Sign_0.xml", xml)]);
+    let sig = read_signature(&mut package, "Signs/Sign_0.xml").expect("descriptor");
+    let seals = read_seals(&mut package, "Signs/Sign_0.xml", &sig).expect("seals");
+    assert_eq!(seals.len(), 1);
+    assert!(seals[0].image.is_empty(), "no bytes, but the place remains");
+    assert_eq!(
+        seals[0].image_ref.as_deref(),
+        Some("Signs/Res/Missing.esl"),
+        "the path is still reported"
     );
 }

@@ -545,6 +545,8 @@ status = "verified"
 tests = [
   "gb_t_33190_18_2_3_the_proof_lives_behind_signed_value",
   "gb_t_33190_18_2_3_a_stamp_records_where_it_sits",
+  "gb_t_33190_18_2_3_a_seal_resolves_to_its_image_and_placements",
+  "gb_t_33190_18_2_3_a_seal_with_no_image_still_places",
 ]
 
 [[item]]

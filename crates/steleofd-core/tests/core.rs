@@ -14,6 +14,16 @@ const OFD_XML: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
   <DocBody><DocRoot>Doc_0/Document.xml</DocRoot></DocBody>
 </OFD>"#;
 
+/// The same, with the signature list declared, which is the only thing that
+/// says a document is signed.
+const OFD_XML_SIGNED: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
+<OFD Version="1.0">
+  <DocBody>
+    <DocRoot>Doc_0/Document.xml</DocRoot>
+    <Signatures>Doc_0/Signs/Signs.xml</Signatures>
+  </DocBody>
+</OFD>"#;
+
 fn document_xml(pages: &str) -> String {
     format!(
         r#"<?xml version="1.0" encoding="UTF-8"?>
@@ -81,6 +91,23 @@ fn font_table(id: &str, name: &str, file: &str) -> String {
     format!(
         r#"<?xml version="1.0" encoding="UTF-8"?>
 <Res BaseLoc="Res"><Fonts><Font ID="{id}" FontName="{name}"><FontFile>{file}</FontFile></Font></Fonts></Res>"#
+    )
+}
+
+fn signs_xml() -> Vec<u8> {
+    br#"<Signs><Sign BaseLoc="Doc_0/Signs/Sign_0.xml"/></Signs>"#.to_vec()
+}
+
+/// A descriptor naming one seal image and one stamp on the page id given.
+fn seal_descriptor(page_ref: &str, boundary: &str) -> String {
+    format!(
+        r#"<Signature ID="s">
+  <SignedInfo><References CheckMethod="SM3">
+    <Reference FileRef="Doc_0/Document.xml"><CheckValue>AAAA</CheckValue></Reference>
+  </References></SignedInfo>
+  <StampAnnot ID="1" PageRef="{page_ref}" Boundary="{boundary}"/>
+  <Seal><BaseLoc>Seal.esl</BaseLoc></Seal>
+</Signature>"#
     )
 }
 
@@ -526,6 +553,56 @@ fn reports_when_no_signatures_are_declared() {
     );
     let err = doc.verify_signatures().expect_err("must fail");
     assert!(matches!(err, OfdError::Format(_)), "got {err:?}");
+}
+
+#[cfg(feature = "sign")]
+#[test]
+fn a_seal_lands_on_the_page_its_ref_names() {
+    // The stamp carries a `PageRef` id, not an index, so the facade has to
+    // join it against `<Pages>`; a stamp whose id names no page is dropped
+    // rather than drawn on page zero.
+    let entries = [
+        ("OFD.xml", OFD_XML_SIGNED.as_bytes().to_vec()),
+        (
+            "Doc_0/Document.xml",
+            document_xml(r#"<Page ID="1"/><Page ID="2"/><Page ID="7"/>"#).into_bytes(),
+        ),
+        ("Doc_0/Signs/Signs.xml", signs_xml()),
+        (
+            "Doc_0/Signs/Sign_0.xml",
+            seal_descriptor("7", "1 2 3 4").into_bytes(),
+        ),
+        ("Doc_0/Signs/Seal.esl", b"seal-image".to_vec()),
+    ];
+    let mut doc = open(&entries);
+    let seals = doc.seals().expect("seals");
+    assert_eq!(seals.len(), 1);
+    assert_eq!(
+        seals[0].page, 2,
+        "PageRef 7 is the third page, not the first"
+    );
+    assert_eq!(seals[0].id, "1");
+    assert_eq!(seals[0].image, b"seal-image");
+}
+
+#[cfg(feature = "sign")]
+#[test]
+fn a_stamp_naming_no_page_is_dropped() {
+    let entries = [
+        ("OFD.xml", OFD_XML_SIGNED.as_bytes().to_vec()),
+        (
+            "Doc_0/Document.xml",
+            document_xml(r#"<Page ID="1"/>"#).into_bytes(),
+        ),
+        ("Doc_0/Signs/Signs.xml", signs_xml()),
+        (
+            "Doc_0/Signs/Sign_0.xml",
+            seal_descriptor("99", "1 2 3 4").into_bytes(),
+        ),
+    ];
+    let mut doc = open(&entries);
+    let seals = doc.seals().expect("seals");
+    assert!(seals.is_empty(), "an unresolvable PageRef finds no page");
 }
 
 #[cfg(feature = "archive")]
