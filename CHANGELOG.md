@@ -11,9 +11,9 @@ step-by-step.
 
 ## [Unreleased]
 
-Everything below is unreleased: the workspace builds and every crate is in
-place, but no crate has been published yet. The engine is functional;
-the interfaces may still move before `0.1.0`.
+Everything below is unreleased: the workspace builds, every crate is in place
+and the original P0–P9 sequence is complete, but no crate has been published
+yet. The interfaces may still move before `0.1.0`.
 
 ### Added
 
@@ -40,6 +40,21 @@ the interfaces may still move before `0.1.0`.
 - **`steleofd-ffi`** — expose the engine to C hosts through a committed header.
 - **`steleofd-server`** — serve documents over HTTP.
 - **`steleofd-reader`** — a native window over the engine, open by drop.
+- **Reader, completed** — print from the current view, an annotation list, seal
+  appearance rendering, a two-revision comparison view and full keyboard
+  navigation, all over the same `core` facade.
+- **`steleofd-crypto` / `steleofd-sign`** — GB/T 20520 timestamp tokens, read as
+  a CMS `SignedData` around a `TSTInfo`, with a four-way verdict (`Absent`,
+  `Unbound`, `Unverified`, `Bound`) exposed as `Document::verify_timestamps`.
+- **`steleofd-archive`** — `archive()` produces the GB/T 42133-2022 archival
+  profile: it strips the optional structures clause 6.2.2 names, drops the
+  attachments that leaves unreachable, and declares `DocType="OFD-A"`.
+- **Font subsetting** — `steleofd-font::subset` rebuilds a face down to the
+  glyphs a document uses, carrying whole only a face it cannot rewrite.
+- **Release manifests** — `release.yml` builds the reader for Linux, macOS and
+  Windows beside the C ABI library and the WASM bindings, each shipped with a
+  `SHA256SUMS` manifest; the builds are unsigned, so the checksum is the trust
+  anchor.
 - **Conformance** — annex A schemas rebuilt from the standard and validated in
   CI; the GB/T 33190 clause register gate.
 - **`proptest` suites** for `package`, `xml` and `model`, and a crash-free
