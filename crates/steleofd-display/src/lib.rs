@@ -10,6 +10,7 @@ pub mod list;
 pub mod ops;
 pub mod page;
 pub mod resource;
+pub mod shading;
 pub mod text;
 
 pub use list::{DisplayList, DisplayListBuilder, PageDisplay, PageRef};

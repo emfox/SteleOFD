@@ -73,10 +73,14 @@ pub enum DrawOp {
 
     /// Draw a radial gradient clipped to a path.
     RadialGradient {
-        /// Circle centre.
+        /// Centre of the start circle.
         center: Point,
-        /// Circle radius.
+        /// Radius of the start circle.
         radius: f64,
+        /// Centre of the end circle.
+        end: Point,
+        /// Radius of the end circle.
+        end_radius: f64,
         /// Colour stops.
         stops: Vec<GradientStop>,
         /// Region the gradient is painted into.
@@ -155,7 +159,7 @@ pub enum Paint {
 }
 
 /// One colour stop of a gradient.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct GradientStop {
     /// Position along the gradient, `0.0..=1.0`.
     pub offset: f64,

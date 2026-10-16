@@ -517,20 +517,31 @@ impl PageSink for PdfSink<'_> {
         self.fill_shading(shape.path, &format!("Sh{index}"));
     }
 
-    fn radial_gradient(&mut self, center: Point, radius: f64, shape: GradientShape<'_>) {
+    fn radial_gradient(
+        &mut self,
+        center: Point,
+        radius: f64,
+        end: Point,
+        end_radius: f64,
+        shape: GradientShape<'_>,
+    ) {
         if shape.stops.is_empty() {
             return;
         }
         let total = self.to_pt(Affine::IDENTITY);
         let (cx, cy) = total.apply(center.x, center.y);
-        // The page transform is axis preserving up to the y flip, so the radius
+        let (ex, ey) = total.apply(end.x, end.y);
+        // The page transform is axis preserving up to the y flip, so a radius
         // scales with the mean factor.
-        let r = radius * total.scale_factor();
+        let scale = total.scale_factor();
         let index = self.shadings.len();
         self.radial_refs.push(index);
+        // PDF's radial shading is the very cone the clause describes: two
+        // circles, with the parameter running from the first to the second,
+        // so the geometry travels as written.
         self.shadings.push(PendingShading {
             radial: true,
-            coords: vec![cx, cy, 0.0, cx, cy, r],
+            coords: vec![cx, cy, radius * scale, ex, ey, end_radius * scale],
             stops: shape.stops.to_vec(),
         });
         self.stats.gradients += 1;
@@ -1039,7 +1050,9 @@ mod tests {
     fn a_radial_gradient_uses_shading_type_three() {
         let p = page(vec![steleofd_display::DrawOp::RadialGradient {
             center: Point::new(5.0, 5.0),
-            radius: 5.0,
+            radius: 1.0,
+            end: Point::new(8.0, 5.0),
+            end_radius: 5.0,
             stops: vec![GradientStop {
                 offset: 0.0,
                 color: Color::WHITE,
@@ -1063,6 +1076,33 @@ mod tests {
                 == Some(3)
         });
         assert!(found, "a radial shading is type 3");
+        // Both circles travel: PDF's type 3 is the cone the clause describes,
+        // so the two centres and both radii reach the shading as written.
+        let coords = doc.objects.values().find_map(|o| match o {
+            Object::Stream(stream) => stream
+                .dict
+                .get(b"Shading")
+                .ok()
+                .and_then(|s| s.as_dict().ok())
+                .and_then(|d| d.get(b"Coords").ok())
+                .and_then(|c| c.as_array().ok())
+                .map(|a| a.iter().filter_map(|v| v.as_f32().ok()).collect::<Vec<_>>()),
+            _ => None,
+        });
+        let coords = coords.expect("the shading carries its two circles");
+        assert_eq!(coords.len(), 6, "two circles, each a centre and a radius");
+        let pt = (72.0 / 25.4) as f32;
+        assert!((coords[2] - pt).abs() < 1e-3, "start radius: {:?}", coords);
+        assert!(
+            (coords[5] - 5.0 * pt).abs() < 1e-3,
+            "end radius: {:?}",
+            coords
+        );
+        assert!(
+            coords[0] < coords[3],
+            "the centres stay apart: {:?}",
+            coords
+        );
     }
 
     #[test]

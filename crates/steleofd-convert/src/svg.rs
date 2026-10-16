@@ -276,22 +276,64 @@ impl PageSink for SvgSink<'_> {
         self.fill_with_gradient(shape.path, &id, PaintRule::NonZero);
     }
 
-    fn radial_gradient(&mut self, center: Point, radius: f64, shape: GradientShape<'_>) {
+    fn radial_gradient(
+        &mut self,
+        center: Point,
+        radius: f64,
+        end: Point,
+        end_radius: f64,
+        shape: GradientShape<'_>,
+    ) {
         if shape.stops.is_empty() {
             return;
         }
         self.seq += 1;
         let id = format!("grad{}", self.seq);
-        self.radial.push(id.clone());
-        self.stats.gradients += 1;
-        self.line(format!(
-            "<radialGradient id=\"{id}\" gradientUnits=\"userSpaceOnUse\" cx=\"{}\" cy=\"{}\" r=\"{}\">{}</radialGradient>",
-            num(center.x),
-            num(center.y),
-            num(radius.max(0.0)),
-            stops_markup(shape.stops)
-        ));
-        self.fill_with_gradient(shape.path, &id, PaintRule::NonZero);
+        // The clause's cone reduces to the focal form SVG paints: a point at
+        // the apex and a circle at the far end, with the stops moved along the
+        // axis. Equal circles leave no apex, and colour varies along the line.
+        match steleofd_display::shading::radial_form(center, radius, end, end_radius, shape.stops) {
+            steleofd_display::shading::RadialForm::Cone(cone) => {
+                self.stats.gradients += 1;
+                self.radial.push(id.clone());
+                self.line(format!(
+                    "<radialGradient id=\"{id}\" gradientUnits=\"userSpaceOnUse\" cx=\"{}\" cy=\"{}\" r=\"{}\" fx=\"{}\" fy=\"{}\">{}</radialGradient>",
+                    num(cone.circle.x),
+                    num(cone.circle.y),
+                    num(cone.radius.max(0.0)),
+                    num(cone.apex.x),
+                    num(cone.apex.y),
+                    stops_markup(&cone.stops)
+                ));
+                self.fill_with_gradient(shape.path, &id, PaintRule::NonZero);
+            }
+            steleofd_display::shading::RadialForm::Cylinder { start, end } => {
+                self.stats.gradients += 1;
+                self.linear.push(id.clone());
+                self.line(format!(
+                    "<linearGradient id=\"{id}\" gradientUnits=\"userSpaceOnUse\" x1=\"{}\" y1=\"{}\" x2=\"{}\" y2=\"{}\">{}</linearGradient>",
+                    num(start.x),
+                    num(start.y),
+                    num(end.x),
+                    num(end.y),
+                    stops_markup(shape.stops)
+                ));
+                self.fill_with_gradient(shape.path, &id, PaintRule::NonZero);
+            }
+            steleofd_display::shading::RadialForm::Flat(color) => {
+                // Neither circle has extent, so the shading is one colour.
+                let faded = if color.a == 255 {
+                    String::new()
+                } else {
+                    format!(" fill-opacity=\"{}\"", opacity(&color))
+                };
+                self.line(format!(
+                    "<path d=\"{}\" fill=\"{}\"{faded}/>",
+                    path_data(shape.path),
+                    hex(&color)
+                ));
+            }
+        }
     }
 }
 
@@ -747,12 +789,17 @@ mod tests {
         }];
         let p = page(vec![DrawOp::RadialGradient {
             center: Point::new(10.0, 10.0),
-            radius: 25.0,
+            radius: 0.0,
+            end: Point::new(10.0, 10.0),
+            end_radius: 25.0,
             stops,
             path: rect(0.0, 0.0, 20.0, 20.0),
         }]);
         let svg = page_to_svg(&p, &SvgOptions::default()).expect("convert");
-        assert!(svg.contains("<radialGradient id=\"grad1\" gradientUnits=\"userSpaceOnUse\" cx=\"10\" cy=\"10\" r=\"25\">"));
+        // The clause's start circle is a point here, so the cone reduces to
+        // the plain radial SVG paints: the circle at the far end, the point
+        // at the near one.
+        assert!(svg.contains("<radialGradient id=\"grad1\" gradientUnits=\"userSpaceOnUse\" cx=\"10\" cy=\"10\" r=\"25\" fx=\"10\" fy=\"10\">"));
         assert!(svg.contains("fill=\"url(#grad1)\""));
     }
 

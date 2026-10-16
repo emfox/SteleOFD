@@ -186,13 +186,14 @@ fn paint_of(color: &ColorRef, path: &Path, builder: &mut DisplayListBuilder) -> 
         }) => {
             let stops = stops_of(segments)?;
             let index = builder.len();
-            // Only the start circle is painted; the end circle the clause also
-            // gives is not folded in yet.
-            let _ = end;
-            let _ = end_radius;
+            // Clause 8.3.4 describes the shading as the cone between two
+            // circles, so both travel with the op; how a backend paints a
+            // two-circle cone is its own business.
             builder.push(DrawOp::RadialGradient {
                 center: Point::new(start.0, start.1),
                 radius: *start_radius,
+                end: Point::new(end.0, end.1),
+                end_radius: *end_radius,
                 stops,
                 path: path.clone(),
             });

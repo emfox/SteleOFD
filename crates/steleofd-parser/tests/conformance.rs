@@ -691,13 +691,13 @@ fn gb_t_33190_8_3_4_axial_shading_becomes_a_linear_gradient() {
 
 #[test]
 fn gb_t_33190_8_3_4_radial_shading_carries_both_radii() {
-    // A RadialShd names two circles, and this parser keeps the start circle as
-    // the one that is painted. The clause also allows the shading to be
-    // stroked rather than filled, so the marker has to work for both paints.
+    // A RadialShd names two circles and the clause draws the shading as the
+    // cone between them, so both have to reach the gradient op. The clause
+    // also allows the shading to be stroked, so the marker covers both paints.
     let ops = page_ops(
         r##"<PathObject ID="10" Boundary="0 0 20 20" Stroke="true">
   <AbbreviatedData>M 0 0 L 20 0 L 20 20 Z</AbbreviatedData>
-  <StrokeColor><RadialShd StartPoint="10 10" StartRadius="0" EndPoint="10 10" EndRadius="5">
+  <StrokeColor><RadialShd StartPoint="10 10" StartRadius="0" EndPoint="16 10" EndRadius="5">
     <Segment Position="0"><Color Value="#FFFFFF"/></Segment>
     <Segment Position="1"><Color Value="#000000"/></Segment>
   </RadialShd></StrokeColor>
@@ -707,6 +707,8 @@ fn gb_t_33190_8_3_4_radial_shading_carries_both_radii() {
     let DrawOp::RadialGradient {
         center,
         radius,
+        end,
+        end_radius,
         stops,
         ..
     } = &ops[0]
@@ -715,6 +717,8 @@ fn gb_t_33190_8_3_4_radial_shading_carries_both_radii() {
     };
     assert_eq!((center.x, center.y), (10.0, 10.0));
     assert_eq!(*radius, 0.0);
+    assert_eq!((end.x, end.y), (16.0, 10.0), "the end circle travels too");
+    assert_eq!(*end_radius, 5.0);
     assert_eq!(stops.len(), 2);
     assert!(ops.iter().any(|op| matches!(
         op,

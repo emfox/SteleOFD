@@ -191,18 +191,53 @@ pub fn render_page(
                 path,
             } => {
                 let total = total_transform(&state, &page.page_box, options.dpi);
-                let shader = linear_shader(*start, *end, stops, total)?;
+                let shader = linear_shader(*start, *end, stops, total);
                 fill_with_shader(&mut pixmap, path, shader, total, state.clip.as_ref())?;
             }
             DrawOp::RadialGradient {
                 center,
                 radius,
+                end,
+                end_radius,
                 stops,
                 path,
             } => {
                 let total = total_transform(&state, &page.page_box, options.dpi);
-                let shader = radial_shader(*center, *radius, stops, total)?;
-                fill_with_shader(&mut pixmap, path, shader, total, state.clip.as_ref())?;
+                match steleofd_display::shading::radial_form(
+                    *center,
+                    *radius,
+                    *end,
+                    *end_radius,
+                    stops,
+                ) {
+                    steleofd_display::shading::RadialForm::Cone(cone) => {
+                        let shader = focal_shader(&cone, total);
+                        fill_with_shader(&mut pixmap, path, shader, total, state.clip.as_ref())?;
+                    }
+                    steleofd_display::shading::RadialForm::Cylinder { start, end } => {
+                        // Equal circles: the shading varies along the axis
+                        // between the centres, which a linear gradient paints.
+                        let shader = linear_shader(start, end, stops, total);
+                        fill_with_shader(&mut pixmap, path, shader, total, state.clip.as_ref())?;
+                    }
+                    steleofd_display::shading::RadialForm::Flat(color) => {
+                        // Neither circle has extent: one flat colour keeps the
+                        // region painted instead of dropping it.
+                        let paint = TsPaint {
+                            shader: Shader::SolidColor(to_color(&color)),
+                            anti_alias: true,
+                            ..TsPaint::default()
+                        };
+                        let ts_path = to_ts_path(path, total)?;
+                        pixmap.fill_path(
+                            &ts_path,
+                            &paint,
+                            FillRule::Winding,
+                            Transform::identity(),
+                            state.clip.as_ref(),
+                        );
+                    }
+                }
             }
         }
     }
@@ -624,16 +659,24 @@ fn premultiply(px: [u8; 4]) -> [u8; 4] {
     [m(px[0]), m(px[1]), m(px[2]), px[3]]
 }
 
+/// Paint a linear gradient, degrading to the first stop when the axis
+/// vanishes: one fill refusing to place must not fail the whole page.
 fn linear_shader(
     start: steleofd_common::Point,
     end: steleofd_common::Point,
     stops: &[GradientStop],
     total: Transform,
-) -> Result<Shader<'static>> {
+) -> Shader<'static> {
     let ts_stops: Vec<tiny_skia::GradientStop> = stops
         .iter()
         .map(|s| tiny_skia::GradientStop::new(s.offset as f32, to_color(&s.color)))
         .collect();
+    let flat = Shader::SolidColor(
+        stops
+            .first()
+            .map(|s| to_color(&s.color))
+            .unwrap_or(tiny_skia::Color::BLACK),
+    );
     tiny_skia::LinearGradient::new(
         Point::from_xy(start.x as f32, start.y as f32),
         Point::from_xy(end.x as f32, end.y as f32),
@@ -641,36 +684,33 @@ fn linear_shader(
         SpreadMode::Pad,
         total,
     )
-    .ok_or_else(|| {
-        OfdError::Render(RenderError::BudgetExceeded(
-            "degenerate linear gradient".to_string(),
-        ))
-    })
+    .unwrap_or(flat)
 }
 
-fn radial_shader(
-    center: steleofd_common::Point,
-    radius: f64,
-    stops: &[GradientStop],
-    total: Transform,
-) -> Result<Shader<'static>> {
-    let ts_stops: Vec<tiny_skia::GradientStop> = stops
+/// Paint a reduced cone: a point at the apex, a circle at the far end.
+/// A gradient tiny-skia refuses to place degrades to the first stop's colour:
+/// a shading is one fill among many, and losing it must not lose the page.
+fn focal_shader(cone: &steleofd_display::shading::FocalCone, total: Transform) -> Shader<'static> {
+    let ts_stops: Vec<tiny_skia::GradientStop> = cone
+        .stops
         .iter()
         .map(|s| tiny_skia::GradientStop::new(s.offset as f32, to_color(&s.color)))
         .collect();
+    let flat = Shader::SolidColor(
+        cone.stops
+            .first()
+            .map(|s| to_color(&s.color))
+            .unwrap_or(tiny_skia::Color::BLACK),
+    );
     tiny_skia::RadialGradient::new(
-        Point::from_xy(center.x as f32, center.y as f32),
-        Point::from_xy(center.x as f32, center.y as f32),
-        radius as f32,
+        Point::from_xy(cone.apex.x as f32, cone.apex.y as f32),
+        Point::from_xy(cone.circle.x as f32, cone.circle.y as f32),
+        cone.radius as f32,
         ts_stops,
         SpreadMode::Pad,
         total,
     )
-    .ok_or_else(|| {
-        OfdError::Render(RenderError::BudgetExceeded(
-            "degenerate radial gradient".to_string(),
-        ))
-    })
+    .unwrap_or(flat)
 }
 
 fn fill_with_shader(
@@ -913,6 +953,80 @@ mod tests {
         let right = pixel_at(&out, 70, 38)[0] as i32;
         assert!(left < 80, "left edge is dark, got {left}");
         assert!(right > 175, "right edge is light, got {right}");
+    }
+
+    #[test]
+    fn a_radial_gradient_runs_from_its_centre_out_to_its_circle() {
+        // The shape the corpus writes: no StartRadius, so the first stop sits
+        // at the centre and the last on the circle the clause names.
+        let manager = FontManager::new();
+        let page = page_with(vec![DrawOp::RadialGradient {
+            center: steleofd_common::Point::new(10.0, 10.0),
+            radius: 0.0,
+            end: steleofd_common::Point::new(10.0, 10.0),
+            end_radius: 8.0,
+            stops: vec![
+                DisplayStop {
+                    offset: 0.0,
+                    color: Color::rgba(0, 0, 0, 255),
+                },
+                DisplayStop {
+                    offset: 1.0,
+                    color: Color::rgba(255, 255, 255, 255),
+                },
+            ],
+            path: rect_path(0.0, 0.0, 20.0, 20.0),
+        }]);
+        let out = render(&page, &manager);
+        let centre = pixel_at(&out, 38, 38);
+        assert!(
+            centre[0] < 40 && centre[1] < 40 && centre[2] < 40,
+            "the centre holds the first stop, got {centre:?}"
+        );
+        // 8 mm out at 96 dpi is about 30 px, near the far circle.
+        let near_edge = pixel_at(&out, 38, 8)[0];
+        assert!(
+            near_edge > 200,
+            "the rim holds the last stop, got {near_edge}"
+        );
+        let middle = pixel_at(&out, 38, 23)[0] as i32;
+        assert!(
+            (30..225).contains(&middle),
+            "halfway out is halfway between, got {middle}"
+        );
+    }
+
+    #[test]
+    fn a_shading_with_no_extent_paints_one_colour_and_keeps_the_page() {
+        // A document whose radial shading names two points and no radius at
+        // all once aborted the whole page here; the fill degrades to the
+        // first stop instead and the rest of the drawing survives.
+        let manager = FontManager::new();
+        let page = page_with(vec![
+            DrawOp::RadialGradient {
+                center: steleofd_common::Point::new(5.0, 5.0),
+                radius: 0.0,
+                end: steleofd_common::Point::new(6.0, 5.0),
+                end_radius: 0.0,
+                stops: vec![DisplayStop {
+                    offset: 0.0,
+                    color: Color::rgba(255, 0, 0, 255),
+                }],
+                path: rect_path(0.0, 0.0, 8.0, 8.0),
+            },
+            fill_rect_op(12.0, 12.0, 4.0, 4.0, Color::rgba(0, 0, 255, 255)),
+        ]);
+        let out = render(&page, &manager);
+        assert_eq!(
+            pixel_at(&out, 15, 15),
+            [255, 0, 0, 255],
+            "the extentless shading paints its first stop"
+        );
+        assert_eq!(
+            pixel_at(&out, 50, 50),
+            [0, 0, 255, 255],
+            "the rect after it still paints"
+        );
     }
 
     #[test]

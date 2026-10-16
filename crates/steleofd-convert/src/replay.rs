@@ -58,8 +58,16 @@ pub trait PageSink {
     /// Fill a path with a linear gradient.
     fn linear_gradient(&mut self, start: Point, end: Point, shape: GradientShape<'_>);
 
-    /// Fill a path with a radial gradient.
-    fn radial_gradient(&mut self, center: Point, radius: f64, shape: GradientShape<'_>);
+    /// Fill a path with a radial gradient, the cone clause 8.3.4 draws
+    /// between its two circles.
+    fn radial_gradient(
+        &mut self,
+        center: Point,
+        radius: f64,
+        end: Point,
+        end_radius: f64,
+        shape: GradientShape<'_>,
+    );
 }
 
 /// Replay one page into `sink`, rejecting an unbalanced restore.
@@ -110,9 +118,17 @@ pub fn replay(page: &PageDisplay, sink: &mut impl PageSink) -> Result<()> {
             DrawOp::RadialGradient {
                 center,
                 radius,
+                end,
+                end_radius,
                 stops,
                 path,
-            } => sink.radial_gradient(*center, *radius, GradientShape { stops, path }),
+            } => sink.radial_gradient(
+                *center,
+                *radius,
+                *end,
+                *end_radius,
+                GradientShape { stops, path },
+            ),
         }
     }
     Ok(())
@@ -169,7 +185,7 @@ mod tests {
             self.log.push("linear".into());
         }
 
-        fn radial_gradient(&mut self, _: Point, _: f64, _: GradientShape<'_>) {
+        fn radial_gradient(&mut self, _: Point, _: f64, _: Point, _: f64, _: GradientShape<'_>) {
             self.log.push("radial".into());
         }
     }
@@ -240,6 +256,8 @@ mod tests {
             DrawOp::RadialGradient {
                 center: Point::new(0.0, 0.0),
                 radius: 5.0,
+                end: Point::new(0.0, 0.0),
+                end_radius: 9.0,
                 stops: Vec::new(),
                 path: rect,
             },
