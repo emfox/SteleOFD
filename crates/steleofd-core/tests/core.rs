@@ -133,8 +133,10 @@ fn registers_container_fonts_and_remaps_ids() {
         ("Doc_0/Res/Orbitron-Bold.ttf", font_bytes()),
     ];
     let doc = open(&entries);
+    // The embedded face the page names, plus the CJK substitute the chain
+    // adds when no wide face is registered.
     assert_eq!(
-        doc.fonts().registry().len(),
+        embedded_faces(doc.fonts()).len(),
         1,
         "the one container font is registered"
     );
@@ -210,7 +212,7 @@ fn non_font_entries_are_ignored() {
         ("Doc_0/Res/readme.txt", b"not a font".to_vec()),
     ];
     let doc = open(&entries);
-    assert_eq!(doc.fonts().registry().len(), 1);
+    assert_eq!(embedded_faces(doc.fonts()).len(), 1);
 }
 
 #[test]
@@ -228,14 +230,30 @@ fn a_font_the_document_never_declares_is_not_registered() {
     ];
     let doc = open(&entries);
     // The id is still resolved, but to the system substitute: nothing was
-    // embedded, so no entry carries the container file's bytes.
+    // embedded, so no entry carries the container file's bytes. The chain's
+    // CJK substitute is the only other entry.
     let entries = doc.fonts().registry().iter().collect::<Vec<_>>();
-    assert_eq!(entries.len(), 1, "only the substitute is registered");
+    let systems: Vec<_> = entries
+        .iter()
+        .filter(|e| matches!(e.source, steleofd_font::FontSource::System { .. }))
+        .collect();
+    assert_eq!(systems.len(), 1, "only the substitute is registered");
     assert!(
-        matches!(entries[0].source, steleofd_font::FontSource::System { .. }),
-        "the undeclared file is not loaded, got {:?}",
-        entries[0].source
+        entries
+            .iter()
+            .all(|e| !matches!(e.source, steleofd_font::FontSource::Embedded { .. })),
+        "the undeclared file is not loaded, got {entries:?}"
     );
+}
+
+/// The faces registered from the container, ignoring the chain's substitutes.
+fn embedded_faces(fonts: &steleofd_font::FontManager) -> Vec<steleofd_font::FontId> {
+    fonts
+        .registry()
+        .iter()
+        .filter(|e| matches!(e.source, steleofd_font::FontSource::Embedded { .. }))
+        .map(|e| e.id)
+        .collect()
 }
 
 #[cfg(feature = "render")]
@@ -498,18 +516,25 @@ fn opening_a_document_populates_the_fallback_chain() {
     ];
     let doc = open(&entries);
     let chain = doc.fonts().fallback_chain();
+    // The CJK substitute leads because the document embeds no wide face, and
+    // the embedded face follows it; both are reachable.
     assert_eq!(
         chain,
-        vec![FontId(0)],
+        vec![FontId(1), FontId(0)],
         "the embedded face is reachable as a substitute, got {chain:?}"
     );
+    let substitution = doc
+        .fonts()
+        .fallback_for('\u{4f60}' as u32)
+        .expect("a code the embedded face lacks resolves");
+    assert_eq!(substitution.0, FontId(1), "to the CJK substitute");
 }
 
 #[test]
 fn the_chain_only_holds_faces_the_pages_reference() {
     // The registry is filled from the ids the display list names, so a face
-    // declared but never drawn with never gets registered and cannot join the
-    // chain. That gap is recorded in docs/FONTS.md rather than fixed here.
+    // declared but never drawn with never gets registered. The chain adds a
+    // CJK substitute on top; the unused face is still absent from both.
     let entries = [
         ("OFD.xml", OFD_XML.as_bytes().to_vec()),
         (
@@ -534,10 +559,14 @@ fn the_chain_only_holds_faces_the_pages_reference() {
     ];
     let doc = open(&entries);
     let chain = doc.fonts().fallback_chain();
+    assert!(
+        chain.contains(&FontId(0)),
+        "the face the page names is registered, got {chain:?}"
+    );
     assert_eq!(
-        chain,
-        vec![FontId(0)],
-        "only the face the page names is registered, got {chain:?}"
+        embedded_faces(doc.fonts()).len(),
+        1,
+        "the face the page never names is not, got {chain:?}"
     );
 }
 
@@ -561,4 +590,32 @@ fn a_malformed_resource_table_surfaces_instead_of_being_swallowed() {
     let bytes = build_archive(&borrowed).expect("build fixture");
     let err = steleofd_core::Document::open_bytes(&bytes).expect_err("must fail");
     assert!(matches!(err, OfdError::Xml(_)), "got {err:?}");
+}
+
+#[cfg(feature = "render")]
+#[test]
+fn a_document_naming_an_unshipped_cjk_face_still_draws_its_text() {
+    // The page names a CJK face and ships nothing. Before the chain could
+    // add a substitute, every Han code dropped and the page rendered blank
+    // with no complaint; the run is now short of no glyph at all.
+    let entries = [
+        ("OFD.xml", OFD_XML.as_bytes().to_vec()),
+        (
+            "Doc_0/Document.xml",
+            document_xml(&text_page("7", "4.0", "\u{4f60}\u{597d}")).into_bytes(),
+        ),
+        (
+            "Doc_0/PublicRes.xml",
+            font_table("7", "\u{5b8b}\u{4f53}", "Song.ttf").into_bytes(),
+        ),
+    ];
+    let doc = open(&entries);
+    let raster = doc
+        .render_page(0, &steleofd_render::RenderOptions::default())
+        .expect("render page");
+    assert_eq!(
+        raster.missing_glyph_runs, 0,
+        "every Han code resolved from the chain"
+    );
+    assert_eq!(raster.skipped_font_runs, 0, "and no run lost its face");
 }

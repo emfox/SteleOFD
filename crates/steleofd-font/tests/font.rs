@@ -4,7 +4,7 @@
 
 use std::sync::Arc;
 
-use steleofd_font::{FontId, FontManager, ShapeOptions, shape_text};
+use steleofd_font::{FontId, FontManager, FontSource, ShapeOptions, shape_text};
 
 /// The shared real face, so outlining and shaping are not degraded paths.
 fn font_bytes() -> Vec<u8> {
@@ -270,9 +270,16 @@ fn building_the_chain_registers_every_embedded_face_in_id_order() {
             .registry_mut()
             .register_embedded("Res/Two.ttf", "Orbitron Two", Arc::new(other));
     let chain = manager.build_fallback_chain();
+    // Neither face is wide, so the chain leads with the CJK substitute and
+    // then the two embedded faces in id order.
+    let substitute = manager
+        .registry()
+        .iter()
+        .find(|e| matches!(e.source, FontSource::Fallback { .. }))
+        .map(|e| e.id);
     assert_eq!(
         chain,
-        vec![first, second],
+        vec![substitute.unwrap(), first, second],
         "both faces are reachable, in id order"
     );
     assert_eq!(
@@ -315,9 +322,51 @@ fn building_the_chain_twice_changes_nothing() {
     let once = manager.build_fallback_chain();
     let twice = manager.build_fallback_chain();
     assert_eq!(once, twice);
+    // The fixture's one face, plus the CJK substitute no document can do
+    // without. Rebuilding must not add a second substitute.
     assert_eq!(
         once.len(),
-        1,
+        2,
         "the fixture registers one face, got {once:?}"
+    );
+}
+
+#[test]
+fn a_code_the_face_lacks_is_outlined_from_the_chain() {
+    // A document that names a font it does not ship registers a substitute.
+    // A code point the substitute lacks used to drop, leaving the page blank;
+    // it now resolves against the CJK link the chain adds.
+    let mut manager = FontManager::new();
+    let narrow = manager.registry_mut().register_system("sans-serif");
+    manager.build_fallback_chain();
+    let face = manager.face(narrow).expect("the substitute loads");
+
+    let latin = manager
+        .outline_for_code(&face, 'A' as u16, false)
+        .expect("Latin comes from the face itself");
+    assert_eq!(latin.1.id(), narrow, "and is attributed to it");
+
+    let han = manager
+        .outline_for_code(&face, '\u{4f60}' as u16, false)
+        .expect("a Han code resolves from the chain");
+    assert_ne!(han.1.id(), narrow, "from the CJK substitute, not the face");
+    assert!(
+        han.1.has_codepoint('\u{4f60}' as u32),
+        "and that is the face that covers it"
+    );
+}
+
+#[test]
+fn a_resolved_glyph_id_is_never_substituted() {
+    // A glyph index only means anything against the face it was resolved for,
+    // so it must not be looked up in the chain even when that face lacks it.
+    let mut manager = FontManager::new();
+    let narrow = manager.registry_mut().register_system("sans-serif");
+    manager.build_fallback_chain();
+    let face = manager.face(narrow).expect("the substitute loads");
+    // Glyph id 43981 is arbitrary; the point is the code path, not the glyph.
+    assert!(
+        manager.outline_for_code(&face, 43981, true).is_none(),
+        "an id the face cannot draw is not handed to another face"
     );
 }
