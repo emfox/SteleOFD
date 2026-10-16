@@ -7,9 +7,10 @@ use steleofd_error::OfdError;
 use steleofd_model::document::{Layer, PageArea};
 use steleofd_model::object::{ObjectBase, PathObject, TextCode, TextObject};
 use steleofd_model::{
-    CommonData, CompositeGraphicUnit, DocBody, Document, Location, Multimedia, MultimediaKind,
-    Object, OfdRoot, Page, PageBlock, PageLayout, PageMode, Pages, Permission, PrintPermission,
-    TabDisplay, VPreferences, Valid, ValidPeriod, Version, ZoomMode, ZoomSetting,
+    ColorSpace, ColorSpaceKind, CommonData, CompositeGraphicUnit, DocBody, Document, Location,
+    Multimedia, MultimediaKind, Object, OfdRoot, Page, PageBlock, PageLayout, PageMode, Pages,
+    Permission, PrintPermission, TabDisplay, VPreferences, Valid, ValidPeriod, Version, ZoomMode,
+    ZoomSetting,
 };
 
 fn path_object(id: &str) -> Object {
@@ -348,4 +349,42 @@ fn an_absent_print_copy_count_reads_as_no_limit() {
     let print: PrintPermission =
         serde_json::from_value(serde_json::json!({ "@Printable": true })).expect("deserialize");
     assert_eq!(print.copies, -1);
+}
+
+#[test]
+fn a_colour_space_keeps_its_type_depth_profile_and_palette() {
+    // Clause 7.13: every field of `CT_ColorSpace` bears on how samples are
+    // read, so the model has to keep all of them.
+    let space = ColorSpace {
+        id: "5".to_string(),
+        kind: ColorSpaceKind::Cmyk,
+        bits_per_component: 16,
+        profile: Some("Color/icc.icc".to_string()),
+        palette: vec!["0 0 0 0".to_string(), "255 255 255 255".to_string()],
+    };
+    let json = serde_json::to_value(&space).expect("serialize");
+    assert_eq!(json["kind"], "CMYK");
+    assert_eq!(json["bits_per_component"], 16);
+    assert_eq!(json["profile"], "Color/icc.icc");
+    assert_eq!(json["palette"].as_array().expect("palette").len(), 2);
+
+    let back: ColorSpace = serde_json::from_value(json).expect("deserialize");
+    assert_eq!(back, space);
+}
+
+#[test]
+fn an_empty_palette_is_left_out_of_the_serialised_form() {
+    // A direct-colour space has no palette, and emitting an empty one would
+    // write an XML element the schema does not want.
+    let space = ColorSpace {
+        id: "1".to_string(),
+        kind: ColorSpaceKind::Rgb,
+        bits_per_component: 8,
+        profile: None,
+        palette: Vec::new(),
+    };
+    let json = serde_json::to_value(&space).expect("serialize");
+    assert!(json.get("palette").is_none());
+    assert!(json.get("profile").is_none());
+    assert_eq!(json["kind"], "RGB");
 }

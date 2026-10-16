@@ -5,11 +5,11 @@ use steleofd_common::{Millimeter, Rect};
 use steleofd_error::{FormatError, OfdError, Result, XmlError};
 use steleofd_model::color::{ColorRef, Segment, Shading};
 use steleofd_model::document::{
-    CommonData, CompositeGraphicUnit, CompositeGraphicUnitList, DocBody, Document as ModelDocument,
-    DrawParamList, Font, FontList, Layer, Location, Multimedia, MultimediaKind, MultimediaList,
-    OfdRoot, Page, PageArea, PageBlock, Pages, Permission, PrintPermission, Template, TemplateList,
-    TemplatePageList, TemplateRef, VPreferences, ValidPeriod, Version, ZoomSetting,
-    unlimited_copies,
+    ColorSpace, ColorSpaceList, CommonData, CompositeGraphicUnit, CompositeGraphicUnitList,
+    DocBody, Document as ModelDocument, DrawParamList, Font, FontList, Layer, Location, Multimedia,
+    MultimediaKind, MultimediaList, OfdRoot, Page, PageArea, PageBlock, Pages, Permission,
+    PrintPermission, Template, TemplateList, TemplatePageList, TemplateRef, VPreferences,
+    ValidPeriod, Version, ZoomSetting, unlimited_copies,
 };
 use steleofd_model::object::{
     Action, ActionEvent, ActionKind, Actions, CGTransform, Clip, ClipArea, ClipList,
@@ -1277,6 +1277,92 @@ fn push_font(cursor: &mut Cursor<'_>, node: &Node, list: &mut FontList) -> Resul
     Ok(())
 }
 
+/// GB/T 33190 clause 7.13: read a `Res` file's colour-space table. Each space
+/// is `CT_ColorSpace`: a `Type`, an optional `Profile` and an optional
+/// `Palette`, plus the resource `ID` the `Res` wrapper adds.
+pub fn read_color_spaces(xml: &str) -> Result<ColorSpaceList> {
+    let mut cursor = Cursor::new(xml);
+    let mut list = ColorSpaceList::default();
+    let root = cursor.expect_start("Res")?;
+    if root.is_self_closing() {
+        return Ok(list);
+    }
+    loop {
+        match cursor.next_event()? {
+            Event::Start(n) if n.is("ColorSpaces") => {
+                read_color_space_entries(&mut cursor, &n, &mut list)?
+            }
+            Event::Start(n) if n.is("ColorSpace") => {
+                list.items.push(read_color_space(&mut cursor, &n)?)
+            }
+            Event::Start(other) => cursor.skip_element(&other)?,
+            Event::End(_) | Event::Eof => break,
+            Event::Text(_) => {}
+        }
+    }
+    Ok(list)
+}
+
+fn read_color_space_entries(
+    cursor: &mut Cursor<'_>,
+    node: &Node,
+    list: &mut ColorSpaceList,
+) -> Result<()> {
+    if node.is_self_closing() {
+        return Ok(());
+    }
+    loop {
+        match cursor.next_event()? {
+            Event::Start(n) if n.is("ColorSpace") => list.items.push(read_color_space(cursor, &n)?),
+            Event::Start(other) => cursor.skip_element(&other)?,
+            Event::End(_) | Event::Eof => break,
+            Event::Text(_) => {}
+        }
+    }
+    Ok(())
+}
+
+fn read_color_space(cursor: &mut Cursor<'_>, node: &Node) -> Result<ColorSpace> {
+    let a = node.attributes();
+    let type_name = a.require("ColorSpace", "Type")?.to_string();
+    let mut space = ColorSpace {
+        id: a.require("ColorSpace", "ID")?.to_string(),
+        kind: type_name
+            .parse()
+            .map_err(|_| enum_error(node, &type_name))?,
+        bits_per_component: a.or_default("ColorSpace", "BitsPerComponent", 8u8)?,
+        profile: a.get("Profile").map(str::to_string),
+        palette: Vec::new(),
+    };
+    if node.is_self_closing() {
+        return Ok(space);
+    }
+    loop {
+        match cursor.next_event()? {
+            Event::Start(n) if n.is("Palette") => space.palette = read_palette(cursor)?,
+            Event::Start(other) => cursor.skip_element(&other)?,
+            Event::End(_) | Event::Eof => break,
+            Event::Text(_) => {}
+        }
+    }
+    Ok(space)
+}
+
+/// A palette is a list of `CV` entries, each a space-separated channel list.
+fn read_palette(cursor: &mut Cursor<'_>) -> Result<Vec<String>> {
+    let mut entries = Vec::new();
+    loop {
+        match cursor.next_event()? {
+            Event::Start(n) if n.is("CV") => entries.push(read_element_text(cursor, &n)?),
+            Event::Start(other) => cursor.skip_element(&other)?,
+            Event::End(_) | Event::Eof => break,
+            Event::Text(_) => {}
+        }
+    }
+    Ok(entries)
+}
+
+/// Read `MultiMedia` tables from a `Res` file, which is where video lives.
 /// GB/T 33190 clause 12: read a `Res` file's multimedia table. The table is
 /// where video lives, since the schema gives no video graphic unit of its own.
 pub fn read_multimedias(xml: &str) -> Result<MultimediaList> {

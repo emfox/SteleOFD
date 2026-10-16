@@ -363,6 +363,34 @@ pub struct ValidPeriod {
     pub end_date: Option<String>,
 }
 
+/// GB/T 33190 clause 7.13: a colour space a document declares. An OFD image
+/// may name one by resource id instead of carrying sRGB samples, so a reader
+/// that ignores the table cannot interpret those images at all.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ColorSpaceList {
+    /// One entry per declared colour space.
+    #[serde(rename = "ColorSpace", default)]
+    pub items: Vec<ColorSpace>,
+}
+
+/// One declared colour space, `CT_ColorSpace`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ColorSpace {
+    /// Resource id, referenced from an image's `ResourceID`.
+    pub id: crate::RefId,
+    /// Which family of channels the space uses.
+    pub kind: ColorSpaceKind,
+    /// Bits used per channel, 8 unless the writer says otherwise.
+    pub bits_per_component: u8,
+    /// Package-relative path of an ICC profile, when one is supplied.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub profile: Option<String>,
+    /// Palette entries for an indexed space, each a space-separated channel
+    /// list as written. Empty for a direct-colour space.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub palette: Vec<String>,
+}
+
 /// An element's text that is not one of the values the schema allows.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UnknownEnumValue(pub String);
@@ -390,6 +418,27 @@ macro_rules! tagged_enum {
         }
     };
 }
+
+/// The three colour families `CT_ColorSpace` allows.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ColorSpaceKind {
+    /// A single grey channel.
+    #[serde(rename = "GRAY")]
+    Gray,
+    /// Red, green and blue.
+    #[default]
+    #[serde(rename = "RGB")]
+    Rgb,
+    /// Cyan, magenta, yellow and black.
+    #[serde(rename = "CMYK")]
+    Cmyk,
+}
+
+tagged_enum!(ColorSpaceKind {
+    "GRAY" => Gray,
+    "RGB" => Rgb,
+    "CMYK" => Cmyk,
+});
 
 tagged_enum!(PageMode {
     "None" => None,

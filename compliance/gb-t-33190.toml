@@ -148,9 +148,12 @@ tests = [
 [[item]]
 clause = "7.13"
 title = "Declared colour spaces"
-status = "deviation"
-note = "not read; every backend paints sRGB and the corpus declares no space"
-tests = []
+status = "verified"
+tests = [
+    "gb_t_33190_7_13_declared_colour_spaces_are_read",
+    "gb_t_33190_7_13_an_unknown_colour_space_type_is_refused",
+    "gb_t_33190_7_13_colour_spaces_reach_the_open_document",
+]
 
 [[item]]
 clause = "7.14"

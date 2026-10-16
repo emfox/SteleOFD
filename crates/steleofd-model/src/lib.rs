@@ -11,10 +11,11 @@ pub mod object;
 
 pub use color::{ColorRef, Segment, Shading};
 pub use document::{
-    CommonData, CompositeGraphicUnit, CompositeGraphicUnitList, DocBody, DocRoot, Document,
-    DrawParamList, Location, Multimedia, MultimediaKind, MultimediaList, OfdRoot, Page, PageBlock,
-    PageLayout, PageMode, Pages, Permission, PrintPermission, TabDisplay, VPreferences,
-    ValidPeriod, Version, Zones, ZoomMode, ZoomSetting,
+    ColorSpace, ColorSpaceKind, ColorSpaceList, CommonData, CompositeGraphicUnit,
+    CompositeGraphicUnitList, DocBody, DocRoot, Document, DrawParamList, Location, Multimedia,
+    MultimediaKind, MultimediaList, OfdRoot, Page, PageBlock, PageLayout, PageMode, Pages,
+    Permission, PrintPermission, TabDisplay, VPreferences, ValidPeriod, Version, Zones, ZoomMode,
+    ZoomSetting,
 };
 pub use object::{
     Action, ActionEvent, ActionKind, Actions, ClipArea, ClipList, CompositeObject, DashPattern,

@@ -34,6 +34,8 @@ pub struct ParsedDocument {
     pub images: images::ImageTable,
     /// Drawing parameters the document declares, keyed by resource id.
     pub draw_params: params::ParamTable,
+    /// Colour spaces the document declares, by resource id, clause 7.13.
+    pub color_spaces: steleofd_model::ColorSpaceList,
 }
 
 /// Reads OFD files from a [`Package`] and flattens pages on demand.
@@ -77,12 +79,14 @@ impl<'a> Parser<'a> {
             &doc_dir,
             document.common_data.draw_params.as_ref(),
         )?;
+        let color_spaces = load_color_spaces(self.package, &doc_dir)?;
         Ok(ParsedDocument {
             ofd,
             document,
             doc_dir,
             images,
             draw_params,
+            color_spaces,
         })
     }
 
@@ -175,6 +179,30 @@ impl<'a> Parser<'a> {
         let xml = self.package.read_string(&path)?;
         content::read_template_block(&xml)
     }
+}
+
+/// Read the colour spaces both `Res` tables declare, clause 7.13. A table
+/// that is absent or malformed leaves the list empty rather than failing the
+/// open, since a colour space only matters to an image that names one.
+fn load_color_spaces(
+    package: &mut Package,
+    doc_dir: &str,
+) -> Result<steleofd_model::ColorSpaceList> {
+    let mut list = steleofd_model::ColorSpaceList::default();
+    for name in [
+        steleofd_common::DOCUMENT_RES_XML,
+        steleofd_common::PUBLIC_RES_XML,
+    ] {
+        let path = steleofd_package::join(doc_dir, name);
+        let Some(xml) = package.read_optional(&path)? else {
+            continue;
+        };
+        let Ok(text) = String::from_utf8(xml) else {
+            continue;
+        };
+        list.items.extend(content::read_color_spaces(&text)?.items);
+    }
+    Ok(list)
 }
 
 fn template_table(doc: &ParsedDocument) -> HashMap<&str, Template> {

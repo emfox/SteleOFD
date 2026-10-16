@@ -1944,3 +1944,106 @@ fn gb_t_33190_7_12_a_document_without_permissions_reads_them_as_absent() {
         doc.permissions
     );
 }
+
+#[test]
+fn gb_t_33190_7_13_declared_colour_spaces_are_read() {
+    // Clause 7.13: a `Res` file may declare colour spaces that images then
+    // name instead of carrying sRGB samples. The type, bit depth, profile and
+    // palette are all part of the declaration.
+    let list = steleofd_parser::content::read_color_spaces(
+        r#"<?xml version="1.0" encoding="UTF-8"?>
+<Res BaseLoc="Res">
+  <ColorSpaces>
+    <ColorSpace ID="5" Type="CMYK" BitsPerComponent="16" Profile="Color/icc.icc"/>
+    <ColorSpace ID="6" Type="RGB">
+      <Palette><CV>0 0 0</CV><CV>255 255 255</CV></Palette>
+    </ColorSpace>
+    <ColorSpace ID="7" Type="GRAY"/>
+  </ColorSpaces>
+</Res>"#,
+    )
+    .expect("colour spaces");
+
+    assert_eq!(list.items.len(), 3);
+    let cmyk = &list.items[0];
+    assert_eq!(cmyk.id, "5");
+    assert_eq!(cmyk.kind, steleofd_model::ColorSpaceKind::Cmyk);
+    assert_eq!(cmyk.bits_per_component, 16, "a stated depth is kept");
+    assert_eq!(cmyk.profile.as_deref(), Some("Color/icc.icc"));
+
+    let rgb = &list.items[1];
+    assert_eq!(rgb.kind, steleofd_model::ColorSpaceKind::Rgb);
+    assert_eq!(
+        rgb.bits_per_component, 8,
+        "the schema's default depth applies when none is stated"
+    );
+    assert_eq!(rgb.palette, vec!["0 0 0", "255 255 255"]);
+    assert!(rgb.profile.is_none(), "no profile was declared");
+
+    let gray = &list.items[2];
+    assert_eq!(gray.kind, steleofd_model::ColorSpaceKind::Gray);
+    assert!(gray.palette.is_empty());
+}
+
+#[test]
+fn gb_t_33190_7_13_an_unknown_colour_space_type_is_refused() {
+    // The schema lists three types; anything else is malformed rather than
+    // silently read as the default.
+    let err = steleofd_parser::content::read_color_spaces(
+        r#"<?xml version="1.0" encoding="UTF-8"?>
+<Res BaseLoc="Res"><ColorSpaces>
+  <ColorSpace ID="5" Type="LAB"/>
+</ColorSpaces></Res>"#,
+    )
+    .expect_err("LAB is not one of the three");
+    assert!(
+        matches!(err, steleofd_error::OfdError::Xml(_)),
+        "a bad type is an XML error, got {err:?}"
+    );
+}
+
+#[test]
+fn gb_t_33190_7_13_colour_spaces_reach_the_open_document() {
+    // The table is only useful if opening a document actually loads it, and
+    // both `Res` tables contribute.
+    let entries = [
+        ("OFD.xml", OFD_XML.to_string()),
+        (
+            "Doc_0/Document.xml",
+            document_xml(r#"<Page ID="1" BaseLoc="Pages/Page_0/Content.xml"/>"#),
+        ),
+        (
+            "Doc_0/Pages/Page_0/Content.xml",
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+<Page><Content><Layer/></Content></Page>"#
+                .to_string(),
+        ),
+        (
+            "Doc_0/DocumentRes.xml",
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+<Res BaseLoc="Res"><ColorSpaces>
+  <ColorSpace ID="5" Type="CMYK"/>
+</ColorSpaces></Res>"#
+                .to_string(),
+        ),
+        (
+            "Doc_0/PublicRes.xml",
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+<Res BaseLoc="Res"><ColorSpaces>
+  <ColorSpace ID="6" Type="GRAY"/>
+</ColorSpaces></Res>"#
+                .to_string(),
+        ),
+    ];
+    let mut parser = open(&entries);
+    let doc = parser.open_document().expect("open document");
+    let kinds: Vec<_> = doc.color_spaces.items.iter().map(|c| c.kind).collect();
+    assert_eq!(
+        kinds,
+        vec![
+            steleofd_model::ColorSpaceKind::Cmyk,
+            steleofd_model::ColorSpaceKind::Gray,
+        ],
+        "both resource tables contribute their spaces"
+    );
+}
