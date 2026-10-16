@@ -104,6 +104,36 @@ impl FontManager {
         }
     }
 
+    /// Build the fallback chain from what the registry holds and install it.
+    /// Embedded faces go in first, CJK then the rest, each group in id order.
+    /// A system reference joins only when this build can resolve one.
+    pub fn build_fallback_chain(&mut self) -> Vec<FontId> {
+        let mut wide: Vec<FontId> = Vec::new();
+        let mut narrow: Vec<FontId> = Vec::new();
+        let resolvable = cfg!(all(feature = "system-fonts", not(target_arch = "wasm32")));
+        for entry in self.registry.iter() {
+            match &entry.source {
+                FontSource::Embedded { .. } => {
+                    if entry.is_cjk {
+                        wide.push(entry.id);
+                    } else {
+                        narrow.push(entry.id);
+                    }
+                }
+                FontSource::System { .. } if resolvable => narrow.push(entry.id),
+                _ => {}
+            }
+        }
+        // Ids are handed out in registration order, so sorting only guards
+        // against a caller that built a registry some other way.
+        wide.sort_unstable();
+        narrow.sort_unstable();
+        wide.extend(narrow);
+        wide.dedup();
+        self.set_fallback_chain(wide.clone());
+        wide
+    }
+
     /// Current fallback chain.
     pub fn fallback_chain(&self) -> Vec<FontId> {
         self.fallback_chain

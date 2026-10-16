@@ -254,3 +254,70 @@ fn clearing_the_cache_drops_the_count_but_keeps_handles_alive() {
     // safe for work in flight.
     assert_eq!(held.family(), "Orbitron");
 }
+
+#[test]
+fn building_the_chain_registers_every_embedded_face_in_id_order() {
+    let mut manager = FontManager::new();
+    let first =
+        manager
+            .registry_mut()
+            .register_embedded("Res/One.ttf", "Orbitron", Arc::new(font_bytes()));
+    // Different bytes, so the dedup keeps them apart.
+    let mut other = font_bytes();
+    other.push(0);
+    let second =
+        manager
+            .registry_mut()
+            .register_embedded("Res/Two.ttf", "Orbitron Two", Arc::new(other));
+    let chain = manager.build_fallback_chain();
+    assert_eq!(
+        chain,
+        vec![first, second],
+        "both faces are reachable, in id order"
+    );
+    assert_eq!(
+        manager.fallback_chain(),
+        chain,
+        "and the chain is installed, not just returned"
+    );
+}
+
+#[test]
+fn a_substitute_face_is_only_chained_where_one_can_be_resolved() {
+    // A system reference is chained when the build can load one and skipped
+    // when it cannot, because a link that always fails would be retried on
+    // every code point that reaches fallback.
+    let mut manager = FontManager::new();
+    let embedded = manager.registry_mut().register_embedded(
+        "Res/Orbitron-Bold.ttf",
+        "Orbitron",
+        Arc::new(font_bytes()),
+    );
+    let substitute = manager.registry_mut().register_system("sans-serif");
+    let chain = manager.build_fallback_chain();
+    assert!(
+        chain.contains(&embedded),
+        "an embedded face is always reachable, got {chain:?}"
+    );
+    let resolvable = cfg!(all(feature = "system-fonts", not(target_arch = "wasm32")));
+    assert_eq!(
+        chain.contains(&substitute),
+        resolvable,
+        "a system face joins only where it can load, got {chain:?}"
+    );
+}
+
+#[test]
+fn building_the_chain_twice_changes_nothing() {
+    // The chain is rebuilt whenever a document opens, so it has to be a
+    // function of the registry rather than something that accumulates.
+    let (mut manager, _) = manager_with_fixture();
+    let once = manager.build_fallback_chain();
+    let twice = manager.build_fallback_chain();
+    assert_eq!(once, twice);
+    assert_eq!(
+        once.len(),
+        1,
+        "the fixture registers one face, got {once:?}"
+    );
+}

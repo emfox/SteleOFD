@@ -44,6 +44,9 @@ impl Document {
         let doc_dir = parsed.doc_dir.clone();
         let registered = register_container_fonts(&mut package, &doc_dir, &mut fonts, &list);
         remap_fonts(&mut list, &registered);
+        // The chain is built last, once every face the document declares has
+        // been registered, so it covers all of them rather than the first.
+        fonts.build_fallback_chain();
         Ok(Self {
             package,
             parsed,

@@ -44,11 +44,19 @@ pins today's behaviour so the day it changes, the test fails.
    face at index zero and the rest are unreachable. Producers that embed a
    collection as a single file and expect more than its first face will be
    short of glyphs.
-4. **A page that cannot load a face fails as a whole.** There is no per-object
-   fallback yet, so one unreadable face loses the page rather than one run on
-   it. `FontManager::set_fallback_chain` exists and `fallback_for` consults it,
-   but the parser does not build a chain, so nothing populates it in the read
-   path. This is M2-c.
+4. **A page that cannot load a face still fails as a whole.** The chain is
+   now built: `Document::open` calls `FontManager::build_fallback_chain` once
+   every declared face is registered, so `fallback_for` has real faces to
+   consult instead of an empty list. What is still missing is the reader that
+   acts on it. A run whose own face is unreadable is skipped by the SVG and
+   PDF writers, but the raster backend fails the whole page, and no backend
+   reports which run it dropped as a fallback rather than a substitution.
+   Two smaller limits ride along: the registry is filled from the ids the
+   pages actually name, so a face a document declares but never draws with
+   never joins the chain, and nothing yet re-shapes a run against a fallback
+   face -- the chain is available but the glyph walk does not retry on it.
+   `tests/font.rs` and `tests/core.rs` pin the chain's contents and order.
+   This is M2-c.
 5. **No subsetting on the way out.** Embedded faces are carried whole. A
    document that embeds a 20 MB CJK collection pays for it in every conversion,
    which is M2-b.

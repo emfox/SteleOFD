@@ -478,3 +478,65 @@ fn audits_the_container() {
     let report = doc.audit().expect("audit container");
     assert!(report.findings.iter().all(|f| !f.detail.is_empty()));
 }
+
+#[test]
+fn opening_a_document_populates_the_fallback_chain() {
+    // The chain the shaper consults used to be left empty, so a code point
+    // outside the run's own face was dropped instead of being looked up in
+    // the other faces the document embeds.
+    let entries = [
+        ("OFD.xml", OFD_XML.as_bytes().to_vec()),
+        (
+            "Doc_0/Document.xml",
+            document_xml(&text_page("7", "4.0", "Hi")).into_bytes(),
+        ),
+        (
+            "Doc_0/PublicRes.xml",
+            font_table("7", "Orbitron", "Orbitron-Bold.ttf").into_bytes(),
+        ),
+        ("Doc_0/Res/Orbitron-Bold.ttf", font_bytes()),
+    ];
+    let doc = open(&entries);
+    let chain = doc.fonts().fallback_chain();
+    assert_eq!(
+        chain,
+        vec![FontId(0)],
+        "the embedded face is reachable as a substitute, got {chain:?}"
+    );
+}
+
+#[test]
+fn the_chain_only_holds_faces_the_pages_reference() {
+    // The registry is filled from the ids the display list names, so a face
+    // declared but never drawn with never gets registered and cannot join the
+    // chain. That gap is recorded in docs/FONTS.md rather than fixed here.
+    let entries = [
+        ("OFD.xml", OFD_XML.as_bytes().to_vec()),
+        (
+            "Doc_0/Document.xml",
+            document_xml(&text_page("7", "4.0", "Hi")).into_bytes(),
+        ),
+        (
+            "Doc_0/PublicRes.xml",
+            format!(
+                "{}{}",
+                font_table("7", "Orbitron", "Orbitron-Bold.ttf"),
+                font_table("9", "Orbitron Two", "Orbitron-Two.ttf")
+            )
+            .into_bytes(),
+        ),
+        ("Doc_0/Res/Orbitron-Bold.ttf", font_bytes()),
+        ("Doc_0/Res/Orbitron-Two.ttf", {
+            let mut other = font_bytes();
+            other.push(0);
+            other
+        }),
+    ];
+    let doc = open(&entries);
+    let chain = doc.fonts().fallback_chain();
+    assert_eq!(
+        chain,
+        vec![FontId(0)],
+        "only the face the page names is registered, got {chain:?}"
+    );
+}
