@@ -122,6 +122,10 @@ impl<'a> SvgSink<'a> {
             PaintShape::Solid(c) => hex(c),
             PaintShape::Linear(spec) => self.define_linear(spec),
             PaintShape::Radial(spec) => self.define_radial(spec),
+            // SVG 1.1 has no mesh gradient fill; the mean vertex colour keeps
+            // the region painted rather than dropping a fill that the reader
+            // does draw.
+            PaintShape::Mesh(spec) => mesh_average(spec),
             PaintShape::Pattern(_) => "#000000".to_string(),
         }
     }
@@ -417,6 +421,24 @@ impl SvgSink<'_> {
 /// `#rrggbb` for a colour.
 fn hex(c: &Color) -> String {
     format!("#{:02x}{:02x}{:02x}", c.r, c.g, c.b)
+}
+
+/// The mean of a mesh's vertex colours, used where a mesh gradient cannot be
+/// written. An empty mesh has no colour to average, so it is left black.
+fn mesh_average(spec: &steleofd_display::MeshSpec) -> String {
+    if spec.points.is_empty() {
+        return "#000000".to_string();
+    }
+    let n = spec.points.len() as u32;
+    let sum = spec.points.iter().fold((0u32, 0u32, 0u32), |acc, v| {
+        (
+            acc.0 + v.color.r as u32,
+            acc.1 + v.color.g as u32,
+            acc.2 + v.color.b as u32,
+        )
+    });
+    let mean = Color::rgba((sum.0 / n) as u8, (sum.1 / n) as u8, (sum.2 / n) as u8, 255);
+    hex(&mean)
 }
 
 /// Alpha as a `0..=1` fraction.

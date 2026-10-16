@@ -458,6 +458,15 @@ impl PageSink for PdfSink<'_> {
                         PaintRule::EvenOdd => " f*",
                     });
                 }
+                // A mesh has no PDF shading equivalent here, so its mean
+                // vertex colour keeps the region filled.
+                Some(PaintShape::Mesh(spec)) => {
+                    let _ = write!(setup, "{} rg", mesh_rgb(spec));
+                    operator.push_str(match shape.rule {
+                        PaintRule::NonZero => " f",
+                        PaintRule::EvenOdd => " f*",
+                    });
+                }
                 // Tiling patterns have no equivalent here; black keeps the
                 // region visible rather than silently empty.
                 Some(_) => {
@@ -745,8 +754,8 @@ fn stops_function(shading: &PendingShading, doc: &mut Document) -> Result<Object
 mod content;
 
 use content::{
-    channel_array, convert_error, curve_op, image_xobject, num, pdf_string, point_op, rgb,
-    stroke_prefix,
+    channel_array, convert_error, curve_op, image_xobject, mesh_rgb, num, pdf_string, point_op,
+    rgb, stroke_prefix,
 };
 
 #[cfg(test)]

@@ -19,6 +19,8 @@ pub enum PaintShape<'a> {
     Linear(&'a steleofd_display::LinearGradientSpec),
     /// A radial shading: the cone between its two circles.
     Radial(&'a steleofd_display::RadialGradientSpec),
+    /// A Gouraud mesh: coloured vertices and the triangles over them.
+    Mesh(&'a steleofd_display::MeshSpec),
     /// A tiled image fill.
     Pattern(&'a ImageRef),
 }
@@ -29,6 +31,7 @@ pub fn paint_shape(paint: &Paint) -> PaintShape<'_> {
         Paint::Solid(c) => PaintShape::Solid(c),
         Paint::LinearGradient(spec) => PaintShape::Linear(spec),
         Paint::RadialGradient(spec) => PaintShape::Radial(spec),
+        Paint::Mesh(spec) => PaintShape::Mesh(spec),
         Paint::Pattern(image) => PaintShape::Pattern(image),
     }
 }
