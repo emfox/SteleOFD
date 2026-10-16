@@ -76,6 +76,13 @@ impl Document {
         &self.list
     }
 
+    /// Compare this revision against another, page by page. Both sides are
+    /// already flattened, so the comparison is over what each draws rather
+    /// than over the markup it draws it from.
+    pub fn compare(&self, other: &Document) -> crate::Comparison {
+        crate::compare::compare(&self.list.pages, &other.list.pages)
+    }
+
     /// Faces registered from the container.
     pub fn fonts(&self) -> &FontManager {
         &self.fonts

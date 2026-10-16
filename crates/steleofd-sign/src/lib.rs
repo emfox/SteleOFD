@@ -280,8 +280,7 @@ pub fn read_seals(
 
 /// What one signature covers, and what the container holds that it does not.
 /// Clause 18.2.2 scopes a signature to the files its `References` name, so a
-/// document can be extended without moving an earlier seal. This is that scope
-/// made inspectable: a carrier asks which parts were fixed at signing time.
+/// document can be extended without moving an earlier seal; this is that scope.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Coverage {
     /// Id of the signature, as its descriptor writes it.

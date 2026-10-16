@@ -5,8 +5,10 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
+mod compare;
 mod document;
 
+pub use compare::{Comparison, PageChange, PageDiff};
 #[cfg(feature = "annot")]
 pub use document::Annotation;
 pub use document::Document;
