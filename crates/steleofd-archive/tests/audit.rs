@@ -76,7 +76,13 @@ fn gb_t_33190_6_2_self_contained_document_passes() {
         "a self-contained document must be archivable, got {:?}",
         report.findings
     );
-    assert_eq!(report.findings.len(), 0, "no finding at all is expected");
+    // The fixture is a plain OFD, so the only thing the audit has to say is
+    // that it does not declare the archival profile (GB/T 42133, ARCH-101).
+    assert_eq!(
+        codes(&report),
+        vec!["ARCH-101"],
+        "a self-contained plain OFD raises no self-containment finding"
+    );
 }
 
 #[test]
