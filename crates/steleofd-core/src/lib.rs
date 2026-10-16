@@ -23,4 +23,4 @@ pub use steleofd_render::RenderOptions;
 #[cfg(feature = "search")]
 pub use steleofd_search::SearchOptions;
 #[cfg(feature = "sign")]
-pub use steleofd_sign::VerifyStatus;
+pub use steleofd_sign::{TimestampStatus, VerifyStatus};

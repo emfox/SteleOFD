@@ -252,6 +252,20 @@ impl Document {
             .collect()
     }
 
+    /// Whether each signature carries a trusted timestamp, and whether the
+    /// token really binds that signature. Clause 18.2.4: the proof hangs off
+    /// the signed value, so a token that covers other bytes proves nothing.
+    #[cfg(feature = "sign")]
+    pub fn verify_timestamps(&mut self) -> Result<Vec<steleofd_sign::TimestampStatus>> {
+        let refs = self.signatures()?;
+        refs.iter()
+            .map(|sig| {
+                let signature = steleofd_sign::read_signature(&mut self.package, &sig.base_loc)?;
+                steleofd_sign::verify_timestamp(&signature)
+            })
+            .collect()
+    }
+
     /// The seals a document draws, each resolved onto the page it sits on.
     /// Clause 18.2.3: a stamp names its page by id, so the id is joined to the
     /// page index here, and the seal image travels ready to draw.
