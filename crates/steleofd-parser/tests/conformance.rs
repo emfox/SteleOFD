@@ -933,6 +933,102 @@ fn gb_t_33190_8_3_7_a_lattice_wider_than_it_is_tall_makes_every_cell() {
 }
 
 #[test]
+fn gb_t_33190_8_3_5_a_pattern_carries_its_cell_and_its_tile_size() {
+    // A Pattern fill is a cell of vector content repeated over the area, so the
+    // cell reaches the paint as a little display list and the step keeps the
+    // tile size. An omitted step is the cell size, which tiles edge to edge.
+    let ops = page_ops(
+        r##"<PathObject ID="10" Boundary="0 0 20 20" Fill="true">
+  <AbbreviatedData>M 0 0 L 20 0 L 20 20 Z</AbbreviatedData>
+  <FillColor><Pattern Width="5" Height="5" XStep="6" YStep="7">
+    <CellContent><Layer>
+      <PathObject ID="11" Boundary="0 0 5 5" Fill="true">
+        <AbbreviatedData>M 0 0 L 5 0 L 5 5 Z</AbbreviatedData>
+        <FillColor Value="#FF0000"/>
+      </PathObject>
+    </Layer></CellContent>
+  </Pattern></FillColor>
+</PathObject>"##,
+        "",
+    );
+    let DrawOp::Path {
+        fill: Some(Paint::Pattern(spec)),
+        ..
+    } = &ops[0]
+    else {
+        panic!("expected a path filled with a pattern, got {ops:?}");
+    };
+    assert_eq!((spec.width, spec.height), (5.0, 5.0));
+    assert_eq!((spec.step_x, spec.step_y), (6.0, 7.0));
+    assert_eq!(spec.reflect, steleofd_display::Reflect::Normal);
+    assert_eq!(
+        spec.cell.ops.len(),
+        1,
+        "the cell's content is flattened into the paint"
+    );
+}
+
+#[test]
+fn gb_t_33190_8_3_5_a_pattern_step_defaults_to_the_cell_size() {
+    // With neither step written the clause tiles the cell at its own size, so
+    // the paint's step has to fall back to width and height rather than zero.
+    let ops = page_ops(
+        r##"<PathObject ID="10" Boundary="0 0 20 20" Fill="true">
+  <AbbreviatedData>M 0 0 L 20 0 L 20 20 Z</AbbreviatedData>
+  <FillColor><Pattern Width="4" Height="8">
+    <CellContent><Layer>
+      <PathObject ID="11" Boundary="0 0 4 8" Fill="true">
+        <AbbreviatedData>M 0 0 L 4 0 L 4 8 Z</AbbreviatedData>
+        <FillColor Value="#00FF00"/>
+      </PathObject>
+    </Layer></CellContent>
+  </Pattern></FillColor>
+</PathObject>"##,
+        "",
+    );
+    let DrawOp::Path {
+        fill: Some(Paint::Pattern(spec)),
+        ..
+    } = &ops[0]
+    else {
+        panic!("expected a path filled with a pattern, got {ops:?}");
+    };
+    assert_eq!(
+        (spec.step_x, spec.step_y),
+        (4.0, 8.0),
+        "the step defaults to the cell size"
+    );
+}
+
+#[test]
+fn gb_t_33190_8_3_5_a_pattern_records_its_reflect_method() {
+    // ReflectMethod mirrors alternate rows or columns, so it has to survive on
+    // the paint for the tiler to apply it.
+    let ops = page_ops(
+        r##"<PathObject ID="10" Boundary="0 0 20 20" Fill="true">
+  <AbbreviatedData>M 0 0 L 20 0 L 20 20 Z</AbbreviatedData>
+  <FillColor><Pattern Width="5" Height="5" ReflectMethod="RowAndColumn">
+    <CellContent><Layer>
+      <PathObject ID="11" Boundary="0 0 5 5" Fill="true">
+        <AbbreviatedData>M 0 0 L 5 0 L 5 5 Z</AbbreviatedData>
+        <FillColor Value="#0000FF"/>
+      </PathObject>
+    </Layer></CellContent>
+  </Pattern></FillColor>
+</PathObject>"##,
+        "",
+    );
+    let DrawOp::Path {
+        fill: Some(Paint::Pattern(spec)),
+        ..
+    } = &ops[0]
+    else {
+        panic!("expected a path filled with a pattern, got {ops:?}");
+    };
+    assert_eq!(spec.reflect, steleofd_display::Reflect::RowAndColumn);
+}
+
+#[test]
 fn gb_t_33190_8_4_clip_area_narrows_the_drawing_to_a_path() {
     // The clip is state, so the object is bracketed by a save and a restore
     // around the ClipPath command; drawing after the restore is unaffected.
