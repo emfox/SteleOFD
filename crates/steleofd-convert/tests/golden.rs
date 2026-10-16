@@ -141,3 +141,49 @@ fn a_reference_png_is_readable_at_the_expected_size() {
         );
     }
 }
+
+#[test]
+fn the_book_holds_every_fixture_as_a_page() {
+    // One file a third-party renderer can be handed once. If its pages drift
+    // from the per-fixture documents the reference set is comparing something
+    // no oracle ever saw.
+    let bytes = steleofd_testkit::golden_book();
+    let document = steleofd_core::Document::open_bytes(&bytes).expect("open the book");
+    assert_eq!(
+        document.page_count(),
+        DOCS.len(),
+        "one page per fixture, in DOCS order"
+    );
+    for (index, doc) in DOCS.iter().enumerate() {
+        let from_book = document
+            .to_png(index, &RENDER_OPTIONS)
+            .unwrap_or_else(|e| panic!("render book page {index}: {e}"));
+        let alone = render(doc);
+        let ratio = difference_ratio(
+            &decode(&alone, doc.name),
+            &decode(&from_book, "the book page"),
+        );
+        assert!(
+            ratio <= MAX_DIFFERING_RATIO,
+            "book page {index} ({}) differs from its own document by {:.2}%",
+            doc.name,
+            ratio * 100.0,
+        );
+    }
+}
+
+#[test]
+fn each_book_page_keeps_its_own_size() {
+    // The fixtures no longer share a page box, so the book has to honour a
+    // per-page extent rather than the common one it opens with.
+    let bytes = steleofd_testkit::golden_book();
+    let document = steleofd_core::Document::open_bytes(&bytes).expect("open the book");
+    let wide = document
+        .to_png(8, &RENDER_OPTIONS)
+        .expect("render the landscape page");
+    assert_eq!(
+        decode(&wide, "the landscape page").dimensions(),
+        (1123, 378),
+        "page 8 carries its own 297x100mm box"
+    );
+}
