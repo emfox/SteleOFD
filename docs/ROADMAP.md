@@ -212,8 +212,10 @@ the guard does not.
 - **M1-b** `[x]` ~~A documented performance budget: a stated ceiling per stage
   for the one-page case, set well above the measured baseline so only a large,
   deliberate regression crosses it.~~
-- **M1-c** A CI job that runs the benchmarks and fails only on a large,
-  deliberate regression.
+- **M1-c** `[x]` ~~A CI job that runs the benchmarks and fails only on a large,
+  deliberate regression: `scripts/check_performance.py` reads criterion's
+  output and checks each budgeted stage against the ceiling in
+  `docs/PERFORMANCE.md`.~~
 
 ### M2. Fonts, the other correctness surface (M2-a … M2-b)
 

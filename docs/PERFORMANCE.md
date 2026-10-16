@@ -87,9 +87,29 @@ that is the regression.
 > worth a note in the commit message; the ceiling only prevents the slow
 > change nobody noticed.
 
+## How the budget is enforced
+
+`scripts/check_performance.py` reads the criterion output a `cargo bench` run
+leaves in `target/criterion/` and checks each budgeted stage against its
+ceiling. It runs locally after a `cargo bench`, and in CI as the
+`performance` job:
+
+```sh
+cargo bench -p steleofd-parser --bench parse
+cargo bench -p steleofd-convert --bench convert
+python3 scripts/check_performance.py
+```
+
+Only the ceiling is enforced, never the change against a stored baseline. A
+gate on the change would fail on ordinary noise and be disabled within a week;
+a gate on the ceiling fails on the change worth stopping. Moving a ceiling is
+a deliberate edit to this document, which is the point: the argument happens
+in the diff rather than in a comment nobody reads.
+
 ## What is not measured yet
 
-The budgets above are enforced by [M1-c](ROADMAP.md), the CI job that runs the
-benchmarks and fails on a large regression. Until that job lands, a regression
-is visible only by running `cargo bench` by hand and reading the diff — so the
-numbers are the budget, and the gate is still to come.
+The budget covers opening, flattening and the three one-page conversions.
+Search is benchmarked but not budgeted, because a reader never waits on it
+directly; and there is no budget for a large document, only the per-page
+figures plus the fixed open. Both are candidates once a real workload says
+which one matters.
