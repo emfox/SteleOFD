@@ -29,71 +29,6 @@ pub enum MessageId {
     /// Generic delete
     CommonDelete,
 
-    // Reader module
-    /// Open a document
-    ReaderOpen,
-    /// Close the open document
-    ReaderClose,
-    /// Shown where a file can be dropped
-    ReaderDropHint,
-    /// The document description line
-    ReaderInfo,
-    /// Page N of M
-    ReaderPageOf,
-    /// Zoom level
-    ReaderZoom,
-    /// Fit to width
-    ReaderFitWidth,
-    /// Fit to page
-    ReaderFitPage,
-    /// Single page layout
-    ReaderLayoutSingle,
-    /// Facing pages layout
-    ReaderLayoutDouble,
-    /// Continuous scroll layout
-    ReaderLayoutContinuous,
-    /// Page has no visible content
-    ReaderBlankPage,
-    /// The canvas says a page failed; the status bar says why
-    ReaderErrorLabel,
-    /// Label on the toolbar toggle that opens the search panel
-    ReaderSearchTitle,
-    /// Heading inside the search panel, distinct from the toggle
-    ReaderSearchPanelTitle,
-    /// No match found
-    ReaderNoMatch,
-    /// Menu heading for the export actions
-    ReaderExport,
-    /// Export the pages on screen as one PDF
-    ReaderExportPdf,
-    /// Export the pages on screen as one PNG file each
-    ReaderExportPng,
-    /// A PDF export finished, with its page count and path
-    ReaderExportPdfDone,
-    /// A PNG export finished, with its file count and path
-    ReaderExportPngDone,
-    /// Title of the platform dialog choosing where the PDF goes
-    ReaderExportPdfTitle,
-    /// Title of the platform dialog choosing where the PNG files go
-    ReaderExportPngTitle,
-    /// Print the pages on screen
-    ReaderPrint,
-    /// A print job finished, with its page count, sheet count and paper
-    ReaderPrintDone,
-    /// Paper size A3, as a printer names it
-    ReaderPaperA3,
-    /// Paper size A4, as a printer names it
-    ReaderPaperA4,
-    /// Paper size A5, as a printer names it
-    ReaderPaperA5,
-    /// Paper size B5, as a printer names it
-    ReaderPaperB5,
-    /// Paper size Letter, as a printer names it
-    ReaderPaperLetter,
-    /// Paper size Legal, as a printer names it
-    ReaderPaperLegal,
-    /// The paper the document itself declares
-    ReaderPaperDocument,
     /// Name of this language, written in itself
     LocaleNameEn,
     /// Name of the Chinese locale, written in itself
@@ -254,39 +189,6 @@ impl MessageId {
             Self::CommonRetry => "common-retry",
             Self::CommonDelete => "common-delete",
 
-            // Reader
-            Self::ReaderOpen => "reader-open",
-            Self::ReaderClose => "reader-close",
-            Self::ReaderDropHint => "reader-drop-hint",
-            Self::ReaderInfo => "reader-info",
-            Self::ReaderPageOf => "reader-page-of",
-            Self::ReaderZoom => "reader-zoom",
-            Self::ReaderFitWidth => "reader-fit-width",
-            Self::ReaderFitPage => "reader-fit-page",
-            Self::ReaderLayoutSingle => "reader-layout-single",
-            Self::ReaderLayoutDouble => "reader-layout-double",
-            Self::ReaderLayoutContinuous => "reader-layout-continuous",
-            Self::ReaderBlankPage => "reader-blank-page",
-            Self::ReaderErrorLabel => "reader-error-label",
-            Self::ReaderSearchTitle => "reader-search-title",
-            Self::ReaderSearchPanelTitle => "reader-search-panel-title",
-            Self::ReaderNoMatch => "reader-no-match",
-            Self::ReaderExport => "reader-export",
-            Self::ReaderExportPdf => "reader-export-pdf",
-            Self::ReaderExportPng => "reader-export-png",
-            Self::ReaderExportPdfDone => "reader-export-pdf-done",
-            Self::ReaderExportPngDone => "reader-export-png-done",
-            Self::ReaderExportPdfTitle => "reader-export-pdf-title",
-            Self::ReaderExportPngTitle => "reader-export-png-title",
-            Self::ReaderPrint => "reader-print",
-            Self::ReaderPrintDone => "reader-print-done",
-            Self::ReaderPaperA3 => "reader-paper-a3",
-            Self::ReaderPaperA4 => "reader-paper-a4",
-            Self::ReaderPaperA5 => "reader-paper-a5",
-            Self::ReaderPaperB5 => "reader-paper-b5",
-            Self::ReaderPaperLetter => "reader-paper-letter",
-            Self::ReaderPaperLegal => "reader-paper-legal",
-            Self::ReaderPaperDocument => "reader-paper-document",
             Self::LocaleNameEn => "locale-name-en",
             Self::LocaleNameZh => "locale-name-zh",
 
@@ -388,39 +290,6 @@ impl MessageId {
         Self::CommonClose,
         Self::CommonRetry,
         Self::CommonDelete,
-        // Reader
-        Self::ReaderOpen,
-        Self::ReaderClose,
-        Self::ReaderDropHint,
-        Self::ReaderInfo,
-        Self::ReaderPageOf,
-        Self::ReaderZoom,
-        Self::ReaderFitWidth,
-        Self::ReaderFitPage,
-        Self::ReaderLayoutSingle,
-        Self::ReaderLayoutDouble,
-        Self::ReaderLayoutContinuous,
-        Self::ReaderBlankPage,
-        Self::ReaderErrorLabel,
-        Self::ReaderSearchTitle,
-        Self::ReaderSearchPanelTitle,
-        Self::ReaderNoMatch,
-        Self::ReaderExport,
-        Self::ReaderExportPdf,
-        Self::ReaderExportPng,
-        Self::ReaderExportPdfDone,
-        Self::ReaderExportPngDone,
-        Self::ReaderExportPdfTitle,
-        Self::ReaderExportPngTitle,
-        Self::ReaderPrint,
-        Self::ReaderPrintDone,
-        Self::ReaderPaperA3,
-        Self::ReaderPaperA4,
-        Self::ReaderPaperA5,
-        Self::ReaderPaperB5,
-        Self::ReaderPaperLetter,
-        Self::ReaderPaperLegal,
-        Self::ReaderPaperDocument,
         Self::LocaleNameEn,
         Self::LocaleNameZh,
         // Conversion
@@ -498,10 +367,6 @@ impl MessageId {
         matches!(
             self,
             Self::AppLoading
-                | Self::ReaderInfo
-                | Self::ReaderPageOf
-                | Self::ReaderZoom
-                | Self::ReaderPrintDone
                 | Self::ConvertProgress
                 | Self::ConvertFailed
                 | Self::SignCount

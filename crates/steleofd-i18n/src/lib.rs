@@ -11,6 +11,7 @@ pub mod locale;
 pub mod messages;
 
 pub use bundle::{I18n, I18nBuilder};
+pub use fluent::FluentValue;
 pub use locale::{Locale, LocaleNegotiation};
 pub use messages::MessageId;
 

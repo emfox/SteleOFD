@@ -113,15 +113,15 @@ impl App {
         let report = self.export_report.as_ref()?;
         let path = report.written.first().map(|p| p.display().to_string());
         Some(match report.format {
-            ExportFormat::Pdf => self.i18n.text_with(
-                MessageId::ReaderExportPdfDone,
+            ExportFormat::Pdf => self.text_with(
+                ReaderMessage::ExportPdfDone,
                 [
                     ("count", report.pages.to_string().into()),
                     ("path", path.unwrap_or_default().into()),
                 ],
             ),
-            ExportFormat::Png => self.i18n.text_with(
-                MessageId::ReaderExportPngDone,
+            ExportFormat::Png => self.text_with(
+                ReaderMessage::ExportPngDone,
                 [
                     ("count", report.written.len().to_string().into()),
                     ("path", path.unwrap_or_default().into()),
@@ -227,32 +227,29 @@ impl App {
     pub fn print_label(&self) -> Option<String> {
         let report = self.print_report.as_ref()?;
         Some(
-            self.i18n.text_with(
-                MessageId::ReaderPrintDone,
+            self.text_with(
+                ReaderMessage::PrintDone,
                 [
                     ("pages", report.sheets.len().to_string().into()),
                     ("sheets", report.sheet_count.to_string().into()),
                     (
                         "paper",
-                        self.i18n
-                            .text(match report.settings.paper {
-                                steleofd_print::PaperSize::A3 => MessageId::ReaderPaperA3,
-                                steleofd_print::PaperSize::A4 => MessageId::ReaderPaperA4,
-                                steleofd_print::PaperSize::A5 => MessageId::ReaderPaperA5,
-                                steleofd_print::PaperSize::B5 => MessageId::ReaderPaperB5,
-                                steleofd_print::PaperSize::Letter => MessageId::ReaderPaperLetter,
-                                steleofd_print::PaperSize::Legal => MessageId::ReaderPaperLegal,
-                                steleofd_print::PaperSize::Document => {
-                                    MessageId::ReaderPaperDocument
-                                }
-                                // A custom size has no name in any language, so it
-                                // is announced as the document's own paper rather
-                                // than as a number the reader did not choose.
-                                steleofd_print::PaperSize::Custom { .. } => {
-                                    MessageId::ReaderPaperDocument
-                                }
-                            })
-                            .into(),
+                        self.text(match report.settings.paper {
+                            steleofd_print::PaperSize::A3 => ReaderMessage::PaperA3,
+                            steleofd_print::PaperSize::A4 => ReaderMessage::PaperA4,
+                            steleofd_print::PaperSize::A5 => ReaderMessage::PaperA5,
+                            steleofd_print::PaperSize::B5 => ReaderMessage::PaperB5,
+                            steleofd_print::PaperSize::Letter => ReaderMessage::PaperLetter,
+                            steleofd_print::PaperSize::Legal => ReaderMessage::PaperLegal,
+                            steleofd_print::PaperSize::Document => ReaderMessage::PaperDocument,
+                            // A custom size has no name in any language, so it
+                            // is announced as the document's own paper rather
+                            // than as a number the reader did not choose.
+                            steleofd_print::PaperSize::Custom { .. } => {
+                                ReaderMessage::PaperDocument
+                            }
+                        })
+                        .into(),
                     ),
                 ],
             ),
@@ -261,7 +258,7 @@ impl App {
 
     /// The label on the toolbar control that starts a print job.
     pub fn print_label_text(&self) -> String {
-        self.i18n.text(MessageId::ReaderPrint)
+        self.text(ReaderMessage::Print)
     }
 
     /// The settings a job runs under when nothing else says otherwise. The

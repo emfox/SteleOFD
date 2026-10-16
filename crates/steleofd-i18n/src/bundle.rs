@@ -13,7 +13,6 @@ use crate::messages::MessageId;
 // Catalogues are embedded at compile time: no runtime file scanning on desktop,
 // no fetch on WASM, and a missing file fails the build rather than a user.
 const ZH_CN_CORE: &str = include_str!("../../../locales/zh-CN/core.ftl");
-const ZH_CN_READER: &str = include_str!("../../../locales/zh-CN/reader.ftl");
 const ZH_CN_CONVERT: &str = include_str!("../../../locales/zh-CN/convert.ftl");
 const ZH_CN_SIGN: &str = include_str!("../../../locales/zh-CN/sign.ftl");
 const ZH_CN_ERROR: &str = include_str!("../../../locales/zh-CN/error.ftl");
@@ -22,7 +21,6 @@ const ZH_CN_SEARCH: &str = include_str!("../../../locales/zh-CN/search.ftl");
 const ZH_CN_CLI: &str = include_str!("../../../locales/zh-CN/cli.ftl");
 
 const EN_US_CORE: &str = include_str!("../../../locales/en-US/core.ftl");
-const EN_US_READER: &str = include_str!("../../../locales/en-US/reader.ftl");
 const EN_US_CONVERT: &str = include_str!("../../../locales/en-US/convert.ftl");
 const EN_US_SIGN: &str = include_str!("../../../locales/en-US/sign.ftl");
 const EN_US_ERROR: &str = include_str!("../../../locales/en-US/error.ftl");
@@ -107,7 +105,21 @@ impl I18n {
     where
         I: IntoIterator<Item = (&'a str, fluent::FluentValue<'a>)>,
     {
-        let key = id.key();
+        self.text_key_with(id.key(), args)
+    }
+
+    /// Render a message by its raw key, for a catalogue the caller owns.
+    /// A crate that keeps its own `.ftl` (the reader does) holds keys rather
+    /// than [`MessageId`]s, and merges them with [`I18nBuilder::add_resource`].
+    pub fn text_key(&self, key: &str) -> String {
+        self.text_key_with(key, None)
+    }
+
+    /// Render a message by its raw key, with arguments.
+    pub fn text_key_with<'a, I>(&self, key: &str, args: I) -> String
+    where
+        I: IntoIterator<Item = (&'a str, fluent::FluentValue<'a>)>,
+    {
         let mut fa = FluentArgs::new();
         for (k, v) in args {
             fa.set(k, v);
@@ -218,7 +230,6 @@ impl I18nBuilder {
                     Locale::en_us(),
                     &[
                         EN_US_CORE,
-                        EN_US_READER,
                         EN_US_CONVERT,
                         EN_US_SIGN,
                         EN_US_ERROR,
@@ -238,7 +249,6 @@ impl I18nBuilder {
                     Locale::zh_cn(),
                     &[
                         ZH_CN_CORE,
-                        ZH_CN_READER,
                         ZH_CN_CONVERT,
                         ZH_CN_SIGN,
                         ZH_CN_ERROR,
@@ -339,38 +349,6 @@ pub fn all_keys() -> &'static [&'static str] {
         "common-close",
         "common-retry",
         "common-delete",
-        "reader-open",
-        "reader-close",
-        "reader-drop-hint",
-        "reader-info",
-        "reader-page-of",
-        "reader-zoom",
-        "reader-fit-width",
-        "reader-fit-page",
-        "reader-layout-single",
-        "reader-layout-double",
-        "reader-layout-continuous",
-        "reader-blank-page",
-        "reader-error-label",
-        "reader-search-title",
-        "reader-search-panel-title",
-        "reader-no-match",
-        "reader-export",
-        "reader-export-pdf",
-        "reader-export-png",
-        "reader-export-pdf-done",
-        "reader-export-png-done",
-        "reader-export-pdf-title",
-        "reader-export-png-title",
-        "reader-print",
-        "reader-print-done",
-        "reader-paper-a3",
-        "reader-paper-a4",
-        "reader-paper-a5",
-        "reader-paper-b5",
-        "reader-paper-letter",
-        "reader-paper-legal",
-        "reader-paper-document",
         "locale-name-en",
         "locale-name-zh",
         "convert-start",
@@ -507,19 +485,20 @@ mod tests {
 
     #[test]
     fn argument_order_follows_the_catalogue_not_the_call_site() {
-        // English and Chinese place page number and total in different orders,
-        // which is the whole reason the values are passed separately.
+        // Chinese and English place a converter's progress and total in the same
+        // order, but the values are still passed separately so a catalogue is
+        // free to move them.
         let args = [
-            ("current", fluent::FluentValue::from(3)),
+            ("done", fluent::FluentValue::from(3)),
             ("total", fluent::FluentValue::from(12)),
         ];
         assert_eq!(
-            english().text_with(MessageId::ReaderPageOf, args.clone()),
-            "Page 3 of 12"
+            english().text_with(MessageId::ConvertProgress, args.clone()),
+            "Converting: 3 / 12"
         );
         assert_eq!(
-            chinese().text_with(MessageId::ReaderPageOf, args),
-            "\u{7b2c} 3 \u{9875} / \u{5171} 12 \u{9875}"
+            chinese().text_with(MessageId::ConvertProgress, args),
+            "\u{6b63}\u{5728}\u{8f6c}\u{6362}\u{ff1a}3 / 12"
         );
     }
 
@@ -545,12 +524,18 @@ mod tests {
 
     #[test]
     fn unknown_keys_fall_through_to_the_key_itself() {
+        // A key no catalogue defines must degrade to the key, not to an empty
+        // string, so a missing translation is visible rather than invisible.
         let i18n = english();
-        let text = i18n.text_with(
-            MessageId::ReaderZoom,
-            [("percent", fluent::FluentValue::from(150))],
-        );
-        assert_eq!(text, "Zoom 150%");
+        assert_eq!(i18n.text_key("no-such-key"), "no-such-key");
+    }
+
+    #[test]
+    fn a_raw_key_reaches_the_bundle() {
+        // The reader owns its catalogue and holds keys, not ids, so the
+        // key-based entry point has to reach the same bundle.
+        let i18n = english();
+        assert_eq!(i18n.text_key("app-name"), "SteleOFD");
     }
 
     #[test]

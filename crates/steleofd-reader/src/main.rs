@@ -6,6 +6,7 @@ use eframe::egui::{self, Ui};
 use steleofd_i18n::MessageId;
 use steleofd_reader::App;
 use steleofd_reader::ExportFormat;
+use steleofd_reader::ReaderMessage;
 use steleofd_reader::window;
 
 /// The window state, boxed so `eframe` can own it.
@@ -104,7 +105,7 @@ fn compare_with_dialog(app: &mut App) {
 fn open_with_dialog(app: &mut App) {
     let picked = rfd::FileDialog::new()
         .add_filter("OFD document", &["ofd"])
-        .set_title(app.i18n().text(MessageId::ReaderOpen))
+        .set_title(app.text(ReaderMessage::Open))
         .pick_file();
     let Some(path) = picked else {
         return;
@@ -127,7 +128,7 @@ fn export_with_dialog(app: &mut App, requested: ExportFormat) {
     debug_assert_eq!(format, requested, "the window reported a different format");
     let destination = match format {
         ExportFormat::Pdf => {
-            let title = app.i18n().text(MessageId::ReaderExportPdfTitle);
+            let title = app.text(ReaderMessage::ExportPdfTitle);
             let mut dialog = rfd::FileDialog::new().set_title(&title);
             if let Some(stem) = app.path().and_then(|p| p.file_stem()) {
                 dialog = dialog.set_file_name(format!("{}.pdf", stem.to_string_lossy()));
@@ -135,7 +136,7 @@ fn export_with_dialog(app: &mut App, requested: ExportFormat) {
             dialog.add_filter("PDF document", &["pdf"]).save_file()
         }
         ExportFormat::Png => {
-            let title = app.i18n().text(MessageId::ReaderExportPngTitle);
+            let title = app.text(ReaderMessage::ExportPngTitle);
             rfd::FileDialog::new().set_title(&title).pick_folder()
         }
     };

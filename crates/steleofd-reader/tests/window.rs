@@ -9,7 +9,7 @@ use egui_kittest::kittest::{NodeT, Queryable};
 use steleofd_i18n::{I18n, Locale, MessageId};
 use steleofd_reader::viewer::Layout;
 use steleofd_reader::window;
-use steleofd_reader::{App, Canvas, Fit};
+use steleofd_reader::{App, Canvas, Fit, ReaderMessage};
 
 /// The real minimal document from the conformance corpus.
 fn corpus() -> PathBuf {
@@ -30,9 +30,16 @@ fn harness(app: App) -> Harness<'static, App> {
     harness
 }
 
-/// The label the catalogue gives a key, so the test does not hardcode English.
+/// The label the catalogue gives an engine key, so the test does not hardcode
+/// English.
 fn label(key: MessageId) -> String {
     I18n::with_locale(Locale::en_us()).text(key)
+}
+
+/// The label for one of the reader's own messages, drawn from the reader's
+/// catalogue rather than the engine's.
+fn reader_label(message: ReaderMessage) -> String {
+    steleofd_reader::message::bundle_for(Locale::en_us()).text_key(message.key())
 }
 
 /// Run frames until the pages are rasterized, since rendering is off the draw
@@ -57,7 +64,7 @@ fn pump_until_rendered(harness: &mut Harness<'static, App>, pages: &[usize]) {
 #[test]
 fn the_menu_bar_shows_a_localized_open_button() {
     let harness = harness(App::new());
-    let open = label(MessageId::ReaderOpen);
+    let open = reader_label(ReaderMessage::Open);
     // Panics with a list of what did exist if the button is not drawn.
     harness.get_by_label(&open);
 }
@@ -65,8 +72,8 @@ fn the_menu_bar_shows_a_localized_open_button() {
 #[test]
 fn the_toolbar_labels_every_control() {
     let harness = harness(App::new());
-    for key in [MessageId::ReaderFitWidth, MessageId::ReaderFitPage] {
-        harness.get_by_label_contains(&label(key));
+    for key in [ReaderMessage::FitWidth, ReaderMessage::FitPage] {
+        harness.get_by_label_contains(&reader_label(key));
     }
     // The zoom control shows the level, not the template, so it is found by
     // the substituted text a reader actually sees. A slider exposes two nodes
@@ -81,9 +88,9 @@ fn the_toolbar_labels_every_control() {
 #[test]
 fn the_layout_choices_are_offered_and_one_is_selected() {
     let mut harness = harness(App::new());
-    let single = label(MessageId::ReaderLayoutSingle);
-    let facing = label(MessageId::ReaderLayoutDouble);
-    let continuous = label(MessageId::ReaderLayoutContinuous);
+    let single = reader_label(ReaderMessage::LayoutSingle);
+    let facing = reader_label(ReaderMessage::LayoutDouble);
+    let continuous = reader_label(ReaderMessage::LayoutContinuous);
     for name in [&single, &facing, &continuous] {
         harness.get_by_label(name);
     }
@@ -99,7 +106,7 @@ fn the_layout_choices_are_offered_and_one_is_selected() {
 #[test]
 fn an_empty_window_offers_the_drop_hint_instead_of_a_page() {
     let mut harness = harness(App::new());
-    let hint = label(MessageId::ReaderDropHint);
+    let hint = reader_label(ReaderMessage::DropHint);
     harness.get_by_label_contains(&hint);
     assert_eq!(harness.state_mut().canvas(), Canvas::Empty);
 }
@@ -171,7 +178,7 @@ fn closing_through_the_menu_returns_the_window_to_the_hint() {
         Canvas::Empty,
         "the page is gone"
     );
-    let hint = label(MessageId::ReaderDropHint);
+    let hint = reader_label(ReaderMessage::DropHint);
     harness.get_by_label_contains(&hint);
 }
 
@@ -194,7 +201,7 @@ fn the_fit_buttons_choose_a_fit_and_it_sticks() {
     // visible to the toolbar so it can show which is in force.
     assert_eq!(harness.state().fit(), None, "nothing fitted on open");
 
-    let fit_page = label(MessageId::ReaderFitPage);
+    let fit_page = reader_label(ReaderMessage::FitPage);
     harness.get_by_label(&fit_page).click();
     harness.run();
     assert_eq!(
@@ -203,7 +210,7 @@ fn the_fit_buttons_choose_a_fit_and_it_sticks() {
         "fit page is the mode in force"
     );
 
-    let fit_width = label(MessageId::ReaderFitWidth);
+    let fit_width = reader_label(ReaderMessage::FitWidth);
     harness.get_by_label(&fit_width).click();
     harness.run();
     assert_eq!(harness.state().fit(), Some(Fit::Width));
@@ -306,7 +313,7 @@ fn the_search_panel_is_closed_until_it_is_asked_for() {
 
     // The toggle exists, because the bar does not reflow; the panel does not,
     // because it would take space the page needs.
-    let title = label(MessageId::ReaderSearchTitle);
+    let title = reader_label(ReaderMessage::SearchTitle);
     harness.get_by_label(&title);
     assert!(!harness.state().search_open(), "closed on open");
 
@@ -347,7 +354,7 @@ fn a_query_with_no_match_offers_the_no_match_notice() {
     app.set_query("zzzz-not-in-this-document");
     let harness = harness(app);
 
-    let notice = label(MessageId::ReaderNoMatch);
+    let notice = reader_label(ReaderMessage::NoMatch);
     harness.get_by_label_contains(&notice);
 }
 
@@ -356,7 +363,7 @@ fn the_search_toggle_is_disabled_until_a_document_is_open() {
     // There is nothing to search with no document open, so the toggle is
     // disabled rather than hidden. This mirrors the close button's rule.
     let harness = harness(App::new());
-    let title = label(MessageId::ReaderSearchTitle);
+    let title = reader_label(ReaderMessage::SearchTitle);
     let button = harness.get_by_label(&title);
     assert!(
         button.accesskit_node().is_disabled(),
@@ -403,8 +410,8 @@ fn opening_the_signature_panel_shows_the_count_and_the_verdict() {
 #[test]
 fn the_export_buttons_are_disabled_until_a_document_is_open() {
     let harness = harness(App::new());
-    for key in [MessageId::ReaderExportPdf, MessageId::ReaderExportPng] {
-        let text = label(key);
+    for key in [ReaderMessage::ExportPdf, ReaderMessage::ExportPng] {
+        let text = reader_label(key);
         let button = harness.get_by_label(&text);
         assert!(
             button.accesskit_node().is_disabled(),
@@ -424,7 +431,7 @@ fn asking_to_export_asks_the_host_where_to_write_it() {
     let mut harness = harness(app);
 
     harness
-        .get_by_label(&label(MessageId::ReaderExportPdf))
+        .get_by_label(&reader_label(ReaderMessage::ExportPdf))
         .click();
     harness.run();
     assert_eq!(
@@ -469,7 +476,9 @@ fn asking_to_print_reaches_the_host_without_a_destination() {
         .expect("the fixture opens");
     let mut harness = harness(app);
 
-    harness.get_by_label(&label(MessageId::ReaderPrint)).click();
+    harness
+        .get_by_label(&reader_label(ReaderMessage::Print))
+        .click();
     harness.run();
     assert!(
         harness.state().wants_print(),
@@ -480,7 +489,7 @@ fn asking_to_print_reaches_the_host_without_a_destination() {
 #[test]
 fn the_print_button_is_disabled_until_a_document_is_open() {
     let harness = harness(App::new());
-    let text = label(MessageId::ReaderPrint);
+    let text = reader_label(ReaderMessage::Print);
     let button = harness.get_by_label(&text);
     assert!(
         button.accesskit_node().is_disabled(),

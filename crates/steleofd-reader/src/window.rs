@@ -2,6 +2,7 @@
 //! Everything here obeys `docs/UI-SPEC.md`: panels in a fixed order, the canvas
 //! state asked of `App`, and no string drawn that the catalogue did not give.
 
+use crate::message::ReaderMessage;
 use eframe::egui::{self, TextureOptions, Ui};
 use steleofd_i18n::MessageId;
 
@@ -156,7 +157,7 @@ fn take_drops(ui: &mut Ui, app: &mut App) {
 fn draw_menu(ui: &mut Ui, app: &mut App, requests: &mut WindowRequests) {
     egui::Panel::top("menu").show(ui, |ui| {
         ui.horizontal(|ui| {
-            let open = app.i18n().text(MessageId::ReaderOpen);
+            let open = app.text(ReaderMessage::Open);
             if ui.button(open).clicked() {
                 app.request_open();
                 requests.open_dialog = true;
@@ -200,11 +201,11 @@ fn draw_menu(ui: &mut Ui, app: &mut App, requests: &mut WindowRequests) {
                 app.set_annotations_open(!listing);
             }
             for (key, layout) in [
-                (MessageId::ReaderLayoutSingle, Layout::Single),
-                (MessageId::ReaderLayoutDouble, Layout::Facing),
-                (MessageId::ReaderLayoutContinuous, Layout::Continuous),
+                (ReaderMessage::LayoutSingle, Layout::Single),
+                (ReaderMessage::LayoutDouble, Layout::Facing),
+                (ReaderMessage::LayoutContinuous, Layout::Continuous),
             ] {
-                let label = app.i18n().text(key);
+                let label = app.text(key);
                 if ui.selectable_label(app.layout() == layout, label).clicked() {
                     app.set_layout(layout);
                 }
@@ -245,7 +246,7 @@ fn draw_locales(ui: &mut Ui, app: &mut App) {
 fn draw_exports(ui: &mut Ui, app: &mut App) {
     let busy = app.is_exporting();
     let printing = app.is_printing();
-    ui.label(app.i18n().text(MessageId::ReaderExport));
+    ui.label(app.text(ReaderMessage::Export));
     let print = app.print_label_text();
     // Printing is bounded by the paper the reader has, not by a file, so the
     // button hands the job to the host at once rather than holding a request
@@ -256,14 +257,14 @@ fn draw_exports(ui: &mut Ui, app: &mut App) {
     {
         app.request_print();
     }
-    let pdf = app.i18n().text(MessageId::ReaderExportPdf);
+    let pdf = app.text(ReaderMessage::ExportPdf);
     if ui
         .add_enabled(app.is_open() && !busy, egui::Button::new(pdf))
         .clicked()
     {
         app.request_export(ExportFormat::Pdf);
     }
-    let png = app.i18n().text(MessageId::ReaderExportPng);
+    let png = app.text(ReaderMessage::ExportPng);
     if ui
         .add_enabled(app.is_open() && !busy, egui::Button::new(png))
         .clicked()
@@ -289,14 +290,14 @@ fn draw_toolbar(ui: &mut Ui, app: &mut App) {
                 app.next_page();
             }
             ui.separator();
-            let fit_width = app.i18n().text(MessageId::ReaderFitWidth);
+            let fit_width = app.text(ReaderMessage::FitWidth);
             if ui
                 .selectable_label(app.fit() == Some(Fit::Width), fit_width)
                 .clicked()
             {
                 app.set_fit(Fit::Width);
             }
-            let fit_page = app.i18n().text(MessageId::ReaderFitPage);
+            let fit_page = app.text(ReaderMessage::FitPage);
             if ui
                 .selectable_label(app.fit() == Some(Fit::Page), fit_page)
                 .clicked()

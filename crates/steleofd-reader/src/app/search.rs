@@ -125,14 +125,14 @@ impl App {
 
     /// The label on the toolbar toggle that opens the search panel.
     pub fn search_heading(&self) -> String {
-        self.i18n.text(MessageId::ReaderSearchTitle)
+        self.text(ReaderMessage::SearchTitle)
     }
 
     /// The heading inside the search panel. Distinct from the toggle: two
     /// controls wearing the same word on one screen make the reader guess
     /// which one they are looking at.
     pub fn search_panel_title(&self) -> String {
-        self.i18n.text(MessageId::ReaderSearchPanelTitle)
+        self.text(ReaderMessage::SearchPanelTitle)
     }
 
     /// The placeholder in the search box.
@@ -150,7 +150,7 @@ impl App {
 
     /// The notice shown when a query found nothing.
     pub fn no_match_label(&self) -> String {
-        self.i18n.text(MessageId::ReaderNoMatch)
+        self.text(ReaderMessage::NoMatch)
     }
 
     /// One row of the hit list: its page and the text around the match.

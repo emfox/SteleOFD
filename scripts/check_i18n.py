@@ -29,6 +29,12 @@ ROOT = Path(__file__).resolve().parent.parent
 LOCALES_DIR = ROOT / "locales"
 I18N_SRC = ROOT / "crates" / "steleofd-i18n" / "src"
 
+# The reader owns its own catalogue, kept beside the crate that shows the
+# strings rather than inside the engine. It is checked the same way, against
+# the key list in its own message module.
+READER_LOCALES_DIR = ROOT / "crates" / "steleofd-reader" / "locales"
+READER_MESSAGE_RS = ROOT / "crates" / "steleofd-reader" / "src" / "message.rs"
+
 # Baseline locale; every other locale is compared against it
 BASE_LOCALE = "en-US"
 
@@ -93,41 +99,41 @@ def parse_ftl(path: Path) -> tuple[dict[str, set[str]], list[str]]:
     return keys, bad_keys
 
 
-def main() -> int:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--strict", action="store_true", help="treat warnings as failures")
-    ap.add_argument("--quiet", action="store_true")
-    args = ap.parse_args()
+def check_catalogue(locales_dir: Path, rep: Report) -> int:
+    """Compare every locale against the baseline. Returns the key count.
 
-    rep = Report()
+    One catalogue's worth of work: file set, key set, variables. The caller
+    runs it once per catalogue, so the engine's and the reader's are held to
+    the same rules.
+    """
+    if not locales_dir.is_dir():
+        rep.error(f"locales directory not found: {locales_dir}")
+        return 0
 
-    if not LOCALES_DIR.is_dir():
-        print(f"ERROR: locales directory not found: {LOCALES_DIR}", file=sys.stderr)
-        return 1
-
-    locales = sorted(d.name for d in LOCALES_DIR.iterdir() if d.is_dir())
+    locales = sorted(d.name for d in locales_dir.iterdir() if d.is_dir())
     if BASE_LOCALE not in locales:
-        print(f"ERROR: baseline locale directory missing: {BASE_LOCALE}", file=sys.stderr)
-        return 1
+        rep.error(f"baseline locale directory missing under {locales_dir}: {BASE_LOCALE}")
+        return 0
 
-    # 1. File set consistency
-    base_files = sorted(p.name for p in (LOCALES_DIR / BASE_LOCALE).glob("*.ftl"))
+    base_files = sorted(p.name for p in (locales_dir / BASE_LOCALE).glob("*.ftl"))
     for loc in locales:
-        files = sorted(p.name for p in (LOCALES_DIR / loc).glob("*.ftl"))
+        files = sorted(p.name for p in (locales_dir / loc).glob("*.ftl"))
         if files != base_files:
             rep.error(
-                f"[file set] {loc} differs from {BASE_LOCALE}\n"
+                f"[file set] {locales_dir.name}/{loc} differs from {BASE_LOCALE}\n"
                 f"          only in {loc}: {sorted(set(files) - set(base_files))}\n"
                 f"          only in {BASE_LOCALE}: {sorted(set(base_files) - set(files))}"
             )
 
-    # 2 and 3. Per-file key and variable comparison
     base_parsed: dict[str, dict[str, set[str]]] = {}
     for fname in base_files:
-        keys, bad = parse_ftl(LOCALES_DIR / BASE_LOCALE / fname)
+        keys, bad = parse_ftl(locales_dir / BASE_LOCALE / fname)
         base_parsed[fname] = keys
         for b in bad:
-            rep.error(f"[key format] {BASE_LOCALE}/{fname}: invalid key {b!r}, must be ASCII kebab-case")
+            rep.error(
+                f"[key format] {locales_dir.name}/{BASE_LOCALE}/{fname}: "
+                f"invalid key {b!r}, must be ASCII kebab-case"
+            )
 
     total_keys = 0
     for fname in base_files:
@@ -137,38 +143,58 @@ def main() -> int:
         for loc in locales:
             if loc == BASE_LOCALE:
                 continue
-            p = LOCALES_DIR / loc / fname
+            p = locales_dir / loc / fname
             if not p.exists():
                 continue
 
             keys, bad = parse_ftl(p)
             for b in bad:
-                rep.error(f"[key format] {loc}/{fname}: invalid key {b!r}, must be ASCII kebab-case")
+                rep.error(
+                    f"[key format] {locales_dir.name}/{loc}/{fname}: "
+                    f"invalid key {b!r}, must be ASCII kebab-case"
+                )
 
             missing = sorted(set(base_keys) - set(keys))
             extra = sorted(set(keys) - set(base_keys))
             if missing:
-                rep.error(f"[missing keys] {loc}/{fname}: {missing}")
+                rep.error(f"[missing keys] {locales_dir.name}/{loc}/{fname}: {missing}")
             if extra:
-                rep.warn(f"[extra keys] {loc}/{fname}: {extra}")
+                rep.warn(f"[extra keys] {locales_dir.name}/{loc}/{fname}: {extra}")
 
-            # Variable consistency
             for k in sorted(set(base_keys) & set(keys)):
                 bv, lv = base_keys[k], keys[k]
                 if bv != lv:
                     rep.error(
-                        f"[variable mismatch] {loc}/{fname} :: {k}\n"
+                        f"[variable mismatch] {locales_dir.name}/{loc}/{fname} :: {k}\n"
                         f"            {BASE_LOCALE}={sorted(bv)}  {loc}={sorted(lv)}"
                     )
 
-    # 4. Compare the Rust all_keys() list against the catalogue keys
+    return total_keys
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--strict", action="store_true", help="treat warnings as failures")
+    ap.add_argument("--quiet", action="store_true")
+    args = ap.parse_args()
+
+    rep = Report()
+
+    # The engine catalogue: file set, keys, variables, and the two Rust lists
+    # that must agree with it.
+    engine_keys = check_catalogue(LOCALES_DIR, rep)
+
     bundle_rs = I18N_SRC / "bundle.rs"
     if bundle_rs.exists():
         src = bundle_rs.read_text(encoding="utf-8")
         m = re.search(r"pub fn all_keys\(\)[^{]*\{(.*?)\n\}", src, re.S)
         if m:
             rust_keys = set(RUST_KEY_RE.findall(m.group(1)))
-            ftl_keys = {k for keys in base_parsed.values() for k in keys}
+            ftl_keys = {
+                k
+                for f in (LOCALES_DIR / BASE_LOCALE).glob("*.ftl")
+                for k in parse_ftl(f)[0]
+            }
             only_rust = sorted(rust_keys - ftl_keys)
             only_ftl = sorted(ftl_keys - rust_keys)
             if only_rust:
@@ -178,23 +204,46 @@ def main() -> int:
         else:
             rep.warn("could not parse all_keys() from bundle.rs, skipping code vs catalogue check")
 
-    # 5. Compare the MessageId variant count against the key count
     msg_rs = I18N_SRC / "messages.rs"
     if msg_rs.exists():
         src = msg_rs.read_text(encoding="utf-8")
         m = re.search(r"pub enum MessageId \{(.*?)\n\}", src, re.S)
         if m:
             variants = len(re.findall(r"^\s{4}[A-Z][A-Za-z0-9]*,", m.group(1), re.M))
-            if variants != total_keys:
+            if variants != engine_keys:
                 rep.error(
                     f"[variant count] MessageId has {variants} variants "
-                    f"but the FTL catalogues have {total_keys} keys"
+                    f"but the FTL catalogues have {engine_keys} keys"
                 )
 
-    # Output
+    # The reader's own catalogue, held to the same file/key/variable rules and
+    # cross-checked against its `ReaderMessage::key()` map, which is the only
+    # place the reader spells out a key.
+    reader_keys = check_catalogue(READER_LOCALES_DIR, rep)
+    if READER_MESSAGE_RS.exists():
+        src = READER_MESSAGE_RS.read_text(encoding="utf-8")
+        m = re.search(r"pub fn key\(self\)[^{]*\{(.*?)\n    \}", src, re.S)
+        if m:
+            rust_keys = set(RUST_KEY_RE.findall(m.group(1)))
+            ftl_keys = {
+                k
+                for f in (READER_LOCALES_DIR / BASE_LOCALE).glob("*.ftl")
+                for k in parse_ftl(f)[0]
+            }
+            only_rust = sorted(rust_keys - ftl_keys)
+            only_ftl = sorted(ftl_keys - rust_keys)
+            if only_rust:
+                rep.error(f"[reader code vs catalogue] in key() but missing from FTL: {only_rust}")
+            if only_ftl:
+                rep.error(f"[reader code vs catalogue] in FTL but missing from key(): {only_ftl}")
+        else:
+            rep.warn("could not parse ReaderMessage::key() from message.rs")
+
     if not args.quiet:
-        print(f"locales: {', '.join(locales)}")
-        print(f"baseline: {BASE_LOCALE}   files: {len(base_files)}   keys: {total_keys}")
+        print(f"engine locales: {', '.join(sorted(d.name for d in LOCALES_DIR.iterdir() if d.is_dir()))}"
+              f"   keys: {engine_keys}")
+        print(f"reader locales: {', '.join(sorted(d.name for d in READER_LOCALES_DIR.iterdir() if d.is_dir()))}"
+              f"   keys: {reader_keys}")
         print("-" * 60)
 
     for w in rep.warnings:

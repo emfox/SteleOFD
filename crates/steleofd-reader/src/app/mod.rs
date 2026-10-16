@@ -5,6 +5,8 @@ use std::path::{Path, PathBuf};
 use steleofd_core::{Annotation, Comparison, Document, SearchOptions, VerifyStatus};
 use steleofd_i18n::{I18n, MessageId};
 
+use crate::message::ReaderMessage;
+
 use crate::export_worker::{ExportFormat, ExportQueue, ExportRequest};
 use crate::print_worker::{PrintQueue, PrintRequest};
 use crate::render_worker::RenderQueue;
@@ -181,7 +183,7 @@ impl App {
     /// A reader with no document open.
     pub fn new() -> Self {
         Self {
-            i18n: I18n::with_system_locale(),
+            i18n: crate::message::bundle(),
             doc: None,
             bytes: None,
             queue: None,
@@ -352,8 +354,8 @@ impl App {
         let Some(doc) = self.doc.as_ref() else {
             return String::new();
         };
-        let pages = self.i18n.text_with(
-            MessageId::ReaderPageOf,
+        let pages = self.text_with(
+            ReaderMessage::PageOf,
             [
                 ("current", "0".into()),
                 ("total", doc.page_count().to_string().into()),
@@ -480,12 +482,25 @@ impl App {
     /// The status bar carries the engine's own message, so the canvas says
     /// only that something failed rather than repeating it verbatim.
     pub fn error_label(&self) -> String {
-        self.i18n.text(MessageId::ReaderErrorLabel)
+        self.text(ReaderMessage::ErrorLabel)
     }
 
     /// The reader's language bundle, for widgets that need a string.
     pub fn i18n(&self) -> &I18n {
         &self.i18n
+    }
+
+    /// One of the reader's own messages, in the current language.
+    pub fn text(&self, message: crate::message::ReaderMessage) -> String {
+        self.i18n.text_key(message.key())
+    }
+
+    /// One of the reader's own messages, with arguments.
+    pub fn text_with<'a, I>(&self, message: crate::message::ReaderMessage, args: I) -> String
+    where
+        I: IntoIterator<Item = (&'a str, steleofd_i18n::FluentValue<'a>)>,
+    {
+        self.i18n.text_key_with(message.key(), args)
     }
 
     /// The locale every label is currently drawn in.
@@ -569,8 +584,8 @@ impl App {
 
     /// The page label shown under the window.
     pub fn page_label(&self) -> String {
-        self.i18n.text_with(
-            MessageId::ReaderPageOf,
+        self.text_with(
+            ReaderMessage::PageOf,
             [
                 ("current", (self.current + 1).to_string().into()),
                 ("total", self.page_count().to_string().into()),
@@ -623,8 +638,8 @@ impl App {
 
     /// The zoom label shown in the toolbar.
     pub fn zoom_label(&self) -> String {
-        self.i18n.text_with(
-            MessageId::ReaderZoom,
+        self.text_with(
+            ReaderMessage::Zoom,
             [("percent", (self.dpi as i32).to_string().into())],
         )
     }
@@ -632,9 +647,7 @@ impl App {
     /// The document line shown in the toolbar, localized.
     pub fn info_label(&self) -> String {
         match self.file_name() {
-            Some(name) => self
-                .i18n
-                .text_with(MessageId::ReaderInfo, [("name", name.into())]),
+            Some(name) => self.text_with(ReaderMessage::Info, [("name", name.into())]),
             None => String::new(),
         }
     }
@@ -662,17 +675,17 @@ impl App {
 
     /// The notice shown when the current page has nothing on it.
     pub fn blank_notice(&self) -> String {
-        self.i18n.text(MessageId::ReaderBlankPage)
+        self.text(ReaderMessage::BlankPage)
     }
 
     /// The hint shown on the empty window, where a file can be dropped.
     pub fn drop_hint(&self) -> String {
-        self.i18n.text(MessageId::ReaderDropHint)
+        self.text(ReaderMessage::DropHint)
     }
 
     /// The label on the button that closes the document.
     pub fn close_label(&self) -> String {
-        self.i18n.text(MessageId::ReaderClose)
+        self.text(ReaderMessage::Close)
     }
 }
 

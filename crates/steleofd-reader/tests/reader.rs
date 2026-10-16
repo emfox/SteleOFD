@@ -1438,11 +1438,24 @@ fn the_status_bar_names_the_pages_the_sheets_and_the_paper() {
 #[test]
 fn the_paper_names_come_from_the_catalogue() {
     // A paper size is a word like any other, so it is translated rather than
-    // hardcoded in the reader's source.
-    use steleofd_i18n::{I18n, Locale, MessageId};
-    let english = I18n::with_locale(Locale::en_us());
-    assert_eq!(english.text(MessageId::ReaderPaperA4), "A4");
-    assert!(!english.text(MessageId::ReaderPrintDone).is_empty());
+    // hardcoded in the reader's source. The reader owns its catalogue, so the
+    // bundle it builds is what holds these keys.
+    use steleofd_i18n::{FluentValue, Locale};
+    use steleofd_reader::ReaderMessage;
+    let english = steleofd_reader::message::bundle_for(Locale::en_us());
+    assert_eq!(english.text_key(ReaderMessage::PaperA4.key()), "A4");
+    assert!(
+        !english
+            .text_key_with(
+                ReaderMessage::PrintDone.key(),
+                [
+                    ("pages", FluentValue::from(1)),
+                    ("sheets", FluentValue::from(1)),
+                    ("paper", FluentValue::from("A4")),
+                ]
+            )
+            .is_empty()
+    );
 }
 
 /// Switching language, which has to redraw every label from the catalogue.
