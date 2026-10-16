@@ -38,7 +38,7 @@ the note a person would need to start them.
 | Tests | 1,098 passing |
 | Delivery forms | `cli`, `wasm`, `ffi`, `server`, `reader`, all on the `core` facade |
 | Standard clauses | 74 registered in GB/T 33190-2016: 73 `verified`, 1 `deviation` (`8.1.6`, with a stated reason) |
-| Languages | `en-US` and `zh-CN`, 105 message keys, parity enforced in CI |
+| Languages | `en-US` and `zh-CN`, 73 engine message keys plus 32 reader keys, parity enforced in CI |
 | CI | fmt, clippy, build, test, all-features test, i18n, language, conformance, XSD validation, corpus freshness, fuzz smoke run |
 
 ## Honest gaps
@@ -419,11 +419,12 @@ not have. Ranked by how often a real reader needs them.
   reader's comparison panel picks a second file, lists the pages that moved and
   turns to one when picked. The comparison is over what each page draws, so two
   files that render the same compare equal even when their markup differs.
-- **M6-f** Move the reader's interface strings out of `steleofd-i18n`. The
-  engine crate defines product-facing ids (`ReaderFitWidth`,
-  `ReaderSearchTitle`, …); they belong with the reader, so the engine catalogue
-  holds engine messages only. Deferred because it moves `i18n`'s public API,
-  the CI parity script and every reader call site at once.
+- **M6-f** Move the reader's interface strings out of `steleofd-i18n`. Done: the
+  reader owns a `ReaderMessage` list and a `locales/{en-US,zh-CN}/reader.ftl`
+  beside the crate that shows the strings, loaded through a key-based
+  `I18n::text_key` so the engine bundle needs no reader ids. `steleofd-i18n`
+  now holds engine messages only (73 keys, was 105), and the i18n parity script
+  checks both catalogues against their own Rust key lists.
 
 ### M7. Repository hygiene
 
@@ -511,8 +512,8 @@ check over a document that renders wrong is checking the wrong bytes.
 **M4 through M7 last.** M4 is done — the server is deployable. M5 depends on
 M1-a, because every item in it is a rendering change and none of them can be
 verified without golden images; M5-c, M5-e are done. M2-b, M3-a, M3-b, M3-c,
-M6-a, M6-b, M6-c, M6-e and M7-a are done too, so what is left is M5's remaining
-rendering work, M6-d's release infrastructure, and M6-f's i18n boundary move.
+M6-a, M6-b, M6-c, M6-d, M6-e, M6-f and M7-a are done too, so what is left is
+M5's remaining rendering work.
 
 Far term is deliberately not scheduled. It describes a direction, not dates.
 

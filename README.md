@@ -111,6 +111,11 @@ FormatError::PageOutOfRange { index: 42, total: 100 }
 "page index out of range: 42 (document has 100 pages)"
 ```
 
+The engine's own message catalogue (`steleofd-i18n`) holds engine messages only.
+A presentation layer that has product-facing strings of its own — the reader
+does — keeps them beside itself and merges them in with `I18nBuilder`, so the
+engine never names a widget it does not own.
+
 ### Untrusted input
 
 | Threat | Defense |
