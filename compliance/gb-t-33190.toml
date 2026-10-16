@@ -536,6 +536,8 @@ status = "verified"
 tests = [
   "gb_t_33190_18_2_2_check_method_governs_every_reference",
   "gb_t_33190_18_2_2_the_provider_name_is_an_attribute",
+  "gb_t_33190_18_2_2_coverage_names_what_a_signature_protects",
+  "gb_t_33190_18_2_2_a_later_signature_slides_under_the_earlier_one",
 ]
 
 [[item]]

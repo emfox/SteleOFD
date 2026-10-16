@@ -544,6 +544,38 @@ fn edit_session_wraps_a_copy_of_the_model() {
 
 #[cfg(feature = "sign")]
 #[test]
+fn signature_coverage_names_the_exposed_files() {
+    // Clause 18.2.2 through the facade: the report states what each signature
+    // protects and what the container holds that none of them does, which is
+    // the surface a later update would touch.
+    let entries = [
+        ("OFD.xml", OFD_XML_SIGNED.as_bytes().to_vec()),
+        (
+            "Doc_0/Document.xml",
+            document_xml(r#"<Page ID="1"/>"#).into_bytes(),
+        ),
+        ("Doc_0/Signs/Signs.xml", signs_xml()),
+        (
+            "Doc_0/Signs/Sign_0.xml",
+            seal_descriptor("1", "1 2 3 4").into_bytes(),
+        ),
+        ("Doc_0/Res/Extra.bin", b"outside the scope".to_vec()),
+    ];
+    let mut doc = open(&entries);
+    let reports = doc.signature_coverage().expect("coverage");
+    assert_eq!(reports.len(), 1);
+    assert_eq!(reports[0].covered, vec!["Doc_0/Document.xml"]);
+    assert!(
+        reports[0]
+            .uncovered
+            .contains(&"Doc_0/Res/Extra.bin".to_string()),
+        "the file no signature protects is reported, got {:?}",
+        reports[0].uncovered
+    );
+}
+
+#[cfg(feature = "sign")]
+#[test]
 fn reports_when_no_signatures_are_declared() {
     let mut doc = two_page_document();
     let err = doc.signatures().expect_err("must fail");

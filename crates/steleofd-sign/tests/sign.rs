@@ -4,8 +4,8 @@ use steleofd_crypto::Sm2KeyPair;
 use steleofd_error::OfdError;
 use steleofd_package::Package;
 use steleofd_sign::{
-    Reference, Signature, SignatureKind, VerifyStatus, read_seals, read_sign_list, read_signature,
-    signed_digest, verify_descriptor, verify_signature, verify_with_public_key,
+    Reference, Signature, SignatureKind, VerifyStatus, read_coverage, read_seals, read_sign_list,
+    read_signature, signed_digest, verify_descriptor, verify_signature, verify_with_public_key,
 };
 use steleofd_testkit::{
     DOCUMENT_ENTRY, OFD_XML_SIGNED, SIGN_FILE, SIGNS_ENTRY, SIGNS_XML, descriptor, open_package,
@@ -536,5 +536,77 @@ fn gb_t_33190_18_2_3_a_seal_with_no_image_still_places() {
         seals[0].image_ref.as_deref(),
         Some("Signs/Res/Missing.esl"),
         "the path is still reported"
+    );
+}
+
+#[test]
+fn gb_t_33190_18_2_2_coverage_names_what_a_signature_protects() {
+    // Clause 18.2.2: a signature is scoped to the files its references name.
+    // The report states that scope, and lists what the container holds that no
+    // signature protects, which is the surface a later update would touch.
+    let entries = vec![
+        (
+            "Signs/Signs.xml",
+            br#"<Signs><Sign ID="s" BaseLoc="Signs/Sign_0.xml"/></Signs>"#.to_vec(),
+        ),
+        (
+            SIG_FILE,
+            descriptor("s", &[("SM3", "Doc_0/Document.xml")]).into_bytes(),
+        ),
+        ("Doc_0/Document.xml", b"sealed".to_vec()),
+        ("Doc_0/Res/Font.ttf", b"a face".to_vec()),
+    ];
+    let mut package = open(&entries);
+    let reports = read_coverage(&mut package, "Signs/Signs.xml").expect("coverage");
+    assert_eq!(reports.len(), 1);
+    assert_eq!(reports[0].id.as_deref(), Some("s"));
+    assert_eq!(reports[0].base_loc, SIG_FILE);
+    assert_eq!(reports[0].covered, vec!["Doc_0/Document.xml"]);
+    assert!(
+        reports[0]
+            .uncovered
+            .contains(&"Doc_0/Res/Font.ttf".to_string()),
+        "a file outside the scope is reported, got {:?}",
+        reports[0].uncovered
+    );
+    assert!(
+        !reports[0]
+            .uncovered
+            .contains(&"Doc_0/Document.xml".to_string()),
+        "a covered file is not reported as exposed"
+    );
+}
+
+#[test]
+fn gb_t_33190_18_2_2_a_later_signature_slides_under_the_earlier_one() {
+    // The incremental-update property: adding a second signature leaves the
+    // first one's scope intact, and a file the second one protects is no
+    // longer reported as exposed by the union of both.
+    let second = "Signs/Sign_1.xml";
+    let list =
+        br#"<Signs><Sign BaseLoc="Signs/Sign_0.xml"/><Sign BaseLoc="Signs/Sign_1.xml"/></Signs>"#
+            .to_vec();
+    let entries = vec![
+        ("Signs/Signs.xml", list),
+        (
+            SIG_FILE,
+            descriptor("first", &[("SM3", "Doc_0/Document.xml")]).into_bytes(),
+        ),
+        (
+            second,
+            descriptor("second", &[("SM3", "Doc_0/Pages/Page_1.xml")]).into_bytes(),
+        ),
+        ("Doc_0/Document.xml", b"sealed".to_vec()),
+        ("Doc_0/Pages/Page_1.xml", b"added later".to_vec()),
+    ];
+    let mut package = open(&entries);
+    let reports = read_coverage(&mut package, "Signs/Signs.xml").expect("coverage");
+    assert_eq!(reports.len(), 2);
+    assert_eq!(reports[0].covered, vec!["Doc_0/Document.xml"]);
+    assert_eq!(reports[1].covered, vec!["Doc_0/Pages/Page_1.xml"]);
+    assert!(
+        reports[0].uncovered.is_empty(),
+        "both content files are protected now, got {:?}",
+        reports[0].uncovered
     );
 }
