@@ -145,6 +145,7 @@ fn run_worker(
     finish: &Sender<RenderResult>,
 ) {
     let mut document = None;
+    let mut seals: Option<Vec<steleofd_core::Seal>> = None;
     let mut pending: Option<RenderRequest> = None;
     loop {
         // Hold the request we are about to render, and look at whatever has
@@ -200,9 +201,20 @@ fn run_worker(
                 }
             }
         }
+        // The seals are read once per document, not per page: they travel with
+        // the raster so a page shows the stamps that cover it.
+        if seals.is_none() {
+            seals = Some(
+                document
+                    .as_mut()
+                    .and_then(|d| d.seals().ok())
+                    .unwrap_or_default(),
+            );
+        }
         let doc = document.as_ref().expect("opened just above");
-        let outcome =
-            viewer::render_page(doc, request.page, request.dpi).map_err(|e| e.to_string());
+        let stamps = seals.as_deref().unwrap_or(&[]);
+        let outcome = viewer::render_page_with_seals(doc, request.page, request.dpi, stamps)
+            .map_err(|e| e.to_string());
         let _ = finish.send(RenderResult {
             generation: request.generation,
             page: request.page,

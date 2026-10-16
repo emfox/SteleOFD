@@ -229,6 +229,34 @@ impl Document {
             .collect()
     }
 
+    /// The seals a document draws, each resolved onto the page it sits on.
+    /// Clause 18.2.3: a stamp names its page by id, so the id is joined to the
+    /// page index here, and the seal image travels ready to draw.
+    #[cfg(feature = "sign")]
+    pub fn seals(&mut self) -> Result<Vec<Seal>> {
+        let refs = self.signatures()?;
+        let by_id = page_ids(&self.parsed);
+        let mut out = Vec::new();
+        for sign in &refs {
+            let signature = steleofd_sign::read_signature(&mut self.package, &sign.base_loc)?;
+            let placements =
+                steleofd_sign::read_seals(&mut self.package, &sign.base_loc, &signature)?;
+            for placement in placements {
+                let Some(&page) = by_id.get(&placement.page_ref) else {
+                    continue;
+                };
+                out.push(Seal {
+                    page,
+                    id: placement.id,
+                    boundary: placement.boundary,
+                    clip: placement.clip,
+                    image: placement.image,
+                });
+            }
+        }
+        Ok(out)
+    }
+
     /// Start an editing session over a copy of the document model.
     #[cfg(feature = "edit")]
     pub fn edit(&self, options: steleofd_edit::EditOptions) -> steleofd_edit::EditSession {
@@ -272,6 +300,22 @@ impl Document {
     }
 }
 
+/// A seal resolved onto the page it sits on, ready for a reader to draw.
+#[cfg(feature = "sign")]
+#[derive(Debug, Clone, PartialEq)]
+pub struct Seal {
+    /// Zero-based page index the seal is drawn on.
+    pub page: usize,
+    /// Identifier written in the document.
+    pub id: String,
+    /// Where on the page the seal sits, in page space.
+    pub boundary: steleofd_common::Rect,
+    /// Region the seal is clipped to, when one is declared.
+    pub clip: Option<steleofd_common::Rect>,
+    /// The seal image bytes, empty when none was named or found.
+    pub image: Vec<u8>,
+}
+
 /// An annotation resolved onto the page it belongs to.
 #[cfg(feature = "annot")]
 #[derive(Debug, Clone, PartialEq)]
@@ -290,6 +334,19 @@ pub struct Annotation {
     pub visible: bool,
     /// Where the mark's appearance sits on the page, in page space.
     pub boundary: Option<steleofd_common::Rect>,
+}
+
+/// Page id to zero-based page index, in document order.
+#[cfg(feature = "sign")]
+fn page_ids(parsed: &steleofd_parser::ParsedDocument) -> std::collections::HashMap<String, usize> {
+    parsed
+        .document
+        .pages
+        .pages
+        .iter()
+        .enumerate()
+        .map(|(index, page)| (page.id.clone(), index))
+        .collect()
 }
 
 /// Register the fonts the document declares, keyed by the id the display list

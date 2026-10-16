@@ -228,6 +228,56 @@ impl Signature {
     }
 }
 
+/// One seal as a page should draw it: where the stamp sits and the image bytes
+/// the seal names, already read from the package.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SealPlacement {
+    /// Id of the stamp, from `StampAnnot`.
+    pub id: String,
+    /// Id of the page the stamp sits on, as the descriptor writes it.
+    pub page_ref: String,
+    /// Where on the page the seal is drawn, in page space.
+    pub boundary: steleofd_common::Rect,
+    /// Region the seal is clipped to, when one is declared.
+    pub clip: Option<steleofd_common::Rect>,
+    /// The seal image bytes, empty when the descriptor names none or the file
+    /// is missing, so a caller can still place a placeholder.
+    pub image: Vec<u8>,
+    /// Archive path of the seal image, when one is named.
+    pub image_ref: Option<String>,
+}
+
+/// Resolve a signature's stamps into drawable placements. Clause 18.2.3: the
+/// descriptor names the seal image beside itself and each `StampAnnot` says
+/// where on which page it is drawn. A missing image keeps the empty placement.
+pub fn read_seals(
+    package: &mut Package,
+    base_loc: &str,
+    signature: &Signature,
+) -> Result<Vec<SealPlacement>, OfdError> {
+    let dir = steleofd_package::parent_of(base_loc);
+    let image_ref = signature
+        .seal
+        .as_ref()
+        .map(|loc| steleofd_package::resolve(&dir, loc));
+    let image = match &image_ref {
+        Some(path) => package.read_optional(path)?.unwrap_or_default(),
+        None => Vec::new(),
+    };
+    Ok(signature
+        .stamps
+        .iter()
+        .map(|stamp| SealPlacement {
+            id: stamp.id.clone(),
+            page_ref: stamp.page_ref.clone(),
+            boundary: stamp.boundary,
+            clip: stamp.clip,
+            image: image.clone(),
+            image_ref: image_ref.clone(),
+        })
+        .collect())
+}
+
 /// A signed-value file holds the proof either as raw DER or as base64 text.
 fn b64_ish(bytes: &[u8]) -> Vec<u8> {
     match std::str::from_utf8(bytes) {

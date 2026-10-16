@@ -14,6 +14,8 @@ pub use document::Document;
 // Types that appear in `Document`'s own signatures. Re-exported so a caller
 // can name them without taking a direct dependency on the crate that defines
 // them, which is the point of a facade: one crate to depend on.
+#[cfg(feature = "sign")]
+pub use document::Seal;
 #[cfg(feature = "render")]
 pub use steleofd_render::RenderOptions;
 #[cfg(feature = "search")]

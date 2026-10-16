@@ -222,6 +222,18 @@ pub fn render_page(
     page: usize,
     dpi: f32,
 ) -> Result<RenderedPage, steleofd_error::OfdError> {
+    render_page_with_seals(doc, page, dpi, &[])
+}
+
+/// Rasterize one page and stamp any seals whose page it is onto the raster.
+/// The seals arrive resolved, so a caller with none, such as the export path,
+/// passes an empty list for the plain page and stamping is a scale and paste.
+pub fn render_page_with_seals(
+    doc: &Document,
+    page: usize,
+    dpi: f32,
+    seals: &[steleofd_core::Seal],
+) -> Result<RenderedPage, steleofd_error::OfdError> {
     let size_mm = doc
         .page(page)
         .map(|p| (p.page_box.w as f32, p.page_box.h as f32))
@@ -239,9 +251,36 @@ pub fn render_page(
                 reason: reason.to_string(),
             })
         })?;
+    let mut rgba = decoded.to_rgba8();
+    for seal in seals.iter().filter(|s| s.page == page) {
+        stamp_seal(&mut rgba, seal, f64::from(effective));
+    }
     let image = egui::ColorImage::from_rgba_unmultiplied(
-        [decoded.width() as usize, decoded.height() as usize],
-        decoded.to_rgba8().as_raw(),
+        [rgba.width() as usize, rgba.height() as usize],
+        rgba.as_raw(),
     );
     Ok(RenderedPage { image, size_mm })
+}
+
+/// Composite one seal onto the page raster, scaled to its boundary. A seal
+/// with no bytes, or one whose image will not decode, is skipped rather than
+/// failing the page, exactly as a missing image resource is.
+fn stamp_seal(raster: &mut image::RgbaImage, seal: &steleofd_core::Seal, dpi: f64) {
+    if seal.image.is_empty() {
+        return;
+    }
+    let Ok(seal_image) = image::load_from_memory(&seal.image) else {
+        return;
+    };
+    let mm = dpi / PIXELS_PER_MM;
+    let box_ = seal.boundary;
+    let (dx, dy) = ((box_.x * mm).round() as i64, (box_.y * mm).round() as i64);
+    let (dw, dh) = ((box_.w * mm).round() as i64, (box_.h * mm).round() as i64);
+    if dw <= 0 || dh <= 0 {
+        return;
+    }
+    let scaled = seal_image
+        .resize_exact(dw as u32, dh as u32, image::imageops::FilterType::Triangle)
+        .to_rgba8();
+    image::imageops::overlay(raster, &scaled, dx, dy);
 }
