@@ -8,11 +8,13 @@ pub mod api;
 pub mod config;
 pub mod dto;
 pub mod error;
+pub mod ratelimit;
 pub mod store;
 pub mod tenancy;
 
 pub use config::{BadSetting, Settings};
 pub use error::ApiError;
+pub use ratelimit::{Caller, Limiter, RateLimit, Verdict};
 pub use store::Store;
 pub use tenancy::{KeyRing, Tenant};
 
@@ -23,20 +25,33 @@ pub struct AppState {
     pub store: Store,
     /// The keys the service accepts.
     pub keys: KeyRing,
+    /// How often each caller may ask for work.
+    pub limiter: Limiter,
 }
 
 impl AppState {
-    /// State with no authentication, which is what a single-tenant service and
-    /// the test suite use.
+    /// State with no authentication and a generous limit, which is what a
+    /// single-tenant service and the test suite use.
     pub fn open(store: Store) -> Self {
         Self {
             store,
             keys: KeyRing::new(),
+            limiter: Limiter::new(RateLimit::generous()),
         }
     }
 
     /// State that requires one of `keys` to be presented.
     pub fn guarded(store: Store, keys: KeyRing) -> Self {
-        Self { store, keys }
+        Self {
+            store,
+            keys,
+            limiter: Limiter::new(RateLimit::generous()),
+        }
+    }
+
+    /// State holding every caller to `limit`.
+    pub fn limited(mut self, limit: RateLimit) -> Self {
+        self.limiter = Limiter::new(limit);
+        self
     }
 }

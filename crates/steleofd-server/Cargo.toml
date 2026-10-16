@@ -19,7 +19,7 @@ steleofd-error.workspace = true
 steleofd-font.workspace = true
 axum.workspace = true
 tokio.workspace = true
-tower-http = { version = "0.6", features = ["cors", "limit", "trace"] }
+tower-http = { version = "0.6", features = ["cors", "limit", "trace", "timeout"] }
 serde.workspace = true
 serde_json.workspace = true
 tracing.workspace = true

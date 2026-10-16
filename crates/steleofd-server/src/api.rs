@@ -3,8 +3,9 @@
 //! returns. CPU-bound work goes to a blocking thread, never the async runtime.
 
 use axum::body::Bytes;
-use axum::extract::{DefaultBodyLimit, Path, Query, State};
+use axum::extract::{DefaultBodyLimit, Path, Query, Request, State};
 use axum::http::{StatusCode, header};
+use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
@@ -12,11 +13,13 @@ use serde::Deserialize;
 use steleofd_core::{Document, RenderOptions};
 use tower_http::cors::CorsLayer;
 use tower_http::limit::RequestBodyLimitLayer;
+use tower_http::timeout::TimeoutLayer;
 use tower_http::trace::TraceLayer;
 use uuid::Uuid;
 
 use crate::dto::{self, DocumentInfo, Health, Opened, SearchHit, SignatureStatus};
 use crate::error::ApiError;
+use crate::ratelimit::{Caller, Verdict};
 use crate::store::{self, Shared};
 use crate::{AppState, Tenant};
 
@@ -28,6 +31,10 @@ const MIN_DPI: f64 = 12.0;
 /// well below this; the real ceiling is the renderer's own pixel budget, which
 /// an A4 page passes at 600 dpi and fails at 1200.
 const MAX_DPI: f64 = 600.0;
+/// How long one request may take before the service gives up on it. A whole
+/// document converting to PDF is the slowest route, and this is set well past
+/// what that costs so only a stuck request meets it.
+const REQUEST_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(120);
 
 /// The query a PNG render reads.
 #[derive(Debug, Clone, Deserialize)]
@@ -60,7 +67,33 @@ pub fn router(state: AppState, max_body_bytes: usize) -> Router {
         .layer(RequestBodyLimitLayer::new(max_body_bytes))
         .layer(CorsLayer::permissive())
         .layer(TraceLayer::new_for_http())
+        .layer(middleware::from_fn_with_state(state.clone(), throttle))
+        .layer(TimeoutLayer::with_status_code(
+            StatusCode::REQUEST_TIMEOUT,
+            REQUEST_TIMEOUT,
+        ))
         .with_state(state)
+}
+
+/// Hold each caller to its rate limit. The caller is the API key when one is
+/// presented and the peer address otherwise, so an open service still tells
+/// one client from another.
+async fn throttle(State(state): State<AppState>, request: Request, next: Next) -> Response {
+    let caller = Caller::of(&request);
+    match state.limiter.check(&caller, std::time::Instant::now()) {
+        Verdict::Allow => next.run(request).await,
+        Verdict::RetryAfter(wait) => {
+            let seconds = wait.as_secs().max(1);
+            (
+                StatusCode::TOO_MANY_REQUESTS,
+                [(header::RETRY_AFTER, seconds.to_string())],
+                Json(serde_json::json!({
+                    "error": "too many requests; slow down and try again",
+                })),
+            )
+                .into_response()
+        }
+    }
 }
 
 /// Report that the service is up, and how much it is holding.

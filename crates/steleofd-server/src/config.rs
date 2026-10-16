@@ -14,12 +14,15 @@ pub const DATA_DIR: &str = "STELEOFD_DATA_DIR";
 /// Environment variable naming the API keys, as `tenant:key,tenant:key`. When
 /// it is unset the service accepts every caller as one shared tenant.
 pub const API_KEYS: &str = "STELEOFD_API_KEYS";
+/// Environment variable setting the per-caller request rate and burst, as
+/// `rate,burst`. Unset means a limit generous enough never to be met.
+pub const RATE_LIMIT: &str = "STELEOFD_RATE_LIMIT";
 
 /// Default listen address: loopback only, so a trial run is not a service.
 pub const DEFAULT_BIND: SocketAddr = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::LOCALHOST, 8080));
 
 /// Where the service listens and how much it accepts.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Settings {
     /// Address to bind.
     pub bind: SocketAddr,
@@ -32,6 +35,8 @@ pub struct Settings {
     /// The API keys the service accepts. Empty means every caller is one
     /// shared tenant.
     pub api_keys: crate::tenancy::KeyRing,
+    /// How often each caller may ask for work.
+    pub rate_limit: crate::ratelimit::RateLimit,
 }
 
 impl Default for Settings {
@@ -42,6 +47,7 @@ impl Default for Settings {
             max_documents: 256,
             data_dir: None,
             api_keys: crate::tenancy::KeyRing::new(),
+            rate_limit: crate::ratelimit::RateLimit::generous(),
         }
     }
 }
@@ -70,8 +76,26 @@ impl Settings {
                     .map_err(|_| BadSetting::new(API_KEYS, &spec))?,
                 None => defaults.api_keys,
             },
+            rate_limit: match text(RATE_LIMIT) {
+                Some(spec) => parse_rate(&spec)?,
+                None => defaults.rate_limit,
+            },
         })
     }
+}
+
+/// Parse `rate,burst` into a rate limit, refusing one that would refuse every
+/// request.
+fn parse_rate(spec: &str) -> Result<crate::ratelimit::RateLimit, BadSetting> {
+    let bad = || BadSetting::new(RATE_LIMIT, spec);
+    let (rate, burst) = spec.split_once(',').ok_or_else(bad)?;
+    let rate: f64 = rate.trim().parse().map_err(|_| bad())?;
+    let burst: f64 = burst.trim().parse().map_err(|_| bad())?;
+    let limit = crate::ratelimit::RateLimit::new(rate, burst);
+    if !limit.is_usable() {
+        return Err(bad());
+    }
+    Ok(limit)
 }
 
 /// One setting that could not be read.

@@ -14,9 +14,13 @@ use crate::error::ApiError;
 pub const ANONYMOUS: &str = "anonymous";
 
 /// The header a bearer key travels in.
-const AUTHORIZATION: &str = "authorization";
+pub const AUTHORIZATION_HEADER: &str = "authorization";
 /// The header a key may travel in instead, for callers that dislike Bearer.
-const API_KEY: &str = "x-api-key";
+pub const API_KEY_HEADER: &str = "x-api-key";
+/// The header a bearer key travels in.
+const AUTHORIZATION: &str = AUTHORIZATION_HEADER;
+/// The header a key may travel in instead, for callers that dislike Bearer.
+const API_KEY: &str = API_KEY_HEADER;
 
 /// The keys the service accepts, and the tenant each one stands for.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]

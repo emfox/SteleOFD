@@ -33,7 +33,7 @@ async fn run() -> Result<(), String> {
         None => Store::new(settings.max_documents),
     };
     let authenticated = !settings.api_keys.is_open();
-    let state = AppState::guarded(store, settings.api_keys.clone());
+    let state = AppState::guarded(store, settings.api_keys.clone()).limited(settings.rate_limit);
     let app = api::router(state, settings.max_body_bytes);
     let listener = tokio::net::TcpListener::bind(settings.bind)
         .await
@@ -51,6 +51,11 @@ async fn run() -> Result<(), String> {
     } else {
         tracing::warn!("no API keys set, so every caller shares one tenant");
     }
+    tracing::info!(
+        rate = settings.rate_limit.rate,
+        burst = settings.rate_limit.burst,
+        "per-caller rate limit"
+    );
 
     axum::serve(listener, app)
         .with_graceful_shutdown(shutdown())
