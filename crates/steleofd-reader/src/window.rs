@@ -40,6 +40,7 @@ pub fn draw(ui: &mut Ui, app: &mut App) -> WindowRequests {
     draw_toolbar(ui, app);
     draw_search(ui, app);
     draw_signatures(ui, app);
+    draw_annotations(ui, app);
     draw_canvas(ui, app);
     draw_status(ui, app);
     // Shortcuts resolve after every panel has been drawn, because a key the
@@ -183,6 +184,17 @@ fn draw_menu(ui: &mut Ui, app: &mut App, requests: &mut WindowRequests) {
                 .clicked()
             {
                 app.set_signatures_open(!showing);
+            }
+            let annotations = app.annotations_heading();
+            let listing = app.annotations_open();
+            if ui
+                .add_enabled(
+                    app.is_open(),
+                    egui::Button::selectable(listing, annotations),
+                )
+                .clicked()
+            {
+                app.set_annotations_open(!listing);
             }
             ui.separator();
             for (key, layout) in [
@@ -397,6 +409,48 @@ fn draw_signatures(ui: &mut Ui, app: &mut App) {
     });
 }
 
+/// Z7: the annotation panel. Clause 15 keeps annotations apart from the pages
+/// they mark up, so the panel lists them by page and turns to the one picked:
+/// a list nothing links to would be an index of places the reader cannot go.
+fn draw_annotations(ui: &mut Ui, app: &mut App) {
+    if !app.annotations_open() || !app.is_open() {
+        return;
+    }
+    egui::Panel::left("annotations").show(ui, |ui| {
+        ui.heading(app.annotations_heading());
+        ui.label(app.annotation_count_label());
+        if app.annotation_count() > 0 {
+            ui.horizontal(|ui| {
+                if ui.button("◀").clicked() {
+                    app.previous_annotation();
+                }
+                if ui.button("▶").clicked() {
+                    app.next_annotation();
+                }
+            });
+        }
+        ui.separator();
+        egui::ScrollArea::vertical()
+            .id_salt("annotation-list")
+            .show(ui, |ui| {
+                if app.annotation_count() == 0 {
+                    // A document with no annotations is not a failure; it is a
+                    // fact, and the count line above already states it.
+                    let notice = app.no_annotations_label();
+                    ui.label(egui::RichText::new(notice).weak());
+                    return;
+                }
+                let selected = app.annotation_index();
+                for index in 0..app.annotation_count() {
+                    let text = app.annotation_label(index);
+                    if ui.selectable_label(selected == Some(index), text).clicked() {
+                        app.show_annotation(index);
+                    }
+                }
+            });
+    });
+}
+
 /// Z3: the only zone that rasterizes, and the only one that may.
 fn draw_canvas(ui: &mut Ui, app: &mut App) {
     // The canvas is the only place that knows how much room there is, so a fit
@@ -477,6 +531,43 @@ fn draw_one_page(ui: &mut Ui, app: &mut App, page: usize, horizontal: bool) {
     // on screen. They are between the image and the next page, so a spread
     // draws its highlights on the correct page rather than the last one.
     draw_highlights(ui, app, page, response.rect, size);
+    draw_annotations_on(ui, app, page, response.rect, size);
+}
+
+/// Outline the annotation boundary on one page, in the space it was drawn.
+/// The boundary is in page space, so it is scaled by the ratio the page was
+/// drawn at; the annotation being visited is drawn stronger than the rest.
+fn draw_annotations_on(ui: &Ui, app: &App, page: usize, area: egui::Rect, drawn: egui::Vec2) {
+    let marks = app.annotations_on(page);
+    if marks.is_empty() {
+        return;
+    }
+    let Some(page_box) = app.page_size_mm(page) else {
+        return;
+    };
+    let painter = ui.painter();
+    for (annotation, current) in marks {
+        let Some(boundary) = annotation.boundary else {
+            continue;
+        };
+        // A mark the document says is hidden is listed but not outlined, so
+        // the panel can still say it is there without drawing it.
+        if !annotation.visible {
+            continue;
+        }
+        let colour = if current {
+            egui::Color32::from_rgb(60, 120, 220)
+        } else {
+            egui::Color32::from_rgb(140, 180, 240)
+        };
+        let scaled = scale_hit(boundary, page_box, area, drawn);
+        painter.rect_stroke(
+            scaled,
+            0.0,
+            egui::Stroke::new(if current { 2.0 } else { 1.0 }, colour),
+            egui::StrokeKind::Inside,
+        );
+    }
 }
 
 /// Outline every hit on one page, in the space the page was drawn.

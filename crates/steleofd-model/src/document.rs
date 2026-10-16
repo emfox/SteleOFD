@@ -124,6 +124,11 @@ pub struct Document {
     /// What the document permits, clause 7.12.
     #[serde(rename = "Permissions", skip_serializing_if = "Option::is_none")]
     pub permissions: Option<Permission>,
+    /// Index of the annotation files, clause 15. It sits on the document
+    /// rather than on each page because annotations are stored apart from the
+    /// pages they mark up, and the index is what joins the two.
+    #[serde(rename = "Annotations", skip_serializing_if = "Option::is_none")]
+    pub annotations: Option<Location>,
 }
 
 /// Templates, resources and default extents shared by every page.
@@ -852,6 +857,7 @@ mod tests {
             },
             vpreferences: None,
             permissions: None,
+            annotations: None,
             pages: Pages::default(),
         };
         assert!(doc.common_data.templates.is_none());
@@ -885,6 +891,7 @@ mod tests {
             },
             vpreferences: None,
             permissions: None,
+            annotations: Some(Location::new("Annots/Annotations.xml")),
             pages: Pages {
                 pages: vec![Page {
                     id: "10".to_string(),
@@ -904,6 +911,12 @@ mod tests {
         let json = serde_json::to_string(&doc).expect("serialize");
         let back: Document = serde_json::from_str(&json).expect("deserialize");
         assert_eq!(back.pages.len(), 1);
+        // The annotation index is a location like any other, so it survives a
+        // round trip with the rest of the document rather than being dropped.
+        assert_eq!(
+            back.annotations.expect("annotations").value,
+            "Annots/Annotations.xml"
+        );
         assert_eq!(
             back.common_data.templates.expect("templates").items[0].base_loc,
             "Tpls/Tpl_0/Content.xml"

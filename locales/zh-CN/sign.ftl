@@ -21,3 +21,8 @@ sign-algorithm = 算法：{ $algo }
 sign-issuer = 颁发机构：{ $issuer }
 sign-export-report = 导出验签报告
 sign-panel-title = 签章
+
+# Annotations, clause 15. Read apart from the pages they mark up.
+annot-panel-title = 注释
+annot-count = 共 { $count } 条注释
+annot-none = 本文档没有注释

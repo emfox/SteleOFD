@@ -214,6 +214,7 @@ fn common_data_round_trips_a_page_area_into_the_document() {
         },
         vpreferences: None,
         permissions: None,
+        annotations: None,
     };
     assert_eq!(
         document.common_data.page_area.physical_box,

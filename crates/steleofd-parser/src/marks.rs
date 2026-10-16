@@ -3,8 +3,10 @@
 //! rather than flattened into the display list.
 
 use steleofd_error::{OfdError, Result, XmlError};
-use steleofd_package::Package;
+use steleofd_package::{Package, parent_of, resolve};
 use steleofd_xml::cursor::{Cursor, Event};
+
+use crate::ParsedDocument;
 
 /// The index that says which annotation file belongs to which page.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -20,6 +22,67 @@ pub struct AnnotPage {
     pub page_id: String,
     /// Archive path of the page's annotation file.
     pub file_loc: String,
+}
+
+/// One annotation, resolved onto the page index it belongs to.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ResolvedAnnot {
+    /// Zero-based page index the annotation marks up.
+    pub page: usize,
+    /// The annotation itself.
+    pub annot: Annot,
+}
+
+/// Read every annotation in a document, in page order. The index names them
+/// by page id rather than by index, so the two have to be joined; a page whose
+/// file will not read costs its own annotations and no others.
+pub fn read_annotations(
+    package: &mut Package,
+    parsed: &ParsedDocument,
+) -> Result<Vec<ResolvedAnnot>> {
+    let Some(loc) = annotation_index_loc(parsed) else {
+        return Ok(Vec::new());
+    };
+    let index = read_annotations_index(package, &loc)?;
+    let by_id = page_ids(parsed);
+    let mut out = Vec::new();
+    for entry in &index.pages {
+        let Some(&page) = by_id.get(&entry.page_id) else {
+            continue;
+        };
+        let file = resolve(&entry.file_loc, &parent_of(&loc));
+        let Ok(annots) = read_page_annots(package, &file) else {
+            continue;
+        };
+        out.extend(
+            annots
+                .items
+                .into_iter()
+                .map(|annot| ResolvedAnnot { page, annot }),
+        );
+    }
+    Ok(out)
+}
+
+/// Where the annotation index sits, from the document body that names it.
+fn annotation_index_loc(parsed: &ParsedDocument) -> Option<String> {
+    parsed
+        .document
+        .annotations
+        .as_ref()
+        .map(|loc| loc.value.clone())
+}
+
+/// Page id to zero-based page index, in document order.
+fn page_ids(parsed: &ParsedDocument) -> std::collections::HashMap<String, usize> {
+    parsed
+        .document
+        .pages
+        .pages
+        .iter()
+        .enumerate()
+        .map(|(index, page)| (page.id.clone(), index))
+        .collect()
 }
 
 /// One `Annot` inside a page annotation file.

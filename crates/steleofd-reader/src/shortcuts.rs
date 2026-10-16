@@ -31,6 +31,12 @@ pub enum Action {
     ToggleSearch,
     /// Show or hide the signature panel.
     ToggleSignatures,
+    /// Show or hide the annotation panel.
+    ToggleAnnotations,
+    /// Move to the next annotation, opening the panel.
+    NextAnnotation,
+    /// Move to the previous annotation, opening the panel.
+    PreviousAnnotation,
     /// Leave whatever has focus, closing a panel or the search box.
     Escape,
     /// Ask the host to open a document.
@@ -76,6 +82,8 @@ fn action_for(key: Key, modifiers: Modifiers) -> Option<Action> {
             Key::Slash => Some(Action::FocusSearch),
             Key::Home => Some(Action::FirstPage),
             Key::End => Some(Action::LastPage),
+            Key::K => Some(Action::ToggleAnnotations),
+            Key::J => Some(Action::NextAnnotation),
             _ => None,
         };
     }
@@ -86,6 +94,10 @@ fn action_for(key: Key, modifiers: Modifiers) -> Option<Action> {
         Key::End => Some(Action::LastPage),
         Key::ArrowDown if modifiers.shift => Some(Action::NextHit),
         Key::ArrowUp if modifiers.shift => Some(Action::PreviousHit),
+        // Animation-style stepping through the marks: one key forward, one
+        // back, as the browsers that show annotations use.
+        Key::J => Some(Action::NextAnnotation),
+        Key::K => Some(Action::PreviousAnnotation),
         Key::Equals | Key::Plus => Some(Action::ZoomIn),
         Key::Minus => Some(Action::ZoomOut),
         Key::Num0 => Some(Action::ZoomReset),

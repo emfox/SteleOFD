@@ -251,6 +251,45 @@ impl Document {
     pub fn audit(&mut self) -> Result<steleofd_archive::Report> {
         steleofd_archive::audit(&mut self.package)
     }
+
+    /// One annotation, as a reader needs it: which page it marks up, what kind
+    /// of mark it is and where its appearance sits.
+    #[cfg(feature = "annot")]
+    pub fn annotations(&mut self) -> Result<Vec<Annotation>> {
+        let resolved = steleofd_parser::marks::read_annotations(&mut self.package, &self.parsed)?;
+        Ok(resolved
+            .into_iter()
+            .map(|entry| Annotation {
+                page: entry.page,
+                id: entry.annot.id,
+                kind: entry.annot.kind,
+                remark: entry.annot.remark,
+                parameters: entry.annot.parameters,
+                visible: entry.annot.visible,
+                boundary: entry.annot.boundary,
+            })
+            .collect())
+    }
+}
+
+/// An annotation resolved onto the page it belongs to.
+#[cfg(feature = "annot")]
+#[derive(Debug, Clone, PartialEq)]
+pub struct Annotation {
+    /// Zero-based page index the annotation marks up.
+    pub page: usize,
+    /// Identifier written in the document.
+    pub id: String,
+    /// What kind of mark it is, as written.
+    pub kind: String,
+    /// Free-text note, when the document carries one.
+    pub remark: Option<String>,
+    /// Name/value pairs from `Parameters`.
+    pub parameters: Vec<(String, String)>,
+    /// Whether the document says the mark is drawn.
+    pub visible: bool,
+    /// Where the mark's appearance sits on the page, in page space.
+    pub boundary: Option<steleofd_common::Rect>,
 }
 
 /// Register the fonts the document declares, keyed by the id the display list

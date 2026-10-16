@@ -7,6 +7,8 @@
 
 mod document;
 
+#[cfg(feature = "annot")]
+pub use document::Annotation;
 pub use document::Document;
 
 // Types that appear in `Document`'s own signatures. Re-exported so a caller

@@ -21,3 +21,8 @@ sign-algorithm = Algorithm: { $algo }
 sign-issuer = Issuer: { $issuer }
 sign-export-report = Export Verification Report
 sign-panel-title = Signatures
+
+# Annotations, clause 15. Read apart from the pages they mark up.
+annot-panel-title = Annotations
+annot-count = { $count } annotation(s)
+annot-none = This document has no annotations

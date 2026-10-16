@@ -45,4 +45,7 @@ ocr      = ["convert", "steleofd-convert/ocr"]
 edit     = ["dep:steleofd-edit"]
 search   = ["dep:steleofd-search"]
 archive  = ["dep:steleofd-archive"]
+# Annotations are read through the parser, which is never optional, so this
+# feature only names the capability: it trims nothing at compile time.
+annot    = []
 async    = ["dep:rayon"]

@@ -147,6 +147,14 @@ pub enum MessageId {
     /// Heading on the signature panel in the reader
     SignPanelTitle,
 
+    // Annotation module
+    /// Heading on the annotation panel in the reader
+    AnnotPanelTitle,
+    /// Annotation count, plural
+    AnnotCount,
+    /// The document carries no annotations
+    AnnotNone,
+
     // Edit module
     /// Confirm page deletion
     EditConfirmDeletePages,
@@ -296,6 +304,11 @@ impl MessageId {
             Self::SignExportReport => "sign-export-report",
             Self::SignPanelTitle => "sign-panel-title",
 
+            // Annotation
+            Self::AnnotPanelTitle => "annot-panel-title",
+            Self::AnnotCount => "annot-count",
+            Self::AnnotNone => "annot-none",
+
             // Edit
             Self::EditConfirmDeletePages => "edit-confirm-delete-pages",
             Self::EditWarnInvalidateSignature => "edit-warn-invalidate-signature",
@@ -415,7 +428,10 @@ impl MessageId {
         Self::SignIssuer,
         Self::SignExportReport,
         Self::SignPanelTitle,
-        // Edit
+        // Annotation
+        Self::AnnotPanelTitle,
+        Self::AnnotCount,
+        Self::AnnotNone,
         Self::EditConfirmDeletePages,
         Self::EditWarnInvalidateSignature,
         Self::EditUndo,
@@ -464,6 +480,7 @@ impl MessageId {
                 | Self::ConvertProgress
                 | Self::ConvertFailed
                 | Self::SignCount
+                | Self::AnnotCount
                 | Self::SignSigner
                 | Self::SignSignedAt
                 | Self::SignAlgorithm
