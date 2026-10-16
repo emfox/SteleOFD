@@ -131,13 +131,10 @@ impl<'a> SvgSink<'a> {
     }
 
     /// Define a `<pattern>` tiling the cell across the area. The element spans
-    /// one step, so `XStep` and `YStep` become its width and height. SVG has
-    /// no mirrored repeat, so a reflecting pattern keeps its flat stand-in.
+    /// one step, so `XStep` and `YStep` become its width and height. SVG repeats
+    /// a tile unchanged, so a reflecting pattern becomes a 2x2 mirrored block.
     fn define_pattern(&mut self, spec: &steleofd_display::PatternSpec) -> String {
         if spec.width <= 0.0 || spec.height <= 0.0 {
-            return pattern_average(spec);
-        }
-        if spec.reflect != steleofd_display::Reflect::Normal {
             return pattern_average(spec);
         }
         self.seq += 1;
@@ -152,15 +149,65 @@ impl<'a> SvgSink<'a> {
         } else {
             spec.height
         };
+        // A cell drawn once is the common case; a reflecting one needs the
+        // mirrored neighbours in the block so plain tiling reproduces them.
+        let cols = if matches!(
+            spec.reflect,
+            steleofd_display::Reflect::Row | steleofd_display::Reflect::RowAndColumn
+        ) {
+            2
+        } else {
+            1
+        };
+        let rows = if matches!(
+            spec.reflect,
+            steleofd_display::Reflect::Column | steleofd_display::Reflect::RowAndColumn
+        ) {
+            2
+        } else {
+            1
+        };
         let mut cell = String::new();
-        for op in &spec.cell.ops {
-            self.pattern_op(op, &mut cell);
+        for row in 0..rows {
+            for col in 0..cols {
+                let (mx, my) = spec.reflect.mirrors(col, row);
+                let transform = match (mx, my) {
+                    (false, false) => String::new(),
+                    (true, false) => format!(
+                        " transform=\"translate({},{}) scale(-1,1)\"",
+                        num(step_x * (col as f64 + 1.0)),
+                        num(0.0)
+                    ),
+                    (false, true) => format!(
+                        " transform=\"translate({},{}) scale(1,-1)\"",
+                        num(0.0),
+                        num(step_y * (row as f64 + 1.0))
+                    ),
+                    (true, true) => format!(
+                        " transform=\"translate({},{}) scale(-1,-1)\"",
+                        num(step_x * (col as f64 + 1.0)),
+                        num(step_y * (row as f64 + 1.0))
+                    ),
+                };
+                let mut placed = String::new();
+                for op in &spec.cell.ops {
+                    self.pattern_op(op, &mut placed);
+                }
+                if placed.is_empty() {
+                    continue;
+                }
+                if transform.is_empty() {
+                    cell.push_str(&placed);
+                } else {
+                    cell.push_str(&format!("<g{transform}>{placed}</g>"));
+                }
+            }
         }
         self.line(format!(
             "<pattern id=\"{id}\" patternUnits=\"userSpaceOnUse\" x=\"0\" y=\"0\" \
              width=\"{w}\" height=\"{h}\">{cell}</pattern>",
-            w = num(step_x),
-            h = num(step_y),
+            w = num(step_x * cols as f64),
+            h = num(step_y * rows as f64),
         ));
         format!("url(#{id})")
     }
@@ -974,9 +1021,10 @@ mod tests {
     }
 
     #[test]
-    fn a_reflecting_pattern_keeps_its_flat_fill() {
-        // SVG cannot mirror a tile, so a reflecting pattern must not be tiled
-        // the wrong way; the cell's first fill stands in instead.
+    fn a_reflecting_pattern_tiles_mirrored_copies() {
+        // SVG repeats a tile unchanged, so a reflecting pattern is laid down as
+        // a 2x2 block of mirrored copies that then tiles normally: the block is
+        // two steps wide and tall, and the copies carry a negative scale.
         let cell = steleofd_display::PageDisplay {
             index: 0,
             page_box: Rect::new(0.0, 0.0, 4.0, 4.0),
@@ -1004,11 +1052,20 @@ mod tests {
             rule: PaintRule::NonZero,
         }]);
         let svg = page_to_svg(&p, &SvgOptions::default()).expect("convert");
-        assert!(!svg.contains("<pattern"), "no pattern is defined: {svg}");
         assert!(
-            svg.contains("fill=\"#008000\""),
-            "the cell's colour stands in: {svg}"
+            svg.contains("<pattern id=\"pat1\""),
+            "a reflecting pattern still tiles: {svg}"
         );
+        // A 2x2 block spans two steps in each direction.
+        assert!(
+            svg.contains("width=\"8\" height=\"8\""),
+            "the block spans two steps: {svg}"
+        );
+        assert!(
+            svg.contains("scale(-1,-1)"),
+            "the diagonal copy is mirrored: {svg}"
+        );
+        assert!(svg.contains("fill=\"#008000\""), "the cell is drawn: {svg}");
     }
 
     #[test]
