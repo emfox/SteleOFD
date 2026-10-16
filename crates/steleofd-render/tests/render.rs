@@ -206,6 +206,52 @@ fn a_clip_confines_the_painted_pixels() {
 }
 
 #[test]
+fn a_text_clip_confines_the_paint_to_the_glyph_outlines() {
+    let (fonts, id) = manager_with_fixture();
+    // A large red rectangle clipped to one big glyph at (60, 80): the red
+    // survives only where the glyph's outline covers it, so the corner far
+    // from the glyph stays white even though the rectangle reached it.
+    let run = GlyphRun {
+        font: id,
+        size: Millimeter(40.0),
+        glyphs: vec!['H' as u16],
+        advances: vec![0.0],
+        text: Some("H".to_string()),
+        cluster_map: None,
+        codes_are_glyphs: false,
+        transform: Affine::translate(60.0, 80.0),
+        fill: Some(Paint::Solid(Color::BLACK)),
+        stroke: None,
+        letter_spacing: 0.0,
+        word_spacing: 0.0,
+        bbox: Rect::new(0.0, 0.0, 0.0, 0.0),
+    };
+    let page = page_with(vec![
+        DrawOp::ClipText(run),
+        filled(rect(0.0, 0.0, 200.0, 200.0), Color::rgba(255, 0, 0, 255)),
+    ]);
+    let output = render_page(&page, &fonts, &RenderOptions::default()).expect("render");
+    let red = output
+        .rgba_bytes()
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .filter(|p| p[0] > 180 && p[1] < 80 && p[2] < 80)
+        .count();
+    // The whole rectangle is 200x200 mm; the clip must cut it down to glyphs.
+    let whole = output.rgba_bytes().len() / 4;
+    assert!(
+        red > 0 && red < whole / 4,
+        "the glyph clip must keep some paint and drop most of it, got {red} of {whole}"
+    );
+    assert_eq!(
+        pixel(&output, 5, 5),
+        [255, 255, 255, 255],
+        "a corner clear of the glyph stays unpainted"
+    );
+}
+
+#[test]
 fn a_clip_of_two_subpaths_paints_both_of_them() {
     let fonts = FontManager::new();
     // Clause 8.4: the areas of a clip cover their union, so a clip path made of

@@ -816,6 +816,49 @@ mod tests {
     }
 
     #[test]
+    fn a_text_clip_emits_the_glyph_outlines_as_a_clip_path() {
+        // Clause 8.4: a text area clips to the glyph outlines, so the SVG
+        // carries the outlines inside the clipPath rather than a path.
+        let mut manager = FontManager::new();
+        manager.registry_mut().register_embedded(
+            "tests/data/Orbitron-Bold.ttf",
+            "Orbitron",
+            std::sync::Arc::new(font_bytes()),
+        );
+        let run = GlyphRun {
+            font: FontId(0),
+            size: Millimeter(5.0),
+            glyphs: vec![65],
+            advances: vec![5.0],
+            text: Some("A".into()),
+            cluster_map: None,
+            codes_are_glyphs: false,
+            transform: Affine::IDENTITY,
+            fill: None,
+            stroke: None,
+            letter_spacing: 0.0,
+            word_spacing: 0.0,
+            bbox: Rect::EMPTY,
+        };
+        let options = SvgOptions {
+            text: TextExport::Outline,
+            fonts: Some(&manager),
+        };
+        let mut sink = SvgSink::new(Rect::A4_PORTRAIT, &options);
+        replay(
+            &page(vec![DrawOp::Save, DrawOp::ClipText(run), DrawOp::Restore]),
+            &mut sink,
+        )
+        .expect("replay");
+        let (svg, _) = sink.finish();
+        assert!(
+            svg.contains("<clipPath id=\"clip1\" clipPathUnits=\"userSpaceOnUse\"><path d=\""),
+            "the glyph outlines become the clip path, got {svg}"
+        );
+        assert!(svg.contains("<g clip-path=\"url(#clip1)\">"));
+    }
+
+    #[test]
     fn a_linear_gradient_becomes_a_def_and_a_clipped_fill() {
         let stops = vec![
             GradientStop {

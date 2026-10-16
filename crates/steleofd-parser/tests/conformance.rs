@@ -997,6 +997,36 @@ fn gb_t_33190_8_4_trans_flag_decides_whether_the_clip_follows_the_ctm() {
 }
 
 #[test]
+fn gb_t_33190_8_4_a_text_area_clips_to_the_glyph_outlines() {
+    // A `Text` area is the other kind clause 8.4 allows: the region is the
+    // glyph outlines rather than a path, so it reaches the backend as a clip
+    // run the way drawn text does, for the backend to outline.
+    let ops = page_ops(
+        r#"<PathObject ID="10" Boundary="0 0 40 40">
+  <Clips><Clip><Area>
+    <Text Font="7" Size="20"><TextCode X="2" Y="30">Hi</TextCode></Text>
+  </Area></Clip></Clips>
+  <AbbreviatedData>M 0 0 L 40 0 L 40 40 Z</AbbreviatedData>
+</PathObject>"#,
+        "",
+    );
+    let run = ops
+        .iter()
+        .find_map(|op| match op {
+            DrawOp::ClipText(run) => Some(run),
+            _ => None,
+        })
+        .expect("a text clip reaches the display list");
+    assert_eq!(run.font.0, 7);
+    assert_eq!(run.size.value(), 20.0);
+    assert_eq!(run.text.as_deref(), Some("Hi"));
+    assert!(
+        !ops.iter().any(|op| matches!(op, DrawOp::ClipPath { .. })),
+        "a text area is not also turned into a path"
+    );
+}
+
+#[test]
 fn gb_t_33190_10_an_image_object_fills_the_unit_square_of_its_ctm() {
     // The CTM scale equals the boundary size for 119 of the 121 image objects
     // in the 42-page invoice, so the content space is the unit square and the
