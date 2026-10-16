@@ -80,9 +80,10 @@ SAMPLES: dict[str, str] = {
 # Samples that do not open yet, and why. A corpus is only useful if a failure in
 # it means something, so the list is short, each entry names a cause, and CI
 # fails when a sample here starts working: that is the signal to remove it.
-KNOWN_UNPARSED = {
-    "n.ofd": "the sample itself references a DrawParam it does not contain",
-}
+# Empty for now: the two that used to sit here both open, one after its clip
+# areas were read as a union and one after the drawing parameters a `Res` table
+# declares stopped being ignored.
+KNOWN_UNPARSED: dict[str, str] = {}
 
 # How `--parse` opens one sample. Built by the caller before this runs.
 PARSE_COMMAND = "cargo run --quiet -p steleofd-cli -- info".split()

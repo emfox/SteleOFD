@@ -36,6 +36,8 @@ struct PendingImage {
     data: std::sync::Arc<Vec<u8>>,
     /// Intrinsic pixel dimensions.
     pixels: (u32, u32),
+    /// Encoding the bytes are stored in.
+    codec: steleofd_display::ImageCodec,
 }
 
 /// A gradient waiting to become a shading pattern.
@@ -486,6 +488,7 @@ impl PageSink for PdfSink<'_> {
         self.images.push(PendingImage {
             data: image.data.clone(),
             pixels: image.pixel_size,
+            codec: image.codec,
         });
         self.stats.images += 1;
         self.op(format!(
@@ -727,11 +730,20 @@ fn channel_array(c: &Color) -> Object {
     )
 }
 
-/// Build an image XObject from encoded bytes, dropping alpha.
+/// Build an image XObject from encoded bytes, dropping alpha. JBIG2 is not one
+/// `image` reads, so a bi-level stream is decoded to grey first and expanded to
+/// RGB, exactly as the raster backend does.
 fn image_xobject(image: &PendingImage) -> Result<Stream> {
-    let decoded =
-        image::load_from_memory(&image.data).map_err(|e| convert_error("image", e.to_string()))?;
-    let rgb = decoded.to_rgb8();
+    let rgb = if image.codec == steleofd_display::ImageCodec::Jbig2 {
+        let gray = steleofd_display::jbig2::decode_to_gray(&image.data)
+            .map_err(|reason| convert_error("image", reason))?;
+        gray.iter().flat_map(|&v| [v, v, v]).collect()
+    } else {
+        image::load_from_memory(&image.data)
+            .map_err(|e| convert_error("image", e.to_string()))?
+            .to_rgb8()
+            .into_raw()
+    };
     let mut dict = Dictionary::new();
     dict.set("Type", Object::Name(b"XObject".to_vec()));
     dict.set("Subtype", Object::Name(b"Image".to_vec()));
@@ -739,7 +751,7 @@ fn image_xobject(image: &PendingImage) -> Result<Stream> {
     dict.set("Height", image.pixels.1 as i64);
     dict.set("ColorSpace", Object::Name(b"DeviceRGB".to_vec()));
     dict.set("BitsPerComponent", Object::Integer(8));
-    let mut stream = Stream::new(dict, rgb.into_raw());
+    let mut stream = Stream::new(dict, rgb);
     stream
         .compress()
         .map_err(|e| convert_error("image stream", e.to_string()))?;
@@ -1136,6 +1148,55 @@ mod tests {
                 == Some(3)
         });
         assert!(stitched, "three stops stitch two intervals");
+    }
+
+    /// A 100x100 QR code as an embedded JBIG2 stream: the encoding a scanned
+    /// invoice carries, which `image` cannot read. Spelled out as bytes so the
+    /// test needs no encoder of its own and no fixture outside the crate.
+    const QR_JBIG2: &[u8] = &[
+        151, 74, 66, 50, 13, 10, 26, 10, 1, 0, 0, 0, 1, 0, 0, 0, 0, 48, 0, 1, 0, 0, 0, 19, 0, 0, 0,
+        100, 0, 0, 0, 100, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 38, 0, 1, 0, 0, 1, 57, 0,
+        0, 0, 100, 0, 0, 0, 100, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8, 3, 255, 253, 255, 2, 254, 254, 254,
+        4, 40, 191, 174, 189, 134, 171, 6, 215, 182, 1, 249, 238, 232, 235, 4, 204, 6, 130, 37, 10,
+        182, 77, 3, 245, 98, 87, 2, 254, 86, 139, 187, 66, 236, 122, 204, 117, 189, 217, 54, 21,
+        169, 173, 42, 178, 128, 197, 216, 20, 219, 121, 130, 14, 98, 9, 144, 181, 233, 16, 85, 223,
+        68, 18, 216, 41, 109, 137, 37, 76, 36, 148, 110, 93, 155, 243, 164, 108, 208, 105, 107, 2,
+        195, 242, 185, 115, 54, 185, 146, 48, 189, 120, 95, 84, 6, 177, 121, 95, 145, 203, 129,
+        254, 155, 101, 188, 30, 204, 212, 119, 62, 84, 118, 154, 193, 73, 255, 90, 180, 122, 97,
+        52, 191, 105, 101, 115, 219, 172, 186, 204, 65, 120, 24, 48, 200, 1, 199, 107, 203, 156,
+        118, 216, 69, 144, 2, 158, 236, 196, 91, 247, 56, 228, 135, 246, 202, 29, 115, 168, 151,
+        197, 177, 152, 165, 30, 150, 114, 8, 42, 84, 19, 94, 150, 56, 246, 131, 15, 102, 57, 26,
+        24, 168, 211, 147, 184, 94, 245, 84, 92, 189, 192, 95, 125, 216, 184, 11, 177, 216, 204,
+        12, 154, 241, 124, 234, 55, 44, 90, 253, 120, 167, 221, 158, 187, 168, 217, 25, 72, 146,
+        90, 194, 149, 37, 2, 43, 230, 196, 2, 16, 105, 110, 63, 168, 76, 175, 112, 34, 165, 76, 79,
+        112, 84, 74, 136, 158, 166, 235, 30, 115, 184, 164, 2, 252, 54, 166, 59, 102, 4, 127, 33,
+        159, 11, 31, 248, 71, 62, 86, 98, 223, 249, 173, 215, 167, 187, 39, 119, 44, 133, 34, 171,
+        132, 153, 131, 206, 128, 64, 99, 226, 63, 255, 172, 0, 0, 0, 2, 49, 0, 1, 0, 0, 0, 0, 0, 0,
+        0, 3, 51, 0, 1, 0, 0, 0, 0,
+    ];
+
+    #[test]
+    fn a_jbig2_image_becomes_an_xobject_of_its_own_pixels() {
+        // `image` reads no JBIG2, so the bytes used to fail the whole document
+        // here while the raster backend painted them; both now decode the same
+        // way, and the XObject carries the dimensions the stream declares.
+        let p = page(vec![steleofd_display::DrawOp::Image {
+            image: ImageRef::new(
+                "qr",
+                std::sync::Arc::new(QR_JBIG2.to_vec()),
+                (100, 100),
+                steleofd_display::ImageCodec::Jbig2,
+            ),
+            dst: Rect::new(20.0, 20.0, 50.0, 50.0),
+            transform: Affine::IDENTITY,
+        }]);
+        let bytes = page_to_pdf(&p, &PdfOptions::default()).expect("convert");
+        let doc = Document::load_from(&bytes[..]).expect("parse");
+        let page_id = *doc.get_pages().values().next().expect("page");
+        let images = doc.get_page_images(page_id).expect("images");
+        assert_eq!(images.len(), 1, "the bi-level image becomes one xobject");
+        assert_eq!(images[0].width, 100);
+        assert_eq!(images[0].height, 100);
     }
 
     #[test]

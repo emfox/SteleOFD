@@ -156,6 +156,48 @@ fn gb_t_33190_7_7_page_content_may_live_in_base_loc() {
 }
 
 #[test]
+fn gb_t_33190_7_9_draw_params_resolve_from_the_resource_table() {
+    // Clause 7.9 manages the drawing parameters in the resource files, which is
+    // where the annex A schema puts them and where the corpus puts them, so a
+    // path naming an id a `Res` table declares must be painted with it.
+    let res = r##"<?xml version="1.0" encoding="UTF-8"?>
+<Res BaseLoc="Res"><DrawParams>
+  <DrawParam ID="1006"><FillColor Value="#0000FF"/></DrawParam>
+</DrawParams></Res>"##
+        .to_string();
+    let entries = [
+        ("OFD.xml", OFD_XML.to_string()),
+        (
+            "Doc_0/Document.xml",
+            document_xml(r#"<Page ID="1" BaseLoc="Pages/Page_0/Content.xml"/>"#),
+        ),
+        ("Doc_0/PublicRes.xml", res),
+        (
+            "Doc_0/Pages/Page_0/Content.xml",
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+<Page><Content><Layer>
+  <PathObject ID="10" Boundary="0 0 10 10" DrawParam="1006">
+    <AbbreviatedData>M 0 0 L 10 0 L 10 10 Z</AbbreviatedData>
+  </PathObject>
+</Layer></Content></Page>"#
+                .to_string(),
+        ),
+    ];
+    let mut parser = open(&entries);
+    let doc = parser.open_document().expect("open document");
+    assert_eq!(doc.draw_params.len(), 1, "the resource table is read");
+    let page = parser.page_display(&doc, 0).expect("flatten page");
+    let Some(DrawOp::Path {
+        fill: Some(Paint::Solid(c)),
+        ..
+    }) = page.ops.iter().find(|op| matches!(op, DrawOp::Path { .. }))
+    else {
+        panic!("expected a filled path, got {:?}", page.ops);
+    };
+    assert_eq!((c.r, c.g, c.b), (0, 0, 255));
+}
+
+#[test]
 fn gb_t_33190_8_1_3_page_area_defaults_from_common_data() {
     let entries = [
         ("OFD.xml", OFD_XML.to_string()),
@@ -238,6 +280,24 @@ fn gb_t_33190_8_5_object_carries_boundary_and_visibility() {
 fn gb_t_33190_9_3_2_move_starts_a_subpath() {
     let path = parse_path("M 5 6").expect("parse");
     assert_eq!(path.len(), 1, "a move is a segment of its own");
+}
+
+#[test]
+fn gb_t_33190_9_3_2_a_subpath_start_operator_opens_the_path() {
+    // Table 36 gives `S` its own operator, the point a subpath starts at, and a
+    // producer in the corpus opens every path with it. `M` and `S` differ in
+    // what they name, not in what they draw, so both must open a subpath.
+    let path = parse_path("S 0 0 L 156 0 C").expect("parse");
+    assert_eq!(path.len(), 2, "a start and a line");
+    // A bare trailing operator consumes no operands and so adds nothing.
+    let only_start = parse_path("S 3 4").expect("parse");
+    assert_eq!(only_start.len(), 1);
+    // Neither may open a path that is not the first thing written.
+    assert!(parse_path("L 0 0").is_err(), "a line cannot open a path");
+    assert!(
+        parse_path("Q 0 0 1 1").is_err(),
+        "a curve cannot open a path"
+    );
 }
 
 #[test]

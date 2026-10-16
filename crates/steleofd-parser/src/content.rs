@@ -1194,6 +1194,33 @@ pub fn read_multimedias(xml: &str) -> Result<MultimediaList> {
     Ok(list)
 }
 
+/// GB/T 33190 clause 7.9: read a `Res` file's drawing parameter table. The
+/// schema keeps the table in the resource file, not in `CommonData`, which is
+/// where every producer in the corpus puts it.
+pub fn read_draw_params(xml: &str) -> Result<DrawParamList> {
+    let mut cursor = Cursor::new(xml);
+    let mut list = DrawParamList::default();
+    let root = cursor.expect_start("Res")?;
+    if !root.is_self_closing() {
+        // The entries sit under a `DrawParams` container; other resource
+        // tables are skipped whole.
+        loop {
+            match cursor.next_event()? {
+                Event::Start(n) if n.is("DrawParams") => {
+                    list = read_draw_param_entries(&mut cursor)?;
+                }
+                Event::Start(n) if n.is("DrawParam") => {
+                    list.items.push(read_draw_param(&mut cursor, &n)?);
+                }
+                Event::Start(other) => cursor.skip_element(&other)?,
+                Event::End(_) | Event::Eof => break,
+                Event::Text(_) => {}
+            }
+        }
+    }
+    Ok(list)
+}
+
 fn read_multimedia_entries(
     cursor: &mut Cursor<'_>,
     node: &Node,

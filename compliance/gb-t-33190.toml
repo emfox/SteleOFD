@@ -116,6 +116,7 @@ status = "verified"
 tests = [
     "gb_t_33190_7_9_unreachable_resource_is_reported",
     "gb_t_33190_7_9_page_level_resource_is_checked_too",
+    "gb_t_33190_7_9_draw_params_resolve_from_the_resource_table",
 ]
 
 [[item]]
@@ -224,7 +225,10 @@ tests = [
 clause = "9.3.2"
 title = "Abbreviated data: move"
 status = "verified"
-tests = ["gb_t_33190_9_3_2_move_starts_a_subpath"]
+tests = [
+    "gb_t_33190_9_3_2_move_starts_a_subpath",
+    "gb_t_33190_9_3_2_a_subpath_start_operator_opens_the_path",
+]
 
 [[item]]
 clause = "9.3.3"

@@ -99,8 +99,8 @@ fn emit(tokens: &[Token], b: &mut PathBuilder) -> Result<()> {
     }
     let mut i = 0usize;
     let mut cmd = expect_cmd(tokens, &mut i)?;
-    if cmd != 'M' {
-        return Err(invalid("path data must start with M"));
+    if cmd != 'M' && cmd != 'S' {
+        return Err(invalid("path data must start with M or S"));
     }
     // The arc form needs the current point, which the builder does not expose.
     let mut cur = (0.0f64, 0.0f64);
@@ -113,7 +113,9 @@ fn emit(tokens: &[Token], b: &mut PathBuilder) -> Result<()> {
             continue;
         }
         match cmd {
-            'M' => {
+            // `S` names the point a subpath starts at and `M` moves the current
+            // point there; both open a subpath, which is all a path can show.
+            'M' | 'S' => {
                 let v = take(tokens, &mut i, 2)?;
                 b.move_to(v[0], v[1]);
                 cur = (v[0], v[1]);

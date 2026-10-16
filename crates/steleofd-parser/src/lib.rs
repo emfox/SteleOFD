@@ -9,6 +9,7 @@ pub mod flatten;
 pub mod fonts;
 pub mod images;
 pub mod marks;
+pub mod params;
 pub mod pathdata;
 
 use std::collections::HashMap;
@@ -16,7 +17,6 @@ use std::collections::HashMap;
 use steleofd_display::{DisplayList, PageDisplay};
 use steleofd_error::Result;
 use steleofd_model::document::{Document, Template};
-use steleofd_model::object::DrawParam;
 use steleofd_model::{OfdRoot, Page, Valid};
 use steleofd_package::{Package, parent_of, resolve};
 use steleofd_xml::cursor::DEFAULT_MAX_DEPTH;
@@ -32,6 +32,8 @@ pub struct ParsedDocument {
     pub doc_dir: String,
     /// Image resources the document declares, with their bytes read in.
     pub images: images::ImageTable,
+    /// Drawing parameters the document declares, keyed by resource id.
+    pub draw_params: params::ParamTable,
 }
 
 /// Reads OFD files from a [`Package`] and flattens pages on demand.
@@ -70,11 +72,17 @@ impl<'a> Parser<'a> {
         let doc_xml = self.package.read_string(&body.doc_root.value)?;
         let document = content::read_document(&doc_xml)?;
         let images = images::load_images(self.package, &doc_dir)?;
+        let draw_params = params::load_draw_params(
+            self.package,
+            &doc_dir,
+            document.common_data.draw_params.as_ref(),
+        )?;
         Ok(ParsedDocument {
             ofd,
             document,
             doc_dir,
             images,
+            draw_params,
         })
     }
 
@@ -91,18 +99,7 @@ impl<'a> Parser<'a> {
             .unwrap_or(doc.document.common_data.page_area.physical_box);
         let mut builder =
             steleofd_display::DisplayListBuilder::new(page_box).with_max_depth(self.max_depth);
-        let params: HashMap<String, DrawParam> = doc
-            .document
-            .common_data
-            .draw_params
-            .as_ref()
-            .map(|list| {
-                list.items
-                    .iter()
-                    .map(|p| (p.id.clone(), p.clone()))
-                    .collect()
-            })
-            .unwrap_or_default();
+        let params = doc.draw_params.clone();
 
         if let Some(tpls) = &page.templates {
             let table = template_table(doc);
