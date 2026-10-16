@@ -209,10 +209,9 @@ the guard does not.
   committed references, gate on a pixel-difference threshold. It found the
   gradient defect the op-level tests could not see: a shape whose fill was a
   shading painted black unless its standalone gradient op was matched first.~~
-- **M1-b** A documented performance budget: pages per second for render, and
-  the document size the parser handles within a stated latency.
-  `docs/PERFORMANCE.md` holds the measured numbers; the budget is what turns
-  them into a pass/fail line.
+- **M1-b** `[x]` ~~A documented performance budget: a stated ceiling per stage
+  for the one-page case, set well above the measured baseline so only a large,
+  deliberate regression crosses it.~~
 - **M1-c** A CI job that runs the benchmarks and fails only on a large,
   deliberate regression.
 
