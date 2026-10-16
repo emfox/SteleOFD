@@ -50,6 +50,10 @@ pub struct RasterOutput {
     /// Runs skipped because their face could not be loaded at all. The page
     /// still renders; the marks those runs would have made are absent.
     pub skipped_font_runs: usize,
+    /// Images skipped because their bytes would not decode or their size was
+    /// rejected. Like a missing font, one broken resource costs only its own
+    /// placement, not the page around it.
+    pub skipped_image_ops: usize,
     pixmap: Pixmap,
 }
 
@@ -110,6 +114,7 @@ pub fn render_page(
     let mut stack: Vec<State> = Vec::new();
     let mut missing_glyph_runs = 0usize;
     let mut skipped_font_runs = 0usize;
+    let mut skipped_image_ops = 0usize;
 
     for op in &page.ops {
         match op {
@@ -187,15 +192,20 @@ pub fn render_page(
                 image,
                 dst,
                 transform,
-            } => draw_image(
-                &mut pixmap,
-                image,
-                *dst,
-                *transform,
-                &state,
-                page.page_box,
-                options,
-            )?,
+            } => {
+                match draw_image(
+                    &mut pixmap,
+                    image,
+                    *dst,
+                    *transform,
+                    &state,
+                    page.page_box,
+                    options,
+                )? {
+                    ImageOutcome::Drawn => {}
+                    ImageOutcome::Failed => skipped_image_ops += 1,
+                }
+            }
             DrawOp::LinearGradient {
                 start,
                 end,
@@ -253,6 +263,7 @@ pub fn render_page(
         height,
         missing_glyph_runs,
         skipped_font_runs,
+        skipped_image_ops,
         pixmap,
     })
 }
@@ -591,6 +602,16 @@ fn draw_text_inner(
     })
 }
 
+/// What became of one placed image.
+enum ImageOutcome {
+    /// The image was decoded and painted.
+    Drawn,
+    /// The image was skipped: its bytes would not decode or its size was
+    /// rejected. The page keeps going, so a single bad resource cannot take
+    /// the rest of the page with it.
+    Failed,
+}
+
 fn draw_image(
     pixmap: &mut Pixmap,
     image: &ImageRef,
@@ -599,23 +620,25 @@ fn draw_image(
     state: &State,
     page_box: Rect,
     options: &RenderOptions,
-) -> Result<()> {
+) -> Result<ImageOutcome> {
     if image.data.is_empty() {
         // A missing resource must not abort the page; leave the area empty.
-        return Ok(());
+        return Ok(ImageOutcome::Failed);
     }
-    let (pixels, iw, ih) = decode_resource(image)?;
+    let (pixels, iw, ih) = match decode_resource(image) {
+        Ok(decoded) => decoded,
+        Err(e) => {
+            tracing::warn!(id = %image.id, error = %e, "skipping an image that would not decode");
+            return Ok(ImageOutcome::Failed);
+        }
+    };
     let Some(size) = IntSize::from_wh(iw, ih) else {
-        return Err(OfdError::Render(RenderError::ImageDecode {
-            page: 0,
-            reason: format!("resource {}: size {iw}x{ih} rejected", image.id),
-        }));
+        tracing::warn!(id = %image.id, w = iw, h = ih, "skipping an image with a rejected size");
+        return Ok(ImageOutcome::Failed);
     };
     let Some(img) = Pixmap::from_vec(pixels, size) else {
-        return Err(OfdError::Render(RenderError::ImageDecode {
-            page: 0,
-            reason: format!("resource {}: pixmaps of {}x{} rejected", image.id, iw, ih),
-        }));
+        tracing::warn!(id = %image.id, w = iw, h = ih, "skipping an image whose pixels were rejected");
+        return Ok(ImageOutcome::Failed);
     };
 
     // Pixels map into the destination rect, which the placement transform
@@ -637,7 +660,7 @@ fn draw_image(
         total,
         state.clip.as_ref(),
     );
-    Ok(())
+    Ok(ImageOutcome::Drawn)
 }
 
 /// Decode a placed resource into RGBA, whichever encoding it uses.
