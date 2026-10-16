@@ -11,9 +11,11 @@ pub mod manager;
 pub mod metrics;
 pub mod registry;
 pub mod shape;
+pub mod subset;
 
 pub use face::FontFace;
 pub use manager::FontManager;
 pub use metrics::{FontMetrics, GlyphOutline};
 pub use registry::{FontId, FontRegistry, FontSource};
 pub use shape::{ShapeOptions, ShapedGlyph, ShapedRun, shape_text};
+pub use subset::subset;
