@@ -4984,6 +4984,7 @@ dependencies = [
  "steleofd-error",
  "steleofd-font",
  "steleofd-geometry",
+ "steleofd-io",
  "steleofd-model",
  "steleofd-parser",
  "steleofd-render",
@@ -5042,7 +5043,6 @@ dependencies = [
 name = "steleofd-display"
 version = "0.1.0"
 dependencies = [
- "hayro-jbig2",
  "serde",
  "serde_json",
  "steleofd-common",
@@ -5123,6 +5123,7 @@ dependencies = [
 name = "steleofd-io"
 version = "0.1.0"
 dependencies = [
+ "hayro-jbig2",
  "memmap2",
  "steleofd-error",
  "tracing",
@@ -5163,6 +5164,7 @@ dependencies = [
  "steleofd-error",
  "steleofd-font",
  "steleofd-geometry",
+ "steleofd-io",
  "steleofd-model",
  "steleofd-package",
  "steleofd-render",
@@ -5211,6 +5213,7 @@ dependencies = [
  "steleofd-error",
  "steleofd-font",
  "steleofd-geometry",
+ "steleofd-io",
  "tiny-skia",
  "tracing",
 ]

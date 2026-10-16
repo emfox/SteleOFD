@@ -5,6 +5,7 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
+pub mod jbig2;
 pub mod sink;
 pub mod source;
 

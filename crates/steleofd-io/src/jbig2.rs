@@ -2,8 +2,6 @@
 //! on white, which the format compresses far better than any raster format.
 //! Pure Rust with `simd` off, so nothing in its tree uses unsafe code.
 
-use crate::resource::ImageCodec;
-
 use hayro_jbig2::{Decoder, Image};
 
 /// Decode JBIG2 into 8-bit greyscale, one byte per pixel, row-major, 1 black.
@@ -28,14 +26,6 @@ pub fn dimensions(data: &[u8]) -> Option<(u32, u32)> {
         .or_else(|_| Image::new_embedded(data, None))
         .ok()?;
     Some((image.width(), image.height()))
-}
-
-/// Dimensions for any codec, so a caller need not match on it first.
-pub fn dimensions_for(data: &[u8], codec: ImageCodec) -> Option<(u32, u32)> {
-    match codec {
-        ImageCodec::Jbig2 => dimensions(data),
-        _ => None,
-    }
 }
 
 /// Collects decoded pixels as one byte per pixel, in row order.

@@ -5,7 +5,6 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
-pub mod jbig2;
 pub mod list;
 pub mod ops;
 pub mod page;

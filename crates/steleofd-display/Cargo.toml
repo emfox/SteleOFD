@@ -12,7 +12,6 @@ steleofd-common.workspace = true
 steleofd-error.workspace = true
 steleofd-geometry.workspace = true
 steleofd-font.workspace = true
-hayro-jbig2.workspace = true
 serde.workspace = true
 
 [dev-dependencies]

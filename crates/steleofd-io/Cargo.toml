@@ -9,6 +9,7 @@ license.workspace = true
 steleofd-error.workspace = true
 tracing.workspace = true
 memmap2 = { version = "0.9", optional = true }
+hayro-jbig2.workspace = true
 
 [features]
 default = []

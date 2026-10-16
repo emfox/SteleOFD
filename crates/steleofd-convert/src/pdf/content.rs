@@ -16,7 +16,7 @@ pub(crate) fn channel_array(c: &Color) -> Object {
 /// RGB, exactly as the raster backend does.
 pub(crate) fn image_xobject(image: &PendingImage) -> Result<Stream> {
     let rgb = if image.codec == steleofd_display::ImageCodec::Jbig2 {
-        let gray = steleofd_display::jbig2::decode_to_gray(&image.data)
+        let gray = steleofd_io::jbig2::decode_to_gray(&image.data)
             .map_err(|reason| convert_error("image", reason))?;
         gray.iter().flat_map(|&v| [v, v, v]).collect()
     } else {

@@ -11,6 +11,7 @@ steleofd-error.workspace = true
 steleofd-geometry.workspace = true
 steleofd-font.workspace = true
 steleofd-display.workspace = true
+steleofd-io.workspace = true
 tiny-skia.workspace = true
 image.workspace = true
 tracing.workspace = true

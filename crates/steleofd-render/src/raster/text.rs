@@ -146,7 +146,7 @@ pub(crate) fn decode_resource(image: &ImageRef) -> Result<(Vec<u8>, u32, u32)> {
         })
     };
     if image.codec == steleofd_display::ImageCodec::Jbig2 {
-        let gray = steleofd_display::jbig2::decode_to_gray(&image.data).map_err(fail)?;
+        let gray = steleofd_io::jbig2::decode_to_gray(&image.data).map_err(fail)?;
         let (w, h) = (image.pixel_size.0, image.pixel_size.1);
         if gray.len() != (w * h) as usize {
             return Err(fail(format!(
