@@ -515,7 +515,7 @@ fn draw_text_inner(
             offset += run.advances.get(i - 1).copied().unwrap_or(0.0);
         }
         offset += run.letter_spacing;
-        let Some(outline) = face.outline_for_codepoint(u32::from(gid)) else {
+        let Some(outline) = face.outline_for_run_code(gid, run.codes_are_glyphs) else {
             continue;
         };
         // Outlines are normalized to 1/1000 em with y pointing up: scale to
@@ -949,6 +949,7 @@ mod tests {
             advances: vec![5.0],
             text: Some("A".to_string()),
             cluster_map: None,
+            codes_are_glyphs: false,
             transform: Affine::translate(2.0, 12.0),
             fill: Some(Paint::Solid(Color::rgba(0, 0, 0, 255))),
             stroke: None,
@@ -991,6 +992,7 @@ mod tests {
             advances: vec![3.0],
             text: Some("A".to_string()),
             cluster_map: None,
+            codes_are_glyphs: false,
             transform: Affine::IDENTITY,
             fill: Some(Paint::Solid(Color::BLACK)),
             stroke: None,

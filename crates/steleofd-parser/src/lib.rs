@@ -6,6 +6,7 @@
 
 pub mod content;
 pub mod flatten;
+pub mod fonts;
 pub mod images;
 pub mod marks;
 pub mod pathdata;

@@ -51,6 +51,17 @@ pub const CONTENT_XML: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
   </Content>
 </Page>"#;
 
+/// The public resource table declaring the one face the document embeds.
+/// The declaration is what ties a font id to a file; without it the bytes in
+/// the container are not a resource at all.
+pub const PUBLIC_RES_XML: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
+<Res BaseLoc="Res"><Fonts>
+  <Font ID="7" FontName="Orbitron"><FontFile>Orbitron-Bold.ttf</FontFile></Font>
+</Fonts></Res>"#;
+
+/// The path to the public resource table entry inside the archive.
+pub const PUBLIC_RES_ENTRY: &str = "Doc_0/PublicRes.xml";
+
 /// The signature list entry.
 pub const SIGNS_XML: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
 <Signs><Sign BaseLoc="Doc_0/Signs/Sign_0.xml"/></Signs>"#;
@@ -121,13 +132,14 @@ pub fn open_package_bytes(bytes: &[u8]) -> Package {
     Package::from_bytes(bytes).expect("package")
 }
 
-/// The four entries every fixture document carries, unsigned.
+/// The entries every fixture document carries, unsigned.
 pub fn base_entries(ofd: &str) -> Vec<(&'static str, Vec<u8>)> {
     vec![
         ("OFD.xml", ofd.as_bytes().to_vec()),
         (DOCUMENT_ENTRY, DOCUMENT_XML.as_bytes().to_vec()),
         (CONTENT_ENTRY, CONTENT_XML.as_bytes().to_vec()),
         ("Doc_0/Res/Orbitron-Bold.ttf", font_bytes()),
+        (PUBLIC_RES_ENTRY, PUBLIC_RES_XML.as_bytes().to_vec()),
     ]
 }
 

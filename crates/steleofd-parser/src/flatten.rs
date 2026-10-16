@@ -16,7 +16,8 @@ use steleofd_geometry::{Affine, Path};
 use steleofd_model::PageBlock;
 use steleofd_model::color::{ColorRef, Segment, Shading};
 use steleofd_model::object::{
-    DrawParam, ImageObject, LineCapStyle, LineJoinStyle, Object, ObjectBase, PathObject, TextObject,
+    CGTransform, DrawParam, ImageObject, LineCapStyle, LineJoinStyle, Object, ObjectBase,
+    PathObject, TextCode, TextObject,
 };
 use steleofd_xml::parse_number_list_n;
 
@@ -397,48 +398,139 @@ fn flatten_text(
             if code.text.is_empty() {
                 continue;
             }
-            // Glyph ids are placeholders until font shaping lands; the raw
-            // code points keep text extraction working in the meantime.
-            let glyphs: Vec<u16> = code.text.chars().map(|c| u32::from(c) as u16).collect();
-            let advances = advances_of(code, size);
-            let place = Affine::translate(code.x, code.y);
-            let transform = if h_scale == 1.0 {
-                place
-            } else {
-                Affine::new(h_scale, 0.0, 0.0, 1.0, 0.0, 0.0).then(place)
-            };
-            b.push(DrawOp::Text(GlyphRun {
-                font,
-                size: t.size,
-                glyphs,
-                advances,
-                text: Some(code.text.clone()),
-                cluster_map: None,
-                transform,
-                fill: fill.clone(),
-                stroke: stroke.clone(),
-                letter_spacing,
-                word_spacing: 0.0,
-                // Text codes address the object space, so the box lives
-                // at its origin too.
-                bbox: Rect::new(0.0, 0.0, t.base.boundary.w, t.base.boundary.h),
-            }));
+            for segment in segments_of(code, &t.cg_transforms, size) {
+                let place = Affine::translate(code.x + segment.offset, code.y);
+                let transform = if h_scale == 1.0 {
+                    place
+                } else {
+                    Affine::new(h_scale, 0.0, 0.0, 1.0, 0.0, 0.0).then(place)
+                };
+                b.push(DrawOp::Text(GlyphRun {
+                    font,
+                    size: t.size,
+                    glyphs: segment.glyphs,
+                    advances: segment.advances,
+                    text: Some(segment.text),
+                    cluster_map: segment.cluster_map,
+                    codes_are_glyphs: segment.glyph_index,
+                    transform,
+                    fill: fill.clone(),
+                    stroke: stroke.clone(),
+                    letter_spacing,
+                    word_spacing: 0.0,
+                    // Text codes address the object space, so the box lives
+                    // at its origin too.
+                    bbox: Rect::new(0.0, 0.0, t.base.boundary.w, t.base.boundary.h),
+                }));
+            }
         }
         Ok(())
     })
 }
 
-/// Per-glyph advances: the font size, plus the `DeltaX`/`DeltaY` adjustments
-/// the standard lets a run carry.
-fn advances_of(code: &steleofd_model::object::TextCode, size: f64) -> Vec<f64> {
-    let count = code.text.chars().count();
-    (0..count)
-        .map(|i| {
-            let dx = code.delta_x.get(i).copied().unwrap_or(0.0);
-            let dy = code.delta_y.get(i).copied().unwrap_or(0.0);
-            size + dx + dy
-        })
-        .collect()
+/// One stretch of a `TextCode` as it reaches the display list.
+struct RunSegment {
+    /// Codes to draw: glyph indices when `glyph_index` is set, Unicode code
+    /// points otherwise.
+    glyphs: Vec<u16>,
+    /// Whether `glyphs` holds indices into the font's own glyph space.
+    glyph_index: bool,
+    /// Character index each glyph belongs to; absent when the two agree.
+    cluster_map: Option<Vec<u32>>,
+    /// Horizontal origin of this stretch within the text code.
+    offset: f64,
+    /// Per-glyph advances, in the text code's own order.
+    advances: Vec<f64>,
+    /// The characters this stretch covers.
+    text: String,
+}
+
+/// Split a `TextCode` into the stretches a `CGTransform` carves out of it.
+/// Untransformed characters keep their code points; a transformed stretch
+/// carries glyph indices, so the two kinds never share a run.
+fn segments_of(code: &TextCode, transforms: &[CGTransform], size: f64) -> Vec<RunSegment> {
+    let chars: Vec<char> = code.text.chars().collect();
+    let advance_at = |i: usize| {
+        let dx = code.delta_x.get(i).copied().unwrap_or(0.0);
+        let dy = code.delta_y.get(i).copied().unwrap_or(0.0);
+        size + dx + dy
+    };
+
+    // A transform names the characters it covers and the glyphs that replace
+    // them; one that names no glyph, or covers nothing, draws nothing.
+    let mut spans: Vec<(usize, usize, &CGTransform)> = Vec::new();
+    for t in transforms {
+        if t.glyphs.is_empty() {
+            continue;
+        }
+        let start = t.code_position.min(chars.len());
+        let end = (start + t.code_count.max(1)).min(chars.len());
+        if start < end {
+            spans.push((start, end, t));
+        }
+    }
+    spans.sort_by_key(|(start, _, _)| *start);
+
+    let mut out: Vec<RunSegment> = Vec::new();
+    let mut at = 0usize;
+    let mut offset = 0.0f64;
+    for (start, end, t) in spans {
+        if start < at {
+            // Overlapping transforms: the first to reach a character wins.
+            continue;
+        }
+        if start > at {
+            let glyphs: Vec<u16> = chars[at..start]
+                .iter()
+                .map(|c| u32::from(*c) as u16)
+                .collect();
+            let advances: Vec<f64> = (at..start).map(advance_at).collect();
+            let span: f64 = advances.iter().sum();
+            out.push(RunSegment {
+                glyphs,
+                glyph_index: false,
+                cluster_map: None,
+                offset,
+                advances,
+                text: chars[at..start].iter().collect(),
+            });
+            offset += span;
+        }
+        // A glyph maps to the first character it replaces, so a one-to-many
+        // transform keeps every glyph anchored to the same character.
+        let glyphs = t.glyphs.clone();
+        let cluster_map: Vec<u32> = (0..glyphs.len())
+            .map(|i| (start + i.min(end - start - 1)) as u32)
+            .collect();
+        let advances: Vec<f64> = cluster_map
+            .iter()
+            .map(|&c| advance_at(c as usize))
+            .collect();
+        let span: f64 = advances.iter().sum();
+        out.push(RunSegment {
+            glyphs,
+            glyph_index: true,
+            cluster_map: Some(cluster_map),
+            offset,
+            advances,
+            text: chars[start..end].iter().collect(),
+        });
+        offset += span;
+        at = end;
+    }
+    if at < chars.len() {
+        let glyphs: Vec<u16> = chars[at..].iter().map(|c| u32::from(*c) as u16).collect();
+        let advances: Vec<f64> = (at..chars.len()).map(advance_at).collect();
+        out.push(RunSegment {
+            glyphs,
+            glyph_index: false,
+            cluster_map: None,
+            offset,
+            advances,
+            text: chars[at..].iter().collect(),
+        });
+    }
+    out
 }
 
 fn flatten_image(i: &ImageObject, builder: &mut DisplayListBuilder) -> Result<()> {

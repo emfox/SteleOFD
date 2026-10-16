@@ -16,6 +16,10 @@ pub struct GlyphRun {
     pub size: Millimeter,
     /// Glyph ids.
     pub glyphs: Vec<u16>,
+    /// Whether `glyphs` holds font glyph indices rather than Unicode code
+    /// points; a `CGTransform` names glyphs, every other run code points.
+    #[serde(default)]
+    pub codes_are_glyphs: bool,
     /// Horizontal advance per glyph in millimetres; same length as `glyphs`.
     pub advances: Vec<f64>,
     /// Original Unicode text; may be absent for subset fonts.

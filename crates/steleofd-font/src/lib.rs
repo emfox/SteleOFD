@@ -5,6 +5,7 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
+pub mod cff;
 pub mod face;
 pub mod manager;
 pub mod metrics;

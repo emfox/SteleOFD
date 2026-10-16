@@ -244,6 +244,7 @@ fn a_run_with_no_glyphs_paints_nothing() {
         advances: Vec::new(),
         text: Some(String::new()),
         cluster_map: None,
+        codes_are_glyphs: false,
         transform: Affine::IDENTITY,
         fill: Some(Paint::Solid(Color::BLACK)),
         stroke: None,

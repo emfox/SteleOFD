@@ -286,7 +286,7 @@ impl<'a> PdfSink<'a> {
                 offset += run.advances.get(i - 1).copied().unwrap_or(0.0);
             }
             offset += run.letter_spacing;
-            let Some(outline) = face.outline_for_codepoint(u32::from(gid)) else {
+            let Some(outline) = face.outline_for_run_code(gid, run.codes_are_glyphs) else {
                 continue;
             };
             // Outlines are normalized to 1/1000 em with y pointing up: scale
@@ -1134,6 +1134,7 @@ mod tests {
             advances: vec![4.0, 4.0],
             text: Some("ab".into()),
             cluster_map: None,
+            codes_are_glyphs: false,
             transform: Affine::translate(20.0, 30.0),
             fill: Some(Paint::Solid(Color::BLACK)),
             stroke: None,
@@ -1169,6 +1170,7 @@ mod tests {
             advances: vec![3.0],
             text: None,
             cluster_map: None,
+            codes_are_glyphs: false,
             transform: Affine::IDENTITY,
             fill: None,
             stroke: None,

@@ -43,6 +43,15 @@ fn font_bytes() -> Vec<u8> {
     std::fs::read(path).expect("font fixture")
 }
 
+/// A public resource table declaring one font, the form every writer emits.
+/// The declaration is the only thing that says which file a font id means.
+fn font_table(id: &str, name: &str, file: &str) -> String {
+    format!(
+        r#"<?xml version="1.0" encoding="UTF-8"?>
+<Res BaseLoc="Res"><Fonts><Font ID="{id}" FontName="{name}"><FontFile>{file}</FontFile></Font></Fonts></Res>"#
+    )
+}
+
 fn open(entries: &[(&str, Vec<u8>)]) -> steleofd_core::Document {
     let borrowed: Vec<(&str, &[u8])> = entries
         .iter()
@@ -117,6 +126,10 @@ fn registers_container_fonts_and_remaps_ids() {
             "Doc_0/Document.xml",
             document_xml(&text_page("7", "4.0", "Hi")).into_bytes(),
         ),
+        (
+            "Doc_0/PublicRes.xml",
+            font_table("7", "Orbitron", "Orbitron-Bold.ttf").into_bytes(),
+        ),
         ("Doc_0/Res/Orbitron-Bold.ttf", font_bytes()),
     ];
     let doc = open(&entries);
@@ -143,6 +156,42 @@ fn registers_container_fonts_and_remaps_ids() {
         doc.fonts().face(FontId(0)).is_ok(),
         "the remapped id resolves to a loadable face"
     );
+    assert_eq!(
+        doc.fonts().face(FontId(0)).expect("face").family(),
+        "Orbitron",
+        "the face carries the declared name"
+    );
+}
+
+#[test]
+fn each_declared_font_keeps_the_file_its_declaration_names() {
+    // The declarations arrive in an order that disagrees with the file names,
+    // which is what a positional pairing gets wrong: it would hand font 7 the
+    // bytes of font 9 and paint every run with the wrong face.
+    let entries = [
+        ("OFD.xml", OFD_XML.as_bytes().to_vec()),
+        (
+            "Doc_0/Document.xml",
+            document_xml(&text_page("9", "4.0", "Nine")).into_bytes(),
+        ),
+        (
+            "Doc_0/PublicRes.xml",
+            font_table("9", "Nine", "aaa-nine.ttf").into_bytes(),
+        ),
+        ("Doc_0/Res/aaa-nine.ttf", font_bytes()),
+    ];
+    let doc = open(&entries);
+    let run = doc
+        .page(0)
+        .and_then(|page| {
+            page.ops.iter().find_map(|op| match op {
+                DrawOp::Text(run) => Some(run),
+                _ => None,
+            })
+        })
+        .expect("text run");
+    let face = doc.fonts().face(run.font).expect("face");
+    assert_eq!(face.family(), "Nine", "the run resolves to its own font");
 }
 
 #[test]
@@ -153,6 +202,10 @@ fn non_font_entries_are_ignored() {
             "Doc_0/Document.xml",
             document_xml(&text_page("7", "4.0", "Hi")).into_bytes(),
         ),
+        (
+            "Doc_0/PublicRes.xml",
+            font_table("7", "Orbitron", "Orbitron-Bold.ttf").into_bytes(),
+        ),
         ("Doc_0/Res/Orbitron-Bold.ttf", font_bytes()),
         ("Doc_0/Res/readme.txt", b"not a font".to_vec()),
     ];
@@ -161,17 +214,28 @@ fn non_font_entries_are_ignored() {
 }
 
 #[test]
-fn fonts_outside_the_document_directory_are_ignored() {
+fn a_font_the_document_never_declares_is_not_registered() {
+    // A font file in the container is not a resource until a declaration
+    // names it; scanning the directory used to pair ids with files by
+    // position, which is how a run came to be drawn with the wrong face.
     let entries = [
         ("OFD.xml", OFD_XML.as_bytes().to_vec()),
         (
             "Doc_0/Document.xml",
-            document_xml(r#"<Page ID="1"/>"#).into_bytes(),
+            document_xml(&text_page("7", "4.0", "Hi")).into_bytes(),
         ),
-        ("Other_Dir/Orbitron-Bold.ttf", font_bytes()),
+        ("Doc_0/Res/Orbitron-Bold.ttf", font_bytes()),
     ];
     let doc = open(&entries);
-    assert_eq!(doc.fonts().registry().len(), 0);
+    // The id is still resolved, but to the system substitute: nothing was
+    // embedded, so no entry carries the container file's bytes.
+    let entries = doc.fonts().registry().iter().collect::<Vec<_>>();
+    assert_eq!(entries.len(), 1, "only the substitute is registered");
+    assert!(
+        matches!(entries[0].source, steleofd_font::FontSource::System { .. }),
+        "the undeclared file is not loaded, got {:?}",
+        entries[0].source
+    );
 }
 
 #[cfg(feature = "render")]
@@ -227,6 +291,10 @@ fn renders_text_with_the_registered_face() {
         (
             "Doc_0/Document.xml",
             document_xml(&text_page("7", "20.0", "A")).into_bytes(),
+        ),
+        (
+            "Doc_0/PublicRes.xml",
+            font_table("7", "Orbitron", "Orbitron-Bold.ttf").into_bytes(),
         ),
         ("Doc_0/Res/Orbitron-Bold.ttf", font_bytes()),
     ];
@@ -365,6 +433,10 @@ fn finds_text_across_pages() {
                 text_page("7", "4.0", "World")
             ))
             .into_bytes(),
+        ),
+        (
+            "Doc_0/PublicRes.xml",
+            font_table("7", "Orbitron", "Orbitron-Bold.ttf").into_bytes(),
         ),
         ("Doc_0/Res/Orbitron-Bold.ttf", font_bytes()),
     ];

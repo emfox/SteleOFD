@@ -182,6 +182,7 @@ mod tests {
             advances: vec![3.0],
             text: Some("A".into()),
             cluster_map: None,
+            codes_are_glyphs: false,
             transform: Affine::translate(1.0, 2.0),
             fill: None,
             stroke: None,

@@ -323,6 +323,30 @@ pub struct TextCode {
     pub text: String,
 }
 
+/// One mapping from a stretch of character codes to glyph indices.
+/// GB/T 33190 clause 11.4: a `CGTransform` names the glyphs a run of text
+/// resolves to, the only index space a font without a usable `cmap` has.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct CGTransform {
+    /// Index of the first character of the text this transform covers.
+    #[serde(rename = "CodePosition", default)]
+    pub code_position: usize,
+    /// Number of characters covered; the standard defaults to one.
+    #[serde(rename = "CodeCount", default = "one")]
+    pub code_count: usize,
+    /// Number of glyph indices named; the standard defaults to one.
+    #[serde(rename = "GlyphCount", default = "one")]
+    pub glyph_count: usize,
+    /// The glyph indices, in the font's own glyph space.
+    #[serde(rename = "Glyphs", default)]
+    pub glyphs: Vec<u16>,
+}
+
+/// The default a `CGTransform` count falls back to.
+fn one() -> usize {
+    1
+}
+
 /// Text laid out as one or more runs.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -363,6 +387,9 @@ pub struct TextObject {
     /// Runs of glyphs in this object.
     #[serde(rename = "TextCode", default)]
     pub codes: Vec<TextCode>,
+    /// Glyph transforms the runs carry, clause 11.4.
+    #[serde(rename = "CGTransform", default)]
+    pub cg_transforms: Vec<CGTransform>,
 }
 
 impl TextObject {

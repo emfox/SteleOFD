@@ -6,14 +6,15 @@ use steleofd_error::{FormatError, OfdError, Result, XmlError};
 use steleofd_model::color::{ColorRef, Segment, Shading};
 use steleofd_model::document::{
     CommonData, CompositeGraphicUnit, CompositeGraphicUnitList, DocBody, Document as ModelDocument,
-    DrawParamList, Layer, Location, Multimedia, MultimediaKind, MultimediaList, OfdRoot, Page,
-    PageArea, PageBlock, Pages, Template, TemplateList, TemplatePageList, TemplateRef, Version,
+    DrawParamList, Font, FontList, Layer, Location, Multimedia, MultimediaKind, MultimediaList,
+    OfdRoot, Page, PageArea, PageBlock, Pages, Template, TemplateList, TemplatePageList,
+    TemplateRef, Version,
 };
 use steleofd_model::object::{
-    Action, ActionEvent, ActionKind, Actions, Clip, ClipArea, ClipList, CompositeObject,
-    DashPattern, Dest, DrawParam, FillRuleStyle, GotoTarget, GraphicsUnit, ImageObject,
-    LineCapStyle, LineJoinStyle, MovieAction, MovieOperator, Object, ObjectBase, PathObject,
-    Region, RegionArea, SoundAction, TextCode, TextObject, UriAction,
+    Action, ActionEvent, ActionKind, Actions, CGTransform, Clip, ClipArea, ClipList,
+    CompositeObject, DashPattern, Dest, DrawParam, FillRuleStyle, GotoTarget, GraphicsUnit,
+    ImageObject, LineCapStyle, LineJoinStyle, MovieAction, MovieOperator, Object, ObjectBase,
+    PathObject, Region, RegionArea, SoundAction, TextCode, TextObject, UriAction,
 };
 use steleofd_xml::cursor::Event;
 use steleofd_xml::{Cursor, Node, parse_bool, parse_number_list, parse_number_list_n};
@@ -140,7 +141,7 @@ fn read_common_data(cursor: &mut Cursor<'_>) -> Result<CommonData> {
             }
             Event::Start(n) if n.is("Templates") => data.templates = Some(read_templates(cursor)?),
             Event::Start(n) if n.is("DrawParams") => {
-                data.draw_params = Some(read_draw_params(cursor)?);
+                data.draw_params = Some(read_draw_param_entries(cursor)?);
             }
             Event::Start(other) => cursor.skip_element(&other)?,
             Event::End(_) => break,
@@ -222,7 +223,7 @@ fn read_templates(cursor: &mut Cursor<'_>) -> Result<TemplateList> {
     Ok(list)
 }
 
-fn read_draw_params(cursor: &mut Cursor<'_>) -> Result<DrawParamList> {
+fn read_draw_param_entries(cursor: &mut Cursor<'_>) -> Result<DrawParamList> {
     let mut list = DrawParamList::default();
     loop {
         match cursor.next_event()? {
@@ -967,6 +968,9 @@ fn read_text_object(cursor: &mut Cursor<'_>, node: &Node) -> Result<TextObject> 
         loop {
             match cursor.next_event()? {
                 Event::Start(n) if n.is("TextCode") => t.codes.push(read_text_code(cursor, &n)?),
+                Event::Start(n) if n.is("CGTransform") => {
+                    t.cg_transforms.push(read_cg_transform(cursor, &n)?)
+                }
                 Event::Start(n) if n.is("StrokeColor") => {
                     t.stroke_color = Some(read_color(&n, cursor)?)
                 }
@@ -975,6 +979,39 @@ fn read_text_object(cursor: &mut Cursor<'_>, node: &Node) -> Result<TextObject> 
                 }
                 Event::Start(n) if n.is("Clips") => t.base.clips = Some(read_clips(cursor, &n)?),
                 Event::Start(n) if n.is("Actions") => t.base.actions = Some(read_actions(cursor)?),
+                Event::Start(other) => cursor.skip_element(&other)?,
+                Event::End(_) => break,
+                Event::Eof => break,
+                Event::Text(_) => {}
+            }
+        }
+    }
+    Ok(t)
+}
+
+/// GB/T 33190 clause 11.4: a `CGTransform` covers `CodeCount` characters from
+/// `CodePosition` and names the glyphs that replace them; both default to one.
+fn read_cg_transform(cursor: &mut Cursor<'_>, node: &Node) -> Result<CGTransform> {
+    let a = node.attributes();
+    let mut t = CGTransform {
+        code_position: a
+            .optional_as::<usize>("CGTransform", "CodePosition")?
+            .unwrap_or(0),
+        code_count: a
+            .optional_as::<usize>("CGTransform", "CodeCount")?
+            .unwrap_or(1),
+        glyph_count: a
+            .optional_as::<usize>("CGTransform", "GlyphCount")?
+            .unwrap_or(1),
+        glyphs: Vec::new(),
+    };
+    if !node.is_self_closing() {
+        loop {
+            match cursor.next_event()? {
+                Event::Start(n) if n.is("Glyphs") => {
+                    let raw = cursor.read_text()?;
+                    t.glyphs = parse_number_list("CGTransform", "Glyphs", &raw)?;
+                }
                 Event::Start(other) => cursor.skip_element(&other)?,
                 Event::End(_) => break,
                 Event::Eof => break,
@@ -1050,6 +1087,85 @@ fn read_image_object(cursor: &mut Cursor<'_>, node: &Node) -> Result<ImageObject
         }
     }
     Ok(i)
+}
+
+/// The `BaseLoc` a `Res` table declares, defaulting to `Res` itself.
+/// A scanner, not a full parse: a resource table may be written in Chinese,
+/// so the head is taken by character boundary rather than by byte count.
+pub fn res_base_loc(xml: &str) -> &str {
+    let head = xml.get(..xml.len().min(4096)).unwrap_or(xml);
+    let Some(at) = head.find("BaseLoc=\"") else {
+        return "Res";
+    };
+    let rest = &head[at + 9..];
+    let end = rest.find('"').unwrap_or(rest.len());
+    let value = rest[..end].trim();
+    if value.is_empty() { "Res" } else { value }
+}
+
+/// GB/T 33190 clause 7.8: read a `Res` file's font table. The declaration is
+/// what ties a document font id to a file inside the package, which is the
+/// only place that pairing exists.
+pub fn read_fonts(xml: &str) -> Result<FontList> {
+    let mut cursor = Cursor::new(xml);
+    let mut list = FontList::default();
+    let root = cursor.expect_start("Res")?;
+    if !root.is_self_closing() {
+        // The entries sit under a `Fonts` container; other resource tables
+        // are skipped whole.
+        loop {
+            match cursor.next_event()? {
+                Event::Start(n) if n.is("Fonts") => read_font_entries(&mut cursor, &n, &mut list)?,
+                Event::Start(n) if n.is("Font") => push_font(&mut cursor, &n, &mut list)?,
+                Event::Start(other) => cursor.skip_element(&other)?,
+                Event::End(_) | Event::Eof => break,
+                Event::Text(_) => {}
+            }
+        }
+    }
+    Ok(list)
+}
+
+fn read_font_entries(cursor: &mut Cursor<'_>, node: &Node, list: &mut FontList) -> Result<()> {
+    if node.is_self_closing() {
+        return Ok(());
+    }
+    loop {
+        match cursor.next_event()? {
+            Event::Start(n) if n.is("Font") => push_font(cursor, &n, list)?,
+            Event::Start(other) => cursor.skip_element(&other)?,
+            Event::End(_) | Event::Eof => break,
+            Event::Text(_) => {}
+        }
+    }
+    Ok(())
+}
+
+fn push_font(cursor: &mut Cursor<'_>, node: &Node, list: &mut FontList) -> Result<()> {
+    let a = node.attributes();
+    let Some(id) = a.get("ID").filter(|id| !id.is_empty()) else {
+        // A font nothing can name is not a resource; skipping it whole keeps
+        // the rest of the table loadable.
+        cursor.skip_element(node)?;
+        return Ok(());
+    };
+    let font_file = if node.is_self_closing() {
+        String::new()
+    } else {
+        read_child_text(cursor, "FontFile")?
+    };
+    list.items.push(Font {
+        id: id.to_string(),
+        font_name: a.get("FontName").unwrap_or("").to_string(),
+        family_name: a.get("FamilyName").map(str::to_string),
+        charset: a.get("CharSet").map(str::to_string),
+        bold: match a.get("Bold") {
+            Some(raw) => Some(parse_bool("Font", "Bold", raw)?),
+            None => None,
+        },
+        font_file,
+    });
+    Ok(())
 }
 
 /// GB/T 33190 clause 12: read a `Res` file's multimedia table. The table is

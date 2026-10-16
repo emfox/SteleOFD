@@ -315,7 +315,7 @@ impl SvgSink<'_> {
                 offset += run.advances.get(i - 1).copied().unwrap_or(0.0);
             }
             offset += run.letter_spacing;
-            let Some(outline) = face.outline_for_codepoint(u32::from(gid)) else {
+            let Some(outline) = face.outline_for_run_code(gid, run.codes_are_glyphs) else {
                 continue;
             };
             // Outlines are normalized to 1/1000 em with y pointing up: scale
@@ -795,6 +795,7 @@ mod tests {
             advances: vec![3.5, 3.5],
             text: Some("a<b".into()),
             cluster_map: None,
+            codes_are_glyphs: false,
             transform: Affine::translate(12.0, 30.0),
             fill: Some(Paint::Solid(Color::BLACK)),
             stroke: None,
@@ -820,6 +821,7 @@ mod tests {
             advances: vec![3.0],
             text: Some("A".into()),
             cluster_map: None,
+            codes_are_glyphs: false,
             transform: Affine::translate(1.0, 2.0).then(Affine::rotate_deg(90.0)),
             fill: None,
             stroke: None,
@@ -843,6 +845,7 @@ mod tests {
             advances: vec![3.0],
             text: None,
             cluster_map: None,
+            codes_are_glyphs: false,
             transform: Affine::IDENTITY,
             fill: None,
             stroke: None,
@@ -866,6 +869,7 @@ mod tests {
             advances: Vec::new(),
             text: Some(String::new()),
             cluster_map: None,
+            codes_are_glyphs: false,
             transform: Affine::IDENTITY,
             fill: None,
             stroke: None,

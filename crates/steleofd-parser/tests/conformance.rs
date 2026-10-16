@@ -425,8 +425,8 @@ fn gb_t_33190_9_2_rule_selects_the_fill_rule() {
     assert_eq!(rule_of(""), PaintRule::NonZero);
 }
 
-/// The first `Text` op a page with one text object produces.
-fn glyph_run(object_attrs: &str, code: &str) -> steleofd_display::text::GlyphRun {
+/// Every `Text` op a page with one text object produces.
+fn glyph_runs(object_attrs: &str, code: &str) -> Vec<steleofd_display::text::GlyphRun> {
     let page_xml = document_xml(&format!(
         r#"<Page ID="1"><Content><Layer>
   <TextObject ID="10" Boundary="0 0 100 30" Font="3" Size="5" {object_attrs}>
@@ -443,10 +443,18 @@ fn glyph_run(object_attrs: &str, code: &str) -> steleofd_display::text::GlyphRun
     let page = parser.page_display(&doc, 0).expect("flatten page");
     page.ops
         .iter()
-        .find_map(|op| match op {
+        .filter_map(|op| match op {
             DrawOp::Text(run) => Some(run.clone()),
             _ => None,
         })
+        .collect()
+}
+
+/// The first `Text` op a page with one text object produces.
+fn glyph_run(object_attrs: &str, code: &str) -> steleofd_display::text::GlyphRun {
+    glyph_runs(object_attrs, code)
+        .into_iter()
+        .next()
         .expect("text run")
 }
 
@@ -503,6 +511,98 @@ fn gb_t_33190_11_4_h_scale_is_applied_to_the_run_transform() {
     );
     let (ox, oy) = run.transform.apply(0.0, 0.0);
     assert_eq!((ox, oy), (10.0, 0.0), "the origin itself does not move");
+}
+
+#[test]
+fn gb_t_33190_11_4_a_transform_names_the_glyphs_of_the_characters_it_covers() {
+    // One-to-one: every character gets the glyph the transform names, and the
+    // run then holds indices into the font's own glyph space, which is the
+    // only space a font without a usable cmap can be addressed in.
+    let runs = glyph_runs(
+        "",
+        r#"<CGTransform CodePosition="0" CodeCount="3" GlyphCount="3"><Glyphs>7 8 9</Glyphs></CGTransform>
+           <TextCode X="0" Y="0">ABC</TextCode>"#,
+    );
+    assert_eq!(runs.len(), 1);
+    assert_eq!(runs[0].glyphs, vec![7, 8, 9]);
+    assert!(
+        runs[0].codes_are_glyphs,
+        "the codes are glyph indices, not code points"
+    );
+    assert_eq!(
+        runs[0].plain_text(),
+        "ABC",
+        "the characters stay for search"
+    );
+    assert_eq!(runs[0].cluster_map.as_deref(), Some(&[0u32, 1, 2][..]));
+}
+
+#[test]
+fn gb_t_33190_11_4_characters_outside_the_transform_keep_their_code_points() {
+    // A transform covers the range it names; the rest of the text is drawn as
+    // code points in runs of its own, each placed where the last one ended.
+    let runs = glyph_runs(
+        "",
+        r#"<CGTransform CodePosition="1" CodeCount="2" GlyphCount="2"><Glyphs>7 8</Glyphs></CGTransform>
+           <TextCode X="0" Y="0">ABCD</TextCode>"#,
+    );
+    assert_eq!(runs.len(), 3);
+    assert_eq!(runs[0].glyphs, vec![65], "A is a code point");
+    assert!(!runs[0].codes_are_glyphs);
+    assert_eq!(runs[1].glyphs, vec![7, 8], "BC are the named glyphs");
+    assert!(runs[1].codes_are_glyphs);
+    assert_eq!(runs[1].plain_text(), "BC");
+    // The glyph run starts after A's advance, and D after both of theirs; the
+    // size is 5mm per glyph.
+    let (x, _) = runs[1].transform.apply(0.0, 0.0);
+    assert_eq!(x, 5.0);
+    let (x, _) = runs[2].transform.apply(0.0, 0.0);
+    assert_eq!(x, 15.0);
+}
+
+#[test]
+fn gb_t_33190_11_4_many_characters_may_share_one_glyph() {
+    // Many-to-one: two characters, one glyph, anchored to the first of them
+    // so a search hit still finds the text it came from.
+    let runs = glyph_runs(
+        "",
+        r#"<CGTransform CodePosition="0" CodeCount="2" GlyphCount="1"><Glyphs>9</Glyphs></CGTransform>
+           <TextCode X="0" Y="0">AB</TextCode>"#,
+    );
+    assert_eq!(runs.len(), 1);
+    assert_eq!(runs[0].glyphs, vec![9]);
+    assert_eq!(runs[0].cluster_map.as_deref(), Some(&[0u32][..]));
+    assert_eq!(runs[0].plain_text(), "AB");
+}
+
+#[test]
+fn gb_t_33190_11_4_one_character_may_expand_into_many_glyphs() {
+    // One-to-many: a single character, several glyphs, every one of them
+    // anchored to the character that produced it.
+    let runs = glyph_runs(
+        "",
+        r#"<CGTransform CodePosition="0" CodeCount="1" GlyphCount="3"><Glyphs>4 5 6</Glyphs></CGTransform>
+           <TextCode X="0" Y="0">A</TextCode>"#,
+    );
+    assert_eq!(runs.len(), 1);
+    assert_eq!(runs[0].glyphs, vec![4, 5, 6]);
+    assert_eq!(runs[0].cluster_map.as_deref(), Some(&[0u32, 0, 0][..]));
+    assert_eq!(runs[0].plain_text(), "A");
+}
+
+#[test]
+fn gb_t_33190_11_4_absent_counts_default_to_one_character() {
+    // CodeCount and GlyphCount default to one; the transform then covers a
+    // single character and the rest of the text is untouched.
+    let runs = glyph_runs(
+        "",
+        r#"<CGTransform CodePosition="0"><Glyphs>7</Glyphs></CGTransform>
+           <TextCode X="0" Y="0">AB</TextCode>"#,
+    );
+    assert_eq!(runs.len(), 2);
+    assert_eq!(runs[0].glyphs, vec![7]);
+    assert_eq!(runs[1].glyphs, vec![66], "B keeps its code point");
+    assert!(!runs[1].codes_are_glyphs);
 }
 
 #[test]

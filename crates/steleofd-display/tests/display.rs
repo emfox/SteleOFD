@@ -44,6 +44,7 @@ fn text_run(bbox: Rect) -> GlyphRun {
         advances: vec![1.0, 1.0, 1.0],
         text: Some("abc".to_string()),
         cluster_map: Some(vec![0, 1, 2]),
+        codes_are_glyphs: false,
         transform: Affine::IDENTITY,
         fill: Some(Paint::Solid(steleofd_display::ops::Color::BLACK)),
         stroke: None,

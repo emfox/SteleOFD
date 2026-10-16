@@ -147,6 +147,7 @@ mod tests {
             advances: vec![10.0],
             text: Some("A".into()),
             cluster_map: None,
+            codes_are_glyphs: false,
             transform: Affine::translate(10.0, 10.0),
             fill: Some(Paint::Solid(Color::BLACK)),
             stroke: None,

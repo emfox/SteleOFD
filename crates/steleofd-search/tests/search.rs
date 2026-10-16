@@ -15,6 +15,7 @@ fn run(text: &str, bbox: Rect, per_glyph: f64) -> GlyphRun {
         advances: vec![per_glyph; text.chars().count()],
         text: Some(text.to_string()),
         cluster_map: Some((0..text.chars().count() as u32).collect()),
+        codes_are_glyphs: false,
         transform: Affine::IDENTITY,
         fill: None,
         stroke: None,

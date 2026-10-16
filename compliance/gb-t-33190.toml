@@ -283,6 +283,11 @@ title = "Glyph transformation"
 status = "verified"
 tests = [
     "gb_t_33190_11_4_h_scale_is_applied_to_the_run_transform",
+    "gb_t_33190_11_4_a_transform_names_the_glyphs_of_the_characters_it_covers",
+    "gb_t_33190_11_4_characters_outside_the_transform_keep_their_code_points",
+    "gb_t_33190_11_4_many_characters_may_share_one_glyph",
+    "gb_t_33190_11_4_one_character_may_expand_into_many_glyphs",
+    "gb_t_33190_11_4_absent_counts_default_to_one_character",
 ]
 
 [[item]]

@@ -238,6 +238,39 @@ impl MultimediaKind {
     }
 }
 
+/// GB/T 33190 clause 7.8: the fonts a document embeds. A text object names
+/// one by id, and the declaration is the only thing that says which file in
+/// the package that id means.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FontList {
+    /// One entry per declared font.
+    #[serde(rename = "Font", default)]
+    pub items: Vec<Font>,
+}
+
+/// One declared font.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Font {
+    /// Resource id, referenced by a text object's `Font`.
+    #[serde(rename = "ID")]
+    pub id: crate::RefId,
+    /// Name of the font as the writer knows it.
+    #[serde(rename = "FontName", default)]
+    pub font_name: String,
+    /// Family name, when the declaration carries one.
+    #[serde(rename = "FamilyName", skip_serializing_if = "Option::is_none")]
+    pub family_name: Option<String>,
+    /// Character set the face covers, such as `prc` or `unicode`.
+    #[serde(rename = "CharSet", skip_serializing_if = "Option::is_none")]
+    pub charset: Option<String>,
+    /// Whether the face is bold.
+    #[serde(rename = "Bold", skip_serializing_if = "Option::is_none")]
+    pub bold: Option<bool>,
+    /// Path of the font file, relative to the table's `BaseLoc`.
+    #[serde(rename = "FontFile", default)]
+    pub font_file: String,
+}
+
 /// GB/T 33190 clause 13: the vector graphics a document embeds. A
 /// `CompositeObject` on a page names one of these by `ResourceID`.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]

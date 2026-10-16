@@ -225,6 +225,7 @@ mod tests {
             advances: vec![1.5],
             text: Some("A".to_string()),
             cluster_map: None,
+            codes_are_glyphs: false,
             transform: Affine::IDENTITY,
             fill: Some(Paint::Solid(Color::BLACK)),
             stroke: None,

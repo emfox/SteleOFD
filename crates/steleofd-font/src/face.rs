@@ -5,6 +5,7 @@ use std::sync::Arc;
 use steleofd_error::{FontError, Result};
 use steleofd_geometry::{Path, PathSegment};
 
+use crate::cff;
 use crate::metrics::{FontMetrics, GlyphOutline};
 use crate::registry::FontId;
 
@@ -18,6 +19,11 @@ pub struct FontFace {
     is_fallback: bool,
     metrics: FontMetrics,
     units_per_em: f64,
+    /// Whether the face is keyed by CID, which decides how the glyph codes
+    /// of a `CGTransform` run are read.
+    cid_keyed: bool,
+    /// CID to glyph id, sorted by CID and empty for every other face.
+    cid_to_gid: Vec<(u16, u16)>,
 }
 
 impl std::fmt::Debug for FontFace {
@@ -27,14 +33,28 @@ impl std::fmt::Debug for FontFace {
             .field("family", &self.family)
             .field("bytes", &self.data.len())
             .field("is_fallback", &self.is_fallback)
+            .field("cid_keyed", &self.cid_keyed)
             .finish()
     }
 }
 
 impl FontFace {
-    /// Validate the font data and precompute metrics.
-    /// Invalid fonts fail at load time rather than surfacing during rendering.
+    /// Validate the font data and precompute metrics, so a bad font fails at
+    /// load time. A bare CFF is wrapped in an sfnt directory before the backend reads it.
     pub fn new(id: FontId, family: String, data: Arc<Vec<u8>>, is_fallback: bool) -> Result<Self> {
+        let (data, cid_keyed, cid_to_gid) = if cff::is_bare_cff(&data) {
+            let cids = cff::cid_charset(&data);
+            let wrapped = cff::wrap_bare_cff(&data).ok_or_else(|| {
+                FontError::Parse("a bare CFF font could not be wrapped".to_string())
+            })?;
+            (
+                Arc::new(wrapped),
+                cids.is_some(),
+                cid_to_gid(cids.as_deref()),
+            )
+        } else {
+            (data, false, Vec::new())
+        };
         let (units_per_em, metrics) = {
             let face = ttf_parser::Face::parse(data.as_slice(), 0)
                 .map_err(|e| FontError::Parse(format!("font parse failed: {e:?}")))?;
@@ -63,6 +83,8 @@ impl FontFace {
             is_fallback,
             metrics,
             units_per_em,
+            cid_keyed,
+            cid_to_gid,
         })
     }
 
@@ -91,9 +113,32 @@ impl FontFace {
         self.metrics
     }
 
-    /// Raw font bytes.
+    /// Raw font bytes. A bare CFF arrives as one and is stored as the sfnt
+    /// wrapper the backend reads, since that is what every query runs on.
     pub fn data(&self) -> &Arc<Vec<u8>> {
         &self.data
+    }
+
+    /// Glyph id for a CID, the index space a CID-keyed font's `CGTransform`
+    /// names. A face that is not keyed by CID has no map and answers `None`.
+    pub fn glyph_for_cid(&self, cid: u16) -> Option<u16> {
+        let at = self
+            .cid_to_gid
+            .binary_search_by(|(c, _)| c.cmp(&cid))
+            .ok()?;
+        Some(self.cid_to_gid[at].1)
+    }
+
+    /// Outline for one entry of a display-list glyph run: a `CGTransform` run
+    /// holds glyph indices, any other run Unicode code points.
+    pub fn outline_for_run_code(&self, code: u16, glyph_index: bool) -> Option<Path> {
+        if !glyph_index {
+            return self.outline_for_codepoint(u32::from(code));
+        }
+        if self.cid_keyed {
+            return self.glyph_for_cid(code).and_then(|gid| self.outline(gid));
+        }
+        self.outline(code)
     }
 
     /// Build a temporary backend face for one query.
@@ -175,6 +220,22 @@ impl FontFace {
     }
 }
 
+/// Turn a charset read off a CID-keyed CFF into the reverse map a glyph
+/// lookup wants: CID to glyph id, sorted by CID, with `.notdef` left out.
+/// A CID the charset names twice keeps its first glyph id.
+fn cid_to_gid(cids: Option<&[u16]>) -> Vec<(u16, u16)> {
+    let mut out: Vec<(u16, u16)> = cids
+        .unwrap_or(&[])
+        .iter()
+        .enumerate()
+        .skip(1)
+        .map(|(gid, cid)| (*cid, gid as u16))
+        .collect();
+    out.sort_unstable_by_key(|(cid, _)| *cid);
+    out.dedup_by_key(|(cid, _)| *cid);
+    out
+}
+
 /// Adapts the backend outline callbacks into this crate's `Path`.
 struct OutlineBuilder {
     path: Path,
@@ -213,5 +274,57 @@ impl ttf_parser::OutlineBuilder for OutlineBuilder {
 
     fn close(&mut self) {
         self.path.segments.push(PathSegment::Close);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::cff::tests::synthetic_cff;
+
+    fn face_of(data: &[u8]) -> FontFace {
+        FontFace::new(
+            FontId(1),
+            "TestCFF".to_string(),
+            Arc::new(data.to_vec()),
+            false,
+        )
+        .expect("the face loads")
+    }
+
+    #[test]
+    fn a_bare_cff_face_loads_and_keeps_its_cid_map() {
+        let face = face_of(&synthetic_cff());
+        assert_eq!(face.units_per_em(), 1000.0);
+        assert_eq!(face.glyph_for_cid(963), Some(1));
+        assert_eq!(face.glyph_for_cid(1217), Some(2));
+        assert_eq!(face.glyph_for_cid(0), None, ".notdef has no CID");
+        assert_eq!(face.glyph_for_cid(1), None, "a glyph id is not a CID");
+    }
+
+    #[test]
+    fn a_cid_run_resolves_through_the_charset() {
+        let face = face_of(&synthetic_cff());
+        let outline = face
+            .outline_for_run_code(963, true)
+            .expect("the CID names a glyph");
+        assert_eq!(outline.segments.len(), 6, "a square is four lines");
+        // The other direction is a code point, and a CFF has no cmap, so it
+        // finds nothing rather than the wrong glyph.
+        assert!(face.outline_for_run_code(963, false).is_none());
+    }
+
+    #[test]
+    fn an_sfnt_face_answers_cid_lookups_with_nothing() {
+        let orbitron = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../steleofd-render/tests/data/Orbitron-Bold.ttf"
+        ))
+        .expect("font fixture");
+        let face = face_of(&orbitron);
+        assert!(face.glyph_for_cid(963).is_none());
+        // Without a CGTransform the codes stay code points, which is the
+        // path every document without one already takes.
+        assert!(face.outline_for_run_code('A' as u16, false).is_some());
     }
 }

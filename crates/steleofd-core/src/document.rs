@@ -10,9 +10,6 @@ use steleofd_model::document::Document as ModelDocument;
 use steleofd_package::Package;
 use steleofd_parser::{ParsedDocument, Parser};
 
-/// Font file extensions recognised when scanning a container.
-const FONT_EXTENSIONS: [&str; 6] = ["ttf", "otf", "ttc", "otc", "woff", "woff2"];
-
 /// An opened OFD document: pages flattened and container fonts registered,
 /// so every capability works against the same prepared state.
 pub struct Document {
@@ -253,46 +250,34 @@ impl Document {
     }
 }
 
-/// Register every font file under the document directory.
-/// Returns the document id to manager id pairing, sorted on both sides.
+/// Register the fonts the document declares, keyed by the id the display list
+/// references. Referenced but undeclared ids point at one system substitute,
+/// so a document that names a font without shipping it still renders.
 fn register_container_fonts(
     package: &mut Package,
     doc_dir: &str,
     fonts: &mut FontManager,
     list: &DisplayList,
 ) -> HashMap<u32, FontId> {
-    let prefix = if doc_dir.is_empty() {
-        String::new()
-    } else {
-        format!("{doc_dir}/")
-    };
-    let mut paths: Vec<String> = package
-        .entries()
-        .iter()
-        .filter(|path| path.starts_with(&prefix) && is_font_path(path))
-        .cloned()
-        .collect();
-    paths.sort();
-
-    let mut registered = Vec::with_capacity(paths.len());
-    for path in &paths {
-        let Ok(data) = package.read(path) else {
+    let mut map: HashMap<u32, FontId> = HashMap::new();
+    let used = used_font_ids(list);
+    let declared = steleofd_parser::fonts::load_fonts(package, doc_dir).unwrap_or_default();
+    for id in &used {
+        let Some(resource) = declared.get(id) else {
             continue;
         };
-        let family = path
-            .rsplit('/')
-            .next()
-            .and_then(|name| name.split('.').next())
-            .unwrap_or("embedded")
-            .to_string();
-        let id =
-            fonts
-                .registry_mut()
-                .register_embedded(path.clone(), family, std::sync::Arc::new(data));
-        registered.push(id);
+        let family = if resource.family.is_empty() {
+            "embedded".to_string()
+        } else {
+            resource.family.clone()
+        };
+        let registered = fonts.registry_mut().register_embedded(
+            resource.path.clone(),
+            family,
+            resource.data.clone(),
+        );
+        map.insert(*id, registered);
     }
-    let used = used_font_ids(list);
-    let mut map: HashMap<u32, FontId> = used.iter().copied().zip(registered).collect();
 
     // Referenced but not embedded: point those ids at one system substitute, so
     // a document that names a font without shipping it still renders.
@@ -325,12 +310,6 @@ fn used_font_ids(list: &DisplayList) -> Vec<u32> {
         }
     }
     used.into_iter().collect()
-}
-
-/// Whether a container path looks like a font file.
-fn is_font_path(path: &str) -> bool {
-    let extension = path.rsplit('.').next().unwrap_or("").to_ascii_lowercase();
-    FONT_EXTENSIONS.contains(&extension.as_str())
 }
 
 /// Rewrite font ids in the display list through the pairing.

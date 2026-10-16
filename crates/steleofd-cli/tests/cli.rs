@@ -69,6 +69,12 @@ fn fixture_path() -> PathBuf {
             "Doc_0/Pages/Page_0/Content.xml",
             CONTENT_XML.as_bytes().to_vec(),
         ),
+        (
+            "Doc_0/PublicRes.xml",
+            br#"<?xml version="1.0" encoding="UTF-8"?>
+<Res BaseLoc="Res"><Fonts><Font ID="7" FontName="Orbitron"><FontFile>Orbitron-Bold.ttf</FontFile></Font></Fonts></Res>"#
+                .to_vec(),
+        ),
         ("Doc_0/Res/Orbitron-Bold.ttf", font_bytes()),
     ];
     let borrowed: Vec<(&str, &[u8])> = entries
