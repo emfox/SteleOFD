@@ -275,11 +275,17 @@ deployable.
 
 Absent features, not wrong ones, so they sit below the correctness band.
 
-- **M5-a** Paint the colour spaces clause 7.13 declares. The declaration side
-  is done: the `ColorSpaces` table is read at open and
+- **M5-a** `[x]` ~~Paint the colour spaces clause 7.13 declares. The declaration
+  side is done: the `ColorSpaces` table is read at open and
   `ParsedDocument::color_spaces` carries each space's type, depth, profile and
   palette. What is left is the painting side — no backend consumes the table
-  yet, so an image naming a CMYK space is still decoded as sRGB.
+  yet, so an image naming a CMYK space is still decoded as sRGB.~~ The painting
+  side is done for colour values: a `FillColor` or `StrokeColor` naming a space
+  has its channels read in that space at flatten time, a four-channel list
+  being CMYK and a single channel grey, and an `Index` picks the palette entry.
+  A colour whose space is absent or unknown keeps its ordinary sRGB reading, so
+  nothing that worked before changes. An image's own colour space rides in its
+  encoded bytes and is converted by the decoder, so it needed no table lookup.
 - **M5-b** `[x]` ~~The three shading and fill models still standing as
   deviations: `Pattern` (8.3.5), `GouraudShd` (8.3.6) and `LaGouraudShd`
   (8.3.7). Each needs a painter, not just a reader.~~ All three are done.
