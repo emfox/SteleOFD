@@ -48,6 +48,9 @@ impl eframe::App for Reader {
         if let Some(format) = requests.export {
             export_with_dialog(&mut self.app, format);
         }
+        if requests.print {
+            print_current_view(&mut self.app);
+        }
         self.sync_title(ui);
         if requests.quit {
             ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
@@ -113,4 +116,17 @@ fn export_with_dialog(app: &mut App, requested: ExportFormat) {
         return;
     };
     app.export_to(format, pages, destination);
+}
+
+/// Print what the reader is looking at. Neither `egui` nor `eframe` prints, so
+/// the pages on screen are laid out and rasterized here; reaching a printer is
+/// the desktop's own path, and a job that will not rasterize is reported.
+fn print_current_view(app: &mut App) {
+    let Some(pages) = app.take_print_request() else {
+        return;
+    };
+    if pages.is_empty() {
+        return;
+    }
+    app.print_to(pages, app.print_settings());
 }

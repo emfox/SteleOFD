@@ -37,6 +37,8 @@ pub enum Action {
     Open,
     /// Ask the host to write a PDF of the pages on screen.
     ExportPdf,
+    /// Ask the host to print the pages on screen.
+    Print,
 }
 
 /// How much one zoom step moves the resolution, in dots per inch.
@@ -67,6 +69,7 @@ fn action_for(key: Key, modifiers: Modifiers) -> Option<Action> {
             Key::O => Some(Action::Open),
             Key::F => Some(Action::ToggleSearch),
             Key::S => Some(Action::ExportPdf),
+            Key::P => Some(Action::Print),
             // The browser's find shortcut. The key carries a slash, not the
             // question mark some layouts print on it: the binding follows the
             // hardware, because the layout is not ours to interpret.

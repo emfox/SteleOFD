@@ -6,6 +6,7 @@ use steleofd_core::{Document, SearchOptions, VerifyStatus};
 use steleofd_i18n::{I18n, MessageId};
 
 use crate::export_worker::{ExportFormat, ExportQueue, ExportRequest};
+use crate::print_worker::{PrintQueue, PrintRequest};
 use crate::render_worker::RenderQueue;
 use crate::shortcuts::{self, ZOOM_STEP};
 use crate::viewer::{self, DroppedFile, Layout, PageCache};
@@ -51,6 +52,17 @@ pub struct App {
     export_report: Option<ExportReport>,
     /// The format the reader asked to export, waiting for a destination.
     want_export: Option<ExportFormat>,
+    /// The worker that lays the pages out and rasterizes them for printing.
+    prints: Option<PrintQueue>,
+    /// The stamp the newest print job was asked under.
+    print_generation: u64,
+    /// What the newest finished job came to, for the status bar to report.
+    print_report: Option<PrintReport>,
+    /// Set while the reader has asked to print but the host has not answered.
+    want_print: bool,
+    /// The settings the newest job was submitted with, so the report quotes
+    /// them rather than guessing them back from the rasters.
+    print_settings: Option<steleofd_print::PrintSettings>,
     error: Option<AppError>,
     info: Option<String>,
     want_open: bool,
@@ -66,6 +78,19 @@ pub struct ExportReport {
     pub pages: usize,
     /// Where the files landed.
     pub written: Vec<PathBuf>,
+}
+
+/// What one finished print job came to, in the reader's terms. The sheets are
+/// kept rather than thrown away, so a caller can tell what a job produced
+/// without repeating the rasterization to find out.
+#[derive(Debug, Clone)]
+pub struct PrintReport {
+    /// What each planned page came to.
+    pub sheets: Vec<crate::print_worker::SheetReport>,
+    /// How many sheets the job consumes, which duplexing halves.
+    pub sheet_count: usize,
+    /// The settings the job ran under, kept for the status bar's wording.
+    pub settings: steleofd_print::PrintSettings,
 }
 
 /// What the reader needs to know about one signature. The verdict comes from
@@ -160,6 +185,11 @@ impl App {
             export_generation: 0,
             export_report: None,
             want_export: None,
+            prints: None,
+            print_generation: 0,
+            print_report: None,
+            want_print: false,
+            print_settings: None,
             error: None,
             info: None,
             want_open: false,
@@ -285,6 +315,10 @@ impl App {
         self.exports = None;
         self.export_report = None;
         self.want_export = None;
+        self.prints = None;
+        self.print_report = None;
+        self.want_print = false;
+        self.print_settings = None;
     }
 
     /// The one-line description of the open document, for the status bar.
@@ -490,6 +524,7 @@ impl App {
     /// during the last frame is on screen in this one.
     pub fn poll(&mut self) {
         self.collect_exports();
+        self.collect_prints();
         let Some(queue) = self.queue.as_mut() else {
             return;
         };
@@ -539,6 +574,7 @@ impl App {
             Action::FocusSearch | Action::Escape => {}
             Action::Open => self.request_open(),
             Action::ExportPdf => self.request_export(crate::export_worker::ExportFormat::Pdf),
+            Action::Print => self.request_print(),
         }
     }
 
@@ -999,8 +1035,151 @@ impl App {
         })
     }
 
+    /// Ask to print the pages on screen. The host answers by choosing a
+    /// printer and handing the settings back, because only the platform knows
+    /// what the printer on this machine can do.
+    pub fn request_print(&mut self) {
+        if !self.is_open() {
+            return;
+        }
+        self.want_print = true;
+    }
+
+    /// Whether the host should ask the platform for a printer.
+    pub fn wants_print(&self) -> bool {
+        self.want_print
+    }
+
+    /// Consume the print request, yielding the pages to lay out.
+    pub fn take_print_request(&mut self) -> Option<Vec<usize>> {
+        if !std::mem::take(&mut self.want_print) {
+            return None;
+        }
+        Some(self.print_pages())
+    }
+
+    /// The pages a print job covers: the reader's selection, not the whole
+    /// document, so a spread prints as the two pages shown and a search result
+    /// prints the page it found.
+    pub fn print_pages(&self) -> Vec<usize> {
+        if self.page_count() == 0 {
+            return Vec::new();
+        }
+        self.visible()
+    }
+
+    /// Lay `pages` out under `settings` and rasterize them, off the draw path.
+    /// Starting a job drops the previous report, so the status bar never
+    /// describes a sheet that has already been replaced.
+    pub fn print_to(&mut self, pages: Vec<usize>, settings: steleofd_print::PrintSettings) {
+        let Some(bytes) = self.bytes.clone() else {
+            return;
+        };
+        if pages.is_empty() {
+            return;
+        }
+        self.print_generation += 1;
+        let generation = self.print_generation;
+        self.print_report = None;
+        self.print_settings = Some(settings.clone());
+        let queue = self.prints.get_or_insert_with(|| PrintQueue::spawn(bytes));
+        queue.submit(PrintRequest {
+            generation,
+            pages,
+            settings,
+        });
+    }
+
+    /// Whether a print job is still being laid out.
+    pub fn is_printing(&self) -> bool {
+        self.prints.as_ref().is_some_and(PrintQueue::is_busy)
+    }
+
+    /// What the newest finished job produced, if it has finished.
+    pub fn print_report(&self) -> Option<&PrintReport> {
+        self.print_report.as_ref()
+    }
+
+    /// Collect finished jobs into the report and the error line. A job that
+    /// will not plan produces no sheets, so nothing is reported and the reason
+    /// stands alone rather than beside an empty sheet count.
+    pub fn collect_prints(&mut self) {
+        let Some(queue) = self.prints.as_mut() else {
+            return;
+        };
+        for result in queue.drain() {
+            match result.outcome {
+                Ok(()) => {
+                    let settings = self
+                        .print_settings
+                        .clone()
+                        .unwrap_or_else(|| self.print_settings());
+                    self.print_report = Some(PrintReport {
+                        sheets: result.planned,
+                        sheet_count: result.sheets,
+                        settings,
+                    });
+                    self.info = None;
+                }
+                Err(message) => self.set_error(message),
+            }
+        }
+    }
+
+    /// What the status bar says about the last job. It names the page count
+    /// and the sheet count separately, so a job that puts two pages on one
+    /// sheet does not look halved.
+    pub fn print_label(&self) -> Option<String> {
+        let report = self.print_report.as_ref()?;
+        Some(
+            self.i18n.text_with(
+                MessageId::ReaderPrintDone,
+                [
+                    ("pages", report.sheets.len().to_string().into()),
+                    ("sheets", report.sheet_count.to_string().into()),
+                    (
+                        "paper",
+                        self.i18n
+                            .text(match report.settings.paper {
+                                steleofd_print::PaperSize::A3 => MessageId::ReaderPaperA3,
+                                steleofd_print::PaperSize::A4 => MessageId::ReaderPaperA4,
+                                steleofd_print::PaperSize::A5 => MessageId::ReaderPaperA5,
+                                steleofd_print::PaperSize::B5 => MessageId::ReaderPaperB5,
+                                steleofd_print::PaperSize::Letter => MessageId::ReaderPaperLetter,
+                                steleofd_print::PaperSize::Legal => MessageId::ReaderPaperLegal,
+                                steleofd_print::PaperSize::Document => {
+                                    MessageId::ReaderPaperDocument
+                                }
+                                // A custom size has no name in any language, so it
+                                // is announced as the document's own paper rather
+                                // than as a number the reader did not choose.
+                                steleofd_print::PaperSize::Custom { .. } => {
+                                    MessageId::ReaderPaperDocument
+                                }
+                            })
+                            .into(),
+                    ),
+                ],
+            ),
+        )
+    }
+
+    /// The label on the toolbar control that starts a print job.
+    pub fn print_label_text(&self) -> String {
+        self.i18n.text(MessageId::ReaderPrint)
+    }
+
+    /// The settings a job runs under when nothing else says otherwise. The
+    /// paper follows the document rather than a fixed size, so a page that is
+    /// already A4 is not shrunk onto another sheet on the way to the printer.
+    pub fn print_settings(&self) -> steleofd_print::PrintSettings {
+        steleofd_print::PrintSettings {
+            paper: steleofd_print::PaperSize::Document,
+            ..steleofd_print::PrintSettings::default()
+        }
+    }
+
     /// Open a file the platform handed over, choosing bytes or path.
-    ///
     /// Some desktops send bytes and others a path; the path is cheaper.
     pub fn open_dropped(&mut self, dropped: DroppedFile) -> Result<(), AppError> {
         match dropped {

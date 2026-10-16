@@ -20,6 +20,9 @@ pub struct WindowRequests {
     pub open_dialog: bool,
     /// The reader asked where to write an export; the host asks the platform.
     pub export: Option<ExportFormat>,
+    /// The reader asked to print; the host lays the job out on the platform's
+    /// paper and hands the sheets to a printer.
+    pub print: bool,
     /// The reader wants the window closed.
     pub quit: bool,
 }
@@ -49,6 +52,7 @@ pub fn draw(ui: &mut Ui, app: &mut App) -> WindowRequests {
     // is what asks the platform where a file should land, and it needs the
     // page selection this window does not own.
     requests.export = app.wants_export();
+    requests.print = app.wants_print();
     requests
 }
 
@@ -104,6 +108,11 @@ fn act(app: &mut App, action: shortcuts::Action, requests: &mut WindowRequests) 
     if action == shortcuts::Action::ExportPdf {
         app.apply(action);
         requests.export = app.wants_export();
+        return;
+    }
+    if action == shortcuts::Action::Print {
+        app.apply(action);
+        requests.print = app.wants_print();
         return;
     }
     app.apply(action);
@@ -212,7 +221,18 @@ fn draw_locales(ui: &mut Ui, app: &mut App) {
 /// disables while an export runs so two cannot interleave their files.
 fn draw_exports(ui: &mut Ui, app: &mut App) {
     let busy = app.is_exporting();
+    let printing = app.is_printing();
     ui.label(app.i18n().text(MessageId::ReaderExport));
+    let print = app.print_label_text();
+    // Printing is bounded by the paper the reader has, not by a file, so the
+    // button hands the job to the host at once rather than holding a request
+    // open while a dialog is up.
+    if ui
+        .add_enabled(app.is_open() && !printing, egui::Button::new(print))
+        .clicked()
+    {
+        app.request_print();
+    }
     let pdf = app.i18n().text(MessageId::ReaderExportPdf);
     if ui
         .add_enabled(app.is_open() && !busy, egui::Button::new(pdf))

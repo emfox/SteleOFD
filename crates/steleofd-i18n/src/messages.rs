@@ -76,6 +76,24 @@ pub enum MessageId {
     ReaderExportPdfTitle,
     /// Title of the platform dialog choosing where the PNG files go
     ReaderExportPngTitle,
+    /// Print the pages on screen
+    ReaderPrint,
+    /// A print job finished, with its page count, sheet count and paper
+    ReaderPrintDone,
+    /// Paper size A3, as a printer names it
+    ReaderPaperA3,
+    /// Paper size A4, as a printer names it
+    ReaderPaperA4,
+    /// Paper size A5, as a printer names it
+    ReaderPaperA5,
+    /// Paper size B5, as a printer names it
+    ReaderPaperB5,
+    /// Paper size Letter, as a printer names it
+    ReaderPaperLetter,
+    /// Paper size Legal, as a printer names it
+    ReaderPaperLegal,
+    /// The paper the document itself declares
+    ReaderPaperDocument,
     /// Name of this language, written in itself
     LocaleNameEn,
     /// Name of the Chinese locale, written in itself
@@ -240,6 +258,15 @@ impl MessageId {
             Self::ReaderExportPngDone => "reader-export-png-done",
             Self::ReaderExportPdfTitle => "reader-export-pdf-title",
             Self::ReaderExportPngTitle => "reader-export-png-title",
+            Self::ReaderPrint => "reader-print",
+            Self::ReaderPrintDone => "reader-print-done",
+            Self::ReaderPaperA3 => "reader-paper-a3",
+            Self::ReaderPaperA4 => "reader-paper-a4",
+            Self::ReaderPaperA5 => "reader-paper-a5",
+            Self::ReaderPaperB5 => "reader-paper-b5",
+            Self::ReaderPaperLetter => "reader-paper-letter",
+            Self::ReaderPaperLegal => "reader-paper-legal",
+            Self::ReaderPaperDocument => "reader-paper-document",
             Self::LocaleNameEn => "locale-name-en",
             Self::LocaleNameZh => "locale-name-zh",
 
@@ -353,6 +380,15 @@ impl MessageId {
         Self::ReaderExportPngDone,
         Self::ReaderExportPdfTitle,
         Self::ReaderExportPngTitle,
+        Self::ReaderPrint,
+        Self::ReaderPrintDone,
+        Self::ReaderPaperA3,
+        Self::ReaderPaperA4,
+        Self::ReaderPaperA5,
+        Self::ReaderPaperB5,
+        Self::ReaderPaperLetter,
+        Self::ReaderPaperLegal,
+        Self::ReaderPaperDocument,
         Self::LocaleNameEn,
         Self::LocaleNameZh,
         // Conversion
@@ -424,6 +460,7 @@ impl MessageId {
                 | Self::ReaderInfo
                 | Self::ReaderPageOf
                 | Self::ReaderZoom
+                | Self::ReaderPrintDone
                 | Self::ConvertProgress
                 | Self::ConvertFailed
                 | Self::SignCount

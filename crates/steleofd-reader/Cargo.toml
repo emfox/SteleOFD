@@ -17,11 +17,14 @@ path = "src/lib.rs"
 [dependencies]
 # The facade re-exports the option and verdict types its own methods take, so
 # the reader names them through `steleofd-core` and depends on nothing below.
-steleofd-core = { workspace = true, features = ["render", "search"] }
+steleofd-core = { workspace = true, features = ["render", "search", "pdf", "print"] }
 # Search hits carry a page-space rectangle, and `Rect` is defined here.
 steleofd-common.workspace = true
 steleofd-i18n.workspace = true
 steleofd-error.workspace = true
+# The reader prints what it shows, so it plans print jobs through the facade
+# and names the settings types that go with them.
+steleofd-print.workspace = true
 egui.workspace = true
 eframe.workspace = true
 rfd = "0.17"

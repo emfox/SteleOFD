@@ -5196,6 +5196,7 @@ dependencies = [
  "steleofd-core",
  "steleofd-error",
  "steleofd-i18n",
+ "steleofd-print",
  "steleofd-testkit",
 ]
 
