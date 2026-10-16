@@ -255,7 +255,12 @@ legal carrier needs.
   verification already tolerates an extended container: only the files a
   descriptor names move its check value, so a page or a second signature added
   afterwards leaves an earlier seal `Valid`.
-- **M3-b** Timestamp countersignature verification.
+- **M3-b** Timestamp countersignature verification. Deferred: the 2016 schema
+  has no timestamp element — `Signatures.xsd` and `Signature.xsd` carry a
+  signature list and a descriptor, and nothing else — so a timestamp travels
+  as a non-standard extension and verifying one needs a decision about which
+  profile (RFC 3161 or a national equivalent) and which container to read it
+  from, not an implementation.
 - **M3-c** The archival profile. `steleofd-archive` checks an OFD against the
   archival rules; it needs the profile document it checks against named, and
   the four `deviation` clauses above are the natural first inputs. GB/T
