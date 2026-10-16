@@ -303,6 +303,7 @@ fn register_container_fonts(
 ) -> Result<HashMap<u32, FontId>> {
     let mut map: HashMap<u32, FontId> = HashMap::new();
     let used = used_font_ids(list);
+    let glyphs = used_glyphs(list);
     let declared = steleofd_parser::fonts::load_fonts(package, doc_dir)?;
     for id in &used {
         let Some(resource) = declared.get(id) else {
@@ -313,11 +314,19 @@ fn register_container_fonts(
         } else {
             resource.family.clone()
         };
-        let registered = fonts.registry_mut().register_embedded(
-            resource.path.clone(),
-            family,
-            resource.data.clone(),
-        );
+        // Only the glyphs this document draws are worth carrying: a face can
+        // be an order of magnitude smaller without them, and nothing outside
+        // the display list can be asked for at render time.
+        let data = match glyphs.get(id).and_then(|set| set.as_ref()) {
+            Some(set) => {
+                std::sync::Arc::new(steleofd_font::subset(&resource.data, set.iter().copied()))
+            }
+            None => resource.data.clone(),
+        };
+        let registered =
+            fonts
+                .registry_mut()
+                .register_embedded(resource.path.clone(), family, data);
         map.insert(*id, registered);
     }
 
@@ -352,6 +361,30 @@ fn used_font_ids(list: &DisplayList) -> Vec<u32> {
         }
     }
     used.into_iter().collect()
+}
+
+/// The glyphs each font id is asked to draw, so a face can be subset to them.
+/// A run carrying code points cannot name its glyphs without the face, so that
+/// font is marked `None` and left whole rather than guessed at.
+fn used_glyphs(list: &DisplayList) -> HashMap<u32, Option<BTreeSet<u16>>> {
+    let mut used: HashMap<u32, Option<BTreeSet<u16>>> = HashMap::new();
+    for page in &list.pages {
+        for op in &page.ops {
+            let DrawOp::Text(run) = op else {
+                continue;
+            };
+            let entry = used
+                .entry(run.font.0)
+                .or_insert_with(|| Some(BTreeSet::new()));
+            match entry {
+                // Code points: without the face the glyph ids are unknown.
+                _ if !run.codes_are_glyphs => *entry = None,
+                Some(set) => set.extend(run.glyphs.iter().copied()),
+                None => {}
+            }
+        }
+    }
+    used
 }
 
 /// Rewrite font ids in the display list through the pairing.
