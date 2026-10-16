@@ -289,15 +289,27 @@ Absent features, not wrong ones, so they sit below the correctness band.
   implementations (M0-c is the corpus half of this), round-trip the
   standard's own examples if the working group publishes any, and the Office
   conversion the `office` feature on `convert` and `core` names as a
-  placeholder. OCR rides with it. First pass done: the nine-page golden book
-  was rendered by another vendor's reader and compared page by page. Five pages
-  agree to anti-aliasing; the four that differ are the oracle's own shortfalls
-  — `Clip` drops the object, `AxialShd` and `RadialShd` paint solid black, and
-  a page box wider than `CommonData.PageArea` is ignored. The comparison paid
-  for itself in the other direction too: it exposed three defects in our own
-  fixtures and reader — `FillRule` for `Rule`, `Fill`/`Stroke` defaults taken
-  from the wrong model, and path coordinates read as absolute where the
-  standard makes them offsets from the boundary corner.
+  placeholder. OCR rides with it. The nine-page golden book was rendered by
+  another vendor's reader and compared page by page. Five pages agree to
+  anti-aliasing; the four that differ were re-checked against the standard's
+  own text, because the vendor is one of the four bodies that drafted it and a
+  difference is not evidence of a fault on their side. That audit holds: each
+  of the four is a gap in the oracle, measured, not assumed.
+  `AxialShd` and `RadialShd` come out as one flat black — its gradient page has
+  a single non-white colour and its radial page two colours, where ours carry
+  a ramp of hundreds. A page box wider than `CommonData.PageArea` is ignored:
+  it renders the 297x100 mm page into a 1.67 ratio box, ours into 2.97. And on
+  the clip page it draws the clip area as a bare outline rather than a mask,
+  so the object it should confine is never filled — the outline sits exactly on
+  the clip rectangle our own render confines the fill to, and tables 34 and 35
+  make that fill the required result.
+  The comparison paid for itself in the other direction too: it exposed three
+  defects in our own fixtures and reader — `FillRule` for `Rule`,
+  `Fill`/`Stroke` defaults taken from the wrong model, and path coordinates
+  read as absolute where the standard makes them offsets from the boundary
+  corner. The audit also caught one of ours that the comparison could not see:
+  `Clips` was read with a `TransFlag` attribute that appears nowhere in the
+  standard, so the clip always took the default branch.
 
 ### M6. The reader, completed (M6-a … M6-f)
 
