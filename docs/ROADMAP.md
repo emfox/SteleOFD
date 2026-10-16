@@ -8,13 +8,16 @@ work is no longer "build the next crate" but "make what exists trustworthy,
 then make it fast, then make it complete". Each horizon states its exit
 criterion, so it is always obvious whether it is done.
 
+Finished tasks are one line: struck through, no explanation. Open tasks carry
+the note a person would need to start them.
+
 ## Where the project stands
 
 | Measure | Value |
 | --- | --- |
 | Crates | 26 (L0 foundation through L5 delivery) |
-| Source | 37,356 lines of Rust, measured with `find crates -name '*.rs'` |
-| Tests | 900 passing, plus 33 inline unit-test modules |
+| Source | 37,725 lines of Rust, measured with `find crates -name '*.rs'` |
+| Tests | 910 passing, plus 33 inline unit-test modules |
 | Delivery forms | `cli`, `wasm`, `ffi`, `server`, `reader`, all on the `core` facade |
 | Standard clauses | 74 registered in GB/T 33190-2016, 66 covered, 8 `deviation` with a stated reason |
 | Languages | `en-US` and `zh-CN`, 88 message keys, parity enforced in CI |
@@ -25,67 +28,53 @@ criterion, so it is always obvious whether it is done.
 These are the things a new contributor would otherwise discover the hard way.
 Each one is a real, verified finding, not a guess.
 
-1. **Every one of the 47 standard clauses now has a test asserting it**, up from
-   20 before N2. One stays honestly short of `verified`: `8.4` is `partial`
-   because only a `Path` clip area is read and a `Text` area is rejected with an
-   explicit error. The register in `compliance/gb-t-33190.toml` is the source of
+1. **Two clauses stay short of `verified`.** `8.4` is `partial` because only a
+   `Path` clip area is read and a `Text` area is rejected with an explicit
+   error; `8.4` is the one place the register and the code disagree on
+   purpose. The register in `compliance/gb-t-33190.toml` is the source of
    truth and lists the status of each by name.
-2. **`criterion` is declared in the workspace but never used.** `proptest` is
-   now in use (N3-a/N3-b), but benchmarks still do not exist: zero references to
-   `criterion` outside the root `Cargo.toml`.
+2. **The documented format support outran the code, until now.** Five cargo
+   features (`render`'s `backend-canvas`/`backend-svg`/`backend-pdf`, and
+   `convert`'s `office`/`ocr`) were declared and referenced nowhere, while
+   `README` advertised "HTML and Office" conversion. The three empty render
+   backends are gone; `office` and `ocr` stay as named placeholders with a
+   comment saying nothing consumes them. M6 is where they would land.
 3. **The OFD corpus is one file.** `compliance/corpus/minimal.ofd` is the only
    document the XSD validation and the test suites actually read.
-4. ~~**The signed-fixture builder is duplicated four times** across the `sign`,
-   `wasm`, `ffi` and `server` test suites, each with its own hand-rolled base64,
-   DER and SM2 certificate construction.~~ Closed by N1: `steleofd-testkit`
-   holds all of it and the four suites import from there.
-5. **`README.zh-CN.md` is behind the English README.** It still shows P3 and P5
+4. **`README.zh-CN.md` is behind the English README.** It still shows P3 and P5
    as unfinished and names a next step that no longer exists.
-6. **Six crates have no dedicated integration test directory.** `convert`
-   (2,848 lines), `xml`, `model`, `font`, `display` and `render` are covered
-   only by inline unit tests, not by tests that drive the public API as a
-   consumer would.
-7. **No release automation.** No `CHANGELOG`, no version-bump or publish
+5. **Six crates have no dedicated integration test directory.** `xml`, `model`,
+   `font`, `display` and `render` are covered only by inline unit tests, not by
+   tests that drive the public API as a consumer would.
+6. **No release automation.** No `CHANGELOG`, no version-bump or publish
    workflow, no `cargo-semver-checks` gate. `Cargo.toml` declares `0.1.0`
    everywhere and nothing tracks whether a change breaks a public API.
-8. **The reader exists but is barely a reader.** `crates/steleofd-reader`
-   (U1-a, U1-b) opens a document, rasterizes pages, navigates and caches, and
-   consumes the `locales/*/reader.ftl` strings. What is still missing is
-   everything below the surface: search, signatures, annotations, export,
-   keyboard shortcuts, accessibility, and a layout that actually honours the
-   facing and continuous choices in the menu. The window's zones and frame
-   flow are specified in [`UI-SPEC.md`](UI-SPEC.md); the rules there are what
-   the remaining reader work will be built against.
+7. **The reader exists but is barely a reader.** It opens, rasterizes,
+   navigates, searches, verifies, exports and takes the keyboard. What is still
+   missing is annotation display, document comparison and a packaged build.
+   See M7.
 
 ---
 
 ## Near term: earn the word "done"
 
-Nothing here adds capability. Everything here makes the 25 existing crates
+Nothing here adds capability. Everything here makes the existing crates
 trustworthy to someone who did not write them. Exit criterion: a new
 contributor can clone, test, and trust the project without asking a question.
 
 ### N1. A shared test kit (N1-a … N1-c)
 
-Extract the four copies of the fixture builder into a `steleofd-testkit`
-crate, so a document shape is defined once and each delivery crate pins the
-same bytes.
-
-- **N1-a** `[x]` ~~`crates/steleofd-testkit` carries the OFD zip builder, the base64/DER/SM2-certificate helpers, and the signed and unsigned fixtures. It brings its own two self-tests, one of which verifies the signed fixture with the engine's own `verify_signature`, so the fixture cannot drift from the engine without a red test.~~
-- **N1-b** `[x]` ~~`sign`, `wasm`, `ffi` and `server` now import from it, and about 800 lines of duplicated builders were deleted. The suites kept their case counts, except `sign`, which regained two `18.2.4` cases the migration had dropped in silence — the conformance register is what caught that.~~
-- **N1-c** `[x]` ~~It is a `[dev-dependencies]` entry everywhere and declares `publish = false`; `cargo tree -p <crate> -e normal` finds it in none of the four release graphs.~~
+- **N1-a** `[x]` ~~`steleofd-testkit` carries the OFD zip builder, the base64/DER/SM2-certificate helpers, and the signed and unsigned fixtures.~~
+- **N1-b** `[x]` ~~`sign`, `wasm`, `ffi` and `server` import from it; about 800 lines of duplicated builders deleted.~~
+- **N1-c** `[x]` ~~It is a `[dev-dependencies]` entry everywhere and declares `publish = false`.~~
 
 ### N2. Close the untested-clause gap, lowest risk first (N2-a … N2-e)
 
-Twenty-seven clauses, ordered so that each step is independently useful and
-the cheap structural ones land before the expensive rendering ones.
-
-- **N2-a** `[x]` ~~The structural clauses that need no rendering — `5.4`, `6.1`, `7.1`, `7.2`, `19.1`, `20.1` and `A.1`. The version clause caught the model's silent default: a document with no `Version` attribute reports `1`, not an error.~~
-- **N2-b** `[x]` ~~Drawing parameters: `8.2.1` draw parameter structure, `8.2.2` line join, `8.2.4` dash pattern, `8.2.5` line cap, `9.2` fill rule. Writing these against the annex A schemas turned up three real parser bugs, all now fixed: the cap and join attributes are named `Cap` and `Join`; `DashPattern` is an `ST_Array` attribute with a `DashOffset` sibling rather than a child element; and the `Rule` attribute on `PathObject` was never read, so every path was filled non-zero.~~
-- **N2-c** `[x]` ~~Text and font: `11.1` font, `11.3` text positioning, `11.4` glyph transformation, `7.8` outlines. Four more real gaps surfaced here — `DeltaY` was not parsed, `DeltaX` was parsed but never applied, `HScale` was ignored, and `TextObject.Stroke`/`Fill` meant text could never be outlined. All four are now read and flattened.~~
-- **N2-d** `[x]` ~~Graphics features: `8.3.4` gradient, `8.4` clip area, `9.1` path object. Gradients meant the parser had to stop skipping `FillColor` children, and clip areas are emitted as a `ClipPath` between a `Save`/`Restore` pair. `8.4` stays `partial`: only a `Path` area is read, and a `Text` area is rejected with an explicit error rather than silently dropped.~~
-- **N2-e** `[x]` ~~The feature tail: `12` video, `13` composite object, `14.1` action description, `15` annotations, `16` custom tags, `17` extended information, `18.2.2` signature scope, `18.2.3` signature appearance. Reading the schemas first paid off three times — `18.2.2` was wrong in the fixture as well as the parser, `18.2.3` was wrong about `SignedValue` being a path rather than the proof inline, and `12`/`13` turned out to be resource clauses rather than page-object ones. All are now read, and the clause count closes at `47 of 47`.~~
-- **N2-e extras** ~~`Action` is modelled as the schema declares it: `Event` is a required enumeration, so an unknown spelling is a parse error rather than a silent default, and the body is a choice of `Goto`, `URI`, `GotoA`, `Sound` or `Movie`, each read into its own shape. `MovieOperator` and `ActionEvent` keep the standard's spelling on one side and a Rust enum on the other, so callers never match on strings.~~
+- **N2-a** `[x]` ~~Structural clauses `5.4`, `6.1`, `7.1`, `7.2`, `19.1`, `20.1`, `A.1`.~~
+- **N2-b** `[x]` ~~Drawing parameters `8.2.1`, `8.2.2`, `8.2.4`, `8.2.5`, `9.2`; three parser bugs fixed.~~
+- **N2-c** `[x]` ~~Text and font `11.1`, `11.3`, `11.4`, `7.8`; four flattening gaps fixed.~~
+- **N2-d** `[x]` ~~Graphics features `8.3.4`, `8.4`, `9.1`.~~
+- **N2-e** `[x]` ~~Feature tail `12`, `13`, `14.1`, `15`, `16`, `17`, `18.2.2`, `18.2.3`; clause count closes at 47 of 47.~~
 
 A clause moves to `verified` only when a linked test actually asserts it. The
 gate script stays the single source of truth; `docs/COMPLIANCE.md` is
@@ -93,117 +82,70 @@ regenerated, never hand-edited.
 
 ### N3. Property and fuzz testing (N3-a … N3-d)
 
-This is where `proptest` finally gets used, on the parsers that face hostile
-input.
-
-- **N3-a** `[x]` ~~Property tests for `package`, covering five invariants. The round-trip property found a real defect: `build_archive` used to write a name with a leading slash that its own `Package::open` then refused, so a document could be stored and never read back. The writer now validates names the way the reader does, and a regression test pins the five rejected shapes.~~
-- **N3-b** `[x]` ~~Property tests for `xml` and `model`, asserting the same contract: reading may fail, it must never panic, and a value that parses survives a `Display` round trip. Writing the text property pinned down two behaviours that were previously only implicit — whitespace-only text is skipped, and outer whitespace is trimmed.~~
-- **N3-c** `[x]` ~~`cargo-fuzz` targets for the ZIP and XML readers, in `fuzz/`: `package_open` walks every entry of any archive `Package::from_bytes` accepts, and `xml_cursor` turns a non-terminating walk into a visible failure rather than a stuck process. The crate lives outside the workspace because `cargo-fuzz` requires its own layout, the hand-written seed corpus is committed while libFuzzer's mutations are not, and CI runs both for 20,000 runs under nightly.~~
-- **N3-d** `[x]` ~~A crash-free invariant test that feeds random bytes to every public entry point and asserts only that errors come back (`crates/steleofd-parser/tests/crash_free.rs`).~~
+- **N3-a** `[x]` ~~Property tests for `package`, five invariants; found and fixed a name-normalisation round-trip defect.~~
+- **N3-b** `[x]` ~~Property tests for `xml` and `model`: reading may fail, never panic; a parsed value survives a `Display` round trip.~~
+- **N3-c** `[x]` ~~`cargo-fuzz` targets `package_open` and `xml_cursor` under `fuzz/`, nightly, 20,000 runs in CI.~~
+- **N3-d** `[x]` ~~A crash-free invariant test feeding random bytes to every public entry point.~~
 
 ### N4. Integration tests for the six thin crates (N4-a … N4-f)
 
-One task per crate, each driving the public API as a consumer rather than
-reaching into internals. All six are done, 96 tests in total; each file is a new
-`tests/*.rs` in its crate, so a struct whose fields exist but whose accessors
-disagree now fails a test.
-
-- **N4-a** `[x]` ~~`convert`: SVG shape and geometry, multi-page and empty PDFs, PNG encoding, and the pixel budget. 11 tests.~~
-- **N4-b** `[x]` ~~`xml`: namespace prefixes, absent versus malformed attributes, the cursor walk, the depth ceiling and error positions. 21 tests.~~
-- **N4-c** `[x]` ~~`model`: root validation, page lookup bounds, layer object counts and the out-of-page resource types. 18 tests.~~
-- **N4-d** `[x]` ~~`font`: face loading, codepoint round trips, shaping, metrics, the fallback chain and the missing-font error. 18 tests.~~
-- **N4-e** `[x]` ~~`display`: content bounds, blank detection, the state-stack ceiling, viewport sizing and culling. 17 tests.~~
-- **N4-f** `[x]` ~~`render`: painted pixels for background, fill, clip and transform, plus the pixel budget and the degenerate page box. 11 tests.~~
+- **N4-a** `[x]` ~~`convert`: 11 tests.~~
+- **N4-b** `[x]` ~~`xml`: 21 tests.~~
+- **N4-c** `[x]` ~~`model`: 18 tests.~~
+- **N4-d** `[x]` ~~`font`: 18 tests.~~
+- **N4-e** `[x]` ~~`display`: 17 tests.~~
+- **N4-f** `[x]` ~~`render`: 11 tests.~~
 
 ### N5. Documentation and release hygiene (N5-a … N5-d)
 
-- **N5-a** `[x]` ~~`README.zh-CN.md` is level with `README.md` again: the same roadmap and the same clause coverage.~~
-- **N5-b** `[x]` ~~`CHANGELOG.md`, following Keep a Changelog and driven by the conventional-commit history.~~
-- **N5-c** `[x]` ~~`cargo-semver-checks` in CI so a breaking public-API change fails the build rather than surprising a downstream user. The job compares against the latest `v*` tag; with no tag yet it reports that there is no published API to protect and skips, so it is honest now and active later.~~
-- **N5-d** `[x]` ~~A release workflow triggered by a `v*` tag, building the `cdylib`, `staticlib` and wasm artefacts and attaching the generated C header and the wasm bindings to the GitHub release. The header check makes a stale committed header fail the release rather than ship.~~
+- **N5-a** `[x]` ~~`README.zh-CN.md` level with `README.md` again.~~ (behind once more; see Honest gaps 4)
+- **N5-b** `[x]` ~~`CHANGELOG.md`, following Keep a Changelog, driven by the conventional-commit history.~~
+- **N5-c** `[x]` ~~`cargo-semver-checks` in CI, comparing against the latest `v*` tag.~~
+- **N5-d** `[x]` ~~A release workflow on a `v*` tag, building `cdylib`, `staticlib` and wasm artefacts.~~
 
-### N6. Corpus and CI (N6-a … N6-b)
+### N6. Corpus and CI (N6-a … N6-c)
 
-- **N6-a** `[x]` ~~`compliance/corpus/features/` joins `minimal/`: one eleven-entry document reaching the parts of annex A the minimal corpus never touched, which conforms to the normative schemas and opens, audits, renders, searches and converts through the CLI. Writing it found two real defects — `scripts/validate_ofd.py` routed a root of `Annotation` to a schema that declares `PageAnnot`, and `features/` pointed four entries at `Doc_0/`-prefixed paths that clause 5 makes relative to the document root — and forced two contract clarifications: `Signatures` identifiers are `xs:ID` so they cannot begin with a digit, and a `Signature`'s `BaseLoc` is a full archive path. A container may carry XML in its own vocabulary, so `validate_ofd.py` grew an explicit `--allow-foreign` opt-in. `scripts/pack_corpus.py --check` runs in CI so a source edit cannot leave the committed archive stale.~~
-
-- **N6-b** `[x]` ~~The `coverage` job is in CI: `cargo-llvm-cov` over the whole workspace with every feature on, and the measured baseline is **87.56% lines, 88.16% functions, 88.37% regions** with the floor set at **85%** — low enough that ordinary work never trips it, high enough that losing a module's tests does. The measurement uses the rustup `llvm-tools-preview` component, whose `llvm-cov`/`llvm-profdata` match the toolchain's LLVM; the system copies are LLVM 18 against rustc's LLVM 21 and fail with a raw-profile version mismatch.~~
-
-- **N6-c** `[x]` ~~CI installs a pinned toolchain, **1.99.0**, rather than following `stable`. A rolling `stable` turns every lint upstream ships into a red build nobody asked for: a stricter `dead_code` for fields that are written but never read arrived in 1.94, and `chunks_exact_to_as_chunks` in 1.99. Both reached CI first and both cost a push to discover, because no local toolchain could see them; upgrading is now a deliberate commit a sandbox can match before it lands. Four fixes travelled with the pin. `-D warnings` moved off the workflow's global `RUSTFLAGS`, where it also applied to every dependency crate, onto the clippy invocation that means to carry it — and had to be restored a second time, because zeroing `RUSTFLAGS` took it away from a clippy line that had never passed it itself, which left the gate quietly open. The step that turns findings into commit annotations ended in a `grep` whose exit status fails the step under `bash -e`, so a clean run was the one that went red; it now tolerates matching nothing. The `third-party-corpus` job compares what opens against a checked-in `KNOWN_UNPARSED` list, so a sample that cannot open is recorded as known instead of failing the build, and the list is empty since S1-g closed the last of them. And four `chunks_exact`/`chunks_exact_mut` loops became `as_chunks`/`as_chunks_mut` — two of them in crates a cached result had been hiding from clippy, which is why they surfaced one push at a time.~~
+- **N6-a** `[x]` ~~`compliance/corpus/features/` joins `minimal/`; found two real defects and grew `--allow-foreign`.~~
+- **N6-b** `[x]` ~~The `coverage` job: `cargo-llvm-cov` over the workspace, baseline 87.56% lines with an 85% floor.~~
+- **N6-c** `[x]` ~~CI pins toolchain 1.99.0 rather than following `stable`.~~
 
 ### N7. The desktop reader, first surface (U1-a … U1-c)
 
-The reader is the one thing this project is obviously for, and it does not
-exist. Everything below the interface is finished: the engine opens a
-document, reports its facts, rasterizes any page to PNG or SVG, searches it
-and verifies its signatures. What is missing is the layer that calls those in
-the right order and puts a person in front of the result.
-
-It is a **native desktop application**, not a web page. It links the engine
-directly, so opening a document involves no upload, no server and no copy of
-the document leaving the machine — which is the point, for the government and
-finance offices this format is used in.
-
-The interface strings already exist. `locales/*/reader.ftl` carries ten of
-them in both languages, from the page counter to facing-pages mode, and no
-code reads them yet. The work is to build the surface they were written for,
-not to invent a new one.
-
-**The framework is `egui`/`eframe`, and the reason is the build.** It is
-pure Rust, so the reader is one more workspace member rather than a second
-toolchain, and `cargo build --workspace` keeps working unchanged. Its cost is
-that accessibility has to be wired up by hand in U3-c.
-
-- [x] **U1-a** ~~Stand up `crates/steleofd-reader`: an `eframe` application that depends on `core` directly, with a window, a menu bar and a document area. Builds on a headless runner with no system package beyond the fontconfig headers CI already installs.~~
-- [x] **U1-b** ~~Open a file through a native dialog and through drag and drop, show the document facts, and wire the page counter and navigation to `reader-page-of`, `reader-blank-page` and `reader-open`. The window's zones and per-frame flow are fixed in [UI-SPEC.md](UI-SPEC.md), the four-zone window is drawn from panels, and the canvas state is decided in `App`, which keeps it testable without a display.~~
-- [x] **U1-c** ~~Prove the path in CI: `tests/window.rs` runs the real widget tree through `egui_kittest` with no display and no X server, clicking the actual toolbar buttons and reading labels out of the catalogue. It immediately earned its keep — it found a slider labelled with the raw `{ $percent }` template, and a page rasterized wider than the driver's texture limit at high zoom, which `egui` answers with a panic.~~
+- [x] **U1-a** ~~A window, a menu bar and a document area in `crates/steleofd-reader`, pure `egui`/`eframe` on `core`.~~
+- [x] **U1-b** ~~Open via dialog and drag-and-drop, document facts, page counter and navigation wired to `reader-*` strings.~~
+- [x] **U1-c** ~~`tests/window.rs` drives the real widget tree through `egui_kittest` with no display.~~
 
 Exit criterion: a person can open an `.ofd` in a native window and read every
 page.
 
 ### N8. Layout, zoom and search (U2-a … U2-c)
 
-- **U2-a** `[x]` ~~`reader-layout-*` is live: `viewer::visible_pages` is a pure function from a layout, a current page and a page count to the pages on screen, paging steps by the layout's stride, and `steleofd-testkit` gained `multipage_archive` since a one-page fixture has no arrangement to assert.~~
-- **U2-b** `[x]` ~~Rendering moved off the draw path into `render_worker`, a thread with its own `Document` and a channel pair, so a page that has not landed is `Canvas::Pending` rather than a stall. Zoom is real: `Fit::Width`/`Fit::Page` resolve through `viewer::fit_dpi` against the space the canvas actually has, and cancellation is by generation. Writing this exposed three liveness bugs only a real frame loop produces, all fixed and covered: a superseded request swallowed the queue behind it, a request was skipped when nothing was left to answer it, and restamping the same request every frame kept the worker rendering rasters the next frame had already replaced — so "ask once per frame" is only safe if an identical ask is recognised as identical, which is what `RenderQueue::request` now guarantees.~~
-- **U2-c** `[x]` ~~The search panel is live as zone Z5, drawn before the canvas so the canvas measures the space actually left for pages; hits are reduced to page, snippet and rectangle, selecting a hit turns to its page, and the canvas outlines every hit with the current one stronger. `reader-no-match` is deliberately narrow — an empty query, or one made with no document open, is not a failed search.~~
+- **U2-a** `[x]` ~~`reader-layout-*` is live; `viewer::visible_pages` is a pure function of layout, page and count.~~
+- **U2-b** `[x]` ~~Rendering moved off the draw path into `render_worker`; real zoom and generation-based cancellation.~~
+- **U2-c** `[x]` ~~The search panel as zone Z5, hits reduced to page, snippet and rectangle, canvas highlight.~~
 
 ### N9. Verification, export and access (U3-a … U3-c)
 
-- **U3-a** `[x]` ~~A signature panel as zone Z6, drawn before the canvas so the canvas measures the space actually left for pages. It shows one row per signature with its verdict, signer, signing time and algorithm, and verification runs on the document once when the panel first opens rather than per signature, because asking the engine per signature re-reads the package each time. Three verdicts rather than two: the engine can only conclude good or bad and reports a signature it has no certificate for as an error, and flattening that into "tampered" would tell the reader their document was altered when nothing says it was — so an unverifiable signature is amber, not red.~~
-- **U3-b** `[x]` ~~The menu can export what the reader is looking at, as one PDF or as one PNG per page, and the range is the visible selection rather than a span — a spread exports as the two pages shown, because a reader in front of a document is asking about the page in front of them. `document_to_pdf_pages` on the convert capability takes a list for exactly this reason, and repeats are honoured because a caller may want one page twice. The window cannot know where a file belongs, so it writes the request into `App` and reports the format; the host asks the platform, which names a file for PDF and a folder for PNG. Conversion runs on its own thread for the same reason rasterizing does, and unlike a render it is never superseded. One bug worth recording came out of the tests: the status line counted written files, so a two-page PDF announced "1 page", and the two formats are now counted differently — a PDF in pages, PNG in files, because that is what appears on disk.~~
-- **U3-c** `[x]` ~~Keyboard navigation throughout, so the reader is fully operable without a mouse, plus a locale switch that pulls from the existing catalogues. The key table is a pure function over key, modifiers and whether a document is open, which is the only way to test a keybinding without a keyboard, and a shortcut reaches the same `App` method the toolbar button does, so the two cannot drift apart — a test asserts they land in the same state. Keys resolve in the last of the ten frame steps, after every panel is drawn, because `egui`'s `TextEdit` consumes keys as it draws and a reader typing a search term would otherwise have the page turn under the cursor on every `s`. `Escape` has two states and which one it means is a pure function too: the search box holds focus first, so the first `Escape` surrenders focus and only the second closes the panel. With no document open, page and zoom keys resolve to nothing rather than to an error, because a reader who has not opened a file is not doing something wrong. Language names are written in their own language and come from the catalogues rather than from a match in the source, and switching keeps the pages already rasterized — the page is pixels, the label is a word.~~
+- **U3-a** `[x]` ~~A signature panel as zone Z6, with three verdicts so an unverifiable signature is amber, not red.~~
+- **U3-b** `[x]` ~~Export the visible selection as one PDF or one PNG per page, off the draw path.~~
+- **U3-c** `[x]` ~~Full keyboard navigation and a locale switch from the existing catalogues.~~
 
 ### N10. Second-implementation corpus (S1-a, S1-b)
 
-The hand-written corpus under `compliance/corpus/` covers one clause each,
-which is what it is for, and for exactly that reason it only covers what its
-author already thought of. Opening another implementation's test documents is
-the cheapest way to find the constructs nobody thought of, and it found six.
+- **S1-a** `[x]` ~~`scripts/fetch_corpus.py` pins documents from the reference Java implementation; nothing committed.~~
+- **S1-b** `[x]` ~~Twenty-eight documents opened, six constructs fixed, each covered by `tests/third_party.rs`.~~
 
-- **S1-a** `[x]` ~~`scripts/fetch_corpus.py` pins a list of documents from the reference Java implementation, which is Apache-2.0 and so the one corpus worth taking rather than one worth asking about twice. Nothing is committed: the samples are large, they are not ours to redistribute, and a vendored copy rots against upstream. Each entry carries the reason it is in the list, because a sample nobody can explain is a sample nobody maintains, and a sample keeps the name its producer gave it, CJK included, because a renamed sample loses the only link back to where it came from — the corpus directory is exempt from the language policy for that reason, and it is fetched rather than committed, so none of it is source and none of it is built.~~
-- **S1-b** `[x]` ~~Twenty-eight documents opened, twelve of which failed, and every failure was a hard parse error rather than a page that looked slightly wrong — which is why none of them surfaced earlier. Six constructs were wrong: `DeltaX` accepts `g` for "the adjustment the glyph before had", which is how a Chinese invoice spaces a whole run; `TemplatePage` hangs off `CommonData` with no wrapper element, so every templated document was refused; `B` is a cubic Bezier from the current point and draws the supervisory seal; `DocRoot` may carry a leading slash; `<Color>` may write `#ee #20 #25`, hex channels that each carry their own marker, and reading that as one six-digit string refused a coloured invoice while the same document's `#0 #0 #0` passed, which is how the bug hid; and a colour carrying a gradient has no flat value, so a gradient-filled text run read as an invalid colour. All six are covered by `tests/third_party.rs`. What was left then was one document whose zip is truncated and two that referenced a resource they did not contain — one of them named for it. The clip list that this parser could not read is read now, in S1-f, which is what opened the scanned invoice; that document then meets a different wall, described under M2-a, and the last of the three is closed by S1-g.~~
+### N11. Image resources reach the page (S1-c … S1-g)
 
-### N11. Image resources reach the page (S1-c, S1-d, S1-e)
-
-The corpus work above turned up something the hand-written corpus never could
-have: an image placement carried a resource id and no bytes, so every document
-with a photograph, a seal or a QR code in it rendered with the image missing and
-`render` reporting success. Three separate things had to be true for that to
-happen, and all three were true at once.
-
-- **S1-c** `[x]` ~~`read_multimedias` parsed the `MultiMedia` table correctly and nothing ever called it, so the bytes never left the archive. The table is now read when the document opens, the media files are resolved against its `BaseLoc`, and each placement is filled in with the bytes and the encoding its file name implies. `ResolvedResources` was an empty shell with no consumer and is gone. An entry that names audio or video is left out: they share the table, and their bytes are not something a backend can paint.~~
-- **S1-d** `[x]` ~~Even with the bytes attached, nothing appeared, because the placement transform was composed on the wrong side: the offset was scaled by the rectangle's own width, putting the picture about 27,000 pixels off the page. Two more defects sat behind it. A package stores `Doc_0/Document.xml` beside `DOC_0/Res/Image_4.JPEG` in one real sample, so entries are now matched case-insensitively when nothing matches exactly, exact first. And `page_display` reported a page size of 0 for a document with no `PageArea`, which silently scaled everything to fill the page; that one is the sample's own doing and is left alone.~~
-- **S1-f** `[x]` ~~A clip is not one area. Clause 8.4 builds `Clips` from `Clip` elements and each `Clip` from `Area` elements, and both levels cover the **union** of what they name — the standard says so in the note to `Clips` in table 34, and again for the areas of one clip. This parser had read only the first area of the first clip and refused the rest with an error, which cost it a 42-page scanned invoice. It now reads every area of every clip into one path of several subpaths, each keeping its own `CTM`, and takes the fill rule from the first area that states one. The union is what the areas mean, and a single path is how a backend expresses it: `tiny-skia`'s clip intersects, so the areas have to arrive together or the second would eat the first.~~
-- **S1-e** `[x]` ~~JBIG2 is the encoding a scanned invoice carries and `image` does not read it, so it takes a separate path through `hayro-jbig2` with the `simd` feature off: that leaves `hayro-jbig2` and `hayro-ccitt` as the only things in the tree, both of which forbid unsafe code. The sample in the corpus decodes to a 100x100 QR code, which is now a test fixture. Taking that crate is why `rust-version` moves from 1.85 to 1.92, which in turn is why six existing `if` statements became let-chains and two modulo tests became `is_multiple_of`: a newer toolchain lints the code it did not used to.~~
-- **S1-g** `[x]` ~~`KNOWN_UNPARSED` is empty: all sixteen samples present open. The last two fell to three defects, each of the kind that hides behind a passing suite. `DrawParams` was read only from `CommonData`, where the annex A schema does not put it — `Document.xsd` allows `MaxUnitID`, `PageArea`, `PublicRes`, `DocumentRes`, `TemplatePage` and `DefaultCS` under `CommonData` and no `DrawParams`, while `Res.xsd` allows the table under `Res`, which is where every producer in the corpus puts it, so a path naming an id that was declared and visible painted as if it did not exist. The table is now read from `PublicRes.xml` and `DocumentRes.xml` beside `CommonData`, which is kept for the documents that do put it there. Second, table 36 gives `S` its own operator — the point a subpath starts at — and a producer in the corpus opens every path with it, so legal path data was refused as malformed. Third, JBIG2 reached the raster backend and nothing else: `image` reads no JBIG2, so a document carrying a scanned QR code rasterized and then failed PDF export with "the image format could not be determined". The PDF sink now decodes a bi-level stream through the same path the raster backend uses and expands it to RGB. Each is pinned by a test, and the whole corpus converts: sixteen samples, three formats, forty-eight conversions, no failures.~~
+- **S1-c** `[x]` ~~The `MultiMedia` table is read at open; media bytes resolved and attached to each placement.~~
+- **S1-d** `[x]` ~~The image placement transform was composed on the wrong side; case-insensitive entry matching added.~~
+- **S1-e** `[x]` ~~JBIG2 through `hayro-jbig2` with `simd` off; `rust-version` moved to 1.92.~~
+- **S1-f** `[x]` ~~A clip is the union of every area of every clip, not just the first.~~
+- **S1-g** `[x]` ~~`KNOWN_UNPARSED` is empty: all sixteen samples open and convert in three formats.~~
 
 ### N12. Where an object's content lands (S2-a)
 
-Opening the scanned invoice above turned out to be the easy half. Of its 42
-pages, 23 rasterize and 19 do not, and several of the 23 are plainly wrong:
-four come out as a single flat colour covering the page, where the same pages
-with the clip taken out carry 180 colours of real content.
-
-- **S2-a** `[x]` ~~An object's clip and its content are not drawn in one coordinate space yet. The corpus settles it once the samples are counted rather than argued about. Across 16 documents, an `ImageObject`'s CTM scale equals its `Boundary` width and height almost without exception — 119 of 121 in the scanned invoice, 4 of 4 in the QR sample, 2 of 2 in the JPEG one — while a `PathObject` follows no such rule in any of them. So the content space is **the unit square plus a CTM that scales it onto the boundary**, not a rectangle placed and then scaled again: image `dst` is now `(0, 0, 1, 1)` and the CTM does the sizing, while path and text data are already millimetres from the boundary corner and the CTM carries a factor instead (0.3528 throughout, points to millimetres). The page position is the boundary translation applied *after* that CTM, not before — the other order scales the offset by 123 and puts the picture 21,000 pixels off the page. Clips disagree in a third way: `Clips/@TransFlag` is `true` by default, meaning the region follows the CTM, but real producers write `false` on nearly every clip because their areas are already boundary millimetres — folding the image's unit-square CTM in once more shrinks the region to nothing. A `false` clip is therefore pulled back through the CTM inverse and shares the object's scope. Two further defects fell out. `tiny-skia`'s `Mask::new` hands back a fully transparent buffer and `intersect_path` only multiplies into it, so every clip this parser built was empty and clipped its object out of existence; the mask now starts opaque and reuses the mask already in scope, which nests clips as intersections. And a path whose abbreviated data ends on a bare `C` leaves an unclosed subpath that encloses nothing when it becomes a mask, so clips close theirs. Verified against the corpus: `helloworld`, `containsJPEG` and `zsbk` now render their picture, photograph and QR code at the boundary the document states.~~
+- **S2-a** `[x]` ~~Content space is the unit square plus a CTM that scales it onto the boundary; clips, masks and the page position all corrected.~~
 
 ---
 
@@ -215,80 +157,56 @@ explicitly documented as a deviation.
 
 ### M1. Performance baselines (M1-a … M1-c)
 
-`criterion` is declared and unused; this is where it earns its place.
-
-- **M1-a** `[x]` ~~Four benchmark targets, one per stage a reader pays for, over a document generated by `steleofd-testkit` rather than committed: a bench needs the same bytes on every machine, and the corpus is fetched. The generator writes `bench_archive(pages)`, a real archive with a real embedded face, 120 mixed objects per page (filled paths, strokes, both shadings, and text runs), so a number measures something a reader would wait for instead of one path and one word. `parse` separates opening from flattening, because opening reads the entry point once and flattening grows with the page count; `convert` measures PNG, SVG and PDF apart, since they share the display list and nothing else; `search` measures building an index apart from querying it, and queries at two hit rates. Every target runs at one page and eight and reports throughput in objects, so the per-page and per-object costs are both visible. The numbers on this machine, at 96 DPI: flatten 430 µs/page, raster 4.3 ms/page, SVG 0.73 ms/page, PDF 2.2 ms/page, search index 26 µs for eight pages, a query 26 µs. Flat across one page and eight, which is what per-page linearity looks like.~~
-- **M1-b** A documented performance budget: pages per second for render, and
-  the document size the parser handles within a stated latency.
-- **M1-c** A CI job that runs the benchmarks and fails only on a large,
-  deliberate regression.
+- **M1-a** `[x]` ~~Four benchmark targets over a generated document, reporting per-page and per-object costs.~~
+- **M1-b** A documented performance budget: pages per second for render, and the document size the parser handles within a stated latency. `docs/PERFORMANCE.md` holds the measured numbers; the budget is what turns them into a pass/fail line.
+- **M1-c** A CI job that runs the benchmarks and fails only on a large, deliberate regression.
 
 ### M2. Font pipeline hardening (M2-a … M2-c)
 
-Fonts are where a document engine most often meets reality.
-
-- **M2-a** `[x]` ~~Two things, both of which had to be true before a face could be drawn at all. A text object names its face by id, and nothing in the engine said which file in the package that id meant — the font table was parsed and then dropped, so every document fell back to a system face. The table is now read from the resource files, resolved against their `BaseLoc`, and carried on the parsed document next to the images. And a bare CFF face, which was the last thing between the 42-page scanned invoice and a full render: its failures were all `font parse failed: UnknownMagic` — **eighteen of its pages** — because three of its twelve embedded faces are raw CFF (`01 00 04 02` / `01 00 04 03`: version 1, header size 4, offset size 2 or 3) rather than sfnt, and `ttf-parser` reads only sfnt. Two of the three even carry `.ttf` and `.otf` names, so the file name cannot be used to tell. A CFF table is now read beside the sfnt ones — `charset`, `charstrings`, the subrs, and the index formats the standard defines rather than the one a TrueType file uses — and the magic decides what a face is, never its extension. Clause 11.4 rides on it: a `CGTransform` names the glyphs a run resolves to, which is the only way into a subset face whose `cmap` no longer covers the text it draws.~~
-- **M2-a extras** `[x]` ~~The other half of M2-a: a documented matrix of CJK, Latin and right-to-left faces, one real face per row, with a test per row. The matrix is [`docs/FONTS.md`](FONTS.md) and the faces it names are Noto subsets under `crates/steleofd-font/tests/data`, cut down to a handful of characters so a test can say exactly what it expects; they are renamed off the Noto Reserved Font Name because a subset is a modified version, and the licence travels with them. Six rows: Latin (each code point its own outlined glyph, proportional advances), Han (ideographs outlined, one shared one-em advance), Hebrew and Arabic (every letter shaped, nothing dropped, clusters and source text kept), a face with no `cmap` at all (outlines by glyph index, which is what clause 11.4 names, and refuses to shape from characters rather than drawing the wrong glyph), and a `.ttc`, whose first face is really read rather than the container being skimmed for a plausible header. What the matrix also does is state the five gaps it found, each pinned by a test so the day it changes the test fails: no `GSUB`/`GPOS`, so no ligatures, no cursive joining and no right-to-left reordering — Hebrew and Arabic come out left to right; no CJK line breaking; only the first face of a collection is addressable; a page whose face will not load fails whole, because nothing populates the fallback chain `FontManager` already has; and no subsetting on the way out. The first and last are M2-c and M2-b.~~
-- **M2-b** Subset embedded fonts instead of carrying whole faces.
-- **M2-c** Make font fallback deterministic and observable, so the same input
-  always produces the same glyphs.
+- **M2-a** `[x]` ~~Faces resolved by declared id, bare CFF read, and the CJK/Latin/RTL matrix in `docs/FONTS.md`.~~
+- **M2-b** Subset embedded fonts instead of carrying whole faces. A document that embeds a 20 MB CJK collection pays for it in every conversion.
+- **M2-c** `[ ]` **mostly open.** The chain is built (`build_fallback_chain`, wired into `Document::open`), every backend reports runs that reach the page short a glyph (`missing_glyph_runs`), a run whose face will not load costs its own run rather than the page (`skipped_font_runs`), and the raster backend now matches the vector ones. What is left is the reader that acts on the chain: nothing re-shapes a run against a fallback face yet, so a code point the run's own face lacks is still dropped rather than looked up in the other faces. Two smaller limits ride along: the registry is filled only from the ids the pages name, so a declared-but-unused face never joins the chain, and a substitute is chained only where one can be resolved. See `docs/FONTS.md` gap 4.
 
 ### M3. Rendering completeness (M3-a … M3-d)
 
 - **M3-a** Colour spaces beyond sRGB, and CMYK for print.
 - **M3-b** Blending and transparency modes.
-- **M3-c** The drawing features N2-b/N2-d verify in tests but only
-  implement; bring each to parity as its clause is verified. The first one is
-  done. Clause 8.3.4 describes a `RadialShd` as the cone between two circles,
-  and only the start circle ever reached a backend — the end centre and radius
-  were parsed and then dropped on the floor. Both now travel with the op, and
-  each backend reduces the cone to what it can paint: a point at the apex with a
-  circle at the far end, the axis between the two centres when the circles are
-  equal, and one flat colour when neither circle has extent. That last case is
-  the one that used to fail a whole page over a single fill, which is what a
-  document that shades a supervisory seal runs into.
-- **M3-d** A golden-image suite: render the corpus to PNG, compare against
-  committed references, and gate on a pixel-difference threshold.
+- **M3-c** Bring each test-verified drawing feature to full parity. The first is done: `RadialShd` end centre and radius now travel with the op and each backend reduces the cone to what it can paint.
+- **M3-d** A golden-image suite: render the corpus to PNG, compare against committed references, gate on a pixel-difference threshold.
+- **M3-e** Move the JBIG2 codec out of `display`. The IR crate carries a full decoder (`display/src/jbig2.rs`, via `hayro-jbig2`) that only `render` and `convert` call; the IR layer should hold data structures, not codecs. A small `steleofd-codec` crate (or an existing lower one) is the home. Deferred because it touches `display`'s public surface and three downstream import paths.
 
 ### M4. Signature depth (M4-a … M4-c)
 
-- **M4-a** `18.2.2` signature scope, and `18.2.3` signature appearance, both
-  verified and both implemented rather than merely tolerated.
-- **M4-b** Seal and incremental update, so a signed document can be extended
-  without breaking its signature.
+- **M4-a** `18.2.2` signature scope and `18.2.3` signature appearance, verified and implemented rather than tolerated.
+- **M4-b** Seal and incremental update, so a signed document can be extended without breaking its signature.
 - **M4-c** Timestamp countersignature verification.
 
 ### M5. Server production readiness (M5-a … M5-e)
 
-The HTTP surface works; it is not yet something to put behind a load balancer.
-
-- **M5-a** Replace the in-memory store with a persistent one, so a restart does
-  not lose every open document.
-- **M5-b** Authentication and per-tenant authorisation. Today any caller who
-  knows a document id can read it.
+- **M5-a** Replace the in-memory store with a persistent one.
+- **M5-b** Authentication and per-tenant authorisation.
 - **M5-c** Rate limiting and a real request timeout budget.
 - **M5-d** OpenAPI documentation generated from the route definitions.
 - **M5-e** Graceful drain, so a rolling deploy does not cut a render in half.
 
-### M6. Interoperability (M6-a … M6-b)
+### M6. Interoperability (M6-a … M6-c)
 
-- **M6-a** Test against documents produced by other real OFD implementations,
-  not only our own builder.
-- **M6-b** Round-trip tests against the standard's own examples, if the
-  working group publishes any.
+- **M6-a** Test against documents produced by other real OFD implementations, not only our own builder.
+- **M6-b** Round-trip tests against the standard's own examples, if the working group publishes any.
+- **M6-c** Office conversion. The `office` feature on `convert` and `core` is a named placeholder that compiles and changes nothing; this is where it gains an implementation. OCR (the `ocr` feature) rides with it.
 
 ### M7. The reader, completed
 
-The first surface in N7 is deliberately minimal. This is where the reader
-grows into the tool the standard's feature set actually implies.
+- **M7-a** Annotation display and navigation, once clause 15 is verified.
+- **M7-b** Signature appearance rendering, once `18.2.3` is implemented.
+- **M7-c** A document comparison view for two revisions of the same file.
+- **M7-d** Print, straight from the reader's current view.
+- **M7-e** Signed, installable builds for the platforms people actually deploy on, and an offline story.
+- **M7-f** Move the reader's interface strings out of `steleofd-i18n`. The engine crate defines product-facing ids (`ReaderFitWidth`, `ReaderSearchTitle`, …); they belong with the reader, so the engine catalogue holds engine messages only and the two change at their own pace. Deferred because it moves `i18n`'s public API, the CI parity script and every reader call site at once.
 
-- **M7-a** Annotation display and navigation, once clause 15 is verified
-- **M7-b** Signature appearance rendering, once `18.2.3` is implemented
-- **M7-c** A document comparison view for two revisions of the same file
-- **M7-d** Print, straight from the reader's current view
-- **M7-e** Signed, installable builds for the platforms people actually deploy
-  on, and an offline story: a reader that works from a file share with no
-  network, which is how these documents are often handled.
+### M8. Repository hygiene
+
+- **M8-a** Split the aging files. `convert/src/pdf.rs` (1,442), `parser/src/content.rs` (1,365), `render/src/raster.rs` (1,312) and `reader/src/app.rs` (1,055) have outgrown one screen of scrolling. Pure reorganisation, no behaviour change; worth one deliberate pass rather than a drip.
 
 ---
 
@@ -306,7 +224,9 @@ desktop reader, generated from the same build the tests exercise.
 ### F2. Extensibility
 
 A public API for custom colour profiles, font providers and render backends,
-so an organisation can plug in its own without forking the engine.
+so an organisation can plug in its own without forking the engine. The command
+stream render backend (a browser re-zooms vectors instead of resampling a
+bitmap) is a candidate for this surface; it is not declared until it exists.
 
 ### F3. Standards movement
 
