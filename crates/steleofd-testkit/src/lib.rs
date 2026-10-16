@@ -9,6 +9,7 @@ mod der;
 mod document;
 mod golden;
 mod signed;
+mod timestamp;
 
 pub use bench::{OBJECTS_PER_PAGE, bench_archive};
 pub use der::{base64_of, oid, sm2_cert_der, tlv};
@@ -21,4 +22,7 @@ pub use golden::{DOCS, GoldenDoc, golden_archive, golden_book};
 pub use signed::{
     descriptor, descriptor_with_proof, fixture_bytes, signed_descriptor_entries, signed_fixture,
     unsigned_descriptor_entries,
+};
+pub use timestamp::{
+    SM2_SM3_OID, SM3_OID, TST_INFO_OID, TimestampSpec, timestamp_token, tst_info_der,
 };

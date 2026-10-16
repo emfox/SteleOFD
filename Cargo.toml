@@ -125,7 +125,7 @@ getrandom  = "0.3"
 sm3        = "0.5"
 sm4        = "0.6"
 x509-parser = "0.18"
-der        = "0.8"
+der        = { version = "0.8", features = ["alloc", "oid"] }
 pkcs12     = "0.1"
 rsa        = "0.9"
 
