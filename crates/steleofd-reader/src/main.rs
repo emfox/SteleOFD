@@ -51,6 +51,9 @@ impl eframe::App for Reader {
         if requests.print {
             print_current_view(&mut self.app);
         }
+        if requests.compare {
+            compare_with_dialog(&mut self.app);
+        }
         self.sync_title(ui);
         if requests.quit {
             ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
@@ -68,6 +71,30 @@ impl Reader {
         self.title = title.clone();
         ui.ctx()
             .send_viewport_cmd(egui::ViewportCommand::Title(title));
+    }
+}
+
+/// Ask the platform for a second revision and compare it against the open one.
+/// Cancelling is not a failure, so nothing is reported; a comparison that
+/// cannot run reports why.
+fn compare_with_dialog(app: &mut App) {
+    let title = app.i18n().text(MessageId::CompareOpenSecond);
+    let picked = rfd::FileDialog::new()
+        .add_filter("OFD document", &["ofd"])
+        .set_title(title)
+        .pick_file();
+    let Some(path) = picked else {
+        return;
+    };
+    let bytes = match std::fs::read(&path) {
+        Ok(bytes) => bytes,
+        Err(err) => {
+            app.set_error(format!("{}: {err}", path.display()));
+            return;
+        }
+    };
+    if let Err(err) = app.compare_bytes(&bytes) {
+        app.set_error(err.message);
     }
 }
 

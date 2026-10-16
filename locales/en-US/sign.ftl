@@ -26,3 +26,10 @@ sign-panel-title = Signatures
 annot-panel-title = Annotations
 annot-count = { $count } annotation(s)
 annot-none = This document has no annotations
+
+# Comparison, two revisions of one file. Read over the flattened pages.
+compare-panel-title = Comparison
+compare-open-second = Open Revision to Compare
+compare-identical = The two revisions draw the same pages
+compare-changed = { $count } page(s) changed
+compare-page = Page { $page }: { $change }

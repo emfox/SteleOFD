@@ -2,7 +2,7 @@
 
 use std::path::{Path, PathBuf};
 
-use steleofd_core::{Annotation, Document, SearchOptions, VerifyStatus};
+use steleofd_core::{Annotation, Comparison, Document, SearchOptions, VerifyStatus};
 use steleofd_i18n::{I18n, MessageId};
 
 use crate::export_worker::{ExportFormat, ExportQueue, ExportRequest};
@@ -69,6 +69,10 @@ pub struct App {
     /// The settings the newest job was submitted with, so the report quotes
     /// them rather than guessing them back from the rasters.
     print_settings: Option<steleofd_print::PrintSettings>,
+    /// The verdict on the last comparison against a second revision.
+    comparison: Option<Comparison>,
+    /// Whether the comparison panel is showing.
+    comparison_open: bool,
     error: Option<AppError>,
     info: Option<String>,
     want_open: bool,
@@ -167,6 +171,7 @@ impl Default for App {
     }
 }
 
+mod compare;
 mod export;
 mod mark;
 mod search;
@@ -204,6 +209,8 @@ impl App {
             print_report: None,
             want_print: false,
             print_settings: None,
+            comparison: None,
+            comparison_open: false,
             error: None,
             info: None,
             want_open: false,
@@ -336,6 +343,8 @@ impl App {
         self.print_report = None;
         self.want_print = false;
         self.print_settings = None;
+        self.comparison = None;
+        self.comparison_open = false;
     }
 
     /// The one-line description of the open document, for the status bar.

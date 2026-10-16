@@ -155,6 +155,18 @@ pub enum MessageId {
     /// The document carries no annotations
     AnnotNone,
 
+    // Comparison module
+    /// Heading on the comparison panel in the reader
+    ComparePanelTitle,
+    /// Menu item that opens a second revision to compare against
+    CompareOpenSecond,
+    /// Whether every page matches
+    CompareIdentical,
+    /// Page count of a change summary, plural
+    CompareChanged,
+    /// One page row: its index and what changed
+    ComparePage,
+
     // Edit module
     /// Confirm page deletion
     EditConfirmDeletePages,
@@ -309,6 +321,13 @@ impl MessageId {
             Self::AnnotCount => "annot-count",
             Self::AnnotNone => "annot-none",
 
+            // Comparison
+            Self::ComparePanelTitle => "compare-panel-title",
+            Self::CompareOpenSecond => "compare-open-second",
+            Self::CompareIdentical => "compare-identical",
+            Self::CompareChanged => "compare-changed",
+            Self::ComparePage => "compare-page",
+
             // Edit
             Self::EditConfirmDeletePages => "edit-confirm-delete-pages",
             Self::EditWarnInvalidateSignature => "edit-warn-invalidate-signature",
@@ -432,6 +451,12 @@ impl MessageId {
         Self::AnnotPanelTitle,
         Self::AnnotCount,
         Self::AnnotNone,
+        // Comparison
+        Self::ComparePanelTitle,
+        Self::CompareOpenSecond,
+        Self::CompareIdentical,
+        Self::CompareChanged,
+        Self::ComparePage,
         Self::EditConfirmDeletePages,
         Self::EditWarnInvalidateSignature,
         Self::EditUndo,
@@ -481,6 +506,7 @@ impl MessageId {
                 | Self::ConvertFailed
                 | Self::SignCount
                 | Self::AnnotCount
+                | Self::CompareChanged
                 | Self::SignSigner
                 | Self::SignSignedAt
                 | Self::SignAlgorithm

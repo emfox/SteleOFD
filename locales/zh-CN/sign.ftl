@@ -26,3 +26,10 @@ sign-panel-title = 签章
 annot-panel-title = 注释
 annot-count = 共 { $count } 条注释
 annot-none = 本文档没有注释
+
+# Comparison, two revisions of one file. Read over the flattened pages.
+compare-panel-title = 版本比较
+compare-open-second = 打开用于比较的版本
+compare-identical = 两个版本绘制的页面相同
+compare-changed = 共 { $count } 页有改动
+compare-page = 第 { $page } 页：{ $change }

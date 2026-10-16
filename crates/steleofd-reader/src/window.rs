@@ -23,6 +23,8 @@ pub struct WindowRequests {
     /// The reader asked to print; the host lays the job out on the platform's
     /// paper and hands the sheets to a printer.
     pub print: bool,
+    /// The reader asked to pick a second revision to compare against.
+    pub compare: bool,
     /// The reader wants the window closed.
     pub quit: bool,
 }
@@ -41,6 +43,7 @@ pub fn draw(ui: &mut Ui, app: &mut App) -> WindowRequests {
     draw_search(ui, app);
     draw_signatures(ui, app);
     draw_annotations(ui, app);
+    draw_comparison(ui, app, &mut requests);
     draw_canvas(ui, app);
     draw_status(ui, app);
     // Shortcuts resolve after every panel has been drawn, because a key the
@@ -196,7 +199,6 @@ fn draw_menu(ui: &mut Ui, app: &mut App, requests: &mut WindowRequests) {
             {
                 app.set_annotations_open(!listing);
             }
-            ui.separator();
             for (key, layout) in [
                 (MessageId::ReaderLayoutSingle, Layout::Single),
                 (MessageId::ReaderLayoutDouble, Layout::Facing),
@@ -210,6 +212,15 @@ fn draw_menu(ui: &mut Ui, app: &mut App, requests: &mut WindowRequests) {
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 draw_exports(ui, app);
                 draw_locales(ui, app);
+                ui.separator();
+                let comparing = app.comparison_open();
+                let compare = app.i18n().text(MessageId::ComparePanelTitle);
+                if ui
+                    .add_enabled(app.is_open(), egui::Button::selectable(comparing, compare))
+                    .clicked()
+                {
+                    app.set_comparison_open(!comparing);
+                }
             });
         });
     });
@@ -445,6 +456,39 @@ fn draw_annotations(ui: &mut Ui, app: &mut App) {
                     let text = app.annotation_label(index);
                     if ui.selectable_label(selected == Some(index), text).clicked() {
                         app.show_annotation(index);
+                    }
+                }
+            });
+    });
+}
+
+/// Z8: the comparison panel. Two revisions of one file are compared over what
+/// each draws, so the panel lists the pages that moved and turns to the first.
+fn draw_comparison(ui: &mut Ui, app: &mut App, requests: &mut WindowRequests) {
+    if !app.comparison_open() || !app.is_open() {
+        return;
+    }
+    egui::Panel::left("comparison").show(ui, |ui| {
+        ui.heading(app.comparison_heading());
+        let pick = app.i18n().text(MessageId::CompareOpenSecond);
+        if ui.button(pick).clicked() {
+            requests.compare = true;
+        }
+        let Some(comparison) = app.comparison() else {
+            return;
+        };
+        ui.separator();
+        ui.label(app.comparison_summary());
+        if comparison.is_identical() {
+            return;
+        }
+        egui::ScrollArea::vertical()
+            .id_salt("comparison-list")
+            .show(ui, |ui| {
+                for (index, _) in app.comparison_changes() {
+                    let text = app.comparison_row(index);
+                    if ui.selectable_label(false, text).clicked() {
+                        app.go_to(index);
                     }
                 }
             });
