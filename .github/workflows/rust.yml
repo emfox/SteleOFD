@@ -93,19 +93,7 @@ jobs:
         run: python3 scripts/check_language.py
 
       - name: Release checksums round-trip
-        run: |
-          tmp=$(mktemp -d)
-          printf alpha > "$tmp/a.bin"
-          printf beta > "$tmp/b.bin"
-          python3 scripts/release_checksums.py generate "$tmp"
-          python3 scripts/release_checksums.py verify "$tmp"
-          printf tampered > "$tmp/a.bin"
-          if python3 scripts/release_checksums.py verify "$tmp"; then
-            echo "a tampered file was reported as intact" >&2
-            exit 1
-          fi
-          rm -rf "$tmp"
-
+        run: python3 scripts/release_checksums.py selftest
       - name: GB/T 33190 conformance register
         run: python3 scripts/check_compliance.py --check-only
 
