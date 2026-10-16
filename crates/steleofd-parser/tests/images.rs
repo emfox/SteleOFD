@@ -113,6 +113,8 @@ fn the_encoding_follows_the_media_file_name() {
         ("image.png", ImageCodec::Png),
         ("image.PNG", ImageCodec::Png),
         ("image.jpeg", ImageCodec::Jpeg),
+        ("image.gif", ImageCodec::Gif),
+        ("image.GIF", ImageCodec::Gif),
         ("image.jb2", ImageCodec::Jbig2),
         ("image.JBIG2", ImageCodec::Jbig2),
         ("image.unknown", ImageCodec::Raw),

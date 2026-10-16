@@ -364,3 +364,28 @@ fn a_placement_with_no_bytes_leaves_the_area_untouched() {
     let output = render_page(&page, &fonts, &RenderOptions::default()).expect("render");
     assert_eq!(pixel(&output, 100, 100), [255, 255, 255, 255]);
 }
+
+/// GIF is an encoding GB/T 33190's own test documents embed, so the decoder
+/// has to read it rather than fail the page that places it.
+#[test]
+fn a_gif_image_is_decoded_and_painted() {
+    let fonts = FontManager::new();
+    let data = std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/block.gif"))
+        .expect("the sample is present");
+    let dst = Rect::new(20.0, 20.0, 40.0, 30.0);
+    let image = ImageRef::new("1", Arc::new(data), (40, 30), ImageCodec::Gif);
+    let page = page_with(vec![DrawOp::Image {
+        image,
+        dst,
+        transform: Affine::IDENTITY,
+    }]);
+    let output = render_page(&page, &fonts, &RenderOptions::default()).expect("render");
+    let bytes = output.rgba_bytes();
+    let (pixels, _) = bytes.as_chunks::<4>();
+    let dark = pixels.iter().filter(|p| p[0] < 128).count();
+    let light = pixels.iter().filter(|p| p[0] > 200).count();
+    assert!(
+        dark > 100 && light > 100,
+        "the sample's black block and white ground both paint, got {dark} dark and {light} light"
+    );
+}
