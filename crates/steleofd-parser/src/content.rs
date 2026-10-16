@@ -45,10 +45,9 @@ pub fn read_ofd_root(xml: &str) -> Result<OfdRoot> {
     Ok(ofd)
 }
 
-/// Normalise a package-root-relative path.
-/// `DocRoot` may be written as `/Doc_0/Document.xml` or `./Doc_0/Document.xml`;
-/// both name the same entry, so the leading slash and any `./` segments are
-/// dropped rather than looked up verbatim.
+/// Normalise a package-root-relative path: `DocRoot` may be written as
+/// `/Doc_0/Document.xml` or `./Doc_0/Document.xml`, and all three name the
+/// same entry, so the leading slash and any `./` segments are dropped.
 fn trim_leading_slash(raw: &str) -> String {
     let trimmed = raw.trim().replace('\\', "/");
     let mut out = trimmed.as_str();
