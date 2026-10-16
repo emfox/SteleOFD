@@ -5,7 +5,7 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
-use steleofd_crypto::{Certificate, sm2_verify, sm3};
+use steleofd_crypto::{Certificate, TimeStampToken, sm2_verify, sm3};
 use steleofd_error::{OfdError, SignatureError};
 use steleofd_package::Package;
 use steleofd_xml::cursor::{Cursor, Event};
@@ -84,6 +84,8 @@ pub struct Signature {
     pub signature_method: Option<String>,
     /// Signing time as written, when present.
     pub sign_time: Option<String>,
+    /// DER-encoded GB/T 20520 timestamp token, when the signature carries one.
+    pub timestamp: Option<Vec<u8>>,
     /// Stamp placements, from `StampAnnot`.
     pub stamps: Vec<StampAnnot>,
     /// Archive path of the seal image, from `Seal/BaseLoc`.
@@ -138,6 +140,7 @@ pub fn read_signature(package: &mut Package, base_loc: &str) -> Result<Signature
     let mut in_time = false;
     let mut in_seal = false;
     let mut in_signed_value = false;
+    let mut in_timestamp = false;
     let mut cursor = Cursor::new(&xml);
     loop {
         match cursor.next_event()? {
@@ -174,6 +177,8 @@ pub fn read_signature(package: &mut Package, base_loc: &str) -> Result<Signature
                     });
                 } else if node.is("SignedValue") {
                     in_signed_value = true;
+                } else if node.is("Timestamp") || node.is("TimeStamp") {
+                    in_timestamp = true;
                 } else if node.is("Seal") {
                     in_seal = true;
                 }
@@ -187,6 +192,7 @@ pub fn read_signature(package: &mut Package, base_loc: &str) -> Result<Signature
                 in_time = false;
                 in_seal = false;
                 in_signed_value = false;
+                in_timestamp = false;
                 if depth == 0 {
                     break;
                 }
@@ -207,6 +213,7 @@ pub fn read_signature(package: &mut Package, base_loc: &str) -> Result<Signature
                     in_time,
                     in_seal,
                     in_signed_value,
+                    in_timestamp,
                 );
             }
             Event::Text(_) => {}
@@ -226,6 +233,60 @@ impl Signature {
         }
         Ok(())
     }
+
+    /// The GB/T 20520 timestamp the signature carries, already parsed.
+    pub fn timestamp_token(&self) -> Result<Option<TimeStampToken>, OfdError> {
+        match &self.timestamp {
+            Some(der) if !der.is_empty() => Ok(Some(TimeStampToken::parse_der(der)?)),
+            _ => Ok(None),
+        }
+    }
+}
+
+/// What a signature's timestamp says, once checked against the signature it
+/// countersigns. `Bound` means the imprint is this signature's own digest and
+/// the TSA signed the token; `Unbound` means the token is about something else.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TimestampStatus {
+    /// No timestamp is attached, which is lawful.
+    Absent,
+    /// The timestamp binds this signature and its TSA proof verifies.
+    Bound,
+    /// The timestamp parses and verifies but timestamps other bytes.
+    Unbound,
+    /// The timestamp does not verify against its own certificate.
+    Unverified,
+}
+
+/// Check a signature's timestamp: GB/T 38540-2020 clause 7.2 makes the imprint
+/// the SM3 digest of the signature value, and GM/T 0099-2020 clause 7.2.5 sends
+/// the token through GB/T 20520, so both the binding and the TSA proof matter.
+pub fn verify_timestamp(sig: &Signature) -> Result<TimestampStatus, OfdError> {
+    let Some(token) = sig.timestamp_token()? else {
+        return Ok(TimestampStatus::Absent);
+    };
+    if !token.covers(&sig.check_value) {
+        return Ok(TimestampStatus::Unbound);
+    }
+    let key = match &token.certificate {
+        Some(der) => Certificate::parse_der(der)?.public_key().to_vec(),
+        None => sig
+            .certificate
+            .as_ref()
+            .map(|der| Certificate::parse_der(der))
+            .transpose()?
+            .map(|cert| cert.public_key().to_vec())
+            .ok_or_else(|| {
+                OfdError::Signature(SignatureError::CertificateChain(
+                    "timestamp names no TSA certificate".into(),
+                ))
+            })?,
+    };
+    Ok(if token.verify_tsa_signature(&key)? {
+        TimestampStatus::Bound
+    } else {
+        TimestampStatus::Unverified
+    })
 }
 
 /// One seal as a page should draw it: where the stamp sits and the image bytes
@@ -367,6 +428,7 @@ fn absorb_text(
     time: bool,
     seal: bool,
     signed_value: bool,
+    timestamp: bool,
 ) {
     if let Some(index) = pending {
         if ref_digest && let Some(bytes) = base64_decode(text) {
@@ -386,6 +448,13 @@ fn absorb_text(
         signature.signature_method = Some(text.to_string());
     } else if time {
         signature.sign_time = Some(text.to_string());
+    } else if timestamp {
+        // The timestamp travels as base64 DER, like `Cert` and `CheckValue`.
+        if let Some(bytes) = base64_decode(text) {
+            signature.timestamp = Some(bytes);
+        } else {
+            signature.timestamp = Some(text.as_bytes().to_vec());
+        }
     }
 }
 
