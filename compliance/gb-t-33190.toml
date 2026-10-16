@@ -273,9 +273,12 @@ tests = [
 [[item]]
 clause = "8.3.5"
 title = "Pattern fill"
-status = "deviation"
-note = "recognised and skipped; no sample carries one, and the tiling model is unwritten"
-tests = []
+status = "verified"
+tests = [
+  "gb_t_33190_8_3_5_a_pattern_carries_its_cell_and_its_tile_size",
+  "gb_t_33190_8_3_5_a_pattern_step_defaults_to_the_cell_size",
+  "gb_t_33190_8_3_5_a_pattern_records_its_reflect_method",
+]
 
 [[item]]
 clause = "8.3.6"
