@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
 use steleofd_error::{FontError, Result};
+use steleofd_geometry::Path;
 
 use crate::face::FontFace;
 use crate::registry::{FontId, FontRegistry, FontSource};
@@ -97,6 +98,27 @@ impl FontManager {
         None
     }
 
+    /// The outline for one run code and the face it came from, substituting
+    /// from the fallback chain when the run's own face lacks it. A code already
+    /// resolved to a glyph id is never substituted.
+    pub fn outline_for_code(
+        &self,
+        face: &FontFace,
+        code: u16,
+        glyph_index: bool,
+    ) -> Option<(Path, Arc<FontFace>)> {
+        if glyph_index {
+            let outline = face.outline_for_run_code(code, true)?;
+            return Some((outline, self.face(face.id()).ok()?));
+        }
+        if let Some(outline) = face.outline_for_run_code(code, false) {
+            return Some((outline, self.face(face.id()).ok()?));
+        }
+        let (_, alt) = self.fallback_for(u32::from(code))?;
+        let outline = alt.outline_for_run_code(code, false)?;
+        Some((outline, alt))
+    }
+
     /// Replace the fallback chain.
     pub fn set_fallback_chain(&self, ids: Vec<FontId>) {
         if let Ok(mut chain) = self.fallback_chain.write() {
@@ -120,10 +142,20 @@ impl FontManager {
                         narrow.push(entry.id);
                     }
                 }
+                FontSource::Fallback { .. } => wide.push(entry.id),
                 FontSource::System { .. } if resolvable => narrow.push(entry.id),
                 _ => {}
             }
         }
+
+        // A document that ships no wide face and names none leaves its CJK
+        // text with nothing to fall back to, and the page renders blank rather
+        // than wrong. Chain one substitute, loaded only if a code needs it.
+        if wide.is_empty() && resolvable {
+            let id = self.registry.register_fallback("cjk-substitute");
+            wide.push(id);
+        }
+
         // Ids are handed out in registration order, so sorting only guards
         // against a caller that built a registry some other way.
         wide.sort_unstable();

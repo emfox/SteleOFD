@@ -109,6 +109,28 @@ impl FontRegistry {
         id
     }
 
+    /// Register a substitute face, resolved from `default_cjk_family` when it
+    /// is first loaded. Used to cover characters no embedded face carries.
+    pub fn register_fallback(&mut self, family: impl Into<String>) -> FontId {
+        let family = family.into();
+        if let Some(&id) = self.by_family.get(&family) {
+            return id;
+        }
+        let id = FontId(self.entries.len() as u32);
+        self.entries.push(FontEntry {
+            id,
+            family: family.clone(),
+            postscript_name: None,
+            source: FontSource::Fallback {
+                requested: family.clone(),
+            },
+            is_cjk: true,
+            data: None,
+        });
+        self.by_family.insert(family, id);
+        id
+    }
+
     /// Look up an entry by id.
     pub fn get(&self, id: FontId) -> Result<&FontEntry> {
         self.entries

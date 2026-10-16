@@ -44,22 +44,25 @@ pins today's behaviour so the day it changes, the test fails.
    face at index zero and the rest are unreachable. Producers that embed a
    collection as a single file and expect more than its first face will be
    short of glyphs.
-4. **Fallback is built and reported, but not yet applied.** The chain exists:
-   `Document::open` calls `FontManager::build_fallback_chain` once every
-   declared face is registered, so `fallback_for` has real faces to consult
-   instead of an empty list. Reporting caught up: every backend counts a run
-   that reaches the output short a glyph (`missing_glyph_runs`) and the raster
-   backend counts a run whose face would not load at all
-   (`skipped_font_runs`), both apart from `dropped_runs`. A run with an
-   unloadable face now costs its own run rather than the page in every
-   backend. What is still missing is the reader that acts on the chain:
-   nothing re-shapes a run against a fallback face, so a code point the run's
-   own face lacks is dropped rather than looked up in the other faces. Two
-   smaller limits ride along: the registry is filled from the ids the pages
-   actually name, so a face a document declares but never draws with never
-   joins the chain, and a substitute face is only chained where one can be
-   resolved. `tests/font.rs` and `tests/core.rs` pin the chain's contents and
-   order. This is M2-c.
+4. **Fallback is applied, and the chain covers CJK.** `Document::open` calls
+   `FontManager::build_fallback_chain` once every declared face is registered,
+   and every backend resolves a run code through `FontManager::outline_for_code`,
+   which substitutes from the chain when the run's own face lacks the
+   character. A code the display list already resolved to a glyph id is never
+   substituted, since an index only means anything against the face it came
+   from. When no wide face is registered at all — the common case for a
+   document that names a CJK face without shipping one — the chain adds a
+   substitute resolved from `default_cjk_family`, so such a page draws its
+   text instead of rendering blank. Reporting catches up with it: every
+   backend counts a run that reaches the output short a glyph
+   (`missing_glyph_runs`) and the raster backend counts a run whose face would
+   not load (`skipped_font_runs`), both apart from `dropped_runs`. Two limits
+   remain. The registry is still filled from the ids the pages actually name,
+   so a face a document declares but never draws with never joins the chain.
+   And a substitute is chained only where one can be resolved, so a build with
+   no system fonts — wasm, or `system-fonts` off — still drops what it cannot
+   cover. `tests/font.rs` and `tests/core.rs` pin both the chain and the
+   substitution.
 5. **No subsetting on the way out.** Embedded faces are carried whole. A
    document that embeds a 20 MB CJK collection pays for it in every conversion,
    which is M2-b.

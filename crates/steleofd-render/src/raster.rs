@@ -141,7 +141,7 @@ pub fn render_page(
                 if let Ok(face) = fonts.face(run.font) {
                     let total = total_transform(&state, &page.page_box, options.dpi);
                     let mut mask = clip_mask(&state, width, height)?;
-                    for ts_path in glyph_outlines(run, face, total)? {
+                    for ts_path in glyph_outlines(fonts, run, face, total)? {
                         mask.intersect_path(
                             &ts_path,
                             FillRule::Winding,
@@ -246,10 +246,11 @@ fn clip_mask(state: &State, width: u32, height: u32) -> Result<Mask> {
         }))
 }
 
-/// The per-glyph outlines of a run in page pixel space, in draw order.
-/// Outlines are normalized to 1/1000 em with y pointing up: scale to
-/// millimetres first, then position, or the run origin gets scaled too.
+/// Per-glyph outlines in page pixel space, in draw order. Outlines are
+/// normalized to 1/1000 em with y up, so scale before positioning. A code the
+/// run's own face lacks comes from the fallback chain.
 fn glyph_outlines(
+    fonts: &steleofd_font::FontManager,
     run: &GlyphRun,
     face: Arc<steleofd_font::FontFace>,
     total: Transform,
@@ -261,7 +262,8 @@ fn glyph_outlines(
             offset += run.advances.get(i - 1).copied().unwrap_or(0.0);
         }
         offset += run.letter_spacing;
-        let Some(outline) = face.outline_for_run_code(gid, run.codes_are_glyphs) else {
+        let Some((outline, _source)) = fonts.outline_for_code(&face, gid, run.codes_are_glyphs)
+        else {
             continue;
         };
         let k = run.size.value() / 1000.0;
@@ -612,7 +614,7 @@ fn draw_text(
     let Ok(face) = fonts.face(run.font) else {
         return Ok(TextOutcome::NoFace);
     };
-    draw_text_inner(pixmap, run, state, page_box, face, options)
+    draw_text_inner(pixmap, run, state, page_box, fonts, face, options)
 }
 
 fn draw_text_inner(
@@ -620,6 +622,7 @@ fn draw_text_inner(
     run: &GlyphRun,
     state: &State,
     page_box: Rect,
+    fonts: &FontManager,
     face: Arc<steleofd_font::FontFace>,
     options: &RenderOptions,
 ) -> Result<TextOutcome> {
@@ -630,7 +633,8 @@ fn draw_text_inner(
             offset += run.advances.get(i - 1).copied().unwrap_or(0.0);
         }
         offset += run.letter_spacing;
-        let Some(outline) = face.outline_for_run_code(gid, run.codes_are_glyphs) else {
+        let Some((outline, _source)) = fonts.outline_for_code(&face, gid, run.codes_are_glyphs)
+        else {
             missing = true;
             continue;
         };

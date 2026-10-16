@@ -222,17 +222,15 @@ the guard does not.
 Faces are resolved by declared id and bare CFF is read (done; the CJK/Latin/RTL
 matrix is in `docs/FONTS.md`).
 
-- **M2-a** Act on the fallback chain in the reader. The chain is built
-  (`build_fallback_chain`, wired into `Document::open`), every backend reports
-  runs that reach the page short a glyph (`missing_glyph_runs`), a run whose
-  face will not load costs its own run rather than the page
-  (`skipped_font_runs`), and the raster backend matches the vector ones. What
-  is left is the reader that acts on the chain: nothing re-shapes a run
-  against a fallback face yet, so a code point the run's own face lacks is
-  still dropped rather than looked up in the other faces. Two smaller limits
-  ride along: the registry is filled only from the ids the pages name, so a
-  declared-but-unused face never joins the chain, and a substitute is chained
-  only where one can be resolved. See `docs/FONTS.md` gap 4.
+- **M2-a** `[x]` ~~Act on the fallback chain in the reader.~~ Every backend now
+  resolves a run code through `FontManager::outline_for_code`, which substitutes
+  from the chain when the run's own face lacks the character; a code already
+  resolved to a glyph id is never substituted. When no wide face is registered
+  the chain adds one from `default_cjk_family`, which is what a document naming
+  a CJK face it does not ship needs — `helloworld.ofd` went from a blank page to
+  its text. Two limits stand and are recorded in `docs/FONTS.md` gap 4: the
+  registry is filled only from the ids the pages name, and a substitute is
+  chained only where one can be resolved (not wasm, not `system-fonts` off).
 - **M2-b** Subset embedded fonts instead of carrying whole faces. A document
   that embeds a 20 MB CJK collection pays for it in every conversion. Ranked
   below M2-a because it costs size, not correctness.

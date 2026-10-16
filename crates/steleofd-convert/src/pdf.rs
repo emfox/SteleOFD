@@ -281,7 +281,8 @@ impl<'a> PdfSink<'a> {
                 offset += run.advances.get(i - 1).copied().unwrap_or(0.0);
             }
             offset += run.letter_spacing;
-            let Some(outline) = face.outline_for_run_code(gid, run.codes_are_glyphs) else {
+            let Some((outline, _source)) = fonts.outline_for_code(&face, gid, run.codes_are_glyphs)
+            else {
                 missing += 1;
                 continue;
             };
