@@ -26,6 +26,26 @@ extractor had glued together, such as `elementname=` or `schemaxmlns=`.
 Annex A.6 is printed as `Definition.xsd`, but A.1 to A.3 include it as
 `Definitions.xsd`. This directory uses `Definitions.xsd` so the set resolves.
 
+## Cross-check against a third-party transcription
+
+The `easyofd` wiki republishes annex A as text. Comparing its names against
+these files turned up **eleven differences, every one of them the wiki's**:
+`Seqment` for `Segment` (A.13), `Sianature`/`SiqnedInfo`/`Siqnatures` for
+`Signature`/`SignedInfo`/`Signatures` (A.7, A.8), `OuadraticBezier` for
+`QuadraticBezier` (A.6), `Pointl`/`RotationAnglet` for point and angle names
+(A.6), `Deltay`/`y` for `DeltaY`/`Y` (A.13), `DefaultCs` for `DefaultCS`
+(A.2) and `Backqround` for `Background` (A.13). They are all `g` → `q` or a
+case flip, and the wiki contradicts itself: its own body tables spell
+`Segment`, `DeltaY` and `DefaultCS` correctly, so its XSD pages are the
+outlier.
+
+The printed standard settles it. Annex A pages 101, 115, 127, 130 and 131
+carry `DefaultCS`, `QuadraticBezier`, `DeltaY`, `Segment` and `Background`, and
+carry none of the wiki's spellings. The rebuild here agrees with the printed
+annex, so no change followed from the comparison — which is the useful result:
+an independent transcription is now on record as disagreeing, and we are on
+the standard's side.
+
 ## Trustworthiness
 
 - All 13 files build under `lxml.etree.XMLSchema()`, so they are **valid
@@ -47,6 +67,7 @@ them should say so.
 
 ```console
 python3 scripts/extract_schema.py <standard.pdf>          # regenerate
+python3 scripts/cross_check_schema.py <standard.pdf>      # settle a spelling
 python3 scripts/pack_corpus.py --check                    # archives match sources
 python3 scripts/validate_ofd.py --allow-foreign \
     $(find compliance/corpus -name '*.ofd' -o -name '*.xml')
