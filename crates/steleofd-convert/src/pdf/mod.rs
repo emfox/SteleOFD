@@ -467,8 +467,13 @@ impl PageSink for PdfSink<'_> {
                         PaintRule::EvenOdd => " f*",
                     });
                 }
-                // Tiling patterns have no equivalent here; black keeps the
-                // region visible rather than silently empty.
+                // A pattern would need a PDF tiling pattern built from the
+                // cell; the cell's first fill keeps the region visible until
+                // one is written.
+                Some(PaintShape::Pattern(spec)) => {
+                    let _ = write!(setup, "{} rg", pattern_rgb(spec));
+                    operator.push_str(" f");
+                }
                 Some(_) => {
                     setup.push_str("0 0 0 rg");
                     operator.push_str(" f");
@@ -754,8 +759,8 @@ fn stops_function(shading: &PendingShading, doc: &mut Document) -> Result<Object
 mod content;
 
 use content::{
-    channel_array, convert_error, curve_op, image_xobject, mesh_rgb, num, pdf_string, point_op,
-    rgb, stroke_prefix,
+    channel_array, convert_error, curve_op, image_xobject, mesh_rgb, num, pattern_rgb, pdf_string,
+    point_op, rgb, stroke_prefix,
 };
 
 #[cfg(test)]

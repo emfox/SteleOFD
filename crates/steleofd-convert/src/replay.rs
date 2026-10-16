@@ -21,8 +21,8 @@ pub enum PaintShape<'a> {
     Radial(&'a steleofd_display::RadialGradientSpec),
     /// A Gouraud mesh: coloured vertices and the triangles over them.
     Mesh(&'a steleofd_display::MeshSpec),
-    /// A tiled image fill.
-    Pattern(&'a ImageRef),
+    /// A pattern: a cell of vector content repeated over the area.
+    Pattern(&'a steleofd_display::PatternSpec),
 }
 
 /// Split a paint into the shape a sink resolves it from.
@@ -32,7 +32,7 @@ pub fn paint_shape(paint: &Paint) -> PaintShape<'_> {
         Paint::LinearGradient(spec) => PaintShape::Linear(spec),
         Paint::RadialGradient(spec) => PaintShape::Radial(spec),
         Paint::Mesh(spec) => PaintShape::Mesh(spec),
-        Paint::Pattern(image) => PaintShape::Pattern(image),
+        Paint::Pattern(spec) => PaintShape::Pattern(spec),
     }
 }
 

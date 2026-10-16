@@ -126,7 +126,10 @@ impl<'a> SvgSink<'a> {
             // the region painted rather than dropping a fill that the reader
             // does draw.
             PaintShape::Mesh(spec) => mesh_average(spec),
-            PaintShape::Pattern(_) => "#000000".to_string(),
+            // SVG has a native pattern, but the cell is a nested display list
+            // this sink does not re-enter; the cell's first solid fill keeps
+            // the region visible instead of dropping it.
+            PaintShape::Pattern(spec) => pattern_average(spec),
         }
     }
 
@@ -439,6 +442,21 @@ fn mesh_average(spec: &steleofd_display::MeshSpec) -> String {
     });
     let mean = Color::rgba((sum.0 / n) as u8, (sum.1 / n) as u8, (sum.2 / n) as u8, 255);
     hex(&mean)
+}
+
+/// The first opaque fill inside a pattern's cell, used where the repeat cannot
+/// be written. An empty cell is left black.
+fn pattern_average(spec: &steleofd_display::PatternSpec) -> String {
+    for op in &spec.cell.ops {
+        if let steleofd_display::DrawOp::Path {
+            fill: Some(steleofd_display::Paint::Solid(c)),
+            ..
+        } = op
+        {
+            return hex(c);
+        }
+    }
+    "#000000".to_string()
 }
 
 /// Alpha as a `0..=1` fraction.
