@@ -1,0 +1,205 @@
+# Interoperability: reading what other implementations produce
+
+An OFD reader is only useful if it agrees with the other readers in the
+field. This document records the differences found between SteleOFD and
+other implementations on the same documents, what the standard says about
+each, and which side each difference falls on. It is the evidence half of
+**M5-f** in [ROADMAP.md](ROADMAP.md), kept separate because the finding
+outlives the milestone.
+
+The rule for every entry: a difference is not a fault on the other side
+until the standard's own text says so. Several of the bodies that produced
+the compared reader helped draft GB/T 33190, and deference to that is not
+the same as being right.
+
+## 1. Method
+
+The **golden book** ([`crates/steleofd-testkit/src/golden.rs`](../crates/steleofd-testkit/src/golden.rs))
+is nine small pages, one per renderer feature, each with a known expected
+picture. It was rendered twice at 96 dpi into 378x227 PNGs:
+
+- by SteleOFD (`steleofd render`), and
+- by a **second vendor's desktop reader** ("the oracle" below).
+
+The comparison was then checked a third way — against the standard's text
+and against a second implementation's source — so no conclusion rests on a
+single comparison. The second implementation read is **ofdrw 2.4.0**
+(`github.com/ofdrw/ofdrw`), whose Java `AWTMaker` renders to a
+`BufferedImage`; only its source is used here, as semantic evidence, never
+as a second rendering baseline. Each point below cites file and line in
+ofdrw as of commit `84e9eb2`.
+
+Five of the nine pages agree to anti-aliasing. The four that differ are
+`clip`, `gradient` (`AxialShd`), `radial` (`RadialShd`) and `wide` (a page
+box wider than `CommonData.PageArea`). They are examined in turn.
+
+Pixel counts below are read from the PNGs directly. Colour counts are of
+distinct RGBA tuples; a real gradient carries hundreds, a flat fill one.
+
+## 2. Clip: filled versus outlined
+
+**Standard.** Clause 8.4 (*Clipping region*). A clipping region is "a set of
+paths or text" that marks "a valid drawing area on the page; what falls
+outside it is not affected by the drawing instructions" (the prose opening
+8.4). The clip does not replace the object's paint: it only confines it.
+Table 34 (`Clips`) makes the region the **intersection** of its `Clip`
+children, and Table 35 (`Graphics object`) states the paint switches:
+
+| Attribute | Type | Default |
+| --- | --- | --- |
+| `Stroke` | `xs:boolean` | `true` |
+| `Fill` | `xs:boolean` | `false` |
+| `FillColor` | `CT_Color` | transparent |
+| `StrokeColor` | `CT_Color` | black |
+
+The fixture sets `Fill="true" Stroke="false"` on a `PathObject` whose path
+covers the whole 100x60 mm page, and clips it to the inner rectangle
+`20 15 -> 80 45`. The required result is therefore a **solid green fill**
+(`FillColor 30 160 90`) confined to that inner rectangle.
+
+**Observed.**
+
+| | Green pixels | Shape |
+| --- | --- | --- |
+| SteleOFD | 62 481 | solid fill of the clip rectangle |
+| oracle | 569 | outline only |
+
+The oracle's green pixels form a one-pixel frame whose bounding box is
+`(76,56)-(302,170)`. The clip rectangle `20 15 -> 80 45` mm maps to
+`(75.6,56.75)-(302.4,170.25)` at this scale — a pixel-for-pixel match. So
+the oracle **read the clip geometry correctly and drew it as a visible
+stroke**, with no fill, instead of using it to confine the object's fill.
+
+**Second implementation.** ofdrw fills a `Fill="true"` path and strokes a
+`Stroke="true"` one, exactly as Table 35 states
+(`ofdrw-converter/.../AWTMaker.java:361-373`):
+
+```java
+if (pathObject.getStroke() == null || pathObject.getStroke()) {  // default true
+    ...
+    graphics.draw(path2D);
+}
+if (pathObject.getFill() != null && pathObject.getFill()) {      // default false
+    ...
+    graphics.fill(path2D);
+}
+```
+
+It applies a clip with `graphics.setClip(shape)` and never draws it
+(`AWTMaker.java:714-719`).
+
+**Verdict.** A gap in the oracle. SteleOFD and ofdrw both follow Table 35;
+the oracle fills nothing and strokes the clip outline instead.
+
+## 3. Shadings: `AxialShd` and `RadialShd`
+
+**Standard.** Clause 8.3.4 (*Gradient*): 8.3.4.2 axial (colour ramps along
+an axis from a start to an end point) and 8.3.4.3 radial (two similar
+ellipses with a ramped fill between their edges). Table 28 of clause 8.3.3
+lists `AxialShd` and `RadialShd` as complex colours usable "for filling and
+stroking graphics and text".
+
+**Observed.**
+
+| Page | oracle | SteleOFD |
+| --- | --- | --- |
+| `gradient` (`AxialShd`) | 64 473 px of one colour, black | ramp, hundreds of colours |
+| `radial` (`RadialShd`) | 2 colours total (black, white) | 727 colours |
+
+The oracle renders both shadings as a **flat black fill**.
+
+**Second implementation.** ofdrw's `AWTMaker` contains no shading code at
+all — a search for `Shading`/`AxialShd`/`RadialShd`/`GouraudShd` in that
+file returns nothing. Its colour path (`AWTMaker.java:804-845`) reads a
+`CT_Color`'s `Value` array and returns `null` when the colour carries only a
+shading (`845: if (array == null) return null;`), so such a path is simply
+not filled. ofdrw therefore also does not draw these gradients, though it
+degrades to *nothing* where the oracle degrades to *black*.
+
+**Verdict.** A gap in the oracle (and, on this point, a smaller one in
+ofdrw). Verified against Table 28 and clause 8.3.4; the ramp our render
+produces is what the text asks for. Our `Shading` model lives in
+[`crates/steleofd-model/src/color.rs`](../crates/steleofd-model/src/color.rs).
+
+## 4. A page box wider than `CommonData.PageArea`
+
+**Standard.** Clause 8.1.3 (*Page space*): "the size of the whole page
+space is determined by `PhysicalBox` of the `PageArea` node (see 7.5,
+document root)". A page may carry its own `Area`; the document default in
+`CommonData` is the fallback.
+
+**Observed.** The `wide` fixture declares `<Area><PhysicalBox>0 0 297 100</PhysicalBox></Area>`.
+
+| | Output | Aspect |
+| --- | --- | --- |
+| SteleOFD | 1754x591 | 2.97 (297:100) |
+| oracle | 378x227 | 1.67 |
+
+The oracle renders the 297x100 mm page into a ~A4-ratio box, i.e. it takes
+the document default `CommonData.PageArea` and ignores the page's own,
+wider `PhysicalBox`.
+
+**Second implementation.** ofdrw takes the page box from the page's own
+area first (`ofdrw-reader/.../OFDReader.java:506-511`), falling back to the
+template, then `CommonData.PageArea` (`539`), then A4; `ImageMaker.makePage`
+sizes the bitmap from that box (`ImageMaker.java:59-63`). Same precedence as
+SteleOFD (`crates/steleofd-parser/src/lib.rs:105-107`: page area's
+`physical_box`, else `common_data.page_area.physical_box`).
+
+**Verdict.** A gap in the oracle. Both SteleOFD and ofdrw honour the page's
+own box; the oracle clamps to the document default.
+
+## 5. One correction to our own reading: `Clips` and `TransFlag`
+
+The audit also caught a defect on **our** side, and then partly reversed the
+first reading of it — recorded here because the reversal is the point of
+using more than one reference.
+
+The 2016 text (Table 33) gives a clip no attribute but its `Area` list, and
+`Trans` appears nowhere in the standard's body. Our parser nonetheless read
+a `TransFlag` on `Clips`, with a default of `true`.
+
+The second implementation shows the attribute is real but is **not** in the
+2016 edition: ofdrw carries `Clips.setTransFlag`/`getTransFlag` with the note
+"controlled by `TransFlag` since version 1.2 ... default `false`"
+(`ofdrw-core/.../clips/Clips.java:82-99`), i.e. it is an **OFD 1.2
+extension**. An independent third implementation (the Go `zc310/ofd`,
+CHANGELOG) states the same and adds the decisive detail: the attribute "is
+missing from the XSD ... real OFD (including the official reader samples)
+and the parsing side have always treated it as `false`", and "the default
+(**spec `true**) makes the reader fold the object CTM onto the clip path".
+
+So the honest position has two halves:
+
+- We were **wrong to read it at all** from a 2016 document, and wrong about
+  the default — the spec default is `true`, we assumed `true`, but every
+  real sample omits it and means `false`.
+- We were also **wrong to call it fictional**: it is a documented 1.2
+  extension, not an invention.
+
+The fix is the same either way: the attribute is gone
+(`crates/steleofd-model/src/object.rs`, `crates/steleofd-parser/src/content.rs`),
+and the clip stays in object space unconditionally, which is what clause 8.4
+says and what every sample does. The regression test is
+`gb_t_33190_8_4_a_clip_stays_in_object_space_beside_the_ctm`
+(`crates/steleofd-parser/tests/conformance.rs`).
+
+## 6. What this changed in our own code
+
+The comparison paid for itself in the other direction. The four oracle gaps
+above are external; these were ours, found while establishing them:
+
+| Defect | Where | Fix |
+| --- | --- | --- |
+| `FillRule` read where the attribute is `Rule` | parser | renamed to match Table 35 |
+| `Fill`/`Stroke` defaults taken from the wrong model | parser | Table 35 defaults restored |
+| Path coordinates read as absolute, not offsets from the boundary corner | parser | made relative, clause 8.1.4 |
+| `Clips` read with a nonexistent `TransFlag` | parser, model | attribute removed (section 5) |
+
+## 7. Reproducing
+
+The golden fixtures and the writer are in
+[`crates/steleofd-testkit`](../crates/steleofd-testkit). Regression compares
+SteleOFD's own output against the committed reference PNGs only; no second
+implementation is invoked in CI. The oracle renders and the ofdrw source
+citations above are evidence for this document, not test inputs.

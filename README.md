@@ -205,7 +205,9 @@ behind it in [`compliance/CLAUSES.md`](compliance/CLAUSES.md): 74 clauses are
 registered, 66 of them covered, and the eight that are not carry a `deviation`
 note saying why.
 What the engine can and cannot draw with is set out face by face in
-[`docs/FONTS.md`](docs/FONTS.md).
+[`docs/FONTS.md`](docs/FONTS.md). How it compares to other readers in the
+field, page by page against a second vendor's output, is in
+[`docs/INTEROP.md`](docs/INTEROP.md).
 
 Performance baselines, and how to run them, are in
 [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md).

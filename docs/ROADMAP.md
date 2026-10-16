@@ -318,7 +318,9 @@ Absent features, not wrong ones, so they sit below the correctness band.
   spec default is `true` where real files, the official reader samples among
   them, write `false`. We had guessed the default backwards. The attribute is
   gone; the clip stays in object space unconditionally, which is what the 2016
-  text says and what every sample does.
+  text says and what every sample does. The full four-way comparison, with the
+  per-page evidence and the second reader's source citations, is in
+  [INTEROP.md](INTEROP.md).
 
 ### M6. The reader, completed (M6-a … M6-f)
 
