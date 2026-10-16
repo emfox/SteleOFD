@@ -49,15 +49,12 @@ jobs:
         if: runner.os == 'Windows'
         run: choco install -y pkgconfiglite
 
+      # Dependencies only, not the whole `target/`: caching every artefact made
+      # a multi-gigabyte blob whose restore cost more than the build it saved.
       - name: Cache cargo
-        uses: actions/cache@v4
+        uses: Swatinem/rust-cache@v2
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-reader-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: ${{ runner.os }}-reader-
+          shared-key: release-reader
 
       - name: Build the reader
         run: cargo build --release -p steleofd-reader
@@ -100,15 +97,11 @@ jobs:
       - name: Install system dependencies
         run: sudo apt-get update && sudo apt-get install -y libfontconfig1-dev pkg-config
 
+      # Dependencies only, for the same reason the reader job above states.
       - name: Cache cargo
-        uses: actions/cache@v4
+        uses: Swatinem/rust-cache@v2
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-release-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: ${{ runner.os }}-release-
+          shared-key: release-artefacts
 
       - name: Build the C ABI library
         run: cargo build --release -p steleofd-ffi

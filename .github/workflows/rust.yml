@@ -32,15 +32,15 @@ jobs:
       - name: Install system dependencies
         run: sudo apt-get update && sudo apt-get install -y libfontconfig1-dev pkg-config
 
+      # `Swatinem/rust-cache` caches the registry and the *dependency* artefacts
+      # rather than the whole `target/`. Caching all of `target/` made a single
+      # 7.8 GB blob that every job restored in ~140 s — longer than the build it
+      # replaced. This key is also per-job, so the six jobs stop contending for
+      # one entry.
       - name: Cache cargo
-        uses: actions/cache@v4
+        uses: Swatinem/rust-cache@v2
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: ${{ runner.os }}-cargo-
+          shared-key: check
 
       - name: Format
         run: cargo fmt --all --check
@@ -126,14 +126,9 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libfontconfig1-dev pkg-config
 
       - name: Cache cargo
-        uses: actions/cache@v4
+        uses: Swatinem/rust-cache@v2
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-corpus-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: ${{ runner.os }}-corpus-
+          shared-key: corpus
 
       - name: Fetch the samples
         run: python3 scripts/fetch_corpus.py
@@ -174,14 +169,9 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libfontconfig1-dev pkg-config
 
       - name: Cache cargo
-        uses: actions/cache@v4
+        uses: Swatinem/rust-cache@v2
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-perf-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: ${{ runner.os }}-perf-
+          shared-key: perf
 
       # Only the budgeted targets: running every benchmark would spend a
       # runner's afternoon on numbers nothing gates on.
@@ -205,14 +195,10 @@ jobs:
         uses: dtolnay/rust-toolchain@nightly
 
       - name: Cache cargo
-        uses: actions/cache@v4
+        uses: Swatinem/rust-cache@v2
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            fuzz/target
-          key: ${{ runner.os }}-fuzz-${{ hashFiles('fuzz/Cargo.toml') }}
-          restore-keys: ${{ runner.os }}-fuzz-
+          workspaces: fuzz
+          shared-key: fuzz
 
       - name: Install cargo-fuzz
         run: cargo install cargo-fuzz --locked
@@ -273,14 +259,9 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libfontconfig1-dev pkg-config
 
       - name: Cache cargo
-        uses: actions/cache@v4
+        uses: Swatinem/rust-cache@v2
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-coverage-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: ${{ runner.os }}-coverage-
+          shared-key: coverage
 
       - name: Install cargo-llvm-cov
         run: cargo install cargo-llvm-cov --locked
