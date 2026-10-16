@@ -8,7 +8,7 @@ use steleofd_model::document::{
     CommonData, CompositeGraphicUnit, CompositeGraphicUnitList, DocBody, Document as ModelDocument,
     DrawParamList, Font, FontList, Layer, Location, Multimedia, MultimediaKind, MultimediaList,
     OfdRoot, Page, PageArea, PageBlock, Pages, Template, TemplateList, TemplatePageList,
-    TemplateRef, Version,
+    TemplateRef, VPreferences, Version, ZoomSetting,
 };
 use steleofd_model::object::{
     Action, ActionEvent, ActionKind, Actions, CGTransform, Clip, ClipArea, ClipList,
@@ -112,6 +112,9 @@ pub fn read_document(xml: &str) -> Result<ModelDocument> {
                 doc.common_data = read_common_data(&mut cursor)?
             }
             Event::Start(n) if n.is("Pages") => doc.pages = read_pages(&mut cursor)?,
+            Event::Start(n) if n.is("VPreferences") => {
+                doc.vpreferences = Some(read_vpreferences(&mut cursor)?)
+            }
             Event::Start(other) => cursor.skip_element(&other)?,
             Event::End(_) => break,
             Event::Eof => break,
@@ -119,6 +122,66 @@ pub fn read_document(xml: &str) -> Result<ModelDocument> {
         }
     }
     Ok(doc)
+}
+
+/// Read `VPreferences`, clause 7.11. Every child is optional, so what is
+/// absent stays absent rather than being filled from the schema's defaults.
+fn read_vpreferences(cursor: &mut Cursor<'_>) -> Result<VPreferences> {
+    let mut v = VPreferences::default();
+    loop {
+        match cursor.next_event()? {
+            Event::Start(n) if n.is("PageMode") => {
+                let text = read_element_text(cursor, &n)?;
+                v.page_mode = Some(text.parse().map_err(|_| enum_error(&n, &text))?);
+            }
+            Event::Start(n) if n.is("PageLayout") => {
+                let text = read_element_text(cursor, &n)?;
+                v.page_layout = Some(text.parse().map_err(|_| enum_error(&n, &text))?);
+            }
+            Event::Start(n) if n.is("TabDisplay") => {
+                let text = read_element_text(cursor, &n)?;
+                v.tab_display = Some(text.parse().map_err(|_| enum_error(&n, &text))?);
+            }
+            Event::Start(n) if n.is("HideToolbar") => {
+                v.hide_toolbar = Some(read_bool_element(cursor, &n)?)
+            }
+            Event::Start(n) if n.is("HideMenubar") => {
+                v.hide_menubar = Some(read_bool_element(cursor, &n)?)
+            }
+            Event::Start(n) if n.is("HideWindowUI") => {
+                v.hide_window_ui = Some(read_bool_element(cursor, &n)?)
+            }
+            Event::Start(n) if n.is("ZoomMode") => {
+                let text = read_element_text(cursor, &n)?;
+                let mode = text.parse().map_err(|_| enum_error(&n, &text))?;
+                v.zoom = ZoomSetting::ZoomMode(mode);
+            }
+            Event::Start(n) if n.is("Zoom") => {
+                let text = read_element_text(cursor, &n)?;
+                let factor = text.parse().map_err(|_| enum_error(&n, &text))?;
+                v.zoom = ZoomSetting::Zoom(factor);
+            }
+            Event::Start(other) => cursor.skip_element(&other)?,
+            Event::End(_) | Event::Eof => break,
+            Event::Text(_) => {}
+        }
+    }
+    Ok(v)
+}
+
+/// An element's text that must read as a boolean.
+fn read_bool_element(cursor: &mut Cursor<'_>, node: &Node) -> Result<bool> {
+    let text = read_element_text(cursor, node)?;
+    parse_bool(node.local(), node.local(), &text)
+}
+
+/// A value outside the enumeration its element allows.
+fn enum_error(node: &Node, value: &str) -> OfdError {
+    OfdError::Xml(XmlError::InvalidAttribute {
+        element: node.local().to_string(),
+        attr: node.local().to_string(),
+        value: value.to_string(),
+    })
 }
 
 fn read_common_data(cursor: &mut Cursor<'_>) -> Result<CommonData> {

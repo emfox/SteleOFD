@@ -1753,9 +1753,8 @@ fn gb_t_33190_7_10_a_page_resource_table_shadows_the_document_one() {
 #[test]
 fn gb_t_33190_7_14_a_thumbnail_is_read_and_may_be_absent() {
     // Clause 7.14: a vector graphic may name a preview image by reference id.
-    // The reference is kept as a plain id — resolving it to bytes is the
-    // image loader's job, not the reader's — and a unit without one reads back
-    // as `None` rather than borrowing some other resource's id.
+    // The id is kept verbatim — resolving it to bytes is the image loader's
+    // job — and a unit without one reads back as `None`, not its neighbour's.
     let list = steleofd_parser::content::read_composite_graphic_units(
         r#"<?xml version="1.0" encoding="UTF-8"?>
 <Res BaseLoc="Res">
@@ -1780,5 +1779,94 @@ fn gb_t_33190_7_14_a_thumbnail_is_read_and_may_be_absent() {
     assert_eq!(
         list.items[1].thumbnail, None,
         "a unit with no thumbnail does not inherit its neighbour's"
+    );
+}
+
+#[test]
+fn gb_t_33190_7_11_viewer_preferences_are_read() {
+    // Clause 7.11: `VPreferences` says how a reader should open the document.
+    // Every child is optional, so a preference that is stated has to survive
+    // and one that is not has to stay absent.
+    let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<Document>
+  <CommonData>
+    <PageArea><PhysicalBox Left="0" Top="0" Width="210" Height="297"/></PageArea>
+  </CommonData>
+  <VPreferences>
+    <PageMode>UseOutlines</PageMode>
+    <PageLayout>TwoPageL</PageLayout>
+    <TabDisplay>FileName</TabDisplay>
+    <HideToolbar>true</HideToolbar>
+    <HideMenubar>false</HideMenubar>
+    <Zoom>1.5</Zoom>
+  </VPreferences>
+  <Pages><Page ID="1" BaseLoc="Pages/Page_0/Content.xml"/></Pages>
+</Document>"#;
+    let doc = steleofd_parser::content::read_document(xml).expect("read document");
+    let prefs = doc.vpreferences.as_ref().expect("preferences were read");
+    assert_eq!(
+        prefs.page_mode,
+        Some(steleofd_model::PageMode::UseOutlines),
+        "the initial view mode is kept"
+    );
+    assert_eq!(
+        prefs.page_layout,
+        Some(steleofd_model::PageLayout::TwoPageL),
+        "so is the layout"
+    );
+    assert_eq!(
+        prefs.tab_display,
+        Some(steleofd_model::TabDisplay::FileName),
+        "and what the tab shows"
+    );
+    assert_eq!(prefs.hide_toolbar, Some(true), "a stated boolean is kept");
+    assert_eq!(
+        prefs.hide_menubar,
+        Some(false),
+        "false is kept, not dropped"
+    );
+    assert_eq!(
+        prefs.hide_window_ui, None,
+        "an absent preference stays absent rather than defaulting"
+    );
+    assert_eq!(
+        prefs.zoom,
+        steleofd_model::ZoomSetting::Zoom(1.5),
+        "an explicit zoom factor is kept"
+    );
+}
+
+#[test]
+fn gb_t_33190_7_11_a_named_zoom_mode_is_kept_apart_from_a_factor() {
+    // The schema makes `ZoomMode` and `Zoom` a choice, so a named fit mode
+    // must not be read as a factor or the other way round.
+    let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<Document>
+  <CommonData>
+    <PageArea><PhysicalBox Left="0" Top="0" Width="210" Height="297"/></PageArea>
+  </CommonData>
+  <VPreferences><ZoomMode>FitWidth</ZoomMode></VPreferences>
+  <Pages><Page ID="1" BaseLoc="Pages/Page_0/Content.xml"/></Pages>
+</Document>"#;
+    let doc = steleofd_parser::content::read_document(xml).expect("read document");
+    let prefs = doc.vpreferences.as_ref().expect("preferences were read");
+    assert_eq!(
+        prefs.zoom,
+        steleofd_model::ZoomSetting::ZoomMode(steleofd_model::ZoomMode::FitWidth),
+        "a named mode stays a mode"
+    );
+}
+
+#[test]
+fn gb_t_33190_7_11_a_document_without_preferences_reads_them_as_absent() {
+    // The element is optional; a document that omits it must not invent one.
+    let doc = steleofd_parser::content::read_document(&document_xml(
+        r#"<Page ID="1" BaseLoc="Pages/Page_0/Content.xml"/>"#,
+    ))
+    .expect("read document");
+    assert!(
+        doc.vpreferences.is_none(),
+        "no element means no preferences, got {:?}",
+        doc.vpreferences
     );
 }

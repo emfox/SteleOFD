@@ -8,7 +8,8 @@ use steleofd_model::document::{Layer, PageArea};
 use steleofd_model::object::{ObjectBase, PathObject, TextCode, TextObject};
 use steleofd_model::{
     CommonData, CompositeGraphicUnit, DocBody, Document, Location, Multimedia, MultimediaKind,
-    Object, OfdRoot, Page, PageBlock, Pages, Valid, Version,
+    Object, OfdRoot, Page, PageBlock, PageLayout, PageMode, Pages, TabDisplay, VPreferences, Valid,
+    Version, ZoomMode, ZoomSetting,
 };
 
 fn path_object(id: &str) -> Object {
@@ -210,6 +211,7 @@ fn common_data_round_trips_a_page_area_into_the_document() {
         pages: Pages {
             pages: vec![page_with(vec![path_object("1")])],
         },
+        vpreferences: None,
     };
     assert_eq!(
         document.common_data.page_area.physical_box,
@@ -252,4 +254,53 @@ fn a_composite_graphic_unit_keeps_its_declared_size() {
     assert_eq!(unit.width, 80.0);
     assert_eq!(unit.height, 40.0);
     assert!(unit.content.is_none());
+}
+
+#[test]
+fn viewer_preferences_round_trip_in_the_shape_the_schema_uses() {
+    // Clause 7.11's element names are what a writer has to emit, so the
+    // serialised form matters as much as the parsed one.
+    let prefs = VPreferences {
+        page_mode: Some(PageMode::UseBookmarks),
+        page_layout: Some(PageLayout::TwoColumnR),
+        tab_display: Some(TabDisplay::DocTitle),
+        hide_toolbar: Some(true),
+        hide_menubar: None,
+        hide_window_ui: Some(false),
+        zoom: ZoomSetting::ZoomMode(ZoomMode::FitHeight),
+    };
+    let json = serde_json::to_value(&prefs).expect("serialize");
+    assert_eq!(json["PageMode"], "UseBookmarks");
+    assert_eq!(json["PageLayout"], "TwoColumnR");
+    assert_eq!(json["TabDisplay"], "DocTitle");
+    assert_eq!(json["HideToolbar"], true);
+    assert_eq!(json["HideWindowUI"], false);
+    assert_eq!(json["ZoomMode"], "FitHeight");
+    assert!(
+        json.get("HideMenubar").is_none(),
+        "an unstated preference is left out"
+    );
+
+    let back: VPreferences = serde_json::from_value(json).expect("deserialize");
+    assert_eq!(back, prefs);
+}
+
+#[test]
+fn a_zoom_factor_round_trips_as_the_zoom_element() {
+    let prefs = VPreferences {
+        zoom: ZoomSetting::Zoom(2.5),
+        ..Default::default()
+    };
+    let json = serde_json::to_value(&prefs).expect("serialize");
+    assert_eq!(json["Zoom"], 2.5);
+    assert!(json.get("ZoomMode").is_none(), "the two are exclusive");
+    let back: VPreferences = serde_json::from_value(json).expect("deserialize");
+    assert_eq!(back.zoom, ZoomSetting::Zoom(2.5));
+}
+
+#[test]
+fn an_unset_zoom_adds_no_element() {
+    let json = serde_json::to_value(VPreferences::default()).expect("serialize");
+    assert!(json.get("Zoom").is_none());
+    assert!(json.get("ZoomMode").is_none());
 }

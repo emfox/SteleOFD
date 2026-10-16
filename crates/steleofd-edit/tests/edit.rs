@@ -45,6 +45,7 @@ fn document_with(one_object: bool) -> Document {
                 templates: None,
             }],
         },
+        vpreferences: None,
     }
 }
 

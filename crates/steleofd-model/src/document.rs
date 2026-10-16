@@ -118,6 +118,9 @@ pub struct Document {
     /// Page listing.
     #[serde(rename = "Pages")]
     pub pages: Pages,
+    /// How a reader should open the document, clause 7.11.
+    #[serde(rename = "VPreferences", skip_serializing_if = "Option::is_none")]
+    pub vpreferences: Option<VPreferences>,
 }
 
 /// Templates, resources and default extents shared by every page.
@@ -173,6 +176,189 @@ pub struct Template {
     #[serde(rename = "BaseLoc")]
     pub base_loc: String,
 }
+
+/// GB/T 33190 clause 7.11: how a reader should open the document. Every field
+/// is a preference, not a constraint, so an absent value means "no opinion"
+/// rather than a default this model imposes.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct VPreferences {
+    /// Initial view mode, `PageMode` in the schema.
+    #[serde(rename = "PageMode", skip_serializing_if = "Option::is_none")]
+    pub page_mode: Option<PageMode>,
+    /// How pages are laid out side by side.
+    #[serde(rename = "PageLayout", skip_serializing_if = "Option::is_none")]
+    pub page_layout: Option<PageLayout>,
+    /// What the tab shows, the document title or the file name.
+    #[serde(rename = "TabDisplay", skip_serializing_if = "Option::is_none")]
+    pub tab_display: Option<TabDisplay>,
+    /// Whether the toolbar starts hidden.
+    #[serde(rename = "HideToolbar", skip_serializing_if = "Option::is_none")]
+    pub hide_toolbar: Option<bool>,
+    /// Whether the menu bar starts hidden.
+    #[serde(rename = "HideMenubar", skip_serializing_if = "Option::is_none")]
+    pub hide_menubar: Option<bool>,
+    /// Whether the surrounding window chrome starts hidden.
+    #[serde(rename = "HideWindowUI", skip_serializing_if = "Option::is_none")]
+    pub hide_window_ui: Option<bool>,
+    /// Initial zoom, either a named mode or an explicit factor.
+    #[serde(flatten)]
+    pub zoom: ZoomSetting,
+}
+
+/// Initial view mode, `CT_VPreferences`'s `PageMode`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum PageMode {
+    /// No particular mode.
+    #[serde(rename = "None")]
+    None,
+    /// Full-screen presentation.
+    #[serde(rename = "FullScreen")]
+    FullScreen,
+    /// With the outline pane open.
+    #[serde(rename = "UseOutlines")]
+    UseOutlines,
+    /// With the thumbnail pane open.
+    #[serde(rename = "UseThumbs")]
+    UseThumbs,
+    /// With the custom-tag pane open.
+    #[serde(rename = "UseCustomTags")]
+    UseCustomTags,
+    /// With the layer pane open.
+    #[serde(rename = "UseLayers")]
+    UseLayers,
+    /// With the attachment pane open. The schema spells this `UseAttatchs`.
+    #[serde(rename = "UseAttatchs")]
+    UseAttachments,
+    /// With the bookmark pane open.
+    #[serde(rename = "UseBookmarks")]
+    UseBookmarks,
+}
+
+/// How pages sit next to one another.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum PageLayout {
+    /// One page at a time.
+    #[serde(rename = "OnePage")]
+    OnePage,
+    /// A single scrolling column.
+    #[serde(rename = "OneColumn")]
+    OneColumn,
+    /// Two pages side by side, left page first.
+    #[serde(rename = "TwoPageL")]
+    TwoPageL,
+    /// Two scrolling columns, left column first.
+    #[serde(rename = "TwoColumnL")]
+    TwoColumnL,
+    /// Two pages side by side, right page first.
+    #[serde(rename = "TwoPageR")]
+    TwoPageR,
+    /// Two scrolling columns, right column first.
+    #[serde(rename = "TwoColumnR")]
+    TwoColumnR,
+}
+
+/// What the document's tab is labelled with.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TabDisplay {
+    /// The document title.
+    #[serde(rename = "DocTitle")]
+    DocTitle,
+    /// The file name.
+    #[serde(rename = "FileName")]
+    FileName,
+}
+
+/// Initial zoom, which the schema offers as either a named mode or a factor.
+/// The two are exclusive, so the absent case is spelled out here.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+pub enum ZoomSetting {
+    /// No zoom preference was stated.
+    #[default]
+    Unset,
+    /// A named fit mode, `ZoomMode` in the schema.
+    ZoomMode(ZoomMode),
+    /// An explicit magnification factor, `Zoom` in the schema, where 1.0 is
+    /// 100%.
+    Zoom(f64),
+}
+
+/// The named zoom modes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ZoomMode {
+    /// Whatever the reader considers sensible.
+    #[serde(rename = "Default")]
+    Default,
+    /// Fit the page height.
+    #[serde(rename = "FitHeight")]
+    FitHeight,
+    /// Fit the page width.
+    #[serde(rename = "FitWidth")]
+    FitWidth,
+    /// Fit the given rectangle.
+    #[serde(rename = "FitRect")]
+    FitRect,
+}
+
+/// An element's text that is not one of the values the schema allows.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UnknownEnumValue(pub String);
+
+impl std::fmt::Display for UnknownEnumValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl std::error::Error for UnknownEnumValue {}
+
+/// Parse a tagged enumeration, rejecting anything the schema does not list.
+macro_rules! tagged_enum {
+    ($ty:ident { $($tag:literal => $variant:ident),+ $(,)? }) => {
+        impl std::str::FromStr for $ty {
+            type Err = UnknownEnumValue;
+
+            fn from_str(raw: &str) -> std::result::Result<Self, Self::Err> {
+                match raw {
+                    $($tag => Ok(Self::$variant),)+
+                    other => Err(UnknownEnumValue(other.to_string())),
+                }
+            }
+        }
+    };
+}
+
+tagged_enum!(PageMode {
+    "None" => None,
+    "FullScreen" => FullScreen,
+    "UseOutlines" => UseOutlines,
+    "UseThumbs" => UseThumbs,
+    "UseCustomTags" => UseCustomTags,
+    "UseLayers" => UseLayers,
+    "UseAttatchs" => UseAttachments,
+    "UseBookmarks" => UseBookmarks,
+});
+
+tagged_enum!(PageLayout {
+    "OnePage" => OnePage,
+    "OneColumn" => OneColumn,
+    "TwoPageL" => TwoPageL,
+    "TwoColumnL" => TwoColumnL,
+    "TwoPageR" => TwoPageR,
+    "TwoColumnR" => TwoColumnR,
+});
+
+tagged_enum!(TabDisplay {
+    "DocTitle" => DocTitle,
+    "FileName" => FileName,
+});
+
+tagged_enum!(ZoomMode {
+    "Default" => Default,
+    "FitHeight" => FitHeight,
+    "FitWidth" => FitWidth,
+    "FitRect" => FitRect,
+});
 
 /// List of drawing parameter records.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -552,6 +738,7 @@ mod tests {
                 templates: None,
                 draw_params: None,
             },
+            vpreferences: None,
             pages: Pages::default(),
         };
         assert!(doc.common_data.templates.is_none());
@@ -583,6 +770,7 @@ mod tests {
                 }),
                 draw_params: None,
             },
+            vpreferences: None,
             pages: Pages {
                 pages: vec![Page {
                     id: "10".to_string(),

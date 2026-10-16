@@ -128,9 +128,12 @@ tests = [
 [[item]]
 clause = "7.11"
 title = "Viewer preferences"
-status = "deviation"
-note = "not read; the model stops at CommonData and no corpus sample carries one"
-tests = []
+status = "verified"
+tests = [
+    "gb_t_33190_7_11_viewer_preferences_are_read",
+    "gb_t_33190_7_11_a_named_zoom_mode_is_kept_apart_from_a_factor",
+    "gb_t_33190_7_11_a_document_without_preferences_reads_them_as_absent",
+]
 
 [[item]]
 clause = "7.12"
