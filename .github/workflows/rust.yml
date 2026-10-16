@@ -3,8 +3,22 @@ name: CI
 on:
   push:
     branches: [main]
+    # A docs-only or licence-only commit has nothing for the Rust gate to say,
+    # and the gate is the expensive part of a push.
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
+      - 'LICENSE'
+      - '.gitignore'
+      - '.github/ISSUE_TEMPLATE/**'
   pull_request:
     branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
+      - 'LICENSE'
+      - '.gitignore'
+      - '.github/ISSUE_TEMPLATE/**'
 
 env:
   CARGO_TERM_COLOR: always
@@ -157,6 +171,11 @@ jobs:
   # checks each one-page figure against its ceiling, which is set well above
   # the baseline: only a change that makes a page cost several times what it
   # did crosses it. Ordinary noise and different hardware do not.
+  #
+  # It does not run for a docs-only or config-only commit: the workflow's
+  # `paths-ignore` already drops those before any job is created, and a commit
+  # that touches Rust and docs together still runs it, because the Rust half
+  # could move a benchmark.
   performance:
     runs-on: ubuntu-latest
     steps:
