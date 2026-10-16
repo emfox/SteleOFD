@@ -187,3 +187,20 @@ fn each_book_page_keeps_its_own_size() {
         "page 8 carries its own 297x100mm box"
     );
 }
+
+#[test]
+fn the_even_odd_page_keeps_its_hole() {
+    // `Rule="Even-Odd"` on two nested rings has to cut the inner square out.
+    // A backend that ignores the rule, or a fixture that misspells it and
+    // falls back to `NonZero`, paints the square solid.
+    let doc = DOCS
+        .iter()
+        .find(|doc| doc.name == "evenodd")
+        .expect("the even-odd fixture");
+    let page = decode(&render(doc), doc.name);
+    let (w, h) = page.dimensions();
+    let centre = page.get_pixel(w / 2, h / 2);
+    let ring = page.get_pixel(w / 4, h / 2);
+    assert_eq!(centre.0[3], 0, "the inner square is cut out, not filled");
+    assert!(ring.0[3] > 0, "the ring around it is painted");
+}
