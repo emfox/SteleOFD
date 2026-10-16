@@ -2,7 +2,9 @@
 //! document carrying a photograph, a seal or a QR code rendered with the image
 //! missing and no error raised.
 
+use steleofd_common::Rect;
 use steleofd_display::{DrawOp, ImageCodec};
+use steleofd_geometry::Affine;
 use steleofd_package::{Package, build_archive};
 use steleofd_parser::{ParsedDocument, Parser};
 
@@ -214,4 +216,87 @@ fn a_placement_of_an_undeclared_resource_leaves_the_page_alone() {
         })
         .collect();
     assert_eq!(placed, vec![0], "the placement survives with no bytes");
+}
+
+/// Clause 10.1: a placement maps the object's unit square onto the boundary,
+/// and what the resource calls its own size does not move it.
+#[test]
+fn gb_t_33190_10_1_an_image_placement_scales_the_unit_square() {
+    let png = red_pixel();
+    let media = r#"<MultiMedia ID="7" Type="Image"><MediaFile>image.png</MediaFile></MultiMedia>"#;
+    let bytes = archive("Doc_0", media, &png);
+    let (doc, mut parser) = open(&bytes);
+    let page = parser.page_display(&doc, 0).expect("page display");
+
+    let placement = page
+        .ops
+        .iter()
+        .position(|op| matches!(op, DrawOp::Image { .. }))
+        .expect("the page places an image");
+    let DrawOp::Image {
+        dst,
+        transform,
+        image,
+    } = &page.ops[placement]
+    else {
+        unreachable!()
+    };
+    // The fixture boundaries the object at "10 10 50 50": an origin of
+    // (10, 10) and an extent of 50 by 50, matching the rectangle the boundary
+    // is a sibling of elsewhere in the flattener.
+    assert_eq!(
+        *dst,
+        Rect::new(0.0, 0.0, 1.0, 1.0),
+        "the placement addresses a unit square"
+    );
+    assert_eq!(
+        *transform,
+        Affine::IDENTITY,
+        "so that the unit square is scaled once, not twice"
+    );
+    // The boundary reaches the list as a transform bracketing the placement.
+    let boundary = page.ops[..placement]
+        .iter()
+        .rev()
+        .find_map(|op| match op {
+            DrawOp::Transform(t) => Some(*t),
+            _ => None,
+        })
+        .expect("the boundary reached the list ahead of the placement");
+    assert_eq!(
+        boundary.apply(0.0, 0.0),
+        (10.0, 10.0),
+        "the unit square's origin lands on the boundary's"
+    );
+    assert_eq!(
+        boundary.apply(1.0, 1.0),
+        (11.0, 11.0),
+        "and its far corner lands one boundary away from that origin"
+    );
+    assert_eq!(image.pixel_size, (1, 1), "the bytes are read, not guessed");
+}
+
+/// Clause 10.2: the media file names the encoding, and every format a
+/// document may carry has to reach the painter under its own name rather
+/// than being assumed to be PNG.
+#[test]
+fn gb_t_33190_10_2_each_media_format_reaches_the_painter() {
+    let png = red_pixel();
+    for (name, expected) in [
+        ("image.png", ImageCodec::Png),
+        ("image.jpg", ImageCodec::Jpeg),
+        ("image.jb2", ImageCodec::Jbig2),
+    ] {
+        let media = format!(
+            r#"<MultiMedia ID="7" Type="Image"><MediaFile>{name}</MediaFile></MultiMedia>"#
+        );
+        let bytes = archive_named("Doc_0", &media, name, &png);
+        let (doc, mut parser) = open(&bytes);
+        let (data, codec, _) = placed_image(&doc, &mut parser);
+        assert_eq!(codec, expected, "{name} names its own codec");
+        assert_eq!(
+            data, png,
+            "and the bytes reach the painter whatever the format claims"
+        );
+    }
 }

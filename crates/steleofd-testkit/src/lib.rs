@@ -4,10 +4,12 @@
 
 #![warn(missing_docs)]
 
+mod bench;
 mod der;
 mod document;
 mod signed;
 
+pub use bench::{OBJECTS_PER_PAGE, bench_archive};
 pub use der::{base64_of, oid, sm2_cert_der, tlv};
 pub use document::{
     CONTENT_ENTRY, CONTENT_XML, DOCUMENT_ENTRY, DOCUMENT_XML, OFD_XML, OFD_XML_SIGNED, SIGN_FILE,

@@ -402,3 +402,83 @@ fn gb_t_33190_18_2_2_the_provider_name_is_an_attribute() {
     assert_eq!(sig.signature_method.as_deref(), Some("SM2-SM3"));
     assert_eq!(sig.sign_time.as_deref(), Some("2024-05-01T09:00:00"));
 }
+
+#[test]
+fn gb_t_33190_18_3_a_sealed_document_verifies_and_an_edited_one_does_not() {
+    // Clause 18.3: sealing fixes the content, so the same descriptor verifies
+    // against what was sealed and reports a mismatch once that content moves.
+    let sealed = vec![
+        ("Signs/Signs.xml", signs_xml()),
+        (
+            SIG_FILE,
+            descriptor("s", &[("SM3", "Doc_0/Document.xml")]).into_bytes(),
+        ),
+        ("Doc_0/Document.xml", b"the sealed document".to_vec()),
+    ];
+    let (sig, pair) = make_signature(&sealed, &[("SM3", "Doc_0/Document.xml")]);
+    let mut package = open(&sealed);
+    assert_eq!(
+        verify_with_public_key(&mut package, &sig, &pair.public_bytes()).expect("verify"),
+        VerifyStatus::Valid,
+        "the sealed bytes verify"
+    );
+
+    let edited = vec![
+        ("Signs/Signs.xml", signs_xml()),
+        (
+            SIG_FILE,
+            descriptor("s", &[("SM3", "Doc_0/Document.xml")]).into_bytes(),
+        ),
+        ("Doc_0/Document.xml", b"the edited document".to_vec()),
+    ];
+    let mut package = open(&edited);
+    assert_eq!(
+        verify_with_public_key(&mut package, &sig, &pair.public_bytes()).expect("verify"),
+        VerifyStatus::Tampered,
+        "editing a sealed file breaks the seal"
+    );
+}
+
+#[test]
+fn gb_t_33190_18_4_validation_reports_the_scope_it_checked() {
+    // Clause 18.4: validation covers exactly the files the descriptor names.
+    // A file outside that list may change without the seal moving, and that
+    // is the scope the check value was computed over.
+    let entries = vec![
+        ("Signs/Signs.xml", signs_xml()),
+        (
+            SIG_FILE,
+            descriptor("s", &[("SM3", "Doc_0/Document.xml")]).into_bytes(),
+        ),
+        ("Doc_0/Document.xml", b"sealed".to_vec()),
+        ("Doc_0/Res/Other.xml", b"outside the scope".to_vec()),
+    ];
+    let (sig, pair) = make_signature(&entries, &[("SM3", "Doc_0/Document.xml")]);
+    let mut package = open(&entries);
+    let read = read_signature(&mut package, SIG_FILE).expect("descriptor");
+    assert_eq!(
+        read.references
+            .iter()
+            .map(|r| r.file_ref.as_str())
+            .collect::<Vec<_>>(),
+        vec!["Doc_0/Document.xml"],
+        "the descriptor states which file it covers"
+    );
+
+    // Editing a file outside the sealed set leaves the check value alone.
+    let outside_edited = vec![
+        ("Signs/Signs.xml", signs_xml()),
+        (
+            SIG_FILE,
+            descriptor("s", &[("SM3", "Doc_0/Document.xml")]).into_bytes(),
+        ),
+        ("Doc_0/Document.xml", b"sealed".to_vec()),
+        ("Doc_0/Res/Other.xml", b"edited outside the scope".to_vec()),
+    ];
+    let mut package = open(&outside_edited);
+    assert_eq!(
+        verify_with_public_key(&mut package, &sig, &pair.public_bytes()).expect("verify"),
+        VerifyStatus::Valid,
+        "the checked scope is the referenced files and nothing else"
+    );
+}

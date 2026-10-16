@@ -30,6 +30,14 @@ const REFERENCING: &[&str] = &[
 /// the root element there, and reading its text would swallow the resources.
 const PAGE_RESOURCES: &[&str] = &["PageRes", "FileLoc"];
 
+/// Resource tables whose entries name the files they hold. Clause 21.2 is
+/// about reachability, so a table that points at a file the container does not
+/// carry has to be followed as far as the file name, not just to the table.
+const RESOURCE_TABLES: &[&str] = &["PublicRes", "DocumentRes", "PageRes", "FileRes"];
+
+/// Elements inside a resource table whose text is a file the table claims.
+const RESOURCE_FILES: &[&str] = &["MediaFile", "FontFile", "FileLoc", "BaseLoc"];
+
 /// Audit a container for archival readiness.
 pub struct Auditor;
 
@@ -87,11 +95,43 @@ impl Auditor {
         Ok(report)
     }
 
+    /// Follow the entries a document points at. A reference to a resource
+    /// table is one hop; the files that table names are the hop after it, and
+    /// clause 21.2 is not satisfied until they resolve too.
+    fn audit_resource_tables(
+        &self,
+        package: &mut Package,
+        found_in: &str,
+        report: &mut Report,
+    ) -> Result<()> {
+        let xml = read(package, found_in)?;
+        let base = parent_of(found_in);
+        // A table is namespaced, so the local name has to be matched rather
+        // than the prefixed spelling the file happens to use.
+        for reference in references(&xml, RESOURCE_TABLES)? {
+            let table_path = resolve(&base, &reference.value);
+            if !package.contains(&table_path) {
+                continue;
+            }
+            let table = read(package, &table_path)?;
+            let table_base = parent_of(&table_path);
+            for file in references(&table, RESOURCE_FILES)? {
+                if let Some(finding) = self.check(package, &table_base, &table_path, &file) {
+                    report.push(finding);
+                }
+            }
+        }
+        Ok(())
+    }
+
     /// Walk one document: its pages and their resources.
     fn audit_document(&self, package: &mut Package, path: &str, report: &mut Report) -> Result<()> {
         if !package.contains(path) {
             return Ok(());
         }
+        // The document-level tables name the files they hold, so follow them
+        // before descending into pages.
+        self.audit_resource_tables(package, path, report)?;
         let xml = read(package, path)?;
         let base = parent_of(path);
         for reference in references(&xml, REFERENCING)? {
@@ -110,6 +150,7 @@ impl Auditor {
             }
             let res_base = parent_of(&page_path);
             let page_xml = read(package, &page_path)?;
+            self.audit_resource_tables(package, &page_path, report)?;
             for nested in references(&page_xml, PAGE_RESOURCES)? {
                 if let Some(finding) = self.check(package, &res_base, &page_path, &nested) {
                     report.push(finding);

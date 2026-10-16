@@ -1417,3 +1417,335 @@ fn read_page_actions(object: &str) -> steleofd_model::Actions {
         other => panic!("expected a path object, got {other:?}"),
     }
 }
+
+#[test]
+fn gb_t_33190_8_1_1_object_space_agrees_with_the_page_space() {
+    // Clause 8.1.1 makes an object's content space the page's, scaled only by
+    // the object's own matrix; a boundary at the origin with an identity
+    // matrix therefore leaves path data as written, in millimetres.
+    let ops = page_ops(
+        r#"<PathObject ID="10" Boundary="0 0 20 20" Stroke="true">
+  <AbbreviatedData>M 1 2 L 11 12</AbbreviatedData>
+</PathObject>"#,
+        "",
+    );
+    let DrawOp::Path { path, .. } = &ops[0] else {
+        panic!("expected a path op, got {ops:?}");
+    };
+    let bounds = path.tight_bounding_box();
+    assert!(
+        (bounds.x - 1.0).abs() < 1e-9 && (bounds.y - 2.0).abs() < 1e-9,
+        "the data is millimetres from the page origin, got {bounds:?}"
+    );
+    assert!(
+        (bounds.w - 10.0).abs() < 1e-9 && (bounds.h - 10.0).abs() < 1e-9,
+        "and is not scaled on the way in, got {bounds:?}"
+    );
+}
+
+#[test]
+fn gb_t_33190_8_1_2_boundary_places_the_object_on_the_page() {
+    // Clause 8.1.2: the boundary is where the object lands, and the display
+    // list says so by bracketing the object in a transform, leaving the path
+    // data in its own coordinates.
+    let ops = page_ops(
+        r#"<PathObject ID="10" Boundary="40 50 20 20" Stroke="true">
+  <AbbreviatedData>M 0 0 L 20 0 L 20 20 Z</AbbreviatedData>
+</PathObject>"#,
+        "",
+    );
+    let placed = ops
+        .iter()
+        .find_map(|op| match op {
+            DrawOp::Transform(t) => Some(*t),
+            _ => None,
+        })
+        .expect("the boundary reaches the list as a transform");
+    assert_eq!(
+        placed.apply(0.0, 0.0),
+        (40.0, 50.0),
+        "the boundary corner is where the object starts"
+    );
+    assert_eq!(
+        placed.apply(20.0, 20.0),
+        (60.0, 70.0),
+        "and the far corner follows the boundary's size"
+    );
+    assert!(
+        ops.iter().any(|op| matches!(op, DrawOp::Save)),
+        "the transform is scoped, so it cannot leak into the next object"
+    );
+}
+
+#[test]
+fn gb_t_33190_8_1_4_a_page_box_has_a_measurable_size() {
+    // Clause 8.1.4 gives the page a physical box in millimetres, and every
+    // later scale — raster DPI, PDF points — is derived from it.
+    let entries = [
+        ("OFD.xml", OFD_XML.to_string()),
+        (
+            "Doc_0/Document.xml",
+            document_xml(r#"<Page ID="1"><Content><Layer/></Content></Page>"#),
+        ),
+    ];
+    let mut parser = open(&entries);
+    let doc = parser.open_document().expect("open document");
+    let page = parser.page_display(&doc, 0).expect("flatten page");
+    assert_eq!(page.page_box.w, 210.0);
+    assert_eq!(page.page_box.h, 297.0);
+    assert!(page.page_box.size_px(96.0).0 > 0, "and it scales to pixels");
+}
+
+#[test]
+fn gb_t_33190_8_2_3_line_width_and_miter_limit_reach_the_op() {
+    // Clause 8.2.3: width and miter limit are stroke parameters, and a unit
+    // that states its own wins over the draw parameter it names.
+    let ops = page_ops(
+        r##"<PathObject ID="10" Boundary="0 0 10 10" DrawParam="d1" LineWidth="0.25" MiterLimit="7">
+  <AbbreviatedData>M 0 0 L 10 0 L 10 10 Z</AbbreviatedData>
+</PathObject>"##,
+        r#"<DrawParam ID="d1" Stroke="true" LineWidth="9" MiterLimit="2"/>"#,
+    );
+    let DrawOp::Path { stroke_style, .. } = &ops[0] else {
+        panic!("expected a path op, got {ops:?}");
+    };
+    assert_eq!(stroke_style.width, 0.25, "the unit states the width");
+    assert_eq!(stroke_style.miter_limit, 7.0, "and the miter limit");
+}
+
+#[test]
+fn gb_t_33190_8_3_1_a_colour_value_reads_as_its_three_channels() {
+    // Clause 8.3.1: a colour is three channels, and each may carry its own
+    // hex marker. Reading them as one six-digit string is the mistake that
+    // hid behind every dark document in the corpus.
+    let ops = page_ops(
+        r##"<PathObject ID="10" Boundary="0 0 10 10" Fill="true">
+  <FillColor Value="#ee #20 #25"/>
+  <AbbreviatedData>M 0 0 L 10 0 L 10 10 Z</AbbreviatedData>
+</PathObject>"##,
+        "",
+    );
+    let DrawOp::Path {
+        fill: Some(Paint::Solid(c)),
+        ..
+    } = &ops[0]
+    else {
+        panic!("expected a filled path, got {ops:?}");
+    };
+    assert_eq!((c.r, c.g, c.b), (0xee, 0x20, 0x25));
+}
+
+#[test]
+fn gb_t_33190_8_3_3_alpha_reaches_the_paint() {
+    // Clause 8.3.3: transparency is a fourth channel, and it has to survive
+    // the trip from the colour value to the paint or a faded overlay paints
+    // solid.
+    let ops = page_ops(
+        r##"<PathObject ID="10" Boundary="0 0 10 10" Fill="true">
+  <FillColor Value="0 0 0" Alpha="64"/>
+  <AbbreviatedData>M 0 0 L 10 0 L 10 10 Z</AbbreviatedData>
+</PathObject>"##,
+        "",
+    );
+    let DrawOp::Path {
+        fill: Some(Paint::Solid(c)),
+        ..
+    } = &ops[0]
+    else {
+        panic!("expected a filled path, got {ops:?}");
+    };
+    assert_eq!(c.a, 64, "alpha travels with the colour");
+}
+
+#[test]
+fn gb_t_33190_8_6_a_graphics_unit_resolves_from_its_resource_id() {
+    // Clause 8.6: an object may name a graphics unit in the resource table,
+    // and the unit's own draw parameter then applies in place of an inline
+    // one.
+    let ops = page_ops(
+        r##"<PathObject ID="10" Boundary="0 0 10 10" DrawParam="unit1">
+  <AbbreviatedData>M 0 0 L 10 0 L 10 10 Z</AbbreviatedData>
+</PathObject>"##,
+        r#"<DrawParam ID="unit1" Stroke="true" Fill="false" LineWidth="1.25"/>"#,
+    );
+    let DrawOp::Path {
+        fill,
+        stroke,
+        stroke_style,
+        ..
+    } = &ops[0]
+    else {
+        panic!("expected a path op, got {ops:?}");
+    };
+    assert!(fill.is_none(), "the named unit turned filling off");
+    assert!(stroke.is_some());
+    assert_eq!(stroke_style.width, 1.25, "and carried its width");
+}
+
+#[test]
+fn gb_t_33190_9_3_1_a_path_must_open_with_a_subpath_start() {
+    // Clause 9.3.1, table 36: the first operator of abbreviated data is `S`
+    // or `M`, and anything else is malformed rather than silently empty.
+    assert!(parse_path("M 0 0 L 1 1").is_ok(), "M opens a path");
+    assert!(parse_path("S 0 0 L 1 1").is_ok(), "S opens a path");
+    for bad in ["L 0 0", "Q 0 0 1 1", "A 0 0 1 1 0 1 1", "Z"] {
+        assert!(
+            parse_path(bad).is_err(),
+            "{bad:?} cannot open a path and must be refused"
+        );
+    }
+}
+
+#[test]
+fn gb_t_33190_9_4_a_path_keeps_its_data_and_its_clipping() {
+    // Clause 9.4: a path object is its geometry plus the region that limits
+    // it, and both have to survive flattening — the clip as its own op, the
+    // subject as the path it bounds.
+    let ops = page_ops(
+        r#"<PathObject ID="10" Boundary="0 0 20 20" Stroke="true">
+  <Clips><Clip><Area><Path><AbbreviatedData>M 0 0 L 20 0 L 20 20 L 0 20 Z</AbbreviatedData></Path></Area></Clip></Clips>
+  <AbbreviatedData>M 2 2 L 18 2 L 18 18 Z</AbbreviatedData>
+</PathObject>"#,
+        "",
+    );
+    assert!(
+        ops.iter().any(|op| matches!(op, DrawOp::ClipPath { .. })),
+        "the clipping region reached the list as a clip, got {ops:?}"
+    );
+    let subject = ops
+        .iter()
+        .find_map(|op| match op {
+            DrawOp::Path { path, stroke, .. } if stroke.is_some() => Some(path),
+            _ => None,
+        })
+        .expect("the subject keeps its stroke");
+    assert_eq!(subject.len(), 3, "and its own three segments");
+    assert_eq!(
+        ops.iter()
+            .filter(|op| matches!(op, DrawOp::Save | DrawOp::Restore))
+            .count(),
+        2,
+        "the clip is scoped to the object that asked for it"
+    );
+}
+
+#[test]
+fn gb_t_33190_11_5_reading_direction_and_alignment_are_kept() {
+    // Clause 11.5: a text object states which way its characters run and how
+    // they are placed, and a vertical run must not be flattened into a
+    // horizontal one.
+    let ops = page_ops(
+        r#"<TextObject ID="10" Boundary="0 0 100 30" Font="3" Size="5"
+   ReadDirection="0" CharDirection="270" Weight="700" Italic="true">
+  <TextCode X="0" Y="0">AB</TextCode>
+</TextObject>"#,
+        "",
+    );
+    let runs = ops
+        .iter()
+        .filter_map(|op| match op {
+            DrawOp::Text(run) => Some(run),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    assert!(!runs.is_empty(), "the run reached the display list");
+    assert_eq!(runs[0].plain_text(), "AB", "and kept its text for search");
+}
+
+#[test]
+fn gb_t_33190_7_10_a_page_resource_table_is_read() {
+    // Clause 7.10: a page may carry its own resource table at `PageRes`, and
+    // a draw parameter declared there has to be reachable from the page body.
+    let entries = [
+        ("OFD.xml", OFD_XML.to_string()),
+        (
+            "Doc_0/Document.xml",
+            document_xml(r#"<Page ID="1" BaseLoc="Pages/Page_0/Content.xml"/>"#),
+        ),
+        (
+            "Doc_0/Pages/Page_0/Content.xml",
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+<Page>
+  <PageRes>PageRes.xml</PageRes>
+  <Content><Layer>
+    <PathObject ID="10" Boundary="0 0 10 10" DrawParam="p1">
+      <AbbreviatedData>M 0 0 L 10 0 L 10 10 Z</AbbreviatedData>
+    </PathObject>
+  </Layer></Content>
+</Page>"#
+                .to_string(),
+        ),
+        (
+            "Doc_0/Pages/Page_0/PageRes.xml",
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+<Res BaseLoc="."><DrawParams>
+  <DrawParam ID="p1" Stroke="true" LineWidth="3"/>
+</DrawParams></Res>"#
+                .to_string(),
+        ),
+    ];
+    let mut parser = open(&entries);
+    let doc = parser.open_document().expect("open document");
+    let page = parser.page_display(&doc, 0).expect("flatten page");
+    let width = page.ops.iter().find_map(|op| match op {
+        DrawOp::Path { stroke_style, .. } => Some(stroke_style.width),
+        _ => None,
+    });
+    assert_eq!(
+        width,
+        Some(3.0),
+        "the page table's unit is what the object names, got {:?}",
+        page.ops
+    );
+}
+
+#[test]
+fn gb_t_33190_7_10_a_page_resource_table_shadows_the_document_one() {
+    // Clause 7.10 read with 7.9: the page table is the nearer of the two, so
+    // an id both declare has to resolve to the page's copy.
+    let entries = [
+        ("OFD.xml", OFD_XML.to_string()),
+        (
+            "Doc_0/Document.xml",
+            document_xml(r#"<Page ID="1" BaseLoc="Pages/Page_0/Content.xml"/>"#)
+                .replace(
+                    "</CommonData>",
+                    r#"<DrawParams><DrawParam ID="p1" Stroke="true" LineWidth="9"/></DrawParams></CommonData>"#,
+                ),
+        ),
+        (
+            "Doc_0/Pages/Page_0/Content.xml",
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+<Page>
+  <PageRes>PageRes.xml</PageRes>
+  <Content><Layer>
+    <PathObject ID="10" Boundary="0 0 10 10" DrawParam="p1">
+      <AbbreviatedData>M 0 0 L 10 0 L 10 10 Z</AbbreviatedData>
+    </PathObject>
+  </Layer></Content>
+</Page>"#
+                .to_string(),
+        ),
+        (
+            "Doc_0/Pages/Page_0/PageRes.xml",
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+<Res BaseLoc="."><DrawParams>
+  <DrawParam ID="p1" Stroke="true" LineWidth="1.5"/>
+</DrawParams></Res>"#
+                .to_string(),
+        ),
+    ];
+    let mut parser = open(&entries);
+    let doc = parser.open_document().expect("open document");
+    let page = parser.page_display(&doc, 0).expect("flatten page");
+    let width = page.ops.iter().find_map(|op| match op {
+        DrawOp::Path { stroke_style, .. } => Some(stroke_style.width),
+        _ => None,
+    });
+    assert_eq!(
+        width,
+        Some(1.5),
+        "the nearer table wins over the document's 9 mm, got {:?}",
+        page.ops
+    );
+}

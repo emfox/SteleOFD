@@ -99,7 +99,7 @@ impl<'a> Parser<'a> {
             .unwrap_or(doc.document.common_data.page_area.physical_box);
         let mut builder =
             steleofd_display::DisplayListBuilder::new(page_box).with_max_depth(self.max_depth);
-        let params = doc.draw_params.clone();
+        let params = params::for_page(self.package, &doc.doc_dir, page_ref, &doc.draw_params)?;
 
         if let Some(tpls) = &page.templates {
             let table = template_table(doc);

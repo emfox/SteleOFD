@@ -213,3 +213,105 @@ fn findings_name_the_clause_they_derive_from() {
     assert_eq!(finding.clause, "7.4");
     assert_eq!(finding.location, "OFD.xml");
 }
+
+#[test]
+fn gb_t_33190_21_1_a_reference_outside_the_container_fails_the_audit() {
+    // Clause 21.1: an archival container stands alone, so any reference that
+    // leaves it is an error rather than a warning.
+    let mut entries = healthy();
+    entries[1].1 = r#"<ofd:Document xmlns:ofd="http://www.ofdspec.org/2016">
+  <ofd:CommonData>
+    <ofd:PageArea><ofd:PhysicalBox>0 0 210 297</ofd:PhysicalBox></ofd:PageArea>
+    <ofd:DocumentRes>https://example.org/Res.xml</ofd:DocumentRes>
+  </ofd:CommonData>
+  <ofd:Pages>
+    <ofd:Page ID="1" BaseLoc="Pages/Page_0/Content.xml"/>
+  </ofd:Pages>
+</ofd:Document>"#;
+    let report = audit_of(&entries);
+    assert!(
+        codes(&report).contains(&"ARCH-007"),
+        "a reference to another host breaks self-containment, got {:?}",
+        codes(&report)
+    );
+    assert!(
+        !report.is_acceptable(),
+        "and the document is not archivable"
+    );
+    let finding = report
+        .findings
+        .iter()
+        .find(|f| f.code == "ARCH-007")
+        .expect("the finding is present");
+    assert_eq!(finding.severity, Severity::Error);
+    assert_eq!(finding.clause, "6.2", "it cites the self-containment rule");
+}
+
+#[test]
+fn gb_t_33190_21_2_each_declared_resource_must_be_reachable() {
+    // Clause 21.2: a table that names a file the container does not hold is
+    // as broken as one that names nothing at all, so the audit walks every
+    // reference rather than trusting the tables it reads.
+    let mut entries = healthy();
+    entries[3].1 = r#"<ofd:Res xmlns:ofd="http://www.ofdspec.org/2016" BaseLoc="Res">
+  <ofd:MultiMedias>
+    <ofd:MultiMedia ID="7" Type="Image"><ofd:MediaFile>missing.png</ofd:MediaFile></ofd:MultiMedia>
+  </ofd:MultiMedias>
+</ofd:Res>"#;
+    let report = audit_of(&entries);
+    assert!(
+        codes(&report).contains(&"ARCH-004"),
+        "the unreachable media file is reported, got {:?}",
+        codes(&report)
+    );
+
+    // The healthy fixture is the control: every declared file is present, so
+    // the same audit finds nothing.
+    let clean = audit_of(&healthy());
+    assert!(
+        clean.is_acceptable(),
+        "reachable resources raise no finding, got {:?}",
+        clean.findings
+    );
+}
+
+#[test]
+fn gb_t_33190_21_3_the_audit_reports_a_severity_per_finding() {
+    // Clause 21.3: the report says how badly each problem hurts, so a caller
+    // can archive a document that merely lacks an identifier and refuse one
+    // whose document root is gone.
+    let warning = audit_of(&{
+        let mut entries = healthy();
+        entries[0].1 = r#"<ofd:OFD xmlns:ofd="http://www.ofdspec.org/2016">
+  <ofd:DocBody>
+    <ofd:DocInfo/>
+    <ofd:DocRoot>Doc_0/Document.xml</ofd:DocRoot>
+    <ofd:Signatures>Doc_0/Signs/Signatures.xml</ofd:Signatures>
+  </ofd:DocBody>
+</ofd:OFD>"#;
+        entries
+    });
+    assert_eq!(
+        warning.max_severity(),
+        Some(Severity::Warning),
+        "a missing identifier is only worth a warning"
+    );
+
+    let error = audit_of(&[("Doc_0/Document.xml", "<Document/>")]);
+    assert_eq!(
+        error.max_severity(),
+        Some(Severity::Error),
+        "a missing entry point is an error"
+    );
+
+    // Every finding carries a severity, and the maximum is the worst of them.
+    for finding in &error.findings {
+        assert!(
+            matches!(
+                finding.severity,
+                Severity::Info | Severity::Warning | Severity::Error
+            ),
+            "each finding states how badly it hurts"
+        );
+    }
+}

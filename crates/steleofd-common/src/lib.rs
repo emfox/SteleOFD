@@ -28,6 +28,12 @@ pub const DOCUMENT_RES_XML: &str = "DocumentRes.xml";
 /// Fixed name of the public resource file.
 pub const PUBLIC_RES_XML: &str = "PublicRes.xml";
 
+/// Fixed name of the resource file a page carries beside its content.
+pub const PAGE_RES_XML: &str = "PageRes.xml";
+
+/// Fixed name of the resource file a page area outside `Document.xml` carries.
+pub const FILE_RES_XML: &str = "FileRes.xml";
+
 /// Fixed name of the signature list file.
 pub const SIGNATURES_XML: &str = "Signatures.xml";
 
