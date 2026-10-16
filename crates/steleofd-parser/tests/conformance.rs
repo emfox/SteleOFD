@@ -2359,3 +2359,126 @@ fn gb_t_33190_7_13_colour_spaces_reach_the_open_document() {
         "both resource tables contribute their spaces"
     );
 }
+
+/// Flatten one page whose `Res` declares `spaces` and whose content is `body`.
+fn fill_of(spaces: &str, body: &str) -> Paint {
+    let entries = [
+        ("OFD.xml", OFD_XML.to_string()),
+        (
+            "Doc_0/Document.xml",
+            document_xml(r#"<Page ID="1" BaseLoc="Pages/Page_0/Content.xml"/>"#),
+        ),
+        ("Doc_0/DocumentRes.xml", spaces.to_string()),
+        (
+            "Doc_0/Pages/Page_0/Content.xml",
+            format!(
+                r#"<?xml version="1.0" encoding="UTF-8"?>
+<Page><Content><Layer>{body}</Layer></Content></Page>"#
+            ),
+        ),
+    ];
+    let mut parser = open(&entries);
+    let doc = parser.open_document().expect("open document");
+    let page = parser.page_display(&doc, 0).expect("flatten page");
+    page.ops
+        .iter()
+        .find_map(|op| match op {
+            DrawOp::Path {
+                fill: Some(paint), ..
+            } => Some(paint.clone()),
+            _ => None,
+        })
+        .expect("a filled path")
+}
+
+/// The solid colour a paint resolved to.
+fn solid_rgb(paint: Paint) -> (u8, u8, u8) {
+    match paint {
+        Paint::Solid(c) => (c.r, c.g, c.b),
+        other => panic!("expected a solid colour, got {other:?}"),
+    }
+}
+
+#[test]
+fn gb_t_33190_7_13_a_colour_reads_in_its_declared_cmyk_space() {
+    // Clause 7.13: a colour naming a CMYK space has its four channels read as
+    // cyan, magenta, yellow and black, not as four rgb samples.
+    let spaces = r#"<?xml version="1.0" encoding="UTF-8"?>
+<Res BaseLoc="Res"><ColorSpaces>
+  <ColorSpace ID="5" Type="CMYK"/>
+</ColorSpaces></Res>"#;
+    let body = r#"<PathObject ID="10" Boundary="0 0 10 10" Fill="true">
+    <FillColor Value="255 0 0 0" ColorSpace="5"/>
+    <AbbreviatedData>M 0 0 L 10 0 L 10 10 Z</AbbreviatedData>
+  </PathObject>"#;
+    assert_eq!(
+        solid_rgb(fill_of(spaces, body)),
+        (0, 255, 255),
+        "pure cyan, the CMYK reading"
+    );
+}
+
+#[test]
+fn gb_t_33190_7_13_a_colour_reads_in_its_declared_gray_space() {
+    // A single grey channel broadens to three equal channels.
+    let spaces = r#"<?xml version="1.0" encoding="UTF-8"?>
+<Res BaseLoc="Res"><ColorSpaces>
+  <ColorSpace ID="6" Type="GRAY"/>
+</ColorSpaces></Res>"#;
+    let body = r#"<PathObject ID="10" Boundary="0 0 10 10" Fill="true">
+    <FillColor Value="128" ColorSpace="6"/>
+    <AbbreviatedData>M 0 0 L 10 0 L 10 10 Z</AbbreviatedData>
+  </PathObject>"#;
+    assert_eq!(solid_rgb(fill_of(spaces, body)), (128, 128, 128));
+}
+
+#[test]
+fn gb_t_33190_7_13_an_index_picks_the_palette_entry() {
+    // An indexed space carries its colours in the palette, and `Index` names
+    // the entry; the `Value` is then irrelevant.
+    let spaces = r#"<?xml version="1.0" encoding="UTF-8"?>
+<Res BaseLoc="Res"><ColorSpaces>
+  <ColorSpace ID="7" Type="RGB">
+    <Palette><CV>0 0 0</CV><CV>255 0 0</CV><CV>0 128 0</CV></Palette>
+  </ColorSpace>
+</ColorSpaces></Res>"#;
+    let body = r#"<PathObject ID="10" Boundary="0 0 10 10" Fill="true">
+    <FillColor Value="9 9 9" ColorSpace="7" Index="1"/>
+    <AbbreviatedData>M 0 0 L 10 0 L 10 10 Z</AbbreviatedData>
+  </PathObject>"#;
+    assert_eq!(
+        solid_rgb(fill_of(spaces, body)),
+        (255, 0, 0),
+        "the palette's second entry, not the stray Value"
+    );
+}
+
+#[test]
+fn gb_t_33190_7_13_a_colour_without_a_space_stays_hex() {
+    // No `ColorSpace` attribute means the value is read the ordinary way, so
+    // the four-sample reading must not leak onto it.
+    let spaces = r#"<?xml version="1.0" encoding="UTF-8"?>
+<Res BaseLoc="Res"><ColorSpaces>
+  <ColorSpace ID="5" Type="CMYK"/>
+</ColorSpaces></Res>"#;
+    let body = r##"<PathObject ID="10" Boundary="0 0 10 10" Fill="true">
+    <FillColor Value="#FF0000"/>
+    <AbbreviatedData>M 0 0 L 10 0 L 10 10 Z</AbbreviatedData>
+  </PathObject>"##;
+    assert_eq!(solid_rgb(fill_of(spaces, body)), (255, 0, 0));
+}
+
+#[test]
+fn gb_t_33190_7_13_an_unknown_space_falls_back_to_hex() {
+    // A colour naming an id the table does not hold cannot be read in that
+    // space; the value is still worth painting rather than dropping.
+    let spaces = r#"<?xml version="1.0" encoding="UTF-8"?>
+<Res BaseLoc="Res"><ColorSpaces>
+  <ColorSpace ID="5" Type="CMYK"/>
+</ColorSpaces></Res>"#;
+    let body = r##"<PathObject ID="10" Boundary="0 0 10 10" Fill="true">
+    <FillColor Value="#00FF00" ColorSpace="99"/>
+    <AbbreviatedData>M 0 0 L 10 0 L 10 10 Z</AbbreviatedData>
+  </PathObject>"##;
+    assert_eq!(solid_rgb(fill_of(spaces, body)), (0, 255, 0));
+}
