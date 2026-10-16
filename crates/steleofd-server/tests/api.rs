@@ -257,6 +257,31 @@ async fn the_store_refuses_past_its_capacity() {
 }
 
 #[tokio::test]
+async fn an_uploaded_id_still_answers_after_a_restart() {
+    // The end-to-end form of the persistence guarantee: upload through the
+    // real route, throw the store away, build a new one over the same
+    // directory, and the id the caller holds still renders.
+    let dir = std::env::temp_dir().join(format!("steleofd-restart-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+
+    let id = {
+        let store = Store::persistent(4, &dir).expect("a store");
+        let router = api::router(store, MAX_BODY);
+        open_fixture(&router, false).await
+    };
+
+    let restarted = Store::persistent(4, &dir).expect("a new store");
+    assert_eq!(restarted.len(), 1, "the earlier upload was adopted");
+    let router = api::router(restarted, MAX_BODY);
+    let (status, _, body) =
+        call(&router, get(&format!("/api/v1/documents/{id}/pages/0/png"))).await;
+    assert_eq!(status, StatusCode::OK, "the restarted store renders it");
+    assert!(body.starts_with(b"\x89PNG\r\n\x1a\n"), "PNG magic");
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[tokio::test]
 async fn the_service_answers_over_a_socket() {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
         .await
@@ -291,12 +316,22 @@ fn settings_come_from_the_environment_or_the_defaults() {
         "STELEOFD_BIND" => Some("0.0.0.0:9000".to_owned()),
         "STELEOFD_MAX_BODY" => Some("1024".to_owned()),
         "STELEOFD_MAX_DOCUMENTS" => Some("4".to_owned()),
+        "STELEOFD_DATA_DIR" => Some("/var/lib/steleofd".to_owned()),
         _ => None,
     })
     .expect("a full environment");
     assert_eq!(configured.bind.port(), 9000);
     assert_eq!(configured.max_body_bytes, 1024);
     assert_eq!(configured.max_documents, 4);
+    assert_eq!(
+        configured.data_dir.as_deref(),
+        Some(std::path::Path::new("/var/lib/steleofd")),
+        "the data directory is read when set"
+    );
+    assert_eq!(
+        empty.data_dir, None,
+        "and left unset when the environment says nothing, so the store stays in memory"
+    );
 
     assert!(
         Settings::from(|name| (name == "STELEOFD_BIND").then(|| "nowhere".to_owned())).is_err(),
