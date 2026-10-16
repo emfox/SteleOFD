@@ -15,9 +15,10 @@
 # Test names follow `gb_t_42133_<clause>_<slug>`.
 #
 # Scope agreed with the maintainer: the §6 core subset that a format checker
-# can decide by reading a container. The checks report; they never rewrite.
-# Everything 42133 asks of an authoring tool (subsetting, stripping optional
-# structures, converting images) is left out on purpose and marked `untested`.
+# can decide by reading a container, plus the clause 6.2.2 rewrite that turns an
+# ordinary container into the archival profile. The checks report; the rewrite
+# is a separate, explicit call. Everything else 42133 asks of an authoring tool
+# (subsetting fonts, converting images) is left out on purpose.
 
 standard = "GB/T 42133-2022"
 title = "Information technology - Guide for OFD archive application"
@@ -34,8 +35,12 @@ tests = [
 [[item]]
 clause = "6.2.2"
 title = "Archival profile: optional structures removed"
-status = "untested"
-note = "Permissions, ViewPreferences, Extensions and Attachments are stripped when archiving; this build reads archives rather than producing them."
+status = "verified"
+tests = [
+    "gb_t_42133_6_2_2_optional_structures_are_stripped",
+    "gb_t_42133_6_2_2_attachment_files_leave_with_their_list",
+    "gb_t_42133_6_2_2_the_content_around_the_optional_elements_survives",
+]
 
 [[item]]
 clause = "6.2.6 e)"

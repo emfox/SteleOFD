@@ -262,16 +262,16 @@ legal carrier needs.
   (the imprint matches but the TSA signature does not verify) or `Bound`. The
   facade exposes it as `Document::verify_timestamps`, mirroring
   `verify_signatures`. Registered under clause `18.2.4`.
-- **M3-c** The archival profile. `steleofd-archive` checks an OFD against the
-  archival rules; GB/T 42133-2022 supplies the profile, and the four checks a
-  reader can decide from the container are in (`ARCH-101` … `ARCH-104`, covered
-  by `compliance/gb-t-42133.toml`). What remains is everything 42133 asks of an
-  authoring tool: subsetting fonts, stripping optional structures, removing
-  redundant clips and converting images, none of which a read-only checker can
-  do. Deferred as authoring-tool scope: each is a transformation with its own
-  fidelity trade-offs (a subset font that loses a glyph a later edit needs, an
-  image conversion that loses a transparency layer), so the set to build and how
-  a caller drives it need a decision, not just an implementation.
+- **M3-c** The archival profile. `steleofd-archive` both checks an OFD against
+  GB/T 42133-2022 and produces the profile: `archive()` strips the optional
+  structures clause 6.2.2 names (`Permissions`, `VPreferences`, `Extensions`,
+  `Keywords`, `Attachments`), drops the attachment files that leaves
+  unreachable, and declares `DocType="OFD-A"` on the result, returning a record
+  of what it changed. Registered under clause `6.2.2`. The image-format and
+  font-subsetting conversions 42133 also names stay out on purpose: each is a
+  fidelity trade-off (a subset font that loses a glyph a later edit needs, an
+  image re-encode that loses a transparency layer) that needs a per-call
+  decision rather than a default.
 
 ### M4. Server production readiness (M4-a … M4-e)
 
@@ -504,8 +504,7 @@ check over a document that renders wrong is checking the wrong bytes.
 M1-a, because every item in it is a rendering change and none of them can be
 verified without golden images; M5-e is done. M2-b, M3-a, M3-b, M6-a, M6-b,
 M6-c, M6-e and M7-a are done too, so what is left is M5's remaining rendering
-work, M3-c's authoring-tool scope, M6-d's release infrastructure, and M6-f's
-i18n boundary move.
+work, M6-d's release infrastructure, and M6-f's i18n boundary move.
 
 Far term is deliberately not scheduled. It describes a direction, not dates.
 
