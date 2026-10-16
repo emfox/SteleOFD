@@ -71,6 +71,12 @@ jobs:
       - name: Test with every feature on
         run: cargo test --workspace --all-features
 
+      # The pixels, not the ops: `cargo test` runs this too, but naming it here
+      # keeps a rendering regression readable on the run page rather than buried
+      # in the suite. A reference that needs updating is a deliberate commit.
+      - name: Golden images
+        run: cargo test -p steleofd-convert --test golden
+
       # The reader's window is a real widget tree, so this drives it without a
       # display and without an X server: labels come from the catalogue and
       # clicks reach `App`. Without this step the layout could rot while the
