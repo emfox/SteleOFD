@@ -1153,6 +1153,70 @@ mod tests {
     }
 
     #[test]
+    fn a_gouraud_mesh_becomes_a_type_four_shading() {
+        // PDF's ShadingType 4 is a free-form triangle mesh with a colour at
+        // every vertex, which is the clause's model, so a mesh reaches the
+        // file with its vertices rather than collapsing to one mean colour.
+        let p = page(vec![steleofd_display::DrawOp::Path {
+            path: rect(0.0, 0.0, 10.0, 10.0),
+            fill: Some(steleofd_display::ops::Paint::Mesh(Box::new(MeshSpec {
+                points: vec![
+                    MeshVertex {
+                        x: 0.0,
+                        y: 0.0,
+                        color: Color::rgba(255, 0, 0, 255),
+                    },
+                    MeshVertex {
+                        x: 10.0,
+                        y: 0.0,
+                        color: Color::rgba(0, 0, 255, 255),
+                    },
+                    MeshVertex {
+                        x: 0.0,
+                        y: 10.0,
+                        color: Color::rgba(0, 255, 0, 255),
+                    },
+                ],
+                triangles: vec![[0, 1, 2]],
+            }))),
+            stroke: None,
+            stroke_style: Default::default(),
+            rule: PaintRule::NonZero,
+        }]);
+        let bytes = page_to_pdf(&p, &PdfOptions::default()).expect("convert");
+        let doc = Document::load_from(&bytes[..]).expect("parse");
+        let shading = doc.objects.values().find_map(|o| match o {
+            Object::Stream(stream) => stream
+                .dict
+                .get(b"Shading")
+                .ok()
+                .and_then(|s| s.as_dict().ok())
+                .cloned(),
+            _ => None,
+        });
+        let shading = shading.expect("the pattern carries a shading");
+        let kind = shading
+            .get(b"ShadingType")
+            .ok()
+            .and_then(|t| t.as_i64().ok());
+        assert_eq!(kind, Some(4), "a mesh is a free-form triangle shading");
+        // The three vertex colours travel: red, blue and green, in order.
+        let data = doc.objects.values().find_map(|o| match o {
+            Object::Stream(stream) if stream.dict.get(b"Shading").is_ok() => {
+                Some(stream.content.clone())
+            }
+            _ => None,
+        });
+        let data = data.expect("the shading stream has content");
+        // The stream is the raw bytes the format asks for: red, blue and
+        // green, one per vertex, each a triple.
+        let has = |tri: [u8; 3]| data.windows(3).any(|w| w == tri);
+        assert!(has([0xff, 0x00, 0x00]), "the first vertex keeps its red");
+        assert!(has([0x00, 0x00, 0xff]), "the second vertex keeps its blue");
+        assert!(has([0x00, 0xff, 0x00]), "the third vertex keeps its green");
+    }
+
+    #[test]
     fn a_multi_stop_gradient_stitches_its_intervals() {
         let p = page(vec![steleofd_display::DrawOp::Path {
             path: rect(0.0, 0.0, 10.0, 10.0),

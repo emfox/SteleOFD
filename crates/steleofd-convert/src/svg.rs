@@ -924,6 +924,94 @@ mod tests {
     }
 
     #[test]
+    fn a_pattern_becomes_a_tiling_definition() {
+        // SVG's pattern is the clause's model: the element spans one step and
+        // the cell repeats across it, so the cell's own path reaches the def.
+        let cell = steleofd_display::PageDisplay {
+            index: 0,
+            page_box: Rect::new(0.0, 0.0, 4.0, 4.0),
+            ops: vec![DrawOp::Path {
+                path: rect(0.0, 0.0, 2.0, 2.0),
+                fill: Some(Paint::Solid(Color::rgba(255, 0, 0, 255))),
+                stroke: None,
+                stroke_style: Default::default(),
+                rule: PaintRule::NonZero,
+            }],
+            content_bbox: Rect::EMPTY,
+        };
+        let p = page(vec![DrawOp::Path {
+            path: rect(0.0, 0.0, 20.0, 20.0),
+            fill: Some(Paint::Pattern(Box::new(steleofd_display::PatternSpec {
+                cell: Box::new(cell),
+                width: 4.0,
+                height: 4.0,
+                step_x: 6.0,
+                step_y: 6.0,
+                reflect: steleofd_display::Reflect::Normal,
+            }))),
+            stroke: None,
+            stroke_style: Default::default(),
+            rule: PaintRule::NonZero,
+        }]);
+        let svg = page_to_svg(&p, &SvgOptions::default()).expect("convert");
+        assert!(
+            svg.contains("<pattern id=\"pat1\" patternUnits=\"userSpaceOnUse\""),
+            "a pattern def is written: {svg}"
+        );
+        // The step, not the tile size, is the element's span.
+        assert!(
+            svg.contains("width=\"6\" height=\"6\""),
+            "the step sets the repeat: {svg}"
+        );
+        assert!(
+            svg.contains("fill=\"#ff0000\""),
+            "the cell's own fill is inside the def: {svg}"
+        );
+        assert!(
+            svg.contains("fill=\"url(#pat1)\""),
+            "the path references the pattern: {svg}"
+        );
+    }
+
+    #[test]
+    fn a_reflecting_pattern_keeps_its_flat_fill() {
+        // SVG cannot mirror a tile, so a reflecting pattern must not be tiled
+        // the wrong way; the cell's first fill stands in instead.
+        let cell = steleofd_display::PageDisplay {
+            index: 0,
+            page_box: Rect::new(0.0, 0.0, 4.0, 4.0),
+            ops: vec![DrawOp::Path {
+                path: rect(0.0, 0.0, 2.0, 2.0),
+                fill: Some(Paint::Solid(Color::rgba(0, 128, 0, 255))),
+                stroke: None,
+                stroke_style: Default::default(),
+                rule: PaintRule::NonZero,
+            }],
+            content_bbox: Rect::EMPTY,
+        };
+        let p = page(vec![DrawOp::Path {
+            path: rect(0.0, 0.0, 20.0, 20.0),
+            fill: Some(Paint::Pattern(Box::new(steleofd_display::PatternSpec {
+                cell: Box::new(cell),
+                width: 4.0,
+                height: 4.0,
+                step_x: 4.0,
+                step_y: 4.0,
+                reflect: steleofd_display::Reflect::RowAndColumn,
+            }))),
+            stroke: None,
+            stroke_style: Default::default(),
+            rule: PaintRule::NonZero,
+        }]);
+        let svg = page_to_svg(&p, &SvgOptions::default()).expect("convert");
+        assert!(!svg.contains("<pattern"), "no pattern is defined: {svg}");
+        assert!(
+            svg.contains("fill=\"#008000\""),
+            "the cell's colour stands in: {svg}"
+        );
+    }
+
+    #[test]
     fn a_linear_gradient_becomes_a_def_and_a_fill() {
         let spec = LinearGradientSpec {
             start: Point::new(0.0, 0.0),
