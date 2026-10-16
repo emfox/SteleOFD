@@ -12,8 +12,8 @@ use steleofd_font::FontManager;
 use steleofd_geometry::{Affine, Path, PathSegment};
 use tiny_skia::{
     FillRule, IntSize, LineCap as TsLineCap, LineJoin as TsLineJoin, Mask, Paint as TsPaint,
-    Path as TsPath, PathBuilder as TsBuilder, Pixmap, PixmapPaint, Point, Shader, SpreadMode,
-    Stroke, StrokeDash, Transform,
+    Path as TsPath, PathBuilder as TsBuilder, Pixmap, PixmapPaint, Point, PremultipliedColorU8,
+    Shader, SpreadMode, Stroke, StrokeDash, Transform,
 };
 
 /// Rasterization parameters.
@@ -162,14 +162,20 @@ pub fn render_page(
                 let total = total_transform(&state, &page.page_box, options.dpi);
                 let ts_path = to_ts_path(path, total)?;
                 if let Some(paint) = fill {
-                    let p = paint_for(paint, total).unwrap_or_else(|| solid_paint(paint));
-                    pixmap.fill_path(
-                        &ts_path,
-                        &p,
-                        fill_rule(*rule),
-                        Transform::identity(),
-                        state.clip.as_ref(),
-                    );
+                    if let Paint::Mesh(spec) = paint {
+                        // A mesh cannot be a tiny-skia shader, so it is painted
+                        // per pixel and masked by the outline being filled.
+                        mesh::paint_mesh(&mut pixmap, spec, &ts_path, state.clip.as_ref(), total);
+                    } else {
+                        let p = paint_for(paint, total).unwrap_or_else(|| solid_paint(paint));
+                        pixmap.fill_path(
+                            &ts_path,
+                            &p,
+                            fill_rule(*rule),
+                            Transform::identity(),
+                            state.clip.as_ref(),
+                        );
+                    }
                 }
                 if let Some(paint) = stroke {
                     let p = paint_for(paint, total).unwrap_or_else(|| solid_paint(paint));
@@ -222,6 +228,7 @@ pub fn render_page(
 }
 
 mod gradient;
+mod mesh;
 mod shape;
 mod text;
 
