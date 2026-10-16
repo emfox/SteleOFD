@@ -138,7 +138,7 @@ pub fn render_page(
                 // A text clip is the glyph outlines themselves, resolved the
                 // way drawn text is. Without its face there is nothing to
                 // intersect, so the clip is left as it was.
-                if let Ok(face) = fonts.face(run.font) {
+                if let Some(face) = steleofd_display::run_face(fonts, run) {
                     let total = total_transform(&state, &page.page_box, options.dpi);
                     let mut mask = clip_mask(&state, width, height)?;
                     for ts_path in glyph_outlines(fonts, run, face, total)? {
@@ -608,10 +608,10 @@ fn draw_text(
     if run.glyphs.is_empty() {
         return Ok(TextOutcome::Drawn);
     }
-    // A face that will not load costs its own run, not the whole page: the
-    // rest of the page is still worth rendering, and the caller can see how
-    // many runs were lost from `skipped_font_runs`.
-    let Ok(face) = fonts.face(run.font) else {
+    // A face that will not load costs its own run, not the whole page, and
+    // the run is counted in `skipped_font_runs`. The chain gets one more
+    // chance before that, so a document naming an unshipped face still draws.
+    let Some(face) = steleofd_display::run_face(fonts, run) else {
         return Ok(TextOutcome::NoFace);
     };
     draw_text_inner(pixmap, run, state, page_box, fonts, face, options)

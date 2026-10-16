@@ -1,8 +1,10 @@
 //! Text types: glyph runs and character-level text spans.
 
+use std::sync::Arc;
+
 use serde::{Deserialize, Serialize};
 use steleofd_common::{Millimeter, Rect};
-use steleofd_font::FontId;
+use steleofd_font::{FontFace, FontId, FontManager};
 use steleofd_geometry::Affine;
 
 /// A run of text sharing one font and transform.
@@ -55,6 +57,21 @@ impl GlyphRun {
     pub fn plain_text(&self) -> &str {
         self.text.as_deref().unwrap_or("")
     }
+}
+
+/// The face to draw a run with: its own when it loads, otherwise one from the
+/// fallback chain, so a document naming a face it never shipped can still draw.
+/// A glyph index run is never rescued, since an index means nothing without it.
+pub fn run_face(fonts: &FontManager, run: &GlyphRun) -> Option<Arc<FontFace>> {
+    if let Ok(face) = fonts.face(run.font) {
+        return Some(face);
+    }
+    if run.codes_are_glyphs {
+        return None;
+    }
+    run.glyphs
+        .iter()
+        .find_map(|&code| fonts.fallback_for(u32::from(code)).map(|(_, face)| face))
 }
 
 /// A [`GlyphRun`] expanded to character granularity.

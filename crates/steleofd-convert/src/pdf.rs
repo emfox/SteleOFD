@@ -266,7 +266,7 @@ impl<'a> PdfSink<'a> {
         let Some(fonts) = self.fonts else {
             return false;
         };
-        let Ok(face) = fonts.face(run.font) else {
+        let Some(face) = steleofd_display::run_face(fonts, run) else {
             return false;
         };
         let Some(fill) = &run.fill else {
@@ -393,7 +393,7 @@ impl PageSink for PdfSink<'_> {
         let Some(fonts) = self.fonts else {
             return;
         };
-        let Ok(face) = fonts.face(run.font) else {
+        let Some(face) = steleofd_display::run_face(fonts, run) else {
             return;
         };
         // Every glyph outline goes into one path, joined implicitly, so the
