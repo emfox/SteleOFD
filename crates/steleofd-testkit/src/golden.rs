@@ -11,7 +11,7 @@ pub const SOLID_XML: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
   <Area><PhysicalBox>0 0 100 60</PhysicalBox></Area>
   <Content>
     <Layer ID="2">
-      <PathObject ID="3" Boundary="5 5 40 20" Fill="true">
+      <PathObject ID="3" Boundary="5 5 40 20" Fill="true" Stroke="false">
         <FillColor Value="220 30 40"/>
         <AbbreviatedData>M 0 0 L 40 0 L 40 20 L 0 20 Z</AbbreviatedData>
       </PathObject>
@@ -33,7 +33,7 @@ pub const CLIP_XML: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
   <Area><PhysicalBox>0 0 100 60</PhysicalBox></Area>
   <Content>
     <Layer ID="2">
-      <PathObject ID="3" Boundary="0 0 100 60" Fill="true">
+      <PathObject ID="3" Boundary="0 0 100 60" Fill="true" Stroke="false">
         <FillColor Value="30 160 90"/>
         <Clips><Clip><Area>
           <Path><AbbreviatedData>M 20 15 L 80 15 L 80 45 L 20 45 Z</AbbreviatedData></Path>
@@ -51,7 +51,7 @@ pub const GRADIENT_XML: &str = r##"<?xml version="1.0" encoding="UTF-8"?>
   <Area><PhysicalBox>0 0 100 60</PhysicalBox></Area>
   <Content>
     <Layer ID="2">
-      <PathObject ID="3" Boundary="5 5 90 50">
+      <PathObject ID="3" Boundary="5 5 90 50" Fill="true" Stroke="false">
         <FillColor>
           <AxialShd StartPoint="5 5" EndPoint="95 55">
             <Segment Position="0"><Color Value="#FF0000"/></Segment>
@@ -72,7 +72,7 @@ pub const RADIAL_XML: &str = r##"<?xml version="1.0" encoding="UTF-8"?>
   <Area><PhysicalBox>0 0 100 60</PhysicalBox></Area>
   <Content>
     <Layer ID="2">
-      <PathObject ID="3" Boundary="5 5 90 50">
+      <PathObject ID="3" Boundary="5 5 90 50" Fill="true" Stroke="false">
         <FillColor>
           <RadialShd StartPoint="50 30" StartRadius="0" EndPoint="50 30" EndRadius="45">
             <Segment Position="0"><Color Value="#FFFFFF"/></Segment>
@@ -102,12 +102,13 @@ pub const DASH_XML: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
 
 /// An even-odd fill: a ring whose inner square is cut out. Under the non-zero
 /// rule the hole fills in, so the two rules give visibly different pages.
+/// `Stroke` is off because the standard defaults it to true.
 pub const EVENODD_XML: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
 <Page>
   <Area><PhysicalBox>0 0 100 60</PhysicalBox></Area>
   <Content>
     <Layer ID="2">
-      <PathObject ID="3" Boundary="20 5 60 50" Fill="true" FillRule="Even-Odd">
+      <PathObject ID="3" Boundary="20 5 60 50" Fill="true" Stroke="false" Rule="Even-Odd">
         <FillColor Value="40 90 200"/>
         <AbbreviatedData>M 0 0 L 60 0 L 60 50 L 0 50 Z M 15 12 L 45 12 L 45 38 L 15 38 Z</AbbreviatedData>
       </PathObject>
@@ -138,7 +139,7 @@ pub const ARCS_XML: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
   <Area><PhysicalBox>0 0 100 60</PhysicalBox></Area>
   <Content>
     <Layer ID="2">
-      <PathObject ID="3" Boundary="25 2 50 50" Fill="true">
+      <PathObject ID="3" Boundary="25 2 50 50" Fill="true" Stroke="false">
         <FillColor Value="230 140 20"/>
         <AbbreviatedData>M 25 27 A 25 25 0 0 1 75 27 A 25 25 0 0 1 25 27 Z</AbbreviatedData>
       </PathObject>
@@ -153,7 +154,7 @@ pub const WIDE_XML: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
   <Area><PhysicalBox>0 0 297 100</PhysicalBox></Area>
   <Content>
     <Layer ID="2">
-      <PathObject ID="3" Boundary="20 20 257 60" Fill="true">
+      <PathObject ID="3" Boundary="20 20 257 60" Fill="true" Stroke="false">
         <FillColor Value="60 60 120"/>
         <AbbreviatedData>M 0 0 L 257 0 L 257 60 L 0 60 Z</AbbreviatedData>
       </PathObject>

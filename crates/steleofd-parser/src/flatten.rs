@@ -388,8 +388,10 @@ fn flatten_path(
         return Err(OfdError::Format(FormatError::MissingPathData));
     }
     let path: Path = crate::pathdata::parse_path(data)?;
-    let fill_on = p.fill.or(param.and_then(|d| d.fill)).unwrap_or(true);
-    let stroke_on = p.stroke.or(param.and_then(|d| d.stroke)).unwrap_or(false);
+    // `CT_Path` defaults `Stroke` true and `Fill` false, the reverse of the
+    // usual pair, so an object that names only a stroke stays a stroke.
+    let fill_on = p.fill.or(param.and_then(|d| d.fill)).unwrap_or(false);
+    let stroke_on = p.stroke.or(param.and_then(|d| d.stroke)).unwrap_or(true);
     let style = stroke_style_of(&p.base, param);
     let black = default_color();
     let fill_color = p
@@ -692,8 +694,17 @@ mod tests {
         }
     }
 
+    /// A path object that asks for a fill, so the colour defaults are visible
+    /// without the object also asking for a stroke.
+    fn filled_path_object(data: &str) -> PathObject {
+        PathObject {
+            fill: Some(true),
+            ..path_object(data)
+        }
+    }
+
     #[test]
-    fn an_absent_fill_means_filled_and_an_absent_stroke_means_not() {
+    fn an_absent_fill_means_not_filled_and_an_absent_stroke_means_stroked() {
         let ops = run(
             vec![Object::PathObject(path_object("M 0 0 L 10 10"))],
             &HashMap::new(),
@@ -702,14 +713,14 @@ mod tests {
         let DrawOp::Path { fill, stroke, .. } = &ops[0] else {
             panic!("expected a path op, got {ops:?}");
         };
-        assert!(fill.is_some());
-        assert!(stroke.is_none());
+        assert!(fill.is_none());
+        assert!(stroke.is_some());
     }
 
     #[test]
     fn object_colours_default_to_black() {
         let ops = run(
-            vec![Object::PathObject(path_object("M 0 0 L 10 10"))],
+            vec![Object::PathObject(filled_path_object("M 0 0 L 10 10"))],
             &HashMap::new(),
         )
         .expect("flatten");
@@ -735,7 +746,7 @@ mod tests {
                 ..Default::default()
             },
         );
-        let mut p = path_object("M 0 0 L 10 10");
+        let mut p = filled_path_object("M 0 0 L 10 10");
         p.base.draw_param = Some("7".to_string());
         let ops = run(vec![Object::PathObject(p)], &params).expect("flatten");
         let DrawOp::Path {

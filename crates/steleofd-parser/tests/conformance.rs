@@ -176,7 +176,7 @@ fn gb_t_33190_7_9_draw_params_resolve_from_the_resource_table() {
             "Doc_0/Pages/Page_0/Content.xml",
             r#"<?xml version="1.0" encoding="UTF-8"?>
 <Page><Content><Layer>
-  <PathObject ID="10" Boundary="0 0 10 10" DrawParam="1006">
+  <PathObject ID="10" Boundary="0 0 10 10" Fill="true" DrawParam="1006">
     <AbbreviatedData>M 0 0 L 10 0 L 10 10 Z</AbbreviatedData>
   </PathObject>
 </Layer></Content></Page>"#
@@ -229,7 +229,7 @@ fn gb_t_33190_8_3_2_colour_is_rgb_with_alpha() {
             "Doc_0/Document.xml",
             document_xml(
                 r##"<Page ID="1"><Content><Layer>
-  <PathObject ID="10" Boundary="0 0 10 10">
+  <PathObject ID="10" Boundary="0 0 10 10" Fill="true">
     <FillColor Value="#ff0000" Alpha="128"/>
     <AbbreviatedData>M 0 0 L 10 0 L 10 10 Z</AbbreviatedData>
   </PathObject>
@@ -713,7 +713,7 @@ fn gb_t_33190_8_3_4_axial_shading_becomes_a_linear_gradient() {
     // Value attribute. The gradient travels on the paint itself, so the shape
     // is a single op a backend can render without matching an earlier one.
     let ops = page_ops(
-        r##"<PathObject ID="10" Boundary="0 0 10 10">
+        r##"<PathObject ID="10" Boundary="0 0 10 10" Fill="true">
   <AbbreviatedData>M 0 0 L 10 0 L 10 10 Z</AbbreviatedData>
   <FillColor><AxialShd StartPoint="0 0" EndPoint="10 0">
     <Segment Position="0"><Color Value="#FF0000"/></Segment>
@@ -774,7 +774,7 @@ fn gb_t_33190_8_3_4_segments_keep_their_positions_and_colours() {
     // A Segment's Position is a fraction along the axis and its Color child
     // gives the value there; both have to reach the stop list intact.
     let ops = page_ops(
-        r##"<PathObject ID="10" Boundary="0 0 10 10">
+        r##"<PathObject ID="10" Boundary="0 0 10 10" Fill="true">
   <AbbreviatedData>M 0 0 L 10 0 L 10 10 Z</AbbreviatedData>
   <FillColor><AxialShd StartPoint="0 0" EndPoint="0 10">
     <Segment Position="0"><Color Value="#FF0000"/></Segment>
@@ -1044,10 +1044,10 @@ fn gb_t_33190_10_an_image_object_fills_the_unit_square_of_its_ctm() {
 }
 
 #[test]
-fn gb_t_33190_9_1_path_defaults_are_stroke_on_and_fill_off() {
+fn gb_t_33190_9_1_a_draw_param_supplies_the_stroke_and_fill_switches() {
     // Clause 9.1: a path object with no Stroke or Fill attribute of its own
-    // takes those from its draw parameter, and the draw parameter's defaults
-    // leave the path filled only.
+    // takes those from its draw parameter, so the parameter can turn a
+    // default-filled object into a stroke-only one.
     let ops = page_ops(
         r##"<PathObject ID="10" Boundary="0 0 10 10" DrawParam="d1">
   <AbbreviatedData>M 0 0 L 10 0 L 10 10 Z</AbbreviatedData>
@@ -1066,6 +1066,24 @@ fn gb_t_33190_9_1_path_defaults_are_stroke_on_and_fill_off() {
     assert!(fill.is_none(), "the draw parameter turned filling off");
     assert!(stroke.is_some(), "and stroking on");
     assert_eq!(stroke_style.width, 1.5);
+}
+
+#[test]
+fn gb_t_33190_9_1_path_defaults_are_stroke_on_and_fill_off() {
+    // Clause 9.1 takes the defaults from `CT_Path`, which sets `Stroke` true
+    // and `Fill` false: a bare object is stroked, never filled. Neither
+    // attribute nor a draw parameter is named here.
+    let ops = page_ops(
+        r##"<PathObject ID="10" Boundary="0 0 10 10">
+  <AbbreviatedData>M 0 0 L 10 0 L 10 10 Z</AbbreviatedData>
+</PathObject>"##,
+        "",
+    );
+    let DrawOp::Path { fill, stroke, .. } = &ops[0] else {
+        panic!("expected a path op, got {ops:?}");
+    };
+    assert!(fill.is_none(), "an absent Fill means no fill");
+    assert!(stroke.is_some(), "an absent Stroke means stroked");
 }
 
 #[test]

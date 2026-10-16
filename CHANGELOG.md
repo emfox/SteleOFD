@@ -54,6 +54,10 @@ the interfaces may still move before `0.1.0`.
   read incorrectly against the schema.
 - **`steleofd-sign`** — the signature descriptor's check method and signed-value
   path, read from the schema rather than assumed.
+- **`steleofd-parser`** — a `PathObject`'s absent `Fill` and `Stroke` took the
+  wrong defaults, so a path the standard leaves stroked-only was filled and a
+  fill-only path was stroked. The `CT_Path` defaults are `Stroke` true and
+  `Fill` false; the two other graphic units keep their own.
 
 ### Changed
 

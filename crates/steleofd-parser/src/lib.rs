@@ -290,7 +290,7 @@ mod tests {
     <Page ID="1">
       <Content>
         <Layer>
-          <PathObject ID="10" Boundary="10 10 20 20">
+          <PathObject ID="10" Boundary="10 10 20 20" Fill="true">
             <AbbreviatedData>M 10 10 L 30 10 L 30 30 L 10 30 Z</AbbreviatedData>
           </PathObject>
         </Layer>
@@ -550,8 +550,8 @@ mod tests {
     #[test]
     fn colors_decode_from_the_element_form_with_alpha() {
         let doc_xml = DOCUMENT_XML.replace(
-            "<PathObject ID=\"10\" Boundary=\"10 10 20 20\">",
-            "<PathObject ID=\"10\" Boundary=\"10 10 20 20\"><FillColor Value=\"#00FF00\" Alpha=\"128\"/>",
+            "<PathObject ID=\"10\" Boundary=\"10 10 20 20\" Fill=\"true\">",
+            "<PathObject ID=\"10\" Boundary=\"10 10 20 20\" Fill=\"true\"><FillColor Value=\"#00FF00\" Alpha=\"128\"/>",
         );
         let bytes = build_archive(&[
             ("OFD.xml", OFD_XML.as_bytes()),

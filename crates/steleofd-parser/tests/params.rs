@@ -21,7 +21,7 @@ fn archive(public_res: &str, document_res: &str, common_params: &str) -> Vec<u8>
     );
     let content = r##"<?xml version="1.0" encoding="UTF-8"?>
 <Page><Content><Layer ID="1">
-  <PathObject ID="10" Boundary="10 10 20 20" DrawParam="1006">
+  <PathObject ID="10" Boundary="10 10 20 20" Fill="true" DrawParam="1006">
     <AbbreviatedData>M 10 10 L 30 10 L 30 30 Z</AbbreviatedData>
   </PathObject>
 </Layer></Content></Page>"##;

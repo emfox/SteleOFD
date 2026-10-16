@@ -323,6 +323,7 @@ title = "Path object"
 status = "verified"
 tests = [
   "gb_t_33190_9_1_path_defaults_are_stroke_on_and_fill_off",
+  "gb_t_33190_9_1_a_draw_param_supplies_the_stroke_and_fill_switches",
   "gb_t_33190_9_1_graphic_unit_line_width_overrides_the_draw_param",
 ]
 
