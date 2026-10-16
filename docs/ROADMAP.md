@@ -297,11 +297,19 @@ Absent features, not wrong ones, so they sit below the correctness band.
   masked to the path. `8.1.6` PrintQuality stays a deviation for a different
   reason: the element is absent from the vendored Annex A schema entirely, so
   there is nothing to read.
-- **M5-c** Blending and transparency modes.
-- **M5-d** Bring each test-verified drawing feature to full parity. The first
-  is done — `RadialShd` end centre and radius travel with the op and each
-  backend reduces the cone to what it can paint — so this is the remaining
-  list, worked one feature per pass.
+- **M5-c** Blending and transparency modes. Deferred: the 2016 schema has no
+  blend-mode element or attribute — only the per-object `Alpha` the engine
+  already honours — so this needs a non-standard extension and a decision about
+  it, not an implementation.
+- **M5-d** Bring each test-verified drawing feature to full parity. `RadialShd`
+  end centre and radius travel with the op and each backend reduces the cone to
+  what it can paint. The Gouraud mesh and the `Pattern` cell now do too: a mesh
+  reaches PDF as a `ShadingType 4` free-form triangle shading, one colour per
+  vertex, so the file interpolates rather than showing a mean colour, and a
+  `Pattern` reaches SVG as a native `<pattern>` spanning one step. Two limits
+  remain and are recorded rather than hidden: SVG has no mesh gradient and no
+  mirrored repeat, so a mesh keeps its mean colour and a reflecting pattern its
+  cell's first fill there.
 - **M5-e** Move the JBIG2 codec out of `display`. The IR crate carries a full
   decoder (`display/src/jbig2.rs`, via `hayro-jbig2`) that only `render` and
   `convert` call; the IR layer should hold data structures, not codecs. A
