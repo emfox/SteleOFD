@@ -153,6 +153,11 @@ tests = [
     "gb_t_33190_7_13_declared_colour_spaces_are_read",
     "gb_t_33190_7_13_an_unknown_colour_space_type_is_refused",
     "gb_t_33190_7_13_colour_spaces_reach_the_open_document",
+    "gb_t_33190_7_13_a_colour_reads_in_its_declared_cmyk_space",
+    "gb_t_33190_7_13_a_colour_reads_in_its_declared_gray_space",
+    "gb_t_33190_7_13_an_index_picks_the_palette_entry",
+    "gb_t_33190_7_13_a_colour_without_a_space_stays_hex",
+    "gb_t_33190_7_13_an_unknown_space_falls_back_to_hex",
 ]
 
 [[item]]
