@@ -237,31 +237,68 @@ pub const DOCS: &[GoldenDoc] = &[
 /// The archive bytes for one golden document: a single page, an embedded face
 /// and the public resource table that declares it.
 pub fn golden_archive(doc: &GoldenDoc) -> Vec<u8> {
-    let box_ = doc.page_box;
+    build_golden(std::slice::from_ref(doc))
+}
+
+/// Every golden fixture as the pages of one document, in `DOCS` order: a
+/// single file a third-party renderer can be handed once. The page index then
+/// carries meaning, so a wrong page beside a right one names a defect.
+pub fn golden_book() -> Vec<u8> {
+    build_golden(DOCS)
+}
+
+/// Assemble one document from `docs`, one page each.
+fn build_golden(docs: &[GoldenDoc]) -> Vec<u8> {
+    let mut pages = String::new();
+    for index in 0..docs.len() {
+        pages.push_str(&format!(
+            "    <Page ID=\"{id}\" BaseLoc=\"Pages/Page_{index}/Content.xml\"/>\n",
+            id = index + 1,
+        ));
+    }
+    // The common page area is the first document's box; every page overrides
+    // it with its own, so a fixture is free to pick any size it needs.
+    let box_ = docs.first().map(|d| d.page_box).unwrap_or("0 0 100 60");
+    let params = docs
+        .iter()
+        .map(|d| d.draw_params)
+        .collect::<Vec<_>>()
+        .join("");
     let document = format!(
         r#"<?xml version="1.0" encoding="UTF-8"?>
 <Document>
   <CommonData><PageArea><PhysicalBox>{box_}</PhysicalBox></PageArea>{params}</CommonData>
-  <Pages><Page ID="1" BaseLoc="Pages/Page_0/Content.xml"/></Pages>
-</Document>"#,
-        params = doc.draw_params,
+  <Pages>
+{pages}  </Pages>
+</Document>"#
     );
-    let entries = [
-        ("OFD.xml", super::document::OFD_XML.as_bytes().to_vec()),
+    let mut entries = vec![
         (
-            super::document::DOCUMENT_ENTRY,
-            document.as_bytes().to_vec(),
+            "OFD.xml".to_string(),
+            super::document::OFD_XML.as_bytes().to_vec(),
         ),
         (
-            super::document::CONTENT_ENTRY,
-            doc.content.as_bytes().to_vec(),
-        ),
-        ("Doc_0/Res/Orbitron-Bold.ttf", super::document::font_bytes()),
-        (
-            super::document::PUBLIC_RES_ENTRY,
-            super::document::PUBLIC_RES_XML.as_bytes().to_vec(),
+            super::document::DOCUMENT_ENTRY.to_string(),
+            document.into_bytes(),
         ),
     ];
-    let borrowed: Vec<(&str, &[u8])> = entries.iter().map(|(p, d)| (*p, d.as_slice())).collect();
+    for (index, doc) in docs.iter().enumerate() {
+        entries.push((
+            format!("Doc_0/Pages/Page_{index}/Content.xml"),
+            doc.content.as_bytes().to_vec(),
+        ));
+    }
+    entries.push((
+        "Doc_0/Res/Orbitron-Bold.ttf".to_string(),
+        super::document::font_bytes(),
+    ));
+    entries.push((
+        super::document::PUBLIC_RES_ENTRY.to_string(),
+        super::document::PUBLIC_RES_XML.as_bytes().to_vec(),
+    ));
+    let borrowed: Vec<(&str, &[u8])> = entries
+        .iter()
+        .map(|(p, d)| (p.as_str(), d.as_slice()))
+        .collect();
     build_archive(&borrowed).expect("golden archive")
 }
