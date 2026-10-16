@@ -448,8 +448,9 @@ check over a document that renders wrong is checking the wrong bytes.
 **M4 through M7 last.** M4 is independent of everything above it and could
 start any time the maintainers want a deployable server. M5 depends on M1-a,
 because every item in it is a rendering change and none of them can be
-verified without golden images. M6-a, M6-b, M7-a and M2-b are done, so what is
-left is M5's rendering work and the deeper signature items in M3.
+verified without golden images. M6-a, M6-b, M7-a, M2-b and M5-b are done, so
+what is left is the rest of M5's rendering work and the deeper signature
+items in M3.
 
 Far term is deliberately not scheduled. It describes a direction, not dates.
 
