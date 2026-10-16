@@ -173,8 +173,75 @@ fn unknown_key() -> ApiError {
     ApiError::new(StatusCode::UNAUTHORIZED, "the API key is not recognised")
 }
 
-/// One caller naming a tenant it is not: a 403 rather than a 404 would leak
-/// that the id exists, so the route answers as if the document were missing.
-pub fn foreign_document() -> ApiError {
-    ApiError::new(StatusCode::NOT_FOUND, "no such document")
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn an_empty_spec_is_an_open_ring() {
+        let ring = KeyRing::parse("").expect("an empty ring");
+        assert!(ring.is_open());
+        assert!(ring.is_empty());
+        assert_eq!(ring.len(), 0);
+    }
+
+    #[test]
+    fn a_pair_maps_a_key_to_its_tenant() {
+        let ring = KeyRing::parse("acme:secret,rival:other").expect("a ring");
+        assert!(!ring.is_open());
+        assert_eq!(ring.len(), 2);
+        assert_eq!(ring.tenant_of("secret"), Some("acme"));
+        assert_eq!(ring.tenant_of("other"), Some("rival"));
+        assert_eq!(ring.tenant_of("missing"), None);
+    }
+
+    #[test]
+    fn whitespace_around_pairs_is_ignored() {
+        let ring = KeyRing::parse(" acme : secret , rival:other ").expect("a ring");
+        assert_eq!(ring.tenant_of("secret"), Some("acme"));
+        assert_eq!(ring.tenant_of("other"), Some("rival"));
+    }
+
+    #[test]
+    fn a_pair_without_a_key_is_refused() {
+        // A tenant with an empty key cannot be distinguished from no header at
+        // all, which would let the tenant in without presenting anything.
+        assert!(KeyRing::parse("acme").is_err());
+        assert!(KeyRing::parse("acme:").is_err());
+        assert!(KeyRing::parse(":secret").is_err());
+    }
+
+    #[test]
+    fn a_duplicated_key_is_refused() {
+        assert!(
+            KeyRing::parse("acme:secret,rival:secret").is_err(),
+            "one key cannot stand for two tenants"
+        );
+    }
+
+    #[test]
+    fn a_bearer_header_is_read_with_or_without_the_scheme() {
+        let mut headers = axum::http::HeaderMap::new();
+        headers.insert(AUTHORIZATION, "Bearer secret".parse().expect("a header"));
+        assert_eq!(bearer(&headers), Some("secret"));
+
+        let mut headers = axum::http::HeaderMap::new();
+        headers.insert(AUTHORIZATION, "secret".parse().expect("a header"));
+        assert_eq!(bearer(&headers), Some("secret"));
+
+        let mut headers = axum::http::HeaderMap::new();
+        headers.insert(API_KEY, "secret".parse().expect("a header"));
+        assert_eq!(bearer(&headers), Some("secret"));
+
+        let headers = axum::http::HeaderMap::new();
+        assert_eq!(bearer(&headers), None, "no header means no key");
+    }
+
+    #[test]
+    fn the_explicit_key_header_wins_over_the_bearer_one() {
+        let mut headers = axum::http::HeaderMap::new();
+        headers.insert(AUTHORIZATION, "Bearer bearer".parse().expect("a header"));
+        headers.insert(API_KEY, "explicit".parse().expect("a header"));
+        assert_eq!(bearer(&headers), Some("explicit"));
+    }
 }
