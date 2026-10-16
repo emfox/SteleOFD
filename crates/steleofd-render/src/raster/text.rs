@@ -1,0 +1,177 @@
+//! Painting text runs and images.
+
+use super::*;
+
+/// What a text run contributed to the page.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum TextOutcome {
+    /// Every glyph the run named was drawn.
+    Drawn,
+    /// The run drew, but at least one glyph had no outline in its face.
+    ShortGlyphs,
+    /// The run's face could not be loaded, so the run was skipped.
+    NoFace,
+}
+
+pub(crate) fn draw_text(
+    pixmap: &mut Pixmap,
+    run: &GlyphRun,
+    state: &State,
+    page_box: Rect,
+    fonts: &FontManager,
+    options: &RenderOptions,
+) -> Result<TextOutcome> {
+    if run.glyphs.is_empty() {
+        return Ok(TextOutcome::Drawn);
+    }
+    // A face that will not load costs its own run, not the whole page, and
+    // the run is counted in `skipped_font_runs`. The chain gets one more
+    // chance before that, so a document naming an unshipped face still draws.
+    let Some(face) = steleofd_display::run_face(fonts, run) else {
+        return Ok(TextOutcome::NoFace);
+    };
+    draw_text_inner(pixmap, run, state, page_box, fonts, face, options)
+}
+
+pub(crate) fn draw_text_inner(
+    pixmap: &mut Pixmap,
+    run: &GlyphRun,
+    state: &State,
+    page_box: Rect,
+    fonts: &FontManager,
+    face: Arc<steleofd_font::FontFace>,
+    options: &RenderOptions,
+) -> Result<TextOutcome> {
+    let mut offset = 0.0f64;
+    let mut missing = false;
+    for (i, &gid) in run.glyphs.iter().enumerate() {
+        if i > 0 {
+            offset += run.advances.get(i - 1).copied().unwrap_or(0.0);
+        }
+        offset += run.letter_spacing;
+        let Some((outline, _source)) = fonts.outline_for_code(&face, gid, run.codes_are_glyphs)
+        else {
+            missing = true;
+            continue;
+        };
+        // Outlines are normalized to 1/1000 em with y pointing up: scale to
+        // millimetres first, then position, or the run origin gets scaled too.
+        let k = run.size.value() / 1000.0;
+        let glyph = Affine::new(k, 0.0, 0.0, -k, 0.0, 0.0)
+            .then(Affine::translate(offset, 0.0))
+            .then(run.transform);
+        let total = total_transform(state, &page_box, options.dpi);
+        let ts_path = to_ts_path(&outline, total.pre_concat(to_ts(glyph)))?;
+        if let Some(paint) = &run.fill {
+            let p = solid_paint(paint);
+            pixmap.fill_path(&ts_path, &p, FillRule::Winding, Transform::identity(), None);
+        }
+    }
+    Ok(if missing {
+        TextOutcome::ShortGlyphs
+    } else {
+        TextOutcome::Drawn
+    })
+}
+
+/// What became of one placed image.
+pub(crate) enum ImageOutcome {
+    /// The image was decoded and painted.
+    Drawn,
+    /// The image was skipped: its bytes would not decode or its size was
+    /// rejected. The page keeps going, so a single bad resource cannot take
+    /// the rest of the page with it.
+    Failed,
+}
+
+pub(crate) fn draw_image(
+    pixmap: &mut Pixmap,
+    image: &ImageRef,
+    dst: Rect,
+    transform: Affine,
+    state: &State,
+    page_box: Rect,
+    options: &RenderOptions,
+) -> Result<ImageOutcome> {
+    if image.data.is_empty() {
+        // A missing resource must not abort the page; leave the area empty.
+        return Ok(ImageOutcome::Failed);
+    }
+    let (pixels, iw, ih) = match decode_resource(image) {
+        Ok(decoded) => decoded,
+        Err(e) => {
+            tracing::warn!(id = %image.id, error = %e, "skipping an image that would not decode");
+            return Ok(ImageOutcome::Failed);
+        }
+    };
+    let Some(size) = IntSize::from_wh(iw, ih) else {
+        tracing::warn!(id = %image.id, w = iw, h = ih, "skipping an image with a rejected size");
+        return Ok(ImageOutcome::Failed);
+    };
+    let Some(img) = Pixmap::from_vec(pixels, size) else {
+        tracing::warn!(id = %image.id, w = iw, h = ih, "skipping an image whose pixels were rejected");
+        return Ok(ImageOutcome::Failed);
+    };
+
+    // Pixels map into the destination rect, which the placement transform
+    // then positions in page space.
+    let pixel_to_page = Affine::new(dst.w / iw as f64, 0.0, 0.0, dst.h / ih as f64, dst.x, dst.y);
+    // `pre_concat` multiplies on the right, which would apply the placement
+    // before the millimetre-to-pixel step and scale the rect's offset by it
+    // twice; composing left to right keeps the offset in page units.
+    let total = to_ts(transform.then(pixel_to_page)).pre_concat(total_transform(
+        state,
+        &page_box,
+        options.dpi,
+    ));
+    pixmap.draw_pixmap(
+        0,
+        0,
+        img.as_ref(),
+        &PixmapPaint::default(),
+        total,
+        state.clip.as_ref(),
+    );
+    Ok(ImageOutcome::Drawn)
+}
+
+/// Decode a placed resource into RGBA, whichever encoding it uses.
+///
+/// JBIG2 is not one `image` reads, so it takes its own path.
+pub(crate) fn decode_resource(image: &ImageRef) -> Result<(Vec<u8>, u32, u32)> {
+    let fail = |reason: String| {
+        OfdError::Render(RenderError::ImageDecode {
+            page: 0,
+            reason: format!("resource {}: {reason}", image.id),
+        })
+    };
+    if image.codec == steleofd_display::ImageCodec::Jbig2 {
+        let gray = steleofd_display::jbig2::decode_to_gray(&image.data).map_err(fail)?;
+        let (w, h) = (image.pixel_size.0, image.pixel_size.1);
+        if gray.len() != (w * h) as usize {
+            return Err(fail(format!(
+                "JBIG2 declares {w}x{h} but decoded {} bytes",
+                gray.len()
+            )));
+        }
+        if w == 0 || h == 0 {
+            return Err(fail(format!("JBIG2 size {w}x{h} rejected")));
+        }
+        let rgba: Vec<u8> = gray.iter().flat_map(|&v| [v, v, v, u8::MAX]).collect();
+        return Ok((rgba, w, h));
+    }
+    let decoded = image::load_from_memory(&image.data).map_err(|e| fail(e.to_string()))?;
+    let rgba = decoded.to_rgba8();
+    let (w, h) = (rgba.width(), rgba.height());
+    let premul: Vec<u8> = rgba.pixels().flat_map(|p| premultiply(p.0)).collect();
+    Ok((premul, w, h))
+}
+
+pub(crate) fn premultiply(px: [u8; 4]) -> [u8; 4] {
+    let a = px[3] as u32;
+    if a == 255 {
+        return px;
+    }
+    let m = |c: u8| ((c as u32 * a + 127) / 255) as u8;
+    [m(px[0]), m(px[1]), m(px[2]), px[3]]
+}
