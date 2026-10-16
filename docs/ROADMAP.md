@@ -246,9 +246,15 @@ matrix is in `docs/FONTS.md`).
 `18.2.2` and `18.2.3` are already `verified`; what remains is the depth a
 legal carrier needs.
 
-- **M3-a** Seal and incremental update, so a signed document can be extended
-  without breaking its signature. This is the one that matters legally: a
-  document that cannot be signed twice cannot carry a countersignature.
+- **M3-a** `[x]` ~~Seal and incremental update, so a signed document can be
+  extended without breaking its signature. This is the one that matters
+  legally: a document that cannot be signed twice cannot carry a
+  countersignature.~~ `read_coverage` states what each signature protects, from
+  its `References`, and lists the container entries outside the union of every
+  signature's scope — the surface a later update touches. The `18.2.4`
+  verification already tolerates an extended container: only the files a
+  descriptor names move its check value, so a page or a second signature added
+  afterwards leaves an earlier seal `Valid`.
 - **M3-b** Timestamp countersignature verification.
 - **M3-c** The archival profile. `steleofd-archive` checks an OFD against the
   archival rules; it needs the profile document it checks against named, and
@@ -479,9 +485,10 @@ check over a document that renders wrong is checking the wrong bytes.
 
 **M4 through M7 last.** M4 is done — the server is deployable. M5 depends on
 M1-a, because every item in it is a rendering change and none of them can be
-verified without golden images. M6-a, M6-b, M6-c, M7-a, M2-b and M5-b are done,
-so what is left is the rest of M5's rendering work, the reader items that need
-a decision (M6-d, M6-e), and the deeper signature items in M3.
+verified without golden images. M3-a, M6-a, M6-b, M6-c, M7-a, M2-b and M5-b are
+done, so what is left is the rest of M5's rendering work, the reader items that
+need a decision (M6-d, M6-e), and the signature items that need a decision
+(M3-b, M3-c).
 
 Far term is deliberately not scheduled. It describes a direction, not dates.
 
