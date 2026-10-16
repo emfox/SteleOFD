@@ -336,8 +336,10 @@ not have. Ranked by how often a real reader needs them.
 - **M6-a** `[x]` ~~Print, straight from the reader's current view. `steleofd-print`
   exists and nothing calls it from the reader, so this is wiring, not writing.~~
   `print_worker` mirrors `export_worker`; the menu prints the pages on screen.
-- **M6-b** Annotation display and navigation. Clause 15 is verified, so the
-  model is there and only the view is missing.
+- **M6-b** `[x]` ~~Annotation display and navigation. Clause 15 is verified, so the
+  model is there and only the view is missing.~~
+  The document names its index, the parser joins marks back to pages, and the
+  reader lists them by page and turns to the one picked.
 - **M6-c** Signature appearance rendering — the visual half of the `18.2.3`
   model that is already read.
 - **M6-d** Signed, installable builds for the platforms people actually deploy
@@ -433,9 +435,9 @@ check over a document that renders wrong is checking the wrong bytes.
 **M4 through M7 last.** M4 is independent of everything above it and could
 start any time the maintainers want a deployable server. M5 depends on M1-a,
 because every item in it is a rendering change and none of them can be
-verified without golden images. M6-b is pure wiring over a finished model and
-is the cheapest item left on the list. M6-a is done. M7-a is the only one that
-touches no behaviour at all, so it can ride along with any other band.
+verified without golden images. M6-a and M6-b are done; the cheapest item left
+is M7-a, the only one that touches no behaviour at all, so it can ride along
+with any other band.
 
 Far term is deliberately not scheduled. It describes a direction, not dates.
 
