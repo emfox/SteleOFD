@@ -36,6 +36,25 @@ fn text_page(font: &str, size: &str, text: &str) -> String {
     )
 }
 
+/// A page whose text names glyph indices through a `CGTransform`, which is the
+/// only form that says which outlines a document needs without the face.
+fn glyph_page(font: &str, size: &str, glyphs: &[u16]) -> String {
+    let list = glyphs
+        .iter()
+        .map(|g| g.to_string())
+        .collect::<Vec<_>>()
+        .join(" ");
+    format!(
+        r#"<Page ID="1"><Content><Layer>
+  <TextObject ID="10" Boundary="0 0 100 30" Font="{font}" Size="{size}">
+    <CGTransform CodePosition="0" CodeCount="{n}" GlyphCount="{n}"><Glyphs>{list}</Glyphs></CGTransform>
+    <TextCode X="10" Y="25">Hi</TextCode>
+  </TextObject>
+</Layer></Content></Page>"#,
+        n = glyphs.len()
+    )
+}
+
 /// A real face, so glyph outlining runs for real rather than degrading.
 fn font_bytes() -> Vec<u8> {
     let path = concat!(
@@ -708,4 +727,89 @@ fn an_annotation_file_that_will_not_read_costs_only_its_own_page() {
     let marks = document.annotations().expect("annotations");
     assert_eq!(marks.len(), 1, "the page that still has a file reports it");
     assert_eq!(marks[0].page, 1);
+}
+
+#[test]
+fn an_embedded_face_is_carried_down_to_the_glyphs_the_document_draws() {
+    // A page that draws two characters out of a whole face should not pay for
+    // the rest of it: the registered bytes are a subset, not the original.
+    let whole = font_bytes();
+    // The glyph ids the page asks for, taken from the face itself so the test
+    // does not hardcode a fixture's numbering.
+    let source = steleofd_font::FontFace::new(
+        steleofd_font::FontId(0),
+        "Orbitron".to_string(),
+        std::sync::Arc::new(whole.clone()),
+        false,
+    )
+    .expect("fixture face");
+    let wanted: Vec<u16> = "Hi"
+        .chars()
+        .map(|c| source.glyph_id(c as u32).expect("fixture covers Hi"))
+        .collect();
+    let entries = [
+        ("OFD.xml", OFD_XML.as_bytes().to_vec()),
+        (
+            "Doc_0/Document.xml",
+            document_xml(&glyph_page("7", "4.0", &wanted)).into_bytes(),
+        ),
+        (
+            "Doc_0/PublicRes.xml",
+            font_table("7", "Orbitron", "Orbitron-Bold.ttf").into_bytes(),
+        ),
+        ("Doc_0/Res/Orbitron-Bold.ttf", whole.clone()),
+    ];
+    let doc = open(&entries);
+    let id = embedded_faces(doc.fonts())[0];
+    let entry = doc
+        .fonts()
+        .registry()
+        .iter()
+        .find(|e| e.id == id)
+        .expect("the container font is registered");
+    let carried = entry.data.as_ref().expect("embedded faces carry bytes");
+
+    assert!(
+        carried.len() < whole.len(),
+        "the face is subset: {} vs {}",
+        carried.len(),
+        whole.len()
+    );
+    // Subsetting must not damage the face: the run still outlines.
+    let face = doc.fonts().face(id).expect("the subset face loads");
+    for ch in "Hi".chars() {
+        let glyph = face.glyph_id(ch as u32).expect("a drawn glyph survives");
+        assert!(
+            face.outline(glyph).is_some(),
+            "{ch} must still have an outline"
+        );
+    }
+}
+
+#[test]
+fn a_face_whose_run_carries_code_points_is_carried_whole() {
+    // Without glyph indices the subset cannot know which outlines are needed,
+    // so the face is left untouched rather than guessed at.
+    let whole = font_bytes();
+    let entries = [
+        ("OFD.xml", OFD_XML.as_bytes().to_vec()),
+        (
+            "Doc_0/Document.xml",
+            document_xml(&text_page("7", "4.0", "Hi")).into_bytes(),
+        ),
+        (
+            "Doc_0/PublicRes.xml",
+            font_table("7", "Orbitron", "Orbitron-Bold.ttf").into_bytes(),
+        ),
+        ("Doc_0/Res/Orbitron-Bold.ttf", whole.clone()),
+    ];
+    let doc = open(&entries);
+    let id = embedded_faces(doc.fonts())[0];
+    let entry = doc
+        .fonts()
+        .registry()
+        .iter()
+        .find(|e| e.id == id)
+        .expect("registered");
+    assert_eq!(entry.data.as_ref().expect("bytes").len(), whole.len());
 }
