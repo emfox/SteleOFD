@@ -504,6 +504,56 @@ fn a_finished_print_job_is_announced_in_the_status_bar() {
 }
 
 #[test]
+fn the_annotation_toggle_is_disabled_until_a_document_is_open() {
+    let harness = harness(App::new());
+    let text = label(MessageId::AnnotPanelTitle);
+    let button = harness.get_by_label(&text);
+    assert!(
+        button.accesskit_node().is_disabled(),
+        "there is nothing to list with no document open"
+    );
+}
+
+#[test]
+fn opening_the_annotation_panel_shows_the_count_and_the_marks() {
+    let mut app = App::new();
+    let bytes = steleofd_testkit::annotated_archive(3, 2);
+    app.open_bytes(&bytes, Some("marked.ofd"))
+        .expect("the fixture opens");
+    let mut harness = harness(app);
+
+    harness
+        .get_by_label(&label(MessageId::AnnotPanelTitle))
+        .click();
+    harness.run();
+    assert!(harness.state().annotations_open(), "the toggle opened it");
+
+    // The count is the catalogue's plural sentence with the number in it.
+    let count = harness.state().annotation_count_label();
+    harness.get_by_label(&count);
+    // And the row is the mark itself, which a reader has to be able to see.
+    let row = harness.state().annotation_label(0);
+    harness.get_by_label_contains(&row);
+}
+
+#[test]
+fn a_document_with_no_marks_says_so_in_the_panel() {
+    // A document without annotations is not a failure, so the panel states a
+    // fact rather than leaving an empty column.
+    let mut app = App::new();
+    let bytes = steleofd_testkit::multipage_archive(2);
+    app.open_bytes(&bytes, Some("plain.ofd"))
+        .expect("the fixture opens");
+    let mut harness = harness(app);
+
+    harness
+        .get_by_label(&label(MessageId::AnnotPanelTitle))
+        .click();
+    harness.run();
+    harness.get_by_label(&label(MessageId::AnnotNone));
+}
+
+#[test]
 fn the_menu_offers_both_languages_in_their_own_names() {
     // A reader who cannot read the menu's current language still has to be
     // able to find theirs, so the entries are endonyms rather than translations.

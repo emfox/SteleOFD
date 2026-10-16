@@ -485,6 +485,8 @@ status = "verified"
 tests = [
   "gb_t_33190_15_the_annotation_index_points_at_page_files",
   "gb_t_33190_15_an_annotation_keeps_its_type_remark_and_parameters",
+  "gb_t_33190_15_the_document_names_where_its_annotations_live",
+  "gb_t_33190_15_annotations_are_joined_back_to_their_pages",
 ]
 
 [[item]]

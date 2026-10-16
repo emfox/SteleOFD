@@ -650,3 +650,62 @@ fn a_document_naming_an_unshipped_cjk_face_still_draws_its_text() {
         "every Han code resolved from the chain"
     );
 }
+
+#[test]
+fn gb_t_33190_15_annotations_are_joined_back_to_their_pages() {
+    // The index names pages by id, not by index, so reading the marks means
+    // joining the two. Two pages of three carry a mark each.
+    let doc = steleofd_testkit::annotated_archive(3, 2);
+    let mut document = steleofd_core::Document::open_bytes(&doc).expect("open fixture");
+    let marks = document.annotations().expect("annotations");
+    assert_eq!(marks.len(), 2, "one mark per annotated page");
+    assert_eq!(marks[0].page, 0);
+    assert_eq!(marks[1].page, 1);
+    assert_eq!(marks[0].kind, "Highlight");
+    assert_eq!(marks[0].remark.as_deref(), Some("note 0"));
+    assert_eq!(
+        marks[0].boundary,
+        Some(steleofd_common::Rect::new(5.0, 5.0, 40.0, 20.0))
+    );
+    assert!(marks[0].visible, "annotations are visible by default");
+}
+
+#[test]
+fn a_document_without_an_annotation_index_has_no_annotations() {
+    // No index is not a failure: most documents carry no marks at all.
+    let doc = steleofd_testkit::multipage_archive(2);
+    let mut document = steleofd_core::Document::open_bytes(&doc).expect("open fixture");
+    assert_eq!(document.annotations().expect("annotations"), Vec::new());
+}
+
+#[test]
+fn an_annotation_file_that_will_not_read_costs_only_its_own_page() {
+    // A document whose first page names a file that is not there still
+    // reports the marks on its second page: a broken note is not a broken
+    // document, and dropping the whole list would hide the marks that exist.
+    let archive = steleofd_testkit::annotated_archive(2, 2);
+    let mut package = steleofd_package::Package::from_bytes(&archive).expect("package");
+    let dropped = "Doc_0/Annots/Page_0/Annotation.xml";
+    let paths: Vec<String> = package
+        .entries()
+        .iter()
+        .filter(|path| path.as_str() != dropped)
+        .cloned()
+        .collect();
+    let kept: Vec<(String, Vec<u8>)> = paths
+        .into_iter()
+        .map(|path| {
+            let data = package.read(&path).expect("entry reads");
+            (path, data)
+        })
+        .collect();
+    let rebuilt: Vec<(&str, &[u8])> = kept
+        .iter()
+        .map(|(path, data)| (path.as_str(), data.as_slice()))
+        .collect();
+    let bytes = build_archive(&rebuilt).expect("archive");
+    let mut document = steleofd_core::Document::open_bytes(&bytes).expect("open fixture");
+    let marks = document.annotations().expect("annotations");
+    assert_eq!(marks.len(), 1, "the page that still has a file reports it");
+    assert_eq!(marks[0].page, 1);
+}

@@ -1076,6 +1076,14 @@ mod keyboard {
     }
 
     #[test]
+    fn the_annotation_keys_walk_the_marks() {
+        // One key forward, one back, as a reader paging through notes expects.
+        assert_eq!(press(Key::J, plain()), Some(Action::NextAnnotation));
+        assert_eq!(press(Key::K, plain()), Some(Action::PreviousAnnotation));
+        assert_eq!(press(Key::K, ctrl()), Some(Action::ToggleAnnotations));
+    }
+
+    #[test]
     fn a_key_with_no_meaning_is_none_rather_than_a_guess() {
         assert_eq!(press(Key::Num7, plain()), None);
         assert_eq!(press(Key::Q, plain()), None);
@@ -1184,6 +1192,117 @@ mod keyboard {
         app.apply(Action::ToggleSignatures);
         assert!(!app.signatures_open());
     }
+}
+
+/// A reader over a document whose first `annotated` pages carry marks.
+fn open_annotated(pages: usize, annotated: usize) -> App {
+    let mut app = App::new();
+    let bytes = steleofd_testkit::annotated_archive(pages, annotated);
+    app.open_bytes(&bytes, Some("marked.ofd"))
+        .expect("the fixture opens");
+    app
+}
+
+#[test]
+fn the_annotation_panel_lists_the_marks_in_page_order() {
+    let mut app = open_annotated(3, 2);
+    app.set_annotations_open(true);
+    assert!(app.annotations_open());
+    assert_eq!(app.annotation_count(), 2);
+    assert_eq!(
+        app.annotation_label(0),
+        "1  Highlight  note 0",
+        "a row names its page, its kind and its note"
+    );
+    assert_eq!(app.annotations()[1].page, 1);
+}
+
+#[test]
+fn a_reader_with_nothing_open_lists_no_annotations() {
+    // The panel is disabled with no document, but the state must answer too.
+    let mut app = App::new();
+    app.set_annotations_open(true);
+    assert_eq!(app.annotation_count(), 0);
+    assert!(app.error().is_none());
+}
+
+#[test]
+fn a_document_with_no_marks_says_so_rather_than_failing() {
+    let mut app = open();
+    app.set_annotations_open(true);
+    assert_eq!(app.annotation_count(), 0);
+    assert!(
+        !app.no_annotations_label().is_empty(),
+        "the notice comes from the catalogue"
+    );
+    assert!(app.error().is_none(), "no marks is not a failure");
+}
+
+#[test]
+fn choosing_an_annotation_turns_to_the_page_it_marks() {
+    // A note the reader cannot see is not a note they found, so picking one
+    // moves the document as well as the selection.
+    let mut app = open_annotated(4, 3);
+    app.set_annotations_open(true);
+    assert_eq!(app.current_page(), 0);
+    app.show_annotation(2);
+    assert_eq!(app.current_page(), 2);
+    assert_eq!(app.annotation_index(), Some(2));
+    assert_eq!(app.current_annotation().map(|a| a.page), Some(2));
+}
+
+#[test]
+fn stepping_walks_the_marks_in_both_directions_and_wraps() {
+    let mut app = open_annotated(4, 3);
+    app.set_annotations_open(true);
+    app.next_annotation();
+    assert_eq!(app.annotation_index(), Some(0));
+    app.next_annotation();
+    app.next_annotation();
+    assert_eq!(app.annotation_index(), Some(2), "the last mark");
+    app.next_annotation();
+    assert_eq!(app.annotation_index(), Some(0), "it wraps to the first");
+    app.previous_annotation();
+    assert_eq!(app.annotation_index(), Some(2), "and back to the last");
+}
+
+#[test]
+fn stepping_through_marks_opens_the_panel() {
+    // Stepping blind would move the document for no visible reason, so the
+    // key that walks the marks opens the list as well.
+    let mut app = open_annotated(3, 2);
+    assert!(!app.annotations_open());
+    app.apply(steleofd_reader::shortcuts::Action::NextAnnotation);
+    assert!(app.annotations_open());
+    assert_eq!(app.annotation_index(), Some(0));
+}
+
+#[test]
+fn only_the_marks_on_one_page_are_offered_to_the_canvas() {
+    let mut app = open_annotated(3, 2);
+    app.set_annotations_open(true);
+    app.show_annotation(1);
+    let on_first = app.annotations_on(0);
+    assert_eq!(on_first.len(), 1);
+    assert!(
+        !on_first[0].1,
+        "the mark on page one is not the one being visited"
+    );
+    let on_second = app.annotations_on(1);
+    assert_eq!(on_second.len(), 1);
+    assert!(on_second[0].1, "this is the one being visited");
+    assert!(app.annotations_on(2).is_empty());
+}
+
+#[test]
+fn closing_the_document_forgets_the_annotations() {
+    let mut app = open_annotated(2, 2);
+    app.set_annotations_open(true);
+    assert_eq!(app.annotation_count(), 2);
+    app.close();
+    assert!(!app.annotations_open(), "the panel goes with the document");
+    assert_eq!(app.annotation_count(), 0);
+    assert_eq!(app.annotation_index(), None);
 }
 
 /// Lay out and print the pages on screen, and wait for the sheets. Like

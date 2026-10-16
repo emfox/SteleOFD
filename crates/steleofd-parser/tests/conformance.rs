@@ -1110,6 +1110,31 @@ fn side_package(entries: &[(&str, &str)]) -> steleofd_package::Package {
 }
 
 #[test]
+fn gb_t_33190_15_the_document_names_where_its_annotations_live() {
+    // The index is a location on the document, not on each page: annotations
+    // are stored apart, and this is the only thing that joins the two.
+    let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<Document>
+  <CommonData><PageArea><PhysicalBox>0 0 210 297</PhysicalBox></PageArea></CommonData>
+  <Annotations>Annots/Annotations.xml</Annotations>
+  <Pages><Page ID="1" BaseLoc="Pages/Page_0/Content.xml"/></Pages>
+</Document>"#;
+    let doc = steleofd_parser::content::read_document(xml).expect("document");
+    assert_eq!(
+        doc.annotations.map(|loc| loc.value),
+        Some("Annots/Annotations.xml".to_string())
+    );
+
+    let bare = r#"<?xml version="1.0" encoding="UTF-8"?>
+<Document>
+  <CommonData><PageArea><PhysicalBox>0 0 210 297</PhysicalBox></PageArea></CommonData>
+  <Pages><Page ID="1" BaseLoc="Pages/Page_0/Content.xml"/></Pages>
+</Document>"#;
+    let doc = steleofd_parser::content::read_document(bare).expect("document");
+    assert!(doc.annotations.is_none(), "most documents carry no marks");
+}
+
+#[test]
 fn gb_t_33190_15_the_annotation_index_points_at_page_files() {
     // Annotations live apart from the page they mark up: the index says which
     // file holds the marks for which page.

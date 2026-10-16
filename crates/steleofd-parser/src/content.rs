@@ -132,6 +132,11 @@ pub fn read_document(xml: &str) -> Result<ModelDocument> {
             Event::Start(n) if n.is("Permissions") => {
                 doc.permissions = Some(read_permissions(&mut cursor)?)
             }
+            // The annotation index, clause 15: a location like any other, so
+            // it is read as the text of its own element.
+            Event::Start(n) if n.is("Annotations") => {
+                doc.annotations = Some(Location::new(trim_leading_slash(&cursor.read_text()?)))
+            }
             Event::Start(other) => cursor.skip_element(&other)?,
             Event::End(_) => break,
             Event::Eof => break,

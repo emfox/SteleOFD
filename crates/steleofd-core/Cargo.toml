@@ -27,6 +27,10 @@ steleofd-print = { workspace = true, optional = true }
 tracing.workspace = true
 rayon = { version = "1.11", optional = true }
 
+[dev-dependencies]
+# Fixture archives, so a test opens a real document rather than hand-built XML.
+steleofd-testkit.workspace = true
+
 [features]
 default = ["render", "sign", "convert", "pdf"]
 

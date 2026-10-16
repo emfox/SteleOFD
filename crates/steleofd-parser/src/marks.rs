@@ -43,6 +43,9 @@ pub fn read_annotations(
     let Some(loc) = annotation_index_loc(parsed) else {
         return Ok(Vec::new());
     };
+    // The document names the index relative to its own directory, as every
+    // other location in `Document.xml` is.
+    let loc = resolve(&parsed.doc_dir, &loc);
     let index = read_annotations_index(package, &loc)?;
     let by_id = page_ids(parsed);
     let mut out = Vec::new();
@@ -50,7 +53,7 @@ pub fn read_annotations(
         let Some(&page) = by_id.get(&entry.page_id) else {
             continue;
         };
-        let file = resolve(&entry.file_loc, &parent_of(&loc));
+        let file = resolve(&parent_of(&loc), &entry.file_loc);
         let Ok(annots) = read_page_annots(package, &file) else {
             continue;
         };

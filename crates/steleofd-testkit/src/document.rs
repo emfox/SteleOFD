@@ -111,6 +111,57 @@ pub fn multipage_archive(pages: usize) -> Vec<u8> {
     build_archive(&borrowed).expect("archive")
 }
 
+/// The archive bytes of a document whose first `annotated` pages carry marks.
+/// Annotations live apart from the pages they mark up, so the fixture carries
+/// the document-level index, one file per annotated page, and nothing else.
+pub fn annotated_archive(pages: usize, annotated: usize) -> Vec<u8> {
+    let mut document = multipage_document_xml(pages);
+    if annotated > 0 {
+        // The index hangs off the document, before the page list closes.
+        document = document.replace(
+            "  <Pages>",
+            "  <Annotations>Annots/Annotations.xml</Annotations>\n  <Pages>",
+        );
+    }
+    let mut entries: Vec<(String, Vec<u8>)> =
+        vec![("OFD.xml".to_string(), OFD_XML.as_bytes().to_vec())];
+    entries.push((DOCUMENT_ENTRY.to_string(), document.into_bytes()));
+    for page in 0..pages {
+        entries.push((
+            format!("Doc_0/Pages/Page_{page}/Content.xml"),
+            CONTENT_XML.as_bytes().to_vec(),
+        ));
+    }
+    if annotated > 0 {
+        let mut index = String::from("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<Annotations>\n");
+        for page in 0..annotated {
+            index.push_str(&format!(
+                "  <Page PageID=\"{id}\"><FileLoc>Page_{page}/Annotation.xml</FileLoc></Page>\n",
+                id = page + 1,
+            ));
+        }
+        index.push_str("</Annotations>");
+        entries.push((
+            "Doc_0/Annots/Annotations.xml".to_string(),
+            index.into_bytes(),
+        ));
+        for page in 0..annotated {
+            let marks = format!(
+                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<ofd:PageAnnot xmlns:ofd=\"http://www.ofdspec.org/2016\">\n  <Annot ID=\"a{page}\" Type=\"Highlight\"><Remark>note {page}</Remark><Appearance Boundary=\"5 5 40 20\"/></Annot>\n</ofd:PageAnnot>"
+            );
+            entries.push((
+                format!("Doc_0/Annots/Page_{page}/Annotation.xml"),
+                marks.into_bytes(),
+            ));
+        }
+    }
+    let borrowed: Vec<(&str, &[u8])> = entries
+        .iter()
+        .map(|(path, data)| (path.as_str(), data.as_slice()))
+        .collect();
+    build_archive(&borrowed).expect("archive")
+}
+
 /// A real face, so glyph outlining runs for real rather than degrading.
 pub fn font_bytes() -> Vec<u8> {
     let path = concat!(
