@@ -221,6 +221,9 @@ jobs:
           workspaces: fuzz
           shared-key: fuzz
 
+      # Kept as `cargo install` rather than moved to the install action: it is
+      # not in that action's managed list, so it would fall back to
+      # cargo-binstall, and the source build is only about ten seconds here.
       - name: Install cargo-fuzz
         run: cargo install cargo-fuzz --locked
 
@@ -257,7 +260,9 @@ jobs:
 
       - name: Install cargo-semver-checks
         if: steps.baseline.outputs.tag != ''
-        run: cargo install cargo-semver-checks --locked
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-semver-checks
 
       - name: Check the public API against the last release
         if: steps.baseline.outputs.tag != ''
@@ -285,7 +290,9 @@ jobs:
           shared-key: coverage
 
       - name: Install cargo-llvm-cov
-        run: cargo install cargo-llvm-cov --locked
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov
 
       - name: Measure line coverage
         run: cargo llvm-cov --workspace --all-features --lcov --output-path lcov.info
