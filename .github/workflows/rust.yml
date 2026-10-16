@@ -139,6 +139,17 @@ jobs:
       - name: The samples that do not open are still the known ones
         run: python3 scripts/fetch_corpus.py --parse
 
+      # The standard's own conformance set, one document per clause. It shares
+      # this job because it is fetched the same way and needs the same build.
+      - name: Fetch the clause samples
+        run: python3 scripts/fetch_gb_samples.py
+
+      - name: Every clause sample is present
+        run: python3 scripts/fetch_gb_samples.py --check
+
+      - name: Every clause sample still opens
+        run: python3 scripts/fetch_gb_samples.py --parse
+
   fuzz:
     runs-on: ubuntu-latest
     # A short, deterministic smoke run: enough to catch a crash on the seeds
