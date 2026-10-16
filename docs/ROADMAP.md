@@ -34,11 +34,11 @@ the note a person would need to start them.
 | Measure | Value |
 | --- | --- |
 | Crates | 26 (L0 foundation through L5 delivery) |
-| Source | 38,687 lines of Rust, measured with `find crates -name '*.rs'` |
-| Tests | 927 passing, plus 33 inline unit-test modules |
+| Source | 48,635 lines of Rust, measured with `find crates -name '*.rs'` |
+| Tests | 1,098 passing |
 | Delivery forms | `cli`, `wasm`, `ffi`, `server`, `reader`, all on the `core` facade |
-| Standard clauses | 74 registered in GB/T 33190-2016: 68 `verified`, 2 `partial` (`8.4`, `13.1`), 4 `deviation` with a stated reason |
-| Languages | `en-US` and `zh-CN`, 88 message keys, parity enforced in CI |
+| Standard clauses | 74 registered in GB/T 33190-2016: 73 `verified`, 1 `deviation` (`8.1.6`, with a stated reason) |
+| Languages | `en-US` and `zh-CN`, 105 message keys, parity enforced in CI |
 | CI | fmt, clippy, build, test, all-features test, i18n, language, conformance, XSD validation, corpus freshness, fuzz smoke run |
 
 ## Honest gaps
@@ -46,15 +46,11 @@ the note a person would need to start them.
 These are the things a new contributor would otherwise discover the hard way.
 Each one is a real, verified finding, not a guess.
 
-1. **Two clauses are `partial`, four are `deviation`.** `8.4` is `partial`
-   because only a `Path` clip area is read and a `Text` area is rejected with
-   an explicit error. `13.1` is `partial` because a `CompositeObject` is
-   flattened to a stand-in image op with empty bytes — the vector resource's
-   own block is never resolved, so a placed vector graphic draws nothing.
-   The four `deviation` entries (`8.1.6`, `8.3.5`, `8.3.6`, `8.3.7`) each
-   carry their reason in the register. The register in
-   `compliance/gb-t-33190.toml` is the source of truth and lists the status of
-   each by name.
+1. **One clause is a `deviation`.** `8.1.6` (`PrintQuality`) is recorded as a
+   deviation because the annex A `Page.xsd` and `Document.xsd` carry no such
+   element, so there is nothing in a document to assert against; the reason
+   travels in the register. The register in `compliance/gb-t-33190.toml` is the
+   source of truth and lists the status of each clause by name.
 2. **The documented format support outran the code, until now.** Five cargo
    features (`render`'s `backend-canvas`/`backend-svg`/`backend-pdf`, and
    `convert`'s `office`/`ocr`) were declared and referenced nowhere, while
@@ -255,12 +251,17 @@ legal carrier needs.
   verification already tolerates an extended container: only the files a
   descriptor names move its check value, so a page or a second signature added
   afterwards leaves an earlier seal `Valid`.
-- **M3-b** Timestamp countersignature verification. Deferred: the 2016 schema
-  has no timestamp element — `Signatures.xsd` and `Signature.xsd` carry a
-  signature list and a descriptor, and nothing else — so a timestamp travels
-  as a non-standard extension and verifying one needs a decision about which
-  profile (RFC 3161 or a national equivalent) and which container to read it
-  from, not an implementation.
+- **M3-b** Timestamp countersignature verification. `steleofd-crypto` reads a
+  GB/T 20520 token — the profile GM/T 0099-2020 clause 7.2.5 points an OFD
+  signature timestamp at — as a CMS `SignedData` wrapping a `TSTInfo` the TSA
+  signs with SM2 over SM3, and `TimeStampToken::verify_tsa_signature` checks the
+  TSA proof against its own certificate. `steleofd-sign` reads the token off the
+  `<Timestamp>` element and `verify_timestamp` returns one of four verdicts:
+  `Absent` (no token), `Unbound` (the token's `messageImprint` is not the SM3 of
+  the signature's `check_value`, so the proof covers other bytes), `Unverified`
+  (the imprint matches but the TSA signature does not verify) or `Bound`. The
+  facade exposes it as `Document::verify_timestamps`, mirroring
+  `verify_signatures`. Registered under clause `18.2.4`.
 - **M3-c** The archival profile. `steleofd-archive` checks an OFD against the
   archival rules; GB/T 42133-2022 supplies the profile, and the four checks a
   reader can decide from the container are in (`ARCH-101` … `ARCH-104`, covered
@@ -501,10 +502,10 @@ check over a document that renders wrong is checking the wrong bytes.
 
 **M4 through M7 last.** M4 is done — the server is deployable. M5 depends on
 M1-a, because every item in it is a rendering change and none of them can be
-verified without golden images; M5-e is done. M2-b, M3-a, M6-a, M6-b, M6-c,
-M6-e and M7-a are done too, so what is left is M5's remaining rendering work,
-the reader item that needs a decision (M6-d), and the signature items that need
-a decision (M3-b, M3-c).
+verified without golden images; M5-e is done. M2-b, M3-a, M3-b, M6-a, M6-b,
+M6-c, M6-e and M7-a are done too, so what is left is M5's remaining rendering
+work, M3-c's authoring-tool scope, M6-d's release infrastructure, and M6-f's
+i18n boundary move.
 
 Far term is deliberately not scheduled. It describes a direction, not dates.
 
