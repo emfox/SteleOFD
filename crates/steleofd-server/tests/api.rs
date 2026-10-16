@@ -358,6 +358,7 @@ fn settings_come_from_the_environment_or_the_defaults() {
         "STELEOFD_DATA_DIR" => Some("/var/lib/steleofd".to_owned()),
         "STELEOFD_API_KEYS" => Some("acme:secret".to_owned()),
         "STELEOFD_RATE_LIMIT" => Some("5,10".to_owned()),
+        "STELEOFD_DRAIN_TIMEOUT" => Some("30".to_owned()),
         _ => None,
     })
     .expect("a full environment");
@@ -372,6 +373,11 @@ fn settings_come_from_the_environment_or_the_defaults() {
     assert_eq!(configured.api_keys.tenant_of("secret"), Some("acme"));
     assert_eq!(configured.rate_limit.rate, 5.0);
     assert_eq!(configured.rate_limit.burst, 10.0);
+    assert_eq!(
+        configured.drain.duration(),
+        std::time::Duration::from_secs(30),
+        "the drain grace period is read when set"
+    );
     assert_eq!(
         empty.data_dir, None,
         "and left unset when the environment says nothing, so the store stays in memory"
@@ -392,6 +398,15 @@ fn settings_come_from_the_environment_or_the_defaults() {
     assert!(
         Settings::from(|name| (name == "STELEOFD_RATE_LIMIT").then(|| "0,1".to_owned())).is_err(),
         "a rate of zero would refuse every request"
+    );
+    assert!(
+        Settings::from(|name| (name == "STELEOFD_DRAIN_TIMEOUT").then(|| "0".to_owned())).is_err(),
+        "a grace period of zero is a kill, not a drain"
+    );
+    assert!(
+        Settings::from(|name| (name == "STELEOFD_DRAIN_TIMEOUT").then(|| "soon".to_owned()))
+            .is_err(),
+        "a grace period that does not parse is refused"
     );
 
     assert!(
