@@ -398,7 +398,12 @@ not have. Ranked by how often a real reader needs them.
   does not ship keeps its placement with empty bytes rather than vanishing.
 - **M6-d** Signed, installable builds for the platforms people actually deploy
   on, and an offline story.
-- **M6-e** A document comparison view for two revisions of the same file.
+- **M6-e** `[x]` ~~A document comparison view for two revisions of the same
+  file.~~ `Document::compare` diffs two flattened display lists page by page and
+  names each page's change (added, removed, resized, text, graphics), and the
+  reader's comparison panel picks a second file, lists the pages that moved and
+  turns to one when picked. The comparison is over what each page draws, so two
+  files that render the same compare equal even when their markup differs.
 - **M6-f** Move the reader's interface strings out of `steleofd-i18n`. The
   engine crate defines product-facing ids (`ReaderFitWidth`,
   `ReaderSearchTitle`, …); they belong with the reader, so the engine catalogue
@@ -490,9 +495,9 @@ check over a document that renders wrong is checking the wrong bytes.
 
 **M4 through M7 last.** M4 is done — the server is deployable. M5 depends on
 M1-a, because every item in it is a rendering change and none of them can be
-verified without golden images. M3-a, M6-a, M6-b, M6-c, M7-a, M2-b and M5-b are
-done, so what is left is the rest of M5's rendering work, the reader items that
-need a decision (M6-d, M6-e), and the signature items that need a decision
+verified without golden images. M3-a, M6-a, M6-b, M6-c, M6-e, M7-a, M2-b and
+M5-b are done, so what is left is the rest of M5's rendering work, the reader
+item that needs a decision (M6-d), and the signature items that need a decision
 (M3-b, M3-c).
 
 Far term is deliberately not scheduled. It describes a direction, not dates.
