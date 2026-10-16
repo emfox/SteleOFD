@@ -250,7 +250,16 @@ pub(crate) fn read_color(node: &Node, cursor: &mut Cursor<'_>) -> Result<ColorRe
         match cursor.next_event()? {
             Event::Start(n) if n.is("AxialShd") => shading = Some(read_axial(&n, cursor)?),
             Event::Start(n) if n.is("RadialShd") => shading = Some(read_radial(&n, cursor)?),
-            Event::Start(other) if other.is("Pattern") || other.is("GouraudShd") => {
+            // Clauses 8.3.6 and 8.3.7. Both are a coloured mesh; they differ
+            // only in how the triangles are written, which `read_gouraud`
+            // resolves to one triangle list.
+            Event::Start(n) if n.is("GouraudShd") => {
+                shading = Some(read_gouraud(&n, cursor, false)?)
+            }
+            Event::Start(n) if n.is("LaGouraudShd") => {
+                shading = Some(read_gouraud(&n, cursor, true)?)
+            }
+            Event::Start(other) if other.is("Pattern") => {
                 return Err(unsupported_shading(other.local()));
             }
             Event::Start(other) => cursor.skip_element(&other)?,
@@ -302,6 +311,113 @@ fn read_radial(node: &Node, cursor: &mut Cursor<'_>) -> Result<Shading> {
         end,
         end_radius,
         segments,
+    })
+}
+
+/// `GouraudShd` (8.3.6) and `LaGouraudShd` (8.3.7). Both carry a list of
+/// `<Point X Y><Color/></Point>` and a `BackColor`; the lattice form adds a
+/// `VerticesPerRow` that says how the points tile into triangles.
+fn read_gouraud(node: &Node, cursor: &mut Cursor<'_>, lattice: bool) -> Result<Shading> {
+    let per_row = node
+        .attributes()
+        .optional_as::<usize>("LaGouraudShd", "VerticesPerRow")?;
+    let mut points = Vec::new();
+    let mut background = None;
+    if !node.is_self_closing() {
+        loop {
+            match cursor.next_event()? {
+                Event::Start(n) if n.is("Point") => points.push(read_mesh_point(&n, cursor)?),
+                Event::Start(n) if n.is("BackColor") => {
+                    background = Some(Box::new(read_color(&n, cursor)?))
+                }
+                Event::Start(other) => cursor.skip_element(&other)?,
+                Event::End(_) | Event::Eof => break,
+                Event::Text(_) => {}
+            }
+        }
+    }
+    // The strip form of 8.3.6 makes one triangle per consecutive triple; the
+    // lattice form of 8.3.7 makes two per 2x2 cell of `VerticesPerRow`.
+    let triangles = if lattice {
+        lattice_triangles(points.len(), per_row.unwrap_or(0))
+    } else {
+        strip_triangles(points.len())
+    };
+    Ok(Shading::Gouraud {
+        points,
+        triangles,
+        lattice,
+        background,
+    })
+}
+
+/// The strip form of 8.3.6: every consecutive group of three vertices is one
+/// triangle, so a short list yields as many as it can.
+fn strip_triangles(count: usize) -> Vec<MeshTriangle> {
+    let mut triangles = Vec::new();
+    let mut i = 0;
+    while i + 2 < count {
+        triangles.push(MeshTriangle {
+            a: i,
+            b: i + 1,
+            c: i + 2,
+        });
+        i += 3;
+    }
+    triangles
+}
+
+/// The lattice form of 8.3.7: `per_row` vertices to a row, each 2x2 cell of the
+/// grid making two triangles. A `per_row` below two cannot tile, so it yields
+/// nothing rather than a guess.
+fn lattice_triangles(count: usize, per_row: usize) -> Vec<MeshTriangle> {
+    let mut triangles = Vec::new();
+    if per_row < 2 {
+        return triangles;
+    }
+    let rows = count / per_row;
+    for row in 0..rows.saturating_sub(1) {
+        for col in 0..per_row - 1 {
+            let tl = row * per_row + col;
+            let tr = tl + 1;
+            let bl = tl + per_row;
+            let br = bl + 1;
+            triangles.push(MeshTriangle {
+                a: tl,
+                b: tr,
+                c: bl,
+            });
+            triangles.push(MeshTriangle {
+                a: tr,
+                b: br,
+                c: bl,
+            });
+        }
+    }
+    triangles
+}
+
+/// One `<Point X="0" Y="0"><Color Value="#FF0000"/></Point>` of a mesh.
+fn read_mesh_point(node: &Node, cursor: &mut Cursor<'_>) -> Result<MeshPoint> {
+    let a = node.attributes();
+    let x = a.optional_as::<f64>("Point", "X")?.unwrap_or(0.0);
+    let y = a.optional_as::<f64>("Point", "Y")?.unwrap_or(0.0);
+    let mut color = ColorRef::default();
+    if !node.is_self_closing() {
+        loop {
+            match cursor.next_event()? {
+                Event::Start(c) if c.is("Color") => color = read_color(&c, cursor)?,
+                Event::Start(other) => cursor.skip_element(&other)?,
+                Event::End(_) | Event::Eof => break,
+                Event::Text(_) => {}
+            }
+        }
+    }
+    let alpha = color.clone().alpha();
+    Ok(MeshPoint {
+        point: (x, y),
+        color: color.value,
+        alpha,
     })
 }
 

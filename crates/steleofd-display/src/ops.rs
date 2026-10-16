@@ -131,6 +131,8 @@ pub enum Paint {
     LinearGradient(Box<LinearGradientSpec>),
     /// A radial shading: the cone between two circles.
     RadialGradient(Box<RadialGradientSpec>),
+    /// A Gouraud mesh: triangles whose vertices carry colours.
+    Mesh(Box<MeshSpec>),
     /// Tiled image.
     Pattern(ImageRef),
 }
@@ -169,6 +171,28 @@ pub struct GradientStop {
     /// Position along the gradient, `0.0..=1.0`.
     pub offset: f64,
     /// Colour at this position.
+    pub color: Color,
+}
+
+/// A Gouraud mesh an object carries with it, from clause 8.3.6 (`GouraudShd`)
+/// or the lattice form of 8.3.7. The two are the same once read, since the
+/// lattice only changes how the triangles were written.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MeshSpec {
+    /// Every vertex, in the order the shading wrote them.
+    pub points: Vec<MeshVertex>,
+    /// Triangles over those vertices.
+    pub triangles: Vec<[usize; 3]>,
+}
+
+/// One vertex of a [`MeshSpec`]: a position and the colour it carries.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct MeshVertex {
+    /// Position, in the object's content space.
+    pub x: f64,
+    /// Position, in the object's content space.
+    pub y: f64,
+    /// Colour sampled here, straight-line interpolated across a triangle.
     pub color: Color,
 }
 

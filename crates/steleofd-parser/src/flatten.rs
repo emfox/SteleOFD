@@ -8,14 +8,14 @@ use std::sync::Arc;
 use steleofd_common::{Point, Rect};
 use steleofd_display::ops::{Color, GradientStop, LineCap, LineJoin};
 use steleofd_display::{
-    DisplayListBuilder, DrawOp, GlyphRun, ImageCodec, ImageRef, LinearGradientSpec, Paint,
-    PaintRule, RadialGradientSpec, StrokeStyle,
+    DisplayListBuilder, DrawOp, GlyphRun, ImageCodec, ImageRef, LinearGradientSpec, MeshSpec,
+    MeshVertex, Paint, PaintRule, RadialGradientSpec, StrokeStyle,
 };
 use steleofd_error::{FormatError, OfdError, Result};
 use steleofd_font::FontId;
 use steleofd_geometry::{Affine, Path};
 use steleofd_model::PageBlock;
-use steleofd_model::color::{ColorRef, Segment, Shading};
+use steleofd_model::color::{ColorRef, MeshPoint, Segment, Shading};
 use steleofd_model::object::{
     CGTransform, DrawParam, ImageObject, LineCapStyle, LineJoinStyle, Object, ObjectBase,
     PathObject, TextCode, TextObject,
@@ -199,7 +199,30 @@ fn paint_of(color: &ColorRef, _path: &Path, _builder: &mut DisplayListBuilder) -
             end_radius: *end_radius,
             stops: stops_of(segments)?,
         }))),
+        Some(Shading::Gouraud {
+            points, triangles, ..
+        }) => Ok(Paint::Mesh(Box::new(MeshSpec {
+            points: mesh_vertices(points)?,
+            triangles: triangles.iter().map(|t| [t.a, t.b, t.c]).collect(),
+        }))),
     }
+}
+
+/// One vertex per mesh point, its colour resolved to RGB here so the backend
+/// interpolates numbers rather than parsing colour text per pixel.
+fn mesh_vertices(points: &[MeshPoint]) -> Result<Vec<MeshVertex>> {
+    points
+        .iter()
+        .map(|p| {
+            let color = ColorRef::from_hex(p.color.clone()).with_alpha(p.alpha);
+            let (r, g, b) = color.to_rgb()?;
+            Ok(MeshVertex {
+                x: p.point.0,
+                y: p.point.1,
+                color: Color::rgba(r, g, b, p.alpha),
+            })
+        })
+        .collect()
 }
 
 fn stops_of(segments: &[Segment]) -> Result<Vec<GradientStop>> {

@@ -2,7 +2,7 @@
 
 use steleofd_common::{Millimeter, Rect};
 use steleofd_error::{FormatError, OfdError, Result, XmlError};
-use steleofd_model::color::{ColorRef, Segment, Shading};
+use steleofd_model::color::{ColorRef, MeshPoint, MeshTriangle, Segment, Shading};
 use steleofd_model::document::{
     ColorSpace, ColorSpaceList, CommonData, CompositeGraphicUnit, CompositeGraphicUnitList,
     DocBody, Document as ModelDocument, DrawParamList, Font, FontList, Layer, Location, Multimedia,

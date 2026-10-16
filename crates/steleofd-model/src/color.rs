@@ -33,7 +33,34 @@ pub struct Segment {
     pub color: ColorRef,
 }
 
-/// The two shadings clause 8.3.4 defines: a linear axis and a radial cone.
+/// One vertex of a Gouraud mesh: where it sits and the colour it carries.
+/// The colour is a plain `#RRGGBB` plus alpha rather than a [`ColorRef`],
+/// which would nest a shading inside a shading and never size.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct MeshPoint {
+    /// Position, in the object's content space.
+    pub point: (f64, f64),
+    /// Colour sampled at this vertex, `#RRGGBB`.
+    pub color: String,
+    /// Alpha at this vertex, 0 to 255.
+    pub alpha: u8,
+}
+
+/// One triangle of a Gouraud mesh. The three vertices are indices into the
+/// mesh's point list; a triangle whose vertices are all different colours
+/// interpolates between them across its area.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MeshTriangle {
+    /// Index of the first vertex.
+    pub a: usize,
+    /// Index of the second vertex.
+    pub b: usize,
+    /// Index of the third vertex.
+    pub c: usize,
+}
+
+/// The shadings clause 8.3 defines: a linear axis, a radial cone, and the two
+/// colour-interpolated meshes of 8.3.6 and 8.3.7.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Shading {
     /// `AxialShd`: a linear gradient from one point to another.
@@ -58,13 +85,28 @@ pub enum Shading {
         /// Colour stops, at least two, in the order written.
         segments: Vec<Segment>,
     },
+    /// `GouraudShd` (8.3.6) and `LaGouraudShd` (8.3.7): a mesh of coloured
+    /// vertices whose triangles interpolate the colour between them. The two
+    /// differ only in how the triangles are written, not in what they mean.
+    Gouraud {
+        /// Every vertex, in the order the shading wrote them.
+        points: Vec<MeshPoint>,
+        /// Triangles over those vertices.
+        triangles: Vec<MeshTriangle>,
+        /// Whether the writer used the lattice form of 8.3.7.
+        lattice: bool,
+        /// Colour for an area no triangle covers, if the writer named one.
+        /// Boxed so a shading can nest inside a colour without sizing to it.
+        background: Option<Box<ColorRef>>,
+    },
 }
-
 impl Shading {
-    /// The colour stops, whichever shading this is.
+    /// The colour stops, whichever shading this is. A mesh carries its colours
+    /// on its vertices instead, so it has none.
     pub fn segments(&self) -> &[Segment] {
         match self {
             Shading::Axial { segments, .. } | Shading::Radial { segments, .. } => segments,
+            Shading::Gouraud { .. } => &[],
         }
     }
 }
