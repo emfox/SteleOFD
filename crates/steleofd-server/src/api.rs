@@ -56,6 +56,7 @@ pub struct SearchQuery {
 pub fn router(state: AppState, max_body_bytes: usize) -> Router {
     Router::new()
         .route("/healthz", get(health))
+        .route("/openapi.json", get(openapi_document))
         .route("/api/v1/documents", post(open))
         .route("/api/v1/documents/{id}", get(info).delete(close))
         .route("/api/v1/documents/{id}/pdf", get(pdf))
@@ -103,6 +104,12 @@ async fn health(State(state): State<AppState>) -> Json<Health> {
         documents: state.store.len(),
         version: env!("CARGO_PKG_VERSION"),
     })
+}
+
+/// The OpenAPI description of this service, so a client can be generated from
+/// what the service itself says it does.
+async fn openapi_document() -> Json<serde_json::Value> {
+    Json(crate::openapi::document())
 }
 
 /// Open an uploaded document and keep it under a fresh id, owned by the
