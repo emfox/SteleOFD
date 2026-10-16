@@ -14,7 +14,10 @@ SteleOFD implements [GB/T 33190-2016, the Chinese national standard for
 fixed-layout electronic documents](https://openstd.samr.gov.cn/bzgk/gb/newGbInfo?hcno=3AF6682D939116B6F5EED53D01A9DB5D).
 Parsing and rendering are written from scratch; there is no C or C++ dependency.
 
-Status: early. The workspace and interfaces are in place, the engine is not.
+Status: the original plan is complete. All 26 crates are built and tested, the
+five delivery forms (`cli`, `wasm`, `ffi`, `server`, `reader`) sit on one `core`
+facade, and the engine holds a documented performance budget. Remaining work is
+tracked in [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 ## Features
 
@@ -214,13 +217,13 @@ rather than the national standards one.
 - [x] **P9** GB/T 33190-2016 conformance harness: annex A schemas rebuilt from the standard, enforced in CI
 
 All 26 crates are in place, and the five delivery forms (`cli`, `wasm`, `ffi`,
-`server`, `reader`) sit on the same `core` facade. What comes next is tracked in
-[`docs/ROADMAP.md`](docs/ROADMAP.md), which starts with the reader interface
-the engine is built to serve. Clause-level coverage lives in
+`server`, `reader`) sit on the same `core` facade. Every task in the original
+P0–P9 sequence is closed; what is left is tracked in
+[`docs/ROADMAP.md`](docs/ROADMAP.md). Clause-level coverage lives in
 [`compliance/gb-t-33190.toml`](compliance/gb-t-33190.toml) and the method
 behind it in [`compliance/CLAUSES.md`](compliance/CLAUSES.md): 74 clauses are
-registered, 66 of them covered, and the eight that are not carry a `deviation`
-note saying why.
+registered and 73 of them `verified`, with the one that is not — `8.1.6`
+`PrintQuality` — carrying a `deviation` note saying why.
 What the engine can and cannot draw with is set out face by face in
 [`docs/FONTS.md`](docs/FONTS.md). How it compares to other readers in the
 field, page by page against a second vendor's output, is in
