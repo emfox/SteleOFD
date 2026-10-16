@@ -73,10 +73,18 @@ jobs:
           esac
           ls -la dist
 
+      # The builds are unsigned, so the checksum is the only thing a
+      # downloader can hold a binary to. It is generated here, next to the
+      # bytes, so it can never describe a file the tag did not build.
+      - name: Checksum the executable
+        run: python3 scripts/release_checksums.py generate dist
+
       - name: Attach the executable to the release
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/steleofd-reader-*
+          files: |
+            dist/steleofd-reader-*
+            dist/SHA256SUMS
 
   artefacts:
     runs-on: ubuntu-latest
@@ -126,6 +134,11 @@ jobs:
           cp crates/steleofd-wasm/pkg/*.wasm dist/ 2>/dev/null || true
           cp crates/steleofd-wasm/pkg/*.d.ts dist/ 2>/dev/null || true
           ls -la dist
+
+      # Same reason as the reader job: no signing key ships with a release, so
+      # every artefact is published beside the digest that identifies it.
+      - name: Checksum the artefacts
+        run: python3 scripts/release_checksums.py generate dist
 
       # The tag names the release, and the changelog carries the notes, so the
       # archive contents and the published notes come from the same commit.

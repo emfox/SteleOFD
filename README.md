@@ -162,6 +162,18 @@ The i18n check compares the catalogues: same file set, same key set, consistent
 placeholders, and the `all_keys()` list in Rust matching the keys in the FTL
 files.
 
+### Releases
+
+Pushing a `v*` tag builds the desktop reader for Linux, macOS and Windows and
+publishes it with the C ABI library and the WebAssembly bindings. The builds are
+**unsigned** — there is no signing key — so each release carries a `SHA256SUMS`
+manifest as the only thing a download can be held to:
+
+```bash
+python3 scripts/release_checksums.py verify .
+sha256sum -c SHA256SUMS          # or without this project at all
+```
+
 ## Standards
 
 | Standard | Scope |
