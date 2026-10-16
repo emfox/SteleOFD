@@ -25,15 +25,25 @@ use steleofd_xml::parse_number_list_n;
 /// parameter says otherwise; the standard names 0.35 mm as the default.
 const DEFAULT_LINE_WIDTH: f64 = 0.35;
 
+/// The vector graphics a document embeds, keyed by resource id. A
+/// `CompositeObject` names one of these through its `ResourceID`.
+pub type CompositeTable = HashMap<String, steleofd_model::CompositeGraphicUnit>;
+
+/// An empty composite table, for callers that have no document behind them.
+pub fn no_composites() -> CompositeTable {
+    CompositeTable::new()
+}
+
 /// Flatten a whole page or template block onto the builder.
 pub fn flatten_block(
     block: &PageBlock,
     params: &HashMap<String, DrawParam>,
+    composites: &CompositeTable,
     builder: &mut DisplayListBuilder,
 ) -> Result<()> {
     for layer in &block.layers {
         for object in &layer.objects {
-            flatten_object(object, params, builder)?;
+            flatten_object(object, params, composites, builder)?;
         }
     }
     Ok(())
@@ -42,6 +52,7 @@ pub fn flatten_block(
 fn flatten_object(
     object: &Object,
     params: &HashMap<String, DrawParam>,
+    composites: &CompositeTable,
     builder: &mut DisplayListBuilder,
 ) -> Result<()> {
     // GB/T 33190 clause 8.5: Visible defaults to true and false hides the object.
@@ -52,7 +63,7 @@ fn flatten_object(
         Object::PathObject(p) => flatten_path(p, params, builder),
         Object::TextObject(t) => flatten_text(t, params, builder),
         Object::ImageObject(i) => flatten_image(i, builder),
-        Object::CompositeObject(c) => flatten_composite(c, builder),
+        Object::CompositeObject(c) => flatten_composite(c, params, composites, builder),
         Object::Unknown(_) => Ok(()),
     }
 }
@@ -559,27 +570,36 @@ fn flatten_image(i: &ImageObject, builder: &mut DisplayListBuilder) -> Result<()
     })
 }
 
-/// GB/T 33190 clause 13: a composite object places a vector resource, so it
-/// emits one placement just as an image object does.
+/// GB/T 33190 clause 13: a composite object places a vector resource. The
+/// graphic is drawn when the resource carries one; otherwise the substitution
+/// image stands in for it, which is what the substitution exists for.
 fn flatten_composite(
     c: &steleofd_model::object::CompositeObject,
+    params: &HashMap<String, DrawParam>,
+    composites: &CompositeTable,
     builder: &mut DisplayListBuilder,
 ) -> Result<()> {
     if c.resource_id.is_empty() {
         return Ok(());
     }
-    with_object_space(&c.base, &HashMap::new(), builder, |b| {
-        b.push(DrawOp::Image {
-            image: ImageRef::new(
-                c.resource_id.clone(),
-                Arc::new(Vec::new()),
-                (1, 1),
-                ImageCodec::Png,
-            ),
-            dst: Rect::new(0.0, 0.0, 1.0, 1.0),
-            transform: Affine::IDENTITY,
-        });
-        Ok(())
+    let unit = composites.get(c.resource_id.as_str());
+    with_object_space(&c.base, params, builder, |b| {
+        if let Some(block) = unit.and_then(|u| u.content.as_ref()) {
+            // The graphic's own objects, drawn inside the placement box.
+            flatten_block(block, params, composites, b)
+        } else if let Some(sub) = unit.and_then(|u| u.substitution.as_ref()) {
+            // No vector content: paint the stand-in, whose bytes the image
+            // resolver fills in later, exactly as an image object's are.
+            b.push(DrawOp::Image {
+                image: ImageRef::new(sub.clone(), Arc::new(Vec::new()), (1, 1), ImageCodec::Png),
+                dst: Rect::new(0.0, 0.0, 1.0, 1.0),
+                transform: Affine::IDENTITY,
+            });
+            Ok(())
+        } else {
+            // Nothing to draw and nothing to stand in: the placement is empty.
+            Ok(())
+        }
     })
 }
 
@@ -599,7 +619,7 @@ mod tests {
             layers: vec![Layer { id: None, objects }],
         };
         let mut b = builder();
-        flatten_block(&block, params, &mut b)?;
+        flatten_block(&block, params, &no_composites(), &mut b)?;
         Ok(b.finish(0).ops)
     }
 
@@ -792,7 +812,7 @@ mod tests {
             ],
         };
         let mut b = builder();
-        flatten_block(&block, &HashMap::new(), &mut b).expect("flatten");
+        flatten_block(&block, &HashMap::new(), &no_composites(), &mut b).expect("flatten");
         assert_eq!(b.finish(0).ops.len(), 2);
     }
 }

@@ -36,6 +36,8 @@ pub struct ParsedDocument {
     pub draw_params: params::ParamTable,
     /// Colour spaces the document declares, by resource id, clause 7.13.
     pub color_spaces: steleofd_model::ColorSpaceList,
+    /// Vector graphics the document embeds, by resource id, clause 13.
+    pub composites: steleofd_model::CompositeGraphicUnitList,
 }
 
 /// Reads OFD files from a [`Package`] and flattens pages on demand.
@@ -80,6 +82,7 @@ impl<'a> Parser<'a> {
             document.common_data.draw_params.as_ref(),
         )?;
         let color_spaces = load_color_spaces(self.package, &doc_dir)?;
+        let composites = load_composites(self.package, &doc_dir)?;
         Ok(ParsedDocument {
             ofd,
             document,
@@ -87,6 +90,7 @@ impl<'a> Parser<'a> {
             images,
             draw_params,
             color_spaces,
+            composites,
         })
     }
 
@@ -104,6 +108,7 @@ impl<'a> Parser<'a> {
         let mut builder =
             steleofd_display::DisplayListBuilder::new(page_box).with_max_depth(self.max_depth);
         let params = params::for_page(self.package, &doc.doc_dir, page_ref, &doc.draw_params)?;
+        let composites = composite_table(doc);
 
         if let Some(tpls) = &page.templates {
             let table = template_table(doc);
@@ -120,11 +125,11 @@ impl<'a> Parser<'a> {
                     })?
                     .clone();
                 let block = self.load_template(doc, &template)?;
-                flatten::flatten_block(&block, &params, &mut builder)?;
+                flatten::flatten_block(&block, &params, &composites, &mut builder)?;
             }
         }
         if let Some(inline) = &page.content {
-            flatten::flatten_block(inline, &params, &mut builder)?;
+            flatten::flatten_block(inline, &params, &composites, &mut builder)?;
         }
         let mut page = builder.finish(index);
         // The flattened list names image resources but holds no bytes, so they
@@ -203,6 +208,40 @@ fn load_color_spaces(
         list.items.extend(content::read_color_spaces(&text)?.items);
     }
     Ok(list)
+}
+
+/// Read the vector graphic tables both `Res` files declare, clause 13. Like
+/// the colour spaces, an absent or malformed table leaves the list empty: a
+/// graphic only matters to the composite object that names it.
+fn load_composites(
+    package: &mut Package,
+    doc_dir: &str,
+) -> Result<steleofd_model::CompositeGraphicUnitList> {
+    let mut list = steleofd_model::CompositeGraphicUnitList::default();
+    for name in [
+        steleofd_common::DOCUMENT_RES_XML,
+        steleofd_common::PUBLIC_RES_XML,
+    ] {
+        let path = steleofd_package::join(doc_dir, name);
+        let Some(xml) = package.read_optional(&path)? else {
+            continue;
+        };
+        let Ok(text) = String::from_utf8(xml) else {
+            continue;
+        };
+        list.items
+            .extend(content::read_composite_graphic_units(&text)?.items);
+    }
+    Ok(list)
+}
+
+/// Index the document's vector graphics by resource id for flattening.
+fn composite_table(doc: &ParsedDocument) -> flatten::CompositeTable {
+    doc.composites
+        .items
+        .iter()
+        .map(|u| (u.id.as_str().to_string(), u.clone()))
+        .collect()
 }
 
 fn template_table(doc: &ParsedDocument) -> HashMap<&str, Template> {
