@@ -21,7 +21,7 @@ pub use object::{
     Action, ActionEvent, ActionKind, Actions, ClipArea, ClipList, CompositeObject, DashPattern,
     Dest, DrawParam, FillRuleStyle, GotoTarget, GraphicsUnit, ImageObject, LineCapStyle,
     LineJoinStyle, MovieAction, MovieOperator, Object, ObjectRef, PathObject, Region, RegionArea,
-    SoundAction, TextObject, UriAction,
+    SoundAction, TextClip, TextObject, UriAction,
 };
 
 /// Reference attribute (`ID` in the standard) identifying an object or resource.

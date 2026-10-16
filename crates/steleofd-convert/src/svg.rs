@@ -182,6 +182,28 @@ impl PageSink for SvgSink<'_> {
         self.open_extra(&format!("clip-path=\"url(#{id})\""));
     }
 
+    fn clip_text(&mut self, run: &GlyphRun) {
+        let Some(fonts) = self.fonts else {
+            return;
+        };
+        let Ok(face) = fonts.face(run.font) else {
+            return;
+        };
+        let outlines = glyph_paths(run, &face);
+        if outlines.is_empty() {
+            return;
+        }
+        self.seq += 1;
+        let id = format!("clip{}", self.seq);
+        let mut body = format!("<clipPath id=\"{id}\" clipPathUnits=\"userSpaceOnUse\">");
+        for path in &outlines {
+            let _ = write!(body, "<path d=\"{}\"/>", path_data(path));
+        }
+        body.push_str("</clipPath>");
+        self.line(body);
+        self.open_extra(&format!("clip-path=\"url(#{id})\""));
+    }
+
     fn path(&mut self, shape: PathShape<'_>) {
         let mut attrs = format!("d=\"{}\"", path_data(shape.path));
         match shape.fill {
@@ -491,6 +513,28 @@ fn stops_markup(stops: &[GradientStop]) -> String {
         );
     }
     out
+}
+
+/// The outline of every glyph in a run, in page space, in draw order. Outlines
+/// are normalized to 1/1000 em with y up, so scale to millimetres then place.
+fn glyph_paths(run: &GlyphRun, face: &steleofd_font::FontFace) -> Vec<Path> {
+    let k = run.size.value() / 1000.0;
+    let mut offset = 0.0;
+    let mut paths = Vec::new();
+    for (i, &gid) in run.glyphs.iter().enumerate() {
+        if i > 0 {
+            offset += run.advances.get(i - 1).copied().unwrap_or(0.0);
+        }
+        offset += run.letter_spacing;
+        let Some(outline) = face.outline_for_run_code(gid, run.codes_are_glyphs) else {
+            continue;
+        };
+        let glyph = Affine::new(k, 0.0, 0.0, -k, 0.0, 0.0)
+            .then(Affine::translate(offset, 0.0))
+            .then(run.transform);
+        paths.push(outline.transformed(&glyph));
+    }
+    paths
 }
 
 /// SVG path data, millimetre coordinates written verbatim.

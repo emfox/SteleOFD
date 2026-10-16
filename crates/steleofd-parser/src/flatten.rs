@@ -104,6 +104,14 @@ fn ctm_of(base: &ObjectBase) -> Result<Option<Affine>> {
     }
 }
 
+/// An object's clip, which clause 8.4 lets be a path or a stretch of text.
+enum ClipSpec {
+    /// A region bounded by path geometry.
+    Path { path: Path, rule: PaintRule },
+    /// A region bounded by glyph outlines, left for a backend to resolve.
+    Text(Vec<GlyphRun>),
+}
+
 /// Place an object into the page. Content space starts at the boundary's
 /// top-left corner and the CTM maps from there into page space; the corpus
 /// agrees on this for every producer sampled.
@@ -124,14 +132,28 @@ fn with_object_space(
         None => origin,
     };
     // A clip that opts out of the CTM is stated in boundary space, so pull it
-    // back through `ctm` alone: that is the space `single` maps from.
-    let clip = clip.map(|(path, rule, follows)| match (follows, ctm) {
-        (true, _) | (_, None) => (path, rule),
+    // back through `ctm` alone: that is the space `single` maps from. A text
+    // clip carries its own placement, so only its runs are re-placed.
+    let clip = clip.map(|(spec, follows)| match (follows, ctm) {
+        (true, _) | (_, None) => spec,
         (false, Some(t)) => match t.inverse() {
-            Some(inv) => (path.transformed(&inv), rule),
+            Some(inv) => match spec {
+                ClipSpec::Path { path, rule } => ClipSpec::Path {
+                    path: path.transformed(&inv),
+                    rule,
+                },
+                ClipSpec::Text(runs) => ClipSpec::Text(
+                    runs.into_iter()
+                        .map(|mut run| {
+                            run.transform = inv.then(run.transform);
+                            run
+                        })
+                        .collect(),
+                ),
+            },
             // A singular CTM draws nothing at all, so where its clip lands
             // cannot be observed.
-            None => (path, rule),
+            None => spec,
         },
     });
     if single.is_identity() && clip.is_none() {
@@ -145,8 +167,14 @@ fn with_object_space(
     }
     let result = match clip {
         None => body(builder),
-        Some((path, rule)) => {
+        Some(ClipSpec::Path { path, rule }) => {
             builder.push(DrawOp::ClipPath { path, rule });
+            body(builder)
+        }
+        Some(ClipSpec::Text(runs)) => {
+            for run in runs {
+                builder.push(DrawOp::ClipText(run));
+            }
             body(builder)
         }
     };
@@ -227,20 +255,27 @@ fn stops_of(segments: &[Segment]) -> Result<Vec<GradientStop>> {
 }
 
 /// GB/T 33190 clause 8.4: the clip areas an object narrows its drawing to.
-/// The region is the union of every area of every clip, so they are read as
-/// one path. Also reports whether the clip follows the object's CTM.
+/// The region is the union of every area of every clip, so paths are read as
+/// one path and text areas become clip runs for a backend to outline.
 fn clip_of(
     base: &ObjectBase,
     _params: &HashMap<String, DrawParam>,
-) -> Result<Option<(Path, PaintRule, bool)>> {
+) -> Result<Option<(ClipSpec, bool)>> {
     let Some(list) = base.clips.as_ref() else {
         return Ok(None);
     };
     let mut joined = Path::default();
     let mut rule = PaintRule::NonZero;
     let mut rule_stated = false;
+    let mut text_runs: Vec<GlyphRun> = Vec::new();
     for clip in &list.items {
         for area in &clip.areas {
+            // A text area contributes glyphs, a path area contributes segments;
+            // both end up intersecting the same region.
+            if let Some(text) = area.text.as_ref() {
+                text_runs.extend(text_clip_runs(text));
+                continue;
+            }
             let Some(data) = area.path_data.as_deref().map(str::trim) else {
                 continue;
             };
@@ -262,10 +297,46 @@ fn clip_of(
             joined.segments.extend(path.segments);
         }
     }
-    if joined.is_empty() {
-        return Ok(None);
+    let follows = list.trans_flag != Some(false);
+    if !joined.is_empty() {
+        return Ok(Some((ClipSpec::Path { path: joined, rule }, follows)));
     }
-    Ok(Some((joined, rule, list.trans_flag != Some(false))))
+    if !text_runs.is_empty() {
+        return Ok(Some((ClipSpec::Text(text_runs), follows)));
+    }
+    Ok(None)
+}
+
+/// Turn a `Text` clip area into the runs a backend draws the outlines from.
+/// The shape matches a drawn text object, so the glyph mapping is applied the
+/// same way, and a run with no drawable codes is dropped.
+fn text_clip_runs(clip: &steleofd_model::TextClip) -> Vec<GlyphRun> {
+    let size = steleofd_common::Millimeter::new(clip.size.unwrap_or(1.0));
+    let font = FontId(clip.font.parse::<u32>().unwrap_or(0));
+    let mut runs = Vec::new();
+    for code in &clip.codes {
+        if code.text.is_empty() {
+            continue;
+        }
+        for segment in segments_of(code, &clip.cg_transforms, size.value()) {
+            runs.push(GlyphRun {
+                font,
+                size,
+                glyphs: segment.glyphs,
+                advances: segment.advances,
+                text: Some(segment.text),
+                cluster_map: segment.cluster_map,
+                codes_are_glyphs: segment.glyph_index,
+                transform: Affine::translate(code.x, code.y),
+                fill: None,
+                stroke: None,
+                letter_spacing: 0.0,
+                word_spacing: 0.0,
+                bbox: Rect::new(0.0, 0.0, 0.0, 0.0),
+            });
+        }
+    }
+    runs
 }
 
 /// The fill rule an area names; clause 9.1 allows either spelling.

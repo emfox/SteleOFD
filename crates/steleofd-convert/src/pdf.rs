@@ -396,6 +396,42 @@ impl PageSink for PdfSink<'_> {
         }
     }
 
+    fn clip_text(&mut self, run: &GlyphRun) {
+        let Some(fonts) = self.fonts else {
+            return;
+        };
+        let Ok(face) = fonts.face(run.font) else {
+            return;
+        };
+        // Every glyph outline goes into one path, joined implicitly, so the
+        // glyphs intersect the clip as their union rather than one at a time.
+        let mut wrote = false;
+        let k = run.size.value() / 1000.0;
+        let mut offset = 0.0;
+        for (i, &gid) in run.glyphs.iter().enumerate() {
+            if i > 0 {
+                offset += run.advances.get(i - 1).copied().unwrap_or(0.0);
+            }
+            offset += run.letter_spacing;
+            let Some(outline) = face.outline_for_run_code(gid, run.codes_are_glyphs) else {
+                continue;
+            };
+            let glyph = Affine::new(k, 0.0, 0.0, -k, 0.0, 0.0)
+                .then(Affine::translate(offset, 0.0))
+                .then(run.transform);
+            self.write_path(&outline, self.to_pt(glyph));
+            wrote = true;
+        }
+        if !wrote {
+            return;
+        }
+        // `W n` ends the path but leaves the clip in force until `Q`.
+        self.op("q W n".to_string());
+        if let Some(top) = self.clips.last_mut() {
+            *top += 1;
+        }
+    }
+
     fn path(&mut self, shape: PathShape<'_>) {
         let total = self.to_pt(Affine::IDENTITY);
         let mut setup = String::new();

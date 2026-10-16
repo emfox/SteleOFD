@@ -249,6 +249,28 @@ pub struct ClipArea {
     /// Drawing parameters referenced by this area.
     #[serde(rename = "DrawParam", skip_serializing_if = "Option::is_none")]
     pub draw_param: Option<RefId>,
+    /// The text whose glyph outlines bound the clip, for a `Text` area.
+    #[serde(rename = "Text", skip_serializing_if = "Option::is_none")]
+    pub text: Option<TextClip>,
+}
+
+/// GB/T 33190 clause 8.4: an area may be bounded by text rather than a path,
+/// in which case the glyph outlines are the clip. The shape mirrors a text
+/// object's, minus the parts that only matter when the text is drawn.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct TextClip {
+    /// Font referenced by this clip, as an object id.
+    #[serde(rename = "Font", default)]
+    pub font: RefId,
+    /// Font magnitude in millimetres.
+    #[serde(rename = "Size", skip_serializing_if = "Option::is_none")]
+    pub size: Option<f64>,
+    /// Glyph mapping, clause 11.4, applied the same way as drawn text.
+    #[serde(rename = "CGTransform", default)]
+    pub cg_transforms: Vec<CGTransform>,
+    /// The text itself, as one or more positioned codes.
+    #[serde(rename = "TextCode", default)]
+    pub codes: Vec<TextCode>,
 }
 
 /// One reference from an object to something else.

@@ -32,6 +32,11 @@ pub enum DrawOp {
         rule: PaintRule,
     },
 
+    /// Intersect the clip with the outlines of a text run. The region is the
+    /// glyph shapes themselves, so a backend resolves them the way it resolves
+    /// drawn text; a run whose font cannot be found clips nothing.
+    ClipText(GlyphRun),
+
     /// Fill and/or stroke a path.
     Path {
         /// Path geometry.

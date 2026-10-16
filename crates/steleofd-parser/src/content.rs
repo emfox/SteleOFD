@@ -15,7 +15,7 @@ use steleofd_model::object::{
     Action, ActionEvent, ActionKind, Actions, CGTransform, Clip, ClipArea, ClipList,
     CompositeObject, DashPattern, Dest, DrawParam, FillRuleStyle, GotoTarget, GraphicsUnit,
     ImageObject, LineCapStyle, LineJoinStyle, MovieAction, MovieOperator, Object, ObjectBase,
-    PathObject, Region, RegionArea, SoundAction, TextCode, TextObject, UriAction,
+    PathObject, Region, RegionArea, SoundAction, TextClip, TextCode, TextObject, UriAction,
 };
 use steleofd_xml::cursor::Event;
 use steleofd_xml::{Cursor, Node, parse_bool, parse_number_list, parse_number_list_n};
@@ -599,7 +599,7 @@ fn read_area(cursor: &mut Cursor<'_>, node: &Node) -> Result<ClipArea> {
                 area.path_data = read_clip_path(cursor, &p)?;
             }
             Event::Start(t) if t.is("Text") => {
-                return Err(unsupported_shading("text clip area"));
+                area.text = Some(read_text_clip(cursor, &t)?);
             }
             Event::Start(other) => cursor.skip_element(&other)?,
             Event::End(_) | Event::Eof => break,
@@ -607,6 +607,33 @@ fn read_area(cursor: &mut Cursor<'_>, node: &Node) -> Result<ClipArea> {
         }
     }
     Ok(area)
+}
+
+/// GB/T 33190 clause 8.4: the text whose glyph outlines bound a clip area.
+/// It carries the same run shape as a drawn text object, so the codes and the
+/// glyph mapping are read with the same readers.
+fn read_text_clip(cursor: &mut Cursor<'_>, node: &Node) -> Result<TextClip> {
+    let a = node.attributes();
+    let mut clip = TextClip {
+        font: a.get("Font").map(str::to_string).unwrap_or_default(),
+        size: a.optional_as::<f64>("Text", "Size")?,
+        ..TextClip::default()
+    };
+    if node.is_self_closing() {
+        return Ok(clip);
+    }
+    loop {
+        match cursor.next_event()? {
+            Event::Start(n) if n.is("TextCode") => clip.codes.push(read_text_code(cursor, &n)?),
+            Event::Start(n) if n.is("CGTransform") => {
+                clip.cg_transforms.push(read_cg_transform(cursor, &n)?)
+            }
+            Event::Start(other) => cursor.skip_element(&other)?,
+            Event::End(_) | Event::Eof => break,
+            Event::Text(_) => {}
+        }
+    }
+    Ok(clip)
 }
 
 /// The abbreviated data inside an `Area`'s `Path`.

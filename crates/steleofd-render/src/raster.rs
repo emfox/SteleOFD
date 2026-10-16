@@ -130,25 +130,27 @@ pub fn render_page(
             DrawOp::ClipPath { path, rule } => {
                 let total = total_transform(&state, &page.page_box, options.dpi);
                 let ts_path = to_ts_path(path, total)?;
-                // A fresh mask starts transparent and `intersect_path` only
-                // multiplies into it, so it must start opaque. Reusing the
-                // current mask also nests clips into an intersection.
-                let mut mask = state
-                    .clip
-                    .clone()
-                    .filter(|m| m.width() == width && m.height() == height)
-                    .or_else(|| {
-                        Mask::new(width, height).map(|mut m| {
-                            m.data_mut().fill(255);
-                            m
-                        })
-                    })
-                    .ok_or(OfdError::Render(RenderError::InvalidSize {
-                        w: width,
-                        h: height,
-                    }))?;
+                let mut mask = clip_mask(&state, width, height)?;
                 mask.intersect_path(&ts_path, fill_rule(*rule), true, Transform::identity());
                 state.clip = Some(mask);
+            }
+            DrawOp::ClipText(run) => {
+                // A text clip is the glyph outlines themselves, resolved the
+                // way drawn text is. Without its face there is nothing to
+                // intersect, so the clip is left as it was.
+                if let Ok(face) = fonts.face(run.font) {
+                    let total = total_transform(&state, &page.page_box, options.dpi);
+                    let mut mask = clip_mask(&state, width, height)?;
+                    for ts_path in glyph_outlines(run, face, total)? {
+                        mask.intersect_path(
+                            &ts_path,
+                            FillRule::Winding,
+                            true,
+                            Transform::identity(),
+                        );
+                    }
+                    state.clip = Some(mask);
+                }
             }
             DrawOp::Path {
                 path,
@@ -272,6 +274,52 @@ pub fn render_page(
 struct State {
     ctm: Affine,
     clip: Option<Mask>,
+}
+
+/// The mask a clip intersects into, starting opaque on the first use and
+/// reusing the current one so nested clips compose.
+fn clip_mask(state: &State, width: u32, height: u32) -> Result<Mask> {
+    state
+        .clip
+        .clone()
+        .filter(|m| m.width() == width && m.height() == height)
+        .or_else(|| {
+            Mask::new(width, height).map(|mut m| {
+                m.data_mut().fill(255);
+                m
+            })
+        })
+        .ok_or(OfdError::Render(RenderError::InvalidSize {
+            w: width,
+            h: height,
+        }))
+}
+
+/// The per-glyph outlines of a run in page pixel space, in draw order.
+/// Outlines are normalized to 1/1000 em with y pointing up: scale to
+/// millimetres first, then position, or the run origin gets scaled too.
+fn glyph_outlines(
+    run: &GlyphRun,
+    face: Arc<steleofd_font::FontFace>,
+    total: Transform,
+) -> Result<Vec<tiny_skia::Path>> {
+    let mut offset = 0.0f64;
+    let mut paths = Vec::new();
+    for (i, &gid) in run.glyphs.iter().enumerate() {
+        if i > 0 {
+            offset += run.advances.get(i - 1).copied().unwrap_or(0.0);
+        }
+        offset += run.letter_spacing;
+        let Some(outline) = face.outline_for_run_code(gid, run.codes_are_glyphs) else {
+            continue;
+        };
+        let k = run.size.value() / 1000.0;
+        let glyph = Affine::new(k, 0.0, 0.0, -k, 0.0, 0.0)
+            .then(Affine::translate(offset, 0.0))
+            .then(run.transform);
+        paths.push(to_ts_path(&outline, total.pre_concat(to_ts(glyph)))?);
+    }
+    Ok(paths)
 }
 
 fn to_color(c: &Color) -> tiny_skia::Color {

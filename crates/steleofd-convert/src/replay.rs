@@ -46,6 +46,11 @@ pub trait PageSink {
     /// Intersect the clip with a path.
     fn clip(&mut self, path: &Path, rule: PaintRule);
 
+    /// Intersect the clip with the outlines of a glyph run, clause 8.4. The
+    /// default draws nothing extra: a backend without fonts leaves the clip
+    /// as it found it rather than clearing the page.
+    fn clip_text(&mut self, _run: &GlyphRun) {}
+
     /// Fill and/or stroke a path.
     fn path(&mut self, shape: PathShape<'_>);
 
@@ -90,6 +95,7 @@ pub fn replay(page: &PageDisplay, sink: &mut impl PageSink) -> Result<()> {
             }
             DrawOp::Transform(matrix) => sink.transform(*matrix),
             DrawOp::ClipPath { path, rule } => sink.clip(path, *rule),
+            DrawOp::ClipText(run) => sink.clip_text(run),
             DrawOp::Path {
                 path,
                 fill,
