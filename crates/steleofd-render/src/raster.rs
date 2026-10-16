@@ -44,6 +44,9 @@ pub struct RasterOutput {
     pub width: u32,
     /// Height in pixels.
     pub height: u32,
+    /// Runs that drew with at least one glyph missing from their face, so the
+    /// page shows fewer marks than it should.
+    pub missing_glyph_runs: usize,
     pixmap: Pixmap,
 }
 
@@ -102,6 +105,7 @@ pub fn render_page(
         clip: None,
     };
     let mut stack: Vec<State> = Vec::new();
+    let mut missing_glyph_runs = 0usize;
 
     for op in &page.ops {
         match op {
@@ -169,7 +173,9 @@ pub fn render_page(
                 }
             }
             DrawOp::Text(run) => {
-                draw_text(&mut pixmap, run, &state, page.page_box, fonts, options)?
+                if draw_text(&mut pixmap, run, &state, page.page_box, fonts, options)? {
+                    missing_glyph_runs += 1;
+                }
             }
             DrawOp::Image {
                 image,
@@ -245,6 +251,7 @@ pub fn render_page(
     Ok(RasterOutput {
         width,
         height,
+        missing_glyph_runs,
         pixmap,
     })
 }
@@ -520,9 +527,9 @@ fn draw_text(
     page_box: Rect,
     fonts: &FontManager,
     _options: &RenderOptions,
-) -> Result<()> {
+) -> Result<bool> {
     if run.glyphs.is_empty() {
-        return Ok(());
+        return Ok(false);
     }
     let face = fonts.face(run.font)?;
     let total = total_transform(state, &page_box, 0.0).to_owned().to_owned();
@@ -543,14 +550,16 @@ fn draw_text_inner(
     page_box: Rect,
     face: Arc<steleofd_font::FontFace>,
     options: &RenderOptions,
-) -> Result<()> {
+) -> Result<bool> {
     let mut offset = 0.0f64;
+    let mut missing = false;
     for (i, &gid) in run.glyphs.iter().enumerate() {
         if i > 0 {
             offset += run.advances.get(i - 1).copied().unwrap_or(0.0);
         }
         offset += run.letter_spacing;
         let Some(outline) = face.outline_for_run_code(gid, run.codes_are_glyphs) else {
+            missing = true;
             continue;
         };
         // Outlines are normalized to 1/1000 em with y pointing up: scale to
@@ -566,7 +575,7 @@ fn draw_text_inner(
             pixmap.fill_path(&ts_path, &p, FillRule::Winding, Transform::identity(), None);
         }
     }
-    Ok(())
+    Ok(missing)
 }
 
 fn draw_image(
@@ -1094,6 +1103,57 @@ mod tests {
             ink_height >= 12,
             "glyph ink spans {min_y}..{max_y}, expected a full-height glyph"
         );
+    }
+
+    #[test]
+    fn a_run_missing_a_glyph_is_counted_without_failing_the_page() {
+        let manager = manager_with_font();
+        // 65 is 'A', which Orbitron draws; 60000 is far past any glyph the
+        // face holds, so that code point resolves to no outline at all.
+        let run = steleofd_display::GlyphRun {
+            font: FontId(0),
+            size: steleofd_common::Millimeter::new(6.0),
+            glyphs: vec![65u16, 60000u16],
+            advances: vec![5.0, 5.0],
+            text: Some("Ax".to_string()),
+            cluster_map: None,
+            codes_are_glyphs: false,
+            transform: Affine::translate(2.0, 12.0),
+            fill: Some(Paint::Solid(Color::rgba(0, 0, 0, 255))),
+            stroke: None,
+            letter_spacing: 0.0,
+            word_spacing: 0.0,
+            bbox: Rect::new(2.0, 6.0, 10.0, 6.0),
+        };
+        let page = page_with(vec![DrawOp::Text(run)]);
+        let out = render(&page, &manager);
+        assert_eq!(
+            out.missing_glyph_runs, 1,
+            "the run drew, but one of its glyphs had no outline"
+        );
+    }
+
+    #[test]
+    fn a_run_whose_glyphs_all_resolve_reports_nothing_missing() {
+        let manager = manager_with_font();
+        let run = steleofd_display::GlyphRun {
+            font: FontId(0),
+            size: steleofd_common::Millimeter::new(6.0),
+            glyphs: vec![65u16, 66u16],
+            advances: vec![5.0, 5.0],
+            text: Some("AB".to_string()),
+            cluster_map: None,
+            codes_are_glyphs: false,
+            transform: Affine::translate(2.0, 12.0),
+            fill: Some(Paint::Solid(Color::rgba(0, 0, 0, 255))),
+            stroke: None,
+            letter_spacing: 0.0,
+            word_spacing: 0.0,
+            bbox: Rect::new(2.0, 6.0, 10.0, 6.0),
+        };
+        let page = page_with(vec![DrawOp::Text(run)]);
+        let out = render(&page, &manager);
+        assert_eq!(out.missing_glyph_runs, 0);
     }
 
     #[test]

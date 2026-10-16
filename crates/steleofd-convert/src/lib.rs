@@ -40,6 +40,10 @@ pub struct ConversionStats {
     pub live_text_runs: usize,
     /// Runs dropped: no font data and no Unicode text to fall back to.
     pub dropped_runs: usize,
+    /// Runs that reached the output with at least one glyph missing from the
+    /// face, so the page shows fewer marks than it should. Kept apart from
+    /// `dropped_runs`, which counts whole runs that never appear at all.
+    pub missing_glyph_runs: usize,
     /// Images embedded in the output.
     pub images: usize,
     /// Images skipped because the target cannot carry their encoding.
@@ -54,6 +58,7 @@ impl ConversionStats {
         self.outlined_glyphs += other.outlined_glyphs;
         self.live_text_runs += other.live_text_runs;
         self.dropped_runs += other.dropped_runs;
+        self.missing_glyph_runs += other.missing_glyph_runs;
         self.images += other.images;
         self.images_skipped += other.images_skipped;
         self.gradients += other.gradients;
@@ -61,6 +66,6 @@ impl ConversionStats {
 
     /// Whether nothing had to be dropped or skipped.
     pub fn is_lossless(&self) -> bool {
-        self.dropped_runs == 0 && self.images_skipped == 0
+        self.dropped_runs == 0 && self.images_skipped == 0 && self.missing_glyph_runs == 0
     }
 }

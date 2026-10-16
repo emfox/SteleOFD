@@ -352,12 +352,14 @@ impl SvgSink<'_> {
         let k = run.size.value() / 1000.0;
         let mut offset = 0.0;
         let mut drawn = 0usize;
+        let mut missing = 0usize;
         for (i, &gid) in run.glyphs.iter().enumerate() {
             if i > 0 {
                 offset += run.advances.get(i - 1).copied().unwrap_or(0.0);
             }
             offset += run.letter_spacing;
             let Some(outline) = face.outline_for_run_code(gid, run.codes_are_glyphs) else {
+                missing += 1;
                 continue;
             };
             // Outlines are normalized to 1/1000 em with y pointing up: scale
@@ -378,6 +380,9 @@ impl SvgSink<'_> {
             }
             self.line(format!("<path {attrs}/>"));
             drawn += 1;
+        }
+        if missing > 0 {
+            self.stats.missing_glyph_runs += 1;
         }
         if drawn > 0 {
             self.stats.outlined_glyphs += drawn;
@@ -636,6 +641,15 @@ mod tests {
     use steleofd_display::DrawOp;
     use steleofd_display::ops::Paint;
     use steleofd_font::FontId;
+
+    /// A real face, so outlining runs for real rather than degrading.
+    fn font_bytes() -> Vec<u8> {
+        std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../steleofd-render/tests/data/Orbitron-Bold.ttf"
+        ))
+        .expect("font fixture")
+    }
 
     fn rect(x: f64, y: f64, w: f64, h: f64) -> Path {
         Path::build(|b| {
@@ -905,6 +919,44 @@ mod tests {
         let (svg, stats) = sink.finish();
         assert!(!svg.contains("<text"));
         assert_eq!(stats.dropped_runs, 1);
+    }
+
+    #[test]
+    fn a_run_missing_a_glyph_is_counted_and_the_rest_still_draws() {
+        // Orbitron draws 'A'; a code point far outside its coverage resolves
+        // to no outline, so the run reaches the output short one mark.
+        let mut manager = FontManager::new();
+        manager.registry_mut().register_embedded(
+            "tests/data/Orbitron-Bold.ttf",
+            "Orbitron",
+            std::sync::Arc::new(font_bytes()),
+        );
+        let run = GlyphRun {
+            font: FontId(0),
+            size: Millimeter(3.0),
+            glyphs: vec![65, 60000],
+            advances: vec![3.0, 3.0],
+            text: Some("Ax".into()),
+            cluster_map: None,
+            codes_are_glyphs: false,
+            transform: Affine::IDENTITY,
+            fill: Some(Paint::Solid(Color::BLACK)),
+            stroke: None,
+            letter_spacing: 0.0,
+            word_spacing: 0.0,
+            bbox: Rect::new(0.0, 0.0, 6.0, 3.0),
+        };
+        let options = SvgOptions {
+            text: TextExport::Outline,
+            fonts: Some(&manager),
+        };
+        let mut sink = SvgSink::new(Rect::A4_PORTRAIT, &options);
+        replay(&page(vec![DrawOp::Text(run)]), &mut sink).expect("replay");
+        let (svg, stats) = sink.finish();
+        assert_eq!(stats.missing_glyph_runs, 1);
+        assert_eq!(stats.outlined_glyphs, 1, "the drawable glyph still landed");
+        assert!(!stats.is_lossless(), "a short run is not a lossless page");
+        assert!(svg.contains("<path"));
     }
 
     #[test]
