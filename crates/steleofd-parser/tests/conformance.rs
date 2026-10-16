@@ -710,8 +710,8 @@ fn page_ops(object: &str, params: &str) -> Vec<DrawOp> {
 #[test]
 fn gb_t_33190_8_3_4_axial_shading_becomes_a_linear_gradient() {
     // An AxialShd fill is written as a child of FillColor rather than as a
-    // Value attribute, and the gradient it describes is drawn as its own
-    // graphic unit ahead of the shape that carries the marker.
+    // Value attribute. The gradient travels on the paint itself, so the shape
+    // is a single op a backend can render without matching an earlier one.
     let ops = page_ops(
         r##"<PathObject ID="10" Boundary="0 0 10 10">
   <AbbreviatedData>M 0 0 L 10 0 L 10 10 Z</AbbreviatedData>
@@ -722,31 +722,18 @@ fn gb_t_33190_8_3_4_axial_shading_becomes_a_linear_gradient() {
 </PathObject>"##,
         "",
     );
-    let DrawOp::LinearGradient {
-        start,
-        end,
-        stops,
+    let DrawOp::Path {
         path,
+        fill: Some(Paint::LinearGradient(spec)),
+        ..
     } = &ops[0]
     else {
-        panic!("expected a linear gradient first, got {ops:?}");
+        panic!("expected a path filled with a linear gradient, got {ops:?}");
     };
-    assert_eq!((start.x, start.y), (0.0, 0.0));
-    assert_eq!((end.x, end.y), (10.0, 0.0));
-    assert_eq!(stops.len(), 2);
+    assert_eq!((spec.start.x, spec.start.y), (0.0, 0.0));
+    assert_eq!((spec.end.x, spec.end.y), (10.0, 0.0));
+    assert_eq!(spec.stops.len(), 2);
     assert_eq!(path.bounding_box(), Rect::new(0.0, 0.0, 10.0, 10.0));
-
-    // The shape below it refers back by index rather than repeating the stops.
-    let marked = ops.iter().any(|op| {
-        matches!(
-            op,
-            DrawOp::Path {
-                fill: Some(Paint::LinearGradientRef(_)),
-                ..
-            }
-        )
-    });
-    assert!(marked, "the path points at the gradient it was given");
 }
 
 #[test]
@@ -764,29 +751,22 @@ fn gb_t_33190_8_3_4_radial_shading_carries_both_radii() {
 </PathObject>"##,
         "",
     );
-    let DrawOp::RadialGradient {
-        center,
-        radius,
-        end,
-        end_radius,
-        stops,
+    let DrawOp::Path {
+        stroke: Some(Paint::RadialGradient(spec)),
         ..
     } = &ops[0]
     else {
-        panic!("expected a radial gradient first, got {ops:?}");
+        panic!("expected a path stroked with a radial gradient, got {ops:?}");
     };
-    assert_eq!((center.x, center.y), (10.0, 10.0));
-    assert_eq!(*radius, 0.0);
-    assert_eq!((end.x, end.y), (16.0, 10.0), "the end circle travels too");
-    assert_eq!(*end_radius, 5.0);
-    assert_eq!(stops.len(), 2);
-    assert!(ops.iter().any(|op| matches!(
-        op,
-        DrawOp::Path {
-            stroke: Some(Paint::RadialGradientRef(_)),
-            ..
-        }
-    )));
+    assert_eq!((spec.center.x, spec.center.y), (10.0, 10.0));
+    assert_eq!(spec.radius, 0.0);
+    assert_eq!(
+        (spec.end.x, spec.end.y),
+        (16.0, 10.0),
+        "the end circle travels too"
+    );
+    assert_eq!(spec.end_radius, 5.0);
+    assert_eq!(spec.stops.len(), 2);
 }
 
 #[test]
@@ -804,9 +784,14 @@ fn gb_t_33190_8_3_4_segments_keep_their_positions_and_colours() {
 </PathObject>"##,
         "",
     );
-    let DrawOp::LinearGradient { stops, .. } = &ops[0] else {
-        panic!("expected a linear gradient, got {ops:?}");
+    let DrawOp::Path {
+        fill: Some(Paint::LinearGradient(spec)),
+        ..
+    } = &ops[0]
+    else {
+        panic!("expected a path filled with a linear gradient, got {ops:?}");
     };
+    let stops = &spec.stops;
     assert_eq!(stops[0].offset, 0.0);
     assert_eq!(stops[1].offset, 0.25);
     assert_eq!(stops[2].offset, 1.0);
