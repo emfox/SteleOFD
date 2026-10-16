@@ -15,8 +15,8 @@ pub mod text;
 
 pub use list::{DisplayList, DisplayListBuilder, PageDisplay, PageRef};
 pub use ops::{
-    DrawOp, LinearGradientSpec, MeshSpec, MeshVertex, Paint, PaintRule, RadialGradientSpec,
-    StrokeStyle,
+    DrawOp, LinearGradientSpec, MeshSpec, MeshVertex, Paint, PaintRule, PatternSpec,
+    RadialGradientSpec, Reflect, StrokeStyle,
 };
 pub use page::{PageInfo, RenderQuality, Viewport};
 pub use resource::{ImageCodec, ImageRef, ResolvedFont, ResolvedResources};

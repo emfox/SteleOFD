@@ -259,9 +259,8 @@ pub(crate) fn read_color(node: &Node, cursor: &mut Cursor<'_>) -> Result<ColorRe
             Event::Start(n) if n.is("LaGouraudShd") => {
                 shading = Some(read_gouraud(&n, cursor, true)?)
             }
-            Event::Start(other) if other.is("Pattern") => {
-                return Err(unsupported_shading(other.local()));
-            }
+            // Clause 8.3.5: a cell of vector content repeated over the area.
+            Event::Start(n) if n.is("Pattern") => shading = Some(read_pattern(&n, cursor)?),
             Event::Start(other) => cursor.skip_element(&other)?,
             Event::End(_) | Event::Eof => break,
             Event::Text(_) => {}
@@ -271,13 +270,6 @@ pub(crate) fn read_color(node: &Node, cursor: &mut Cursor<'_>) -> Result<ColorRe
     color.shading = shading;
     let _ = element;
     Ok(color)
-}
-
-/// A shading the standard defines but this parser does not yet read. Returning
-/// an error keeps the gap visible; dropping the element would render a document
-/// that silently lost its fill.
-fn unsupported_shading(name: &str) -> OfdError {
-    OfdError::Xml(XmlError::UnsupportedExtension(name.to_string()))
 }
 
 /// `AxialShd`: a linear gradient axis with its colour stops.
@@ -349,6 +341,62 @@ fn read_gouraud(node: &Node, cursor: &mut Cursor<'_>, lattice: bool) -> Result<S
         lattice,
         background,
     })
+}
+
+/// `Pattern` (8.3.5): a cell of vector content repeated over the filled area.
+/// The cell is a page block, read with the same layer reader a page uses, and
+/// an unwritten `XStep`/`YStep` defaults to the cell size.
+fn read_pattern(node: &Node, cursor: &mut Cursor<'_>) -> Result<Shading> {
+    let a = node.attributes();
+    let width = a.optional_as::<f64>("Pattern", "Width")?.unwrap_or(0.0);
+    let height = a.optional_as::<f64>("Pattern", "Height")?.unwrap_or(0.0);
+    let x_step = a.optional_as::<f64>("Pattern", "XStep")?.unwrap_or(0.0);
+    let y_step = a.optional_as::<f64>("Pattern", "YStep")?.unwrap_or(0.0);
+    let reflect = match a.get("ReflectMethod").unwrap_or("Normal") {
+        "Row" => ReflectMethod::Row,
+        "Column" => ReflectMethod::Column,
+        "RowAndColumn" => ReflectMethod::RowAndColumn,
+        _ => ReflectMethod::Normal,
+    };
+    let relative_to = match a.get("RelativeTo").unwrap_or("Object") {
+        "Page" => PatternSpace::Page,
+        _ => PatternSpace::Object,
+    };
+    let ctm = a.get("CTM").map(str::to_string);
+    let layers = if node.is_self_closing() {
+        Vec::new()
+    } else {
+        read_pattern_layers(cursor)?
+    };
+    Ok(Shading::Pattern(Box::new(PatternSpec {
+        layers,
+        width,
+        height,
+        x_step,
+        y_step,
+        reflect,
+        relative_to,
+        ctm,
+    })))
+}
+
+/// The `CellContent` block of a `Pattern`, which holds `Layer` children just
+/// as a page does.
+fn read_pattern_layers(cursor: &mut Cursor<'_>) -> Result<Vec<Layer>> {
+    loop {
+        match cursor.next_event()? {
+            Event::Start(n) if n.is("CellContent") => {
+                return if n.is_self_closing() {
+                    Ok(Vec::new())
+                } else {
+                    read_layers_strict(cursor)
+                };
+            }
+            Event::Start(other) => cursor.skip_element(&other)?,
+            Event::End(_) | Event::Eof => return Ok(Vec::new()),
+            Event::Text(_) => {}
+        }
+    }
 }
 
 /// The strip form of 8.3.6: every consecutive group of three vertices is one

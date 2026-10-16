@@ -15,7 +15,7 @@ use steleofd_error::{FormatError, OfdError, Result};
 use steleofd_font::FontId;
 use steleofd_geometry::{Affine, Path};
 use steleofd_model::PageBlock;
-use steleofd_model::color::{ColorRef, MeshPoint, Segment, Shading};
+use steleofd_model::color::{ColorRef, MeshPoint, PatternSpec, ReflectMethod, Segment, Shading};
 use steleofd_model::object::{
     CGTransform, DrawParam, ImageObject, LineCapStyle, LineJoinStyle, Object, ObjectBase,
     PathObject, TextCode, TextObject,
@@ -205,7 +205,40 @@ fn paint_of(color: &ColorRef, _path: &Path, _builder: &mut DisplayListBuilder) -
             points: mesh_vertices(points)?,
             triangles: triangles.iter().map(|t| [t.a, t.b, t.c]).collect(),
         }))),
+        Some(Shading::Pattern(spec)) => Ok(Paint::Pattern(Box::new(pattern_spec(spec)?))),
     }
+}
+
+/// Flatten a pattern's cell content once, so a backend only has to tile the
+/// finished ops. The cell sits in its own coordinates anchored at the origin,
+/// which is what a repeating tile means.
+fn pattern_spec(spec: &PatternSpec) -> Result<steleofd_display::PatternSpec> {
+    let cell_box = Rect::new(0.0, 0.0, spec.width.max(0.0), spec.height.max(0.0));
+    let params = HashMap::new();
+    let composites = no_composites();
+    let mut builder = DisplayListBuilder::new(cell_box);
+    if let Some(raw) = &spec.ctm {
+        let v = parse_number_list_n::<6>("Pattern", "CTM", raw)?;
+        builder.transform(Affine::new(v[0], v[1], v[2], v[3], v[4], v[5]));
+    }
+    let block = PageBlock {
+        layers: spec.layers.clone(),
+    };
+    flatten_block(&block, &params, &composites, &mut builder)?;
+    let cell = builder.finish(0);
+    Ok(steleofd_display::PatternSpec {
+        cell: Box::new(cell),
+        width: spec.width,
+        height: spec.height,
+        step_x: spec.step_x(),
+        step_y: spec.step_y(),
+        reflect: match spec.reflect {
+            ReflectMethod::Normal => steleofd_display::Reflect::Normal,
+            ReflectMethod::Row => steleofd_display::Reflect::Row,
+            ReflectMethod::Column => steleofd_display::Reflect::Column,
+            ReflectMethod::RowAndColumn => steleofd_display::Reflect::RowAndColumn,
+        },
+    })
 }
 
 /// One vertex per mesh point, its colour resolved to RGB here so the backend

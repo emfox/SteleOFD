@@ -9,7 +9,9 @@ pub mod color;
 pub mod document;
 pub mod object;
 
-pub use color::{ColorRef, MeshPoint, MeshTriangle, Segment, Shading};
+pub use color::{
+    ColorRef, MeshPoint, MeshTriangle, PatternSpace, PatternSpec, ReflectMethod, Segment, Shading,
+};
 pub use document::{
     ColorSpace, ColorSpaceKind, ColorSpaceList, CommonData, CompositeGraphicUnit,
     CompositeGraphicUnitList, DocBody, DocRoot, Document, DrawParamList, Location, Multimedia,

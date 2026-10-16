@@ -7,6 +7,7 @@ use steleofd_common::{Point, Rect};
 use steleofd_font::FontId;
 use steleofd_geometry::{Affine, Path};
 
+use crate::list::PageDisplay;
 use crate::resource::ImageRef;
 use crate::text::GlyphRun;
 
@@ -133,8 +134,8 @@ pub enum Paint {
     RadialGradient(Box<RadialGradientSpec>),
     /// A Gouraud mesh: triangles whose vertices carry colours.
     Mesh(Box<MeshSpec>),
-    /// Tiled image.
-    Pattern(ImageRef),
+    /// A pattern: a cell of vector content repeated over the filled area.
+    Pattern(Box<PatternSpec>),
 }
 
 /// A linear shading an object carries with it, so a backend never has to have
@@ -194,6 +195,51 @@ pub struct MeshVertex {
     pub y: f64,
     /// Colour sampled here, straight-line interpolated across a triangle.
     pub color: Color,
+}
+
+/// A pattern an object carries with it, from clause 8.3.5. The cell is vector
+/// content, so it is flattened once here and the backend only tiles it.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PatternSpec {
+    /// The cell's content, already flattened and in cell-local coordinates.
+    pub cell: Box<PageDisplay>,
+    /// Cell width.
+    pub width: f64,
+    /// Cell height.
+    pub height: f64,
+    /// Horizontal step between cells.
+    pub step_x: f64,
+    /// Vertical step between cells.
+    pub step_y: f64,
+    /// How the cell repeats, as the schema's `ReflectMethod`.
+    pub reflect: Reflect,
+}
+
+/// How a pattern's cells repeat; the schema's `ReflectMethod`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum Reflect {
+    /// Repeat as drawn.
+    #[default]
+    Normal,
+    /// Mirror each successive row.
+    Row,
+    /// Mirror each successive column.
+    Column,
+    /// Mirror both.
+    RowAndColumn,
+}
+
+impl Reflect {
+    /// Whether a cell at the given column and row is mirrored, in cell units.
+    /// A step that does not land on a whole cell still counts as the next one,
+    /// so the sign of the quotient is what decides.
+    pub fn mirrors(&self, col: i64, row: i64) -> (bool, bool) {
+        let mirror_x =
+            matches!(self, Reflect::Row | Reflect::RowAndColumn) && col.rem_euclid(2) == 1;
+        let mirror_y =
+            matches!(self, Reflect::Column | Reflect::RowAndColumn) && row.rem_euclid(2) == 1;
+        (mirror_x, mirror_y)
+    }
 }
 
 /// Rule deciding which regions a path covers.

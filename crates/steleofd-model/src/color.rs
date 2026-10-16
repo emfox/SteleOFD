@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use steleofd_error::{OfdError, XmlError};
 
 use crate::Valid;
+use crate::document::Layer;
 
 /// Colour vocabulary of GB/T 33190-2016, used by `FillColor` and `StrokeColor`.
 /// Clause 8.3.4 also lets a colour be a shading, in which case `value` is empty
@@ -59,6 +60,73 @@ pub struct MeshTriangle {
     pub c: usize,
 }
 
+/// How the cells of a pattern repeat, clause 8.3.5.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum ReflectMethod {
+    /// Repeat the cell as drawn.
+    #[default]
+    Normal,
+    /// Mirror each successive row.
+    Row,
+    /// Mirror each successive column.
+    Column,
+    /// Mirror both rows and columns.
+    RowAndColumn,
+}
+
+/// What a pattern's cell is positioned against.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum PatternSpace {
+    /// The page origin.
+    Page,
+    /// The object being filled.
+    #[default]
+    Object,
+}
+
+/// A `Pattern` fill: a cell of vector content repeated over the filled area.
+/// Clause 8.3.5 makes the cell a page block, not an image, so the content is
+/// carried as the same layer list a page holds.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PatternSpec {
+    /// The cell's content, one layer per `Layer` child.
+    pub layers: Vec<Layer>,
+    /// Cell width, in the units the cell's own coordinates use.
+    pub width: f64,
+    /// Cell height.
+    pub height: f64,
+    /// Horizontal step between cells; defaults to `width`.
+    pub x_step: f64,
+    /// Vertical step between cells; defaults to `height`.
+    pub y_step: f64,
+    /// How cells repeat.
+    pub reflect: ReflectMethod,
+    /// What the tiling is anchored to.
+    pub relative_to: PatternSpace,
+    /// An extra transform over the cell, as written.
+    pub ctm: Option<String>,
+}
+
+impl PatternSpec {
+    /// The horizontal step, falling back to the cell width.
+    pub fn step_x(&self) -> f64 {
+        if self.x_step > 0.0 {
+            self.x_step
+        } else {
+            self.width
+        }
+    }
+
+    /// The vertical step, falling back to the cell height.
+    pub fn step_y(&self) -> f64 {
+        if self.y_step > 0.0 {
+            self.y_step
+        } else {
+            self.height
+        }
+    }
+}
+
 /// The shadings clause 8.3 defines: a linear axis, a radial cone, and the two
 /// colour-interpolated meshes of 8.3.6 and 8.3.7.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -99,14 +167,16 @@ pub enum Shading {
         /// Boxed so a shading can nest inside a colour without sizing to it.
         background: Option<Box<ColorRef>>,
     },
+    /// `Pattern` (8.3.5): a cell of vector content repeated over the area.
+    Pattern(Box<PatternSpec>),
 }
 impl Shading {
     /// The colour stops, whichever shading this is. A mesh carries its colours
-    /// on its vertices instead, so it has none.
+    /// on its vertices and a pattern in its cell content, so neither has any.
     pub fn segments(&self) -> &[Segment] {
         match self {
             Shading::Axial { segments, .. } | Shading::Radial { segments, .. } => segments,
-            Shading::Gouraud { .. } => &[],
+            Shading::Gouraud { .. } | Shading::Pattern(_) => &[],
         }
     }
 }
