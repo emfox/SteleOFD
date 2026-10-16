@@ -126,37 +126,12 @@ fn with_object_space(
     let origin = Affine::translate(base.boundary.x, base.boundary.y);
     let clip = clip_of(base, params)?;
     // One scope carries both matrices: the CTM takes the content into
-    // millimetres measured from the boundary corner, and the boundary then
-    // moves that corner onto the page.
+    // millimetres from the boundary corner, the boundary then moves that
+    // corner onto the page. The clip shares that space and rides the scope.
     let single = match ctm {
         Some(t) => t.then(origin),
         None => origin,
     };
-    // A clip that opts out of the CTM is stated in boundary space, so pull it
-    // back through `ctm` alone: that is the space `single` maps from. A text
-    // clip carries its own placement, so only its runs are re-placed.
-    let clip = clip.map(|(spec, follows)| match (follows, ctm) {
-        (true, _) | (_, None) => spec,
-        (false, Some(t)) => match t.inverse() {
-            Some(inv) => match spec {
-                ClipSpec::Path { path, rule } => ClipSpec::Path {
-                    path: path.transformed(&inv),
-                    rule,
-                },
-                ClipSpec::Text(runs) => ClipSpec::Text(
-                    runs.into_iter()
-                        .map(|mut run| {
-                            run.transform = inv.then(run.transform);
-                            run
-                        })
-                        .collect(),
-                ),
-            },
-            // A singular CTM draws nothing at all, so where its clip lands
-            // cannot be observed.
-            None => spec,
-        },
-    });
     if single.is_identity() && clip.is_none() {
         return body(builder);
     }
@@ -243,10 +218,7 @@ fn stops_of(segments: &[Segment]) -> Result<Vec<GradientStop>> {
 /// GB/T 33190 clause 8.4: the clip areas an object narrows its drawing to.
 /// The region is the union of every area of every clip, so paths are read as
 /// one path and text areas become clip runs for a backend to outline.
-fn clip_of(
-    base: &ObjectBase,
-    _params: &HashMap<String, DrawParam>,
-) -> Result<Option<(ClipSpec, bool)>> {
+fn clip_of(base: &ObjectBase, _params: &HashMap<String, DrawParam>) -> Result<Option<ClipSpec>> {
     let Some(list) = base.clips.as_ref() else {
         return Ok(None);
     };
@@ -283,12 +255,11 @@ fn clip_of(
             joined.segments.extend(path.segments);
         }
     }
-    let follows = list.trans_flag != Some(false);
     if !joined.is_empty() {
-        return Ok(Some((ClipSpec::Path { path: joined, rule }, follows)));
+        return Ok(Some(ClipSpec::Path { path: joined, rule }));
     }
     if !text_runs.is_empty() {
-        return Ok(Some((ClipSpec::Text(text_runs), follows)));
+        return Ok(Some(ClipSpec::Text(text_runs)));
     }
     Ok(None)
 }

@@ -213,17 +213,14 @@ pub struct ObjectBase {
     pub actions: Option<Actions>,
 }
 
-/// The `Clips` container of clause 8.4.
+/// The `Clips` container of clause 8.4. Table 33 gives a clip no attribute but
+/// its `Area` list, and the areas are stated in object space, so a clip always
+/// travels with the object's CTM.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct ClipList {
     /// Clips; the region they confine the drawing to is their union.
     #[serde(rename = "Clip", default)]
     pub items: Vec<Clip>,
-    /// `TransFlag`: whether the clip follows the object's CTM, true by
-    /// default. Real producers write `false` on nearly every clip, since their
-    /// areas are already millimetres relative to the boundary.
-    #[serde(rename = "TransFlag", default)]
-    pub trans_flag: Option<bool>,
 }
 
 /// One `Clip`: the areas it is made of, whose union it covers.

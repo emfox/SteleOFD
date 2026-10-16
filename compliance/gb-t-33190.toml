@@ -300,7 +300,7 @@ tests = [
   "gb_t_33190_8_4_a_clipped_object_does_not_clip_its_neighbour",
   "gb_t_33190_8_4_several_clips_cover_the_union_of_their_areas",
   "gb_t_33190_8_4_one_clip_may_hold_several_areas",
-  "gb_t_33190_8_4_trans_flag_decides_whether_the_clip_follows_the_ctm",
+  "gb_t_33190_8_4_a_clip_stays_in_object_space_beside_the_ctm",
   "gb_t_33190_8_4_a_text_area_clips_to_the_glyph_outlines",
 ]
 note = "A path area becomes a clip path; a text area becomes a clip run the backends outline."

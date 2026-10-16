@@ -925,10 +925,10 @@ fn gb_t_33190_8_4_a_clipped_object_does_not_clip_its_neighbour() {
 }
 
 #[test]
-fn gb_t_33190_8_4_trans_flag_decides_whether_the_clip_follows_the_ctm() {
-    // Clause 8.4 gives Clips a TransFlag, true by default: the region travels
-    // with the CTM. False means the area is already boundary millimetres,
-    // which is what real producers write; the CTM must then come off.
+fn gb_t_33190_8_4_a_clip_stays_in_object_space_beside_the_ctm() {
+    // Table 33 gives a clip no attribute but its areas, and clause 8.4 states
+    // them in the space the object is drawn in: a `TransFlag` is not in the
+    // standard and must not move the clip out of that space.
     let body = r##"<ImageObject ID="10" Boundary="10 10 20 20" CTM="20 0 0 20 0 0" ResourceID="5">
   %CLIP%
 </ImageObject>"##;
@@ -949,35 +949,32 @@ fn gb_t_33190_8_4_trans_flag_decides_whether_the_clip_follows_the_ctm() {
             })
             .expect("clip")
     };
-    let following = with(
+    let plain = with(
         r##"<Clips><Clip><Area>
       <Path><AbbreviatedData>M 2 2 L 6 2 L 6 6 L 2 6 Z</AbbreviatedData></Path>
     </Area></Clip></Clips>"##,
     );
-    let detached = with(
+    let flagged = with(
         r#"<Clips TransFlag="false"><Clip><Area>
       <Path><AbbreviatedData>M 2 2 L 6 2 L 6 6 L 2 6 Z</AbbreviatedData></Path>
     </Area></Clip></Clips>"#,
     );
-    // The path is kept in object space and the CTM rides on the scope, so a
-    // following clip is left exactly as written.
+    // The path is kept in object space and the CTM rides on the scope, so the
+    // clip is left exactly as written.
     assert_eq!(
-        clip_bbox(&following),
+        clip_bbox(&plain),
         Rect::new(2.0, 2.0, 4.0, 4.0),
-        "a following clip is stated in the unit square, as written"
-    );
-    let detached_bbox = clip_bbox(&detached);
-    assert!(
-        (detached_bbox.x - 0.1).abs() < 1e-9
-            && (detached_bbox.y - 0.1).abs() < 1e-9
-            && (detached_bbox.w - 0.2).abs() < 1e-9
-            && (detached_bbox.h - 0.2).abs() < 1e-9,
-        "a detached clip is in boundary millimetres, so the CTM comes off: {detached_bbox:?}"
+        "the clip is stated in the object square, as written"
     );
     assert_eq!(
-        transform_of(&following),
-        transform_of(&detached),
-        "both live in the same object scope, so the difference is the path"
+        clip_bbox(&flagged),
+        clip_bbox(&plain),
+        "an attribute outside the standard does not move the clip"
+    );
+    assert_eq!(
+        transform_of(&plain),
+        transform_of(&flagged),
+        "both live in the same object scope"
     );
 }
 
