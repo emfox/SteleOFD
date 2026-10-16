@@ -389,3 +389,24 @@ fn a_gif_image_is_decoded_and_painted() {
         "the sample's black block and white ground both paint, got {dark} dark and {light} light"
     );
 }
+
+/// A resource whose bytes will not decode must cost only its own placement:
+/// the rest of the page still renders, and the miss is counted so a caller can
+/// tell a blank area from an absent one.
+#[test]
+fn an_image_that_will_not_decode_is_skipped_not_fatal() {
+    let fonts = FontManager::new();
+    let broken = ImageRef::new("7", Arc::new(vec![0u8; 32]), (1, 1), ImageCodec::Png);
+    let page = page_with(vec![
+        filled(rect(0.0, 0.0, 50.0, 50.0), Color::rgba(0, 0, 0, 255)),
+        DrawOp::Image {
+            image: broken,
+            dst: Rect::new(10.0, 10.0, 20.0, 20.0),
+            transform: Affine::IDENTITY,
+        },
+    ]);
+    let output = render_page(&page, &fonts, &RenderOptions::default()).expect("render");
+    assert_eq!(output.skipped_image_ops, 1, "the bad image is counted");
+    // The op that came before it still painted.
+    assert_eq!(pixel(&output, 5, 5), [0, 0, 0, 255]);
+}
