@@ -7,8 +7,9 @@ use steleofd_model::color::{ColorRef, Segment, Shading};
 use steleofd_model::document::{
     CommonData, CompositeGraphicUnit, CompositeGraphicUnitList, DocBody, Document as ModelDocument,
     DrawParamList, Font, FontList, Layer, Location, Multimedia, MultimediaKind, MultimediaList,
-    OfdRoot, Page, PageArea, PageBlock, Pages, Template, TemplateList, TemplatePageList,
-    TemplateRef, VPreferences, Version, ZoomSetting,
+    OfdRoot, Page, PageArea, PageBlock, Pages, Permission, PrintPermission, Template, TemplateList,
+    TemplatePageList, TemplateRef, VPreferences, ValidPeriod, Version, ZoomSetting,
+    unlimited_copies,
 };
 use steleofd_model::object::{
     Action, ActionEvent, ActionKind, Actions, CGTransform, Clip, ClipArea, ClipList,
@@ -115,6 +116,9 @@ pub fn read_document(xml: &str) -> Result<ModelDocument> {
             Event::Start(n) if n.is("VPreferences") => {
                 doc.vpreferences = Some(read_vpreferences(&mut cursor)?)
             }
+            Event::Start(n) if n.is("Permissions") => {
+                doc.permissions = Some(read_permissions(&mut cursor)?)
+            }
             Event::Start(other) => cursor.skip_element(&other)?,
             Event::End(_) => break,
             Event::Eof => break,
@@ -173,6 +177,48 @@ fn read_vpreferences(cursor: &mut Cursor<'_>) -> Result<VPreferences> {
 fn read_bool_element(cursor: &mut Cursor<'_>, node: &Node) -> Result<bool> {
     let text = read_element_text(cursor, node)?;
     parse_bool(node.local(), node.local(), &text)
+}
+
+/// Read `Permissions`, clause 7.12. Each flag is independent, so one stated
+/// flag does not imply the others; `Print` and `ValidPeriod` are attributes.
+fn read_permissions(cursor: &mut Cursor<'_>) -> Result<Permission> {
+    let mut p = Permission::default();
+    loop {
+        match cursor.next_event()? {
+            Event::Start(n) if n.is("Edit") => p.edit = Some(read_bool_element(cursor, &n)?),
+            Event::Start(n) if n.is("Annot") => p.annotate = Some(read_bool_element(cursor, &n)?),
+            Event::Start(n) if n.is("Export") => p.export = Some(read_bool_element(cursor, &n)?),
+            Event::Start(n) if n.is("Signature") => {
+                p.signature = Some(read_bool_element(cursor, &n)?)
+            }
+            Event::Start(n) if n.is("Watermark") => {
+                p.watermark = Some(read_bool_element(cursor, &n)?)
+            }
+            Event::Start(n) if n.is("PrintScreen") => {
+                p.print_screen = Some(read_bool_element(cursor, &n)?)
+            }
+            Event::Start(n) if n.is("Print") => {
+                let a = n.attributes();
+                p.print = Some(PrintPermission {
+                    printable: a.require_as::<bool>("Print", "Printable")?,
+                    copies: a.or_default("Print", "Copies", unlimited_copies())?,
+                });
+                cursor.skip_element(&n)?;
+            }
+            Event::Start(n) if n.is("ValidPeriod") => {
+                let a = n.attributes();
+                p.valid_period = Some(ValidPeriod {
+                    start_date: a.get("StartDate").map(str::to_string),
+                    end_date: a.get("EndDate").map(str::to_string),
+                });
+                cursor.skip_element(&n)?;
+            }
+            Event::Start(other) => cursor.skip_element(&other)?,
+            Event::End(_) | Event::Eof => break,
+            Event::Text(_) => {}
+        }
+    }
+    Ok(p)
 }
 
 /// A value outside the enumeration its element allows.

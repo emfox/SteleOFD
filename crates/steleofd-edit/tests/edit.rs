@@ -46,6 +46,7 @@ fn document_with(one_object: bool) -> Document {
             }],
         },
         vpreferences: None,
+        permissions: None,
     }
 }
 

@@ -1870,3 +1870,77 @@ fn gb_t_33190_7_11_a_document_without_preferences_reads_them_as_absent() {
         doc.vpreferences
     );
 }
+
+#[test]
+fn gb_t_33190_7_12_permissions_and_valid_period_are_read() {
+    // Clause 7.12: the document states what a reader may do. The flags are
+    // independent and each is optional, so what is stated has to survive and
+    // what is not has to stay absent.
+    let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<Document>
+  <CommonData>
+    <PageArea><PhysicalBox Left="0" Top="0" Width="210" Height="297"/></PageArea>
+  </CommonData>
+  <Permissions>
+    <Edit>false</Edit>
+    <Annot>true</Annot>
+    <PrintScreen>false</PrintScreen>
+    <Print Printable="true" Copies="3"/>
+    <ValidPeriod StartDate="2024-01-01T00:00:00Z" EndDate="2025-01-01T00:00:00Z"/>
+  </Permissions>
+  <Pages><Page ID="1" BaseLoc="Pages/Page_0/Content.xml"/></Pages>
+</Document>"#;
+    let doc = steleofd_parser::content::read_document(xml).expect("read document");
+    let perms = doc.permissions.as_ref().expect("permissions were read");
+    assert_eq!(perms.edit, Some(false), "editing is refused");
+    assert_eq!(perms.annotate, Some(true), "annotating is allowed");
+    assert_eq!(
+        perms.export, None,
+        "a flag the document does not state stays absent, not defaulted"
+    );
+    assert_eq!(perms.print_screen, Some(false));
+
+    let print = perms.print.as_ref().expect("print permission was read");
+    assert!(print.printable, "printing is allowed");
+    assert_eq!(print.copies, 3, "and carries its copy count");
+
+    let period = perms.valid_period.as_ref().expect("valid period was read");
+    assert_eq!(period.start_date.as_deref(), Some("2024-01-01T00:00:00Z"));
+    assert_eq!(period.end_date.as_deref(), Some("2025-01-01T00:00:00Z"));
+}
+
+#[test]
+fn gb_t_33190_7_12_print_copies_default_to_no_limit() {
+    // `Copies` defaults to -1, the schema's "no stated limit", so a `Print`
+    // that names only `Printable` must not read back as zero copies.
+    let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<Document>
+  <CommonData>
+    <PageArea><PhysicalBox Left="0" Top="0" Width="210" Height="297"/></PageArea>
+  </CommonData>
+  <Permissions><Print Printable="false"/></Permissions>
+  <Pages><Page ID="1" BaseLoc="Pages/Page_0/Content.xml"/></Pages>
+</Document>"#;
+    let doc = steleofd_parser::content::read_document(xml).expect("read document");
+    let print = doc
+        .permissions
+        .as_ref()
+        .and_then(|p| p.print.as_ref())
+        .expect("print permission was read");
+    assert!(!print.printable);
+    assert_eq!(print.copies, -1, "the absent copy count means no limit");
+}
+
+#[test]
+fn gb_t_33190_7_12_a_document_without_permissions_reads_them_as_absent() {
+    // The element is optional; a document that omits it must not invent one.
+    let doc = steleofd_parser::content::read_document(&document_xml(
+        r#"<Page ID="1" BaseLoc="Pages/Page_0/Content.xml"/>"#,
+    ))
+    .expect("read document");
+    assert!(
+        doc.permissions.is_none(),
+        "no element means no permissions, got {:?}",
+        doc.permissions
+    );
+}

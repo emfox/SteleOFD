@@ -8,8 +8,8 @@ use steleofd_model::document::{Layer, PageArea};
 use steleofd_model::object::{ObjectBase, PathObject, TextCode, TextObject};
 use steleofd_model::{
     CommonData, CompositeGraphicUnit, DocBody, Document, Location, Multimedia, MultimediaKind,
-    Object, OfdRoot, Page, PageBlock, PageLayout, PageMode, Pages, TabDisplay, VPreferences, Valid,
-    Version, ZoomMode, ZoomSetting,
+    Object, OfdRoot, Page, PageBlock, PageLayout, PageMode, Pages, Permission, PrintPermission,
+    TabDisplay, VPreferences, Valid, ValidPeriod, Version, ZoomMode, ZoomSetting,
 };
 
 fn path_object(id: &str) -> Object {
@@ -212,6 +212,7 @@ fn common_data_round_trips_a_page_area_into_the_document() {
             pages: vec![page_with(vec![path_object("1")])],
         },
         vpreferences: None,
+        permissions: None,
     };
     assert_eq!(
         document.common_data.page_area.physical_box,
@@ -303,4 +304,48 @@ fn an_unset_zoom_adds_no_element() {
     let json = serde_json::to_value(VPreferences::default()).expect("serialize");
     assert!(json.get("Zoom").is_none());
     assert!(json.get("ZoomMode").is_none());
+}
+
+#[test]
+fn permissions_round_trip_in_the_shape_the_schema_uses() {
+    // Clause 7.12: `Print` and `ValidPeriod` carry their payload as attributes,
+    // so the serialised form has to match or a writer would emit the wrong XML.
+    let perms = Permission {
+        edit: Some(false),
+        annotate: Some(true),
+        export: None,
+        signature: None,
+        watermark: Some(false),
+        print_screen: Some(true),
+        print: Some(PrintPermission {
+            printable: true,
+            copies: 3,
+        }),
+        valid_period: Some(ValidPeriod {
+            start_date: Some("2024-01-01T00:00:00Z".to_string()),
+            end_date: None,
+        }),
+    };
+    let json = serde_json::to_value(&perms).expect("serialize");
+    assert_eq!(json["Edit"], false);
+    assert_eq!(json["Annot"], true);
+    assert_eq!(json["Print"]["@Printable"], true);
+    assert_eq!(json["Print"]["@Copies"], 3);
+    assert_eq!(json["ValidPeriod"]["@StartDate"], "2024-01-01T00:00:00Z");
+    assert!(
+        json["ValidPeriod"].get("@EndDate").is_none(),
+        "an unstated end date is left out"
+    );
+
+    let back: Permission = serde_json::from_value(json).expect("deserialize");
+    assert_eq!(back, perms);
+}
+
+#[test]
+fn an_absent_print_copy_count_reads_as_no_limit() {
+    // `Copies` defaults to -1 on the wire; deserialising a `Print` that omits
+    // it must land on that default rather than zero.
+    let print: PrintPermission =
+        serde_json::from_value(serde_json::json!({ "@Printable": true })).expect("deserialize");
+    assert_eq!(print.copies, -1);
 }

@@ -121,6 +121,9 @@ pub struct Document {
     /// How a reader should open the document, clause 7.11.
     #[serde(rename = "VPreferences", skip_serializing_if = "Option::is_none")]
     pub vpreferences: Option<VPreferences>,
+    /// What the document permits, clause 7.12.
+    #[serde(rename = "Permissions", skip_serializing_if = "Option::is_none")]
+    pub permissions: Option<Permission>,
 }
 
 /// Templates, resources and default extents shared by every page.
@@ -298,6 +301,66 @@ pub enum ZoomMode {
     /// Fit the given rectangle.
     #[serde(rename = "FitRect")]
     FitRect,
+}
+
+/// GB/T 33190 clause 7.12: what the document permits a reader to do, and the
+/// window in which it may be used. Each flag is independent and optional, so
+/// an absent one stays absent rather than being defaulted here.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct Permission {
+    /// Whether the content may be edited.
+    #[serde(rename = "Edit", skip_serializing_if = "Option::is_none")]
+    pub edit: Option<bool>,
+    /// Whether annotations may be added.
+    #[serde(rename = "Annot", skip_serializing_if = "Option::is_none")]
+    pub annotate: Option<bool>,
+    /// Whether content may be exported.
+    #[serde(rename = "Export", skip_serializing_if = "Option::is_none")]
+    pub export: Option<bool>,
+    /// Whether the document may be signed.
+    #[serde(rename = "Signature", skip_serializing_if = "Option::is_none")]
+    pub signature: Option<bool>,
+    /// Whether a watermark may be applied.
+    #[serde(rename = "Watermark", skip_serializing_if = "Option::is_none")]
+    pub watermark: Option<bool>,
+    /// Whether the screen may be captured.
+    #[serde(rename = "PrintScreen", skip_serializing_if = "Option::is_none")]
+    pub print_screen: Option<bool>,
+    /// Print permission, which carries a copy count of its own.
+    #[serde(rename = "Print", skip_serializing_if = "Option::is_none")]
+    pub print: Option<PrintPermission>,
+    /// The window during which the document may be used.
+    #[serde(rename = "ValidPeriod", skip_serializing_if = "Option::is_none")]
+    pub valid_period: Option<ValidPeriod>,
+}
+
+/// Print permission, `Print` inside `CT_Permission`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PrintPermission {
+    /// Whether printing is allowed at all.
+    #[serde(rename = "@Printable")]
+    pub printable: bool,
+    /// How many copies may be printed; `-1` means no stated limit.
+    #[serde(rename = "@Copies", default = "unlimited_copies")]
+    pub copies: i32,
+}
+
+/// The schema's sentinel for "no copy limit".
+pub fn unlimited_copies() -> i32 {
+    -1
+}
+
+/// A validity window, `ValidPeriod` inside `CT_Permission`. Both ends are
+/// optional, and they are kept as written rather than parsed into a date type,
+/// since the model has no calendar and a reader only needs to compare strings.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ValidPeriod {
+    /// Earliest moment the document may be used.
+    #[serde(rename = "@StartDate", skip_serializing_if = "Option::is_none")]
+    pub start_date: Option<String>,
+    /// Latest moment the document may be used.
+    #[serde(rename = "@EndDate", skip_serializing_if = "Option::is_none")]
+    pub end_date: Option<String>,
 }
 
 /// An element's text that is not one of the values the schema allows.
@@ -739,6 +802,7 @@ mod tests {
                 draw_params: None,
             },
             vpreferences: None,
+            permissions: None,
             pages: Pages::default(),
         };
         assert!(doc.common_data.templates.is_none());
@@ -771,6 +835,7 @@ mod tests {
                 draw_params: None,
             },
             vpreferences: None,
+            permissions: None,
             pages: Pages {
                 pages: vec![Page {
                     id: "10".to_string(),
