@@ -456,3 +456,103 @@ fn an_image_that_will_not_decode_is_skipped_not_fatal() {
     // The op that came before it still painted.
     assert_eq!(pixel(&output, 5, 5), [0, 0, 0, 255]);
 }
+
+/// A mesh fill interpolates its vertex colours across the path it fills, which
+/// is what clauses 8.3.6 and 8.3.7 ask for. The left vertex is red, the right
+/// is blue, so the midpoint is a blend rather than either endpoint.
+#[test]
+fn a_mesh_fill_interpolates_between_its_vertex_colours() {
+    let fonts = FontManager::new();
+    let spec = steleofd_display::MeshSpec {
+        points: vec![
+            steleofd_display::MeshVertex {
+                x: 0.0,
+                y: 0.0,
+                color: Color::rgba(255, 0, 0, 255),
+            },
+            steleofd_display::MeshVertex {
+                x: 20.0,
+                y: 0.0,
+                color: Color::rgba(0, 0, 255, 255),
+            },
+            steleofd_display::MeshVertex {
+                x: 20.0,
+                y: 20.0,
+                color: Color::rgba(0, 0, 255, 255),
+            },
+            steleofd_display::MeshVertex {
+                x: 0.0,
+                y: 20.0,
+                color: Color::rgba(255, 0, 0, 255),
+            },
+        ],
+        triangles: vec![[0, 1, 3], [1, 2, 3]],
+    };
+    let page = page_with(vec![DrawOp::Path {
+        path: rect(2.0, 2.0, 16.0, 16.0),
+        fill: Some(Paint::Mesh(Box::new(spec))),
+        stroke: None,
+        stroke_style: StrokeStyle::default(),
+        rule: PaintRule::NonZero,
+    }]);
+    let output = render_page(&page, &fonts, &RenderOptions::default()).expect("render");
+    // At 96 DPI the 20 mm page is about 76 px, so the rect spans ~8..68.
+    let left = pixel(&output, 12, 38);
+    let right = pixel(&output, 63, 38);
+    let middle = pixel(&output, 38, 38);
+    assert!(
+        left[0] > left[2],
+        "the left edge is nearer the red vertex: {left:?}"
+    );
+    assert!(
+        right[2] > right[0],
+        "the right edge is nearer the blue vertex: {right:?}"
+    );
+    assert!(
+        middle[0] > 0 && middle[2] > 0,
+        "the middle blends both, not either end: {middle:?}"
+    );
+}
+
+/// A mesh is clipped by the path it fills, so a triangle reaching past that
+/// path does not paint outside it.
+#[test]
+fn a_mesh_fill_stays_inside_its_path() {
+    let fonts = FontManager::new();
+    let spec = steleofd_display::MeshSpec {
+        points: vec![
+            steleofd_display::MeshVertex {
+                x: 0.0,
+                y: 0.0,
+                color: Color::rgba(0, 255, 0, 255),
+            },
+            steleofd_display::MeshVertex {
+                x: 20.0,
+                y: 0.0,
+                color: Color::rgba(0, 255, 0, 255),
+            },
+            steleofd_display::MeshVertex {
+                x: 0.0,
+                y: 20.0,
+                color: Color::rgba(0, 255, 0, 255),
+            },
+        ],
+        triangles: vec![[0, 1, 2]],
+    };
+    let page = page_with(vec![DrawOp::Path {
+        path: rect(2.0, 2.0, 6.0, 6.0),
+        fill: Some(Paint::Mesh(Box::new(spec))),
+        stroke: None,
+        stroke_style: StrokeStyle::default(),
+        rule: PaintRule::NonZero,
+    }]);
+    let output = render_page(&page, &fonts, &RenderOptions::default()).expect("render");
+    // The 6 mm path spans roughly px 8..30, so a point well beyond it is
+    // covered by the triangle but not by the path.
+    assert_eq!(
+        pixel(&output, 45, 45),
+        [255, 255, 255, 255],
+        "inside the triangle but outside the path stays clear"
+    );
+    assert_eq!(pixel(&output, 15, 15)[1], 255, "inside the path is painted");
+}
