@@ -65,14 +65,19 @@ impl FontManager {
                 (d, false)
             }
             FontSource::System { family } => (self.load_system_font(family)?, false),
-            FontSource::Fallback { .. } => {
-                let family = self
-                    .default_cjk_family
-                    .read()
-                    .map(|s| s.clone())
-                    .unwrap_or_else(|_| "Noto Sans CJK SC".to_string());
-                (self.load_system_font(&family)?, true)
-            }
+            FontSource::Fallback { .. } => match entry.data.clone() {
+                // A fallback that carries its own bytes covers a script even on
+                // a host with no system face for it, so a caller can pin one.
+                Some(data) => (data, true),
+                None => {
+                    let family = self
+                        .default_cjk_family
+                        .read()
+                        .map(|s| s.clone())
+                        .unwrap_or_else(|_| "Noto Sans CJK SC".to_string());
+                    (self.load_system_font(&family)?, true)
+                }
+            },
         };
 
         let face = Arc::new(FontFace::new(id, entry.family.clone(), data, is_fallback)?);
@@ -131,6 +136,7 @@ impl FontManager {
     /// A system reference joins only when this build can resolve one.
     pub fn build_fallback_chain(&mut self) -> Vec<FontId> {
         let mut wide: Vec<FontId> = Vec::new();
+        let mut pinned: Vec<FontId> = Vec::new();
         let mut narrow: Vec<FontId> = Vec::new();
         let resolvable = cfg!(all(feature = "system-fonts", not(target_arch = "wasm32")));
         for entry in self.registry.iter() {
@@ -142,6 +148,10 @@ impl FontManager {
                         narrow.push(entry.id);
                     }
                 }
+                // A fallback that carries its own bytes is known to load, so it
+                // is consulted before an embedded wide face and long before a
+                // system-resolved substitute that may not exist on this host.
+                FontSource::Fallback { .. } if entry.data.is_some() => pinned.push(entry.id),
                 FontSource::Fallback { .. } => wide.push(entry.id),
                 FontSource::System { .. } if resolvable => narrow.push(entry.id),
                 _ => {}
@@ -151,7 +161,7 @@ impl FontManager {
         // A document that ships no wide face and names none leaves its CJK
         // text with nothing to fall back to, and the page renders blank rather
         // than wrong. Chain one substitute, loaded only if a code needs it.
-        if wide.is_empty() && resolvable {
+        if wide.is_empty() && pinned.is_empty() && resolvable {
             let id = self.registry.register_fallback("cjk-substitute");
             wide.push(id);
         }
@@ -159,11 +169,13 @@ impl FontManager {
         // Ids are handed out in registration order, so sorting only guards
         // against a caller that built a registry some other way.
         wide.sort_unstable();
+        pinned.sort_unstable();
         narrow.sort_unstable();
-        wide.extend(narrow);
-        wide.dedup();
-        self.set_fallback_chain(wide.clone());
-        wide
+        pinned.extend(wide);
+        pinned.extend(narrow);
+        pinned.dedup();
+        self.set_fallback_chain(pinned.clone());
+        pinned
     }
 
     /// Current fallback chain.

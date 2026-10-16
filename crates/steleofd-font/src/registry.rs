@@ -112,10 +112,25 @@ impl FontRegistry {
     /// Register a substitute face, resolved from `default_cjk_family` when it
     /// is first loaded. Used to cover characters no embedded face carries.
     pub fn register_fallback(&mut self, family: impl Into<String>) -> FontId {
+        self.register_fallback_with_data(family, None)
+    }
+
+    /// Register a substitute face that carries its own bytes, so the chain can
+    /// cover a script even on a host with no system font for it. A caller that
+    /// ships a known face pins it; a `None` defers to `default_cjk_family`.
+    pub fn register_fallback_with_data(
+        &mut self,
+        family: impl Into<String>,
+        data: Option<Arc<Vec<u8>>>,
+    ) -> FontId {
         let family = family.into();
         if let Some(&id) = self.by_family.get(&family) {
             return id;
         }
+        let is_cjk = match &data {
+            Some(bytes) => detect_cjk(bytes),
+            None => true,
+        };
         let id = FontId(self.entries.len() as u32);
         self.entries.push(FontEntry {
             id,
@@ -124,8 +139,8 @@ impl FontRegistry {
             source: FontSource::Fallback {
                 requested: family.clone(),
             },
-            is_cjk: true,
-            data: None,
+            is_cjk,
+            data,
         });
         self.by_family.insert(family, id);
         id
@@ -153,11 +168,13 @@ impl FontRegistry {
         self.entries.iter()
     }
 
-    /// Families with no usable data, checked before conversion to avoid garbled output.
+    /// Families with no usable data, checked before conversion to avoid garbled
+    /// output: a face is missing until it holds bytes, whether embedded or
+    /// resolved.
     pub fn missing_families(&self) -> Vec<&str> {
         self.entries
             .iter()
-            .filter(|e| matches!(e.source, FontSource::Fallback { .. }) || e.data.is_none())
+            .filter(|e| e.data.is_none())
             .map(|e| e.family.as_str())
             .collect()
     }
