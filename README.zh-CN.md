@@ -12,7 +12,9 @@ OFD（Open Fixed-layout Document，版式文档）的 Rust 实现，涵盖阅读
 SteleOFD 是 [GB/T 33190-2016《电子文件存储与交换格式 版式文档》](https://openstd.samr.gov.cn/bzgk/gb/newGbInfo?hcno=3AF6682D939116B6F5EED53D01A9DB5D)
 的 Rust 实现。从解析到渲染全部自研，不依赖任何 C/C++ 库。
 
-当前进度：早期。工作区与接口已就位，引擎尚未完成。
+当前进度：原始规划已全部完成。26 个 crate 全部就位并通过测试，五种交付形态
+（`cli` / `wasm` / `ffi` / `server` / `reader`）共用同一个 `core` 门面，内核有
+可量化的性能预算把关。后续工作见 [`docs/ROADMAP.md`](docs/ROADMAP.md)。
 
 ## 特性
 
@@ -21,7 +23,7 @@ SteleOFD 是 [GB/T 33190-2016《电子文件存储与交换格式 版式文档�
 | 阅读渲染 | GB/T 33190 渲染，无损缩放，超大文档分片加载 |
 | 格式转换 | OFD ↔ PDF / SVG / PNG，支持批量与合并；Office 与 OCR 仅在路线图中，尚未实现 |
 | 电子签章 | 国密 SM2/SM3/SM4 及国际算法验签，符合 GB/T 38540-2020 |
-| 多端交付 | 同一内核编译为 CLI、WASM、C ABI 与 HTTP 服务 |
+| 多端交付 | 同一内核编译为 CLI、WASM、C ABI、HTTP 服务与桌面阅读器 |
 | 国际化 | 基于 Fluent 的消息层，内置 en-US / zh-CN |
 
 ## 背景
@@ -59,11 +61,12 @@ steleofd/
 │   ├── steleofd-archive       归档合规校验
 │   ├── steleofd-print         打印
 │   ├── steleofd-core          门面层
+│   ├── steleofd-reader        桌面阅读器（egui/eframe）
 │   ├── steleofd-cli           命令行工具
 │   ├── steleofd-wasm          WASM 绑定
 │   ├── steleofd-ffi           C ABI 动态库
 │   └── steleofd-server        HTTP 服务
-├── locales/                   翻译资源（.ftl）
+├── locales/                   翻译资源（.ftl，引擎 + 阅读器各一套）
 ├── scripts/                   构建与校验脚本
 └── docs/                      架构文档
 ```
@@ -151,8 +154,21 @@ python3 scripts/check_language.py      # 校验英文规范与注释密度
 python3 scripts/check_i18n.py --strict # 警告也视为失败
 ```
 
-国际化校验比对各项资源：文件集合、消息键集合、变量占位符是否一致，
-以及 Rust 侧 `all_keys()` 与 FTL 实际键是否匹配。
+国际化校验比对两套资源：文件集合、消息键集合、变量占位符是否一致，以及各自
+Rust 侧键列表与其 FTL 实际键是否匹配。引擎消息（`crates/steleofd-i18n/locales`，
+73 键）与阅读器界面消息（`crates/steleofd-reader/locales`，32 键）分开维护 ——
+界面文案归展示层自己所有，引擎不会命名它不拥有的控件。
+
+### 发布
+
+推送 `v*` 标签会为 Linux / macOS / Windows 构建桌面阅读器，连同 C ABI 动态库
+与 WASM 绑定一并发布。构建产物**未签名**（项目中不存在签名密钥），因此每个
+release 附带一份 `SHA256SUMS` 清单，作为下载内容唯一可校验的依据：
+
+```bash
+python3 scripts/release_checksums.py verify .
+sha256sum -c SHA256SUMS          # 也可以完全不依赖本项目
+```
 
 ## 规范
 
@@ -190,8 +206,12 @@ GB/T 33476 分为三个部分，本项目遵循的是第 1、2 部分。GM/T 009
 `reader`）共用同一个 `core` 门面。后续规划见
 [`docs/ROADMAP.md`](docs/ROADMAP.md)，按近期 / 中期 / 远期三个阶段组织。
 条款级覆盖情况见
-[`compliance/gb-t-33190.toml`](compliance/gb-t-33190.toml)，47 条已全部覆盖，
-其中 46 条为 `verified`，1 条（`8.4`，部分裁剪区域）为 `partial`。
+[`compliance/gb-t-33190.toml`](compliance/gb-t-33190.toml)：共登记 74 条，其中
+73 条为 `verified`，唯一未覆盖的 `8.1.6`（`PrintQuality`）带 `deviation` 说明 ——
+该元素在附录 A 的 Schema 中并不存在，文档里没有任何可断言的字节。
+字体支持矩阵见 [`docs/FONTS.md`](docs/FONTS.md)，与其他阅读器逐页对照的结果见
+[`docs/INTEROP.md`](docs/INTEROP.md)，性能基线与跑法见
+[`docs/PERFORMANCE.md`](docs/PERFORMANCE.md)。
 
 ## 贡献
 

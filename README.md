@@ -68,11 +68,12 @@ steleofd/
 │   ├── steleofd-archive       Archival compliance validation
 │   ├── steleofd-print         Printing
 │   ├── steleofd-core          Facade
+│   ├── steleofd-reader        Desktop reader (egui/eframe)
 │   ├── steleofd-cli           Command line tool
 │   ├── steleofd-wasm          WebAssembly bindings
 │   ├── steleofd-ffi           C ABI shared library
 │   └── steleofd-server        HTTP service
-├── locales/                   Translation catalogues (.ftl)
+├── locales/                   Translation catalogues (.ftl; engine and reader)
 ├── scripts/                   Build and validation scripts
 └── docs/                      Architecture documentation
 ```
