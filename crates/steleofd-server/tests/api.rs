@@ -8,7 +8,7 @@ use axum::http::{HeaderMap, Request, StatusCode};
 use steleofd_core::Document;
 use steleofd_server::config::Settings;
 use steleofd_server::dto::{Opened, SearchHit, SignatureStatus};
-use steleofd_server::{AppState, KeyRing, Store, api};
+use steleofd_server::{AppState, KeyRing, RateLimit, Store, api};
 use steleofd_testkit::{SIGN_FILE, fixture_bytes};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tower::ServiceExt;
@@ -25,6 +25,19 @@ fn app(capacity: usize) -> Router {
 fn guarded(capacity: usize, spec: &str) -> Router {
     let keys = KeyRing::parse(spec).expect("a usable key ring");
     api::router(AppState::guarded(Store::new(capacity), keys), MAX_BODY)
+}
+
+/// A router holding every caller to `spec`, written `rate,burst`.
+fn throttled(capacity: usize, spec: &str) -> Router {
+    let (rate, burst) = spec.split_once(',').expect("rate,burst");
+    let limit = RateLimit::new(
+        rate.trim().parse().expect("a rate"),
+        burst.trim().parse().expect("a burst"),
+    );
+    api::router(
+        AppState::open(Store::new(capacity)).limited(limit),
+        MAX_BODY,
+    )
 }
 
 /// The same request as [`get`], carrying a bearer key.
@@ -343,6 +356,8 @@ fn settings_come_from_the_environment_or_the_defaults() {
         "STELEOFD_MAX_BODY" => Some("1024".to_owned()),
         "STELEOFD_MAX_DOCUMENTS" => Some("4".to_owned()),
         "STELEOFD_DATA_DIR" => Some("/var/lib/steleofd".to_owned()),
+        "STELEOFD_API_KEYS" => Some("acme:secret".to_owned()),
+        "STELEOFD_RATE_LIMIT" => Some("5,10".to_owned()),
         _ => None,
     })
     .expect("a full environment");
@@ -354,9 +369,29 @@ fn settings_come_from_the_environment_or_the_defaults() {
         Some(std::path::Path::new("/var/lib/steleofd")),
         "the data directory is read when set"
     );
+    assert_eq!(configured.api_keys.tenant_of("secret"), Some("acme"));
+    assert_eq!(configured.rate_limit.rate, 5.0);
+    assert_eq!(configured.rate_limit.burst, 10.0);
     assert_eq!(
         empty.data_dir, None,
         "and left unset when the environment says nothing, so the store stays in memory"
+    );
+    assert!(
+        empty.api_keys.is_open(),
+        "no keys means an open, single-tenant service"
+    );
+
+    assert!(
+        Settings::from(|name| (name == "STELEOFD_API_KEYS").then(|| "acme".to_owned())).is_err(),
+        "a key entry without a secret is refused"
+    );
+    assert!(
+        Settings::from(|name| (name == "STELEOFD_RATE_LIMIT").then(|| "fast".to_owned())).is_err(),
+        "a rate that does not parse is refused"
+    );
+    assert!(
+        Settings::from(|name| (name == "STELEOFD_RATE_LIMIT").then(|| "0,1".to_owned())).is_err(),
+        "a rate of zero would refuse every request"
     );
 
     assert!(
@@ -487,4 +522,42 @@ async fn an_open_service_keeps_working_when_a_key_is_offered() {
     )
     .await;
     assert_eq!(status, StatusCode::CREATED);
+}
+
+#[tokio::test]
+async fn a_flood_is_slowed_with_a_retry_after() {
+    // The burst lets a small flurry through at once and the limit catches the
+    // flood behind it, so a caller that hammers the service is told to wait
+    // rather than served without end.
+    let router = throttled(4, "0.001,2");
+    let (first, _, _) = call(&router, get("/healthz")).await;
+    let (second, _, _) = call(&router, get("/healthz")).await;
+    assert_eq!(first, StatusCode::OK);
+    assert_eq!(second, StatusCode::OK, "the burst covers two requests");
+
+    let (third, headers, body) = call(&router, get("/healthz")).await;
+    assert_eq!(third, StatusCode::TOO_MANY_REQUESTS, "the third is refused");
+    assert!(
+        headers.contains_key("retry-after"),
+        "the answer says how long to wait"
+    );
+    let failure: serde_json::Value = serde_json::from_slice(&body).expect("a failure body");
+    assert!(
+        failure["error"].as_str().unwrap().contains("too many"),
+        "and explains itself: {body:?}"
+    );
+}
+
+#[tokio::test]
+async fn one_caller_flooding_does_not_slow_another() {
+    // The bucket is per caller, so a key that floods is throttled without the
+    // next key noticing.
+    let router = throttled(4, "0.001,1");
+    let uri = "/healthz";
+    let (_, _, _) = call(&router, get_as(uri, "a")).await;
+    let (flooded, _, _) = call(&router, get_as(uri, "a")).await;
+    assert_eq!(flooded, StatusCode::TOO_MANY_REQUESTS);
+
+    let (other, _, _) = call(&router, get_as(uri, "b")).await;
+    assert_eq!(other, StatusCode::OK, "another caller has its own bucket");
 }
