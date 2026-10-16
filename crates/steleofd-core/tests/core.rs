@@ -637,6 +637,36 @@ fn a_stamp_naming_no_page_is_dropped() {
     assert!(seals.is_empty(), "an unresolvable PageRef finds no page");
 }
 
+#[test]
+fn comparing_a_document_with_itself_is_identical() {
+    let before = two_page_document();
+    let after = two_page_document();
+    let diff = before.compare(&after);
+    assert!(diff.is_identical());
+    assert_eq!(diff.before_pages, 2);
+    assert_eq!(diff.after_pages, 2);
+    assert_eq!(diff.changed_pages(), 0);
+}
+
+#[test]
+fn comparing_against_a_page_short_reads_as_removed() {
+    // The comparison runs over what each revision draws, so a document that
+    // dropped its second page reports the page as gone from the newer side.
+    let before = two_page_document();
+    let entries = [
+        ("OFD.xml", OFD_XML.as_bytes().to_vec()),
+        (
+            "Doc_0/Document.xml",
+            document_xml(r#"<Page ID="1"/>"#).into_bytes(),
+        ),
+    ];
+    let after = open(&entries);
+    let diff = before.compare(&after);
+    assert_eq!(diff.pages[0].change, steleofd_core::PageChange::Unchanged);
+    assert_eq!(diff.pages[1].change, steleofd_core::PageChange::Removed);
+    assert_eq!(diff.changed_pages(), 1);
+}
+
 #[cfg(feature = "archive")]
 #[test]
 fn audits_the_container() {
