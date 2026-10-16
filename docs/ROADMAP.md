@@ -231,9 +231,14 @@ matrix is in `docs/FONTS.md`).
   its text. Two limits stand and are recorded in `docs/FONTS.md` gap 4: the
   registry is filled only from the ids the pages name, and a substitute is
   chained only where one can be resolved (not wasm, not `system-fonts` off).
-- **M2-b** Subset embedded fonts instead of carrying whole faces. A document
-  that embeds a 20 MB CJK collection pays for it in every conversion. Ranked
-  below M2-a because it costs size, not correctness.
+- **M2-b** `[x]` ~~Subset embedded fonts instead of carrying whole faces.~~ A
+  document that embeds a 20 MB CJK collection pays for it in every conversion.
+  `steleofd-font::subset` rebuilds `glyf`, `loca`, `cmap`, `maxp`, `hmtx`,
+  `hhea` and `head` down to the glyphs it is asked for and renumbers them; a
+  face it cannot rewrite without losing it (CFF, or no `cmap`) is carried
+  whole. `register_container_fonts` drives it from the display list, so a run
+  carrying code points keeps its face intact rather than being guessed at.
+  `Orbitron-Bold.ttf` measured 28 648 → 2 804 bytes, an order of magnitude.
 
 ### M3. Signature depth (M3-a … M3-c)
 
@@ -431,16 +436,14 @@ compare against, and M1-b needs M1-a's output to define a pixel budget.
 **M2 third.** M2-a needs nothing from M0 or M1, so it can run alongside them.
 M2-b depends on M2-a in the sense that subsetting a face the chain cannot use
 buys nothing.
-
 **M3 fourth.** M3-a is independent. M3-c is the reason M0 matters: an archival
 check over a document that renders wrong is checking the wrong bytes.
 
 **M4 through M7 last.** M4 is independent of everything above it and could
 start any time the maintainers want a deployable server. M5 depends on M1-a,
 because every item in it is a rendering change and none of them can be
-verified without golden images. M6-a and M6-b are done, and M7-a with them, so
-the cheapest item left is M5-e or M2-b: both are single-concern changes to
-code that already has its tests.
+verified without golden images. M6-a, M6-b, M7-a and M2-b are done, so what is
+left is M5's rendering work and the deeper signature items in M3.
 
 Far term is deliberately not scheduled. It describes a direction, not dates.
 
