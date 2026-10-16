@@ -556,3 +556,83 @@ fn a_mesh_fill_stays_inside_its_path() {
     );
     assert_eq!(pixel(&output, 15, 15)[1], 255, "inside the path is painted");
 }
+
+/// A pattern fill tiles its cell over the area, which is what clause 8.3.5
+/// asks for. The cell paints a small square of its own, so a tiled fill shows
+/// that square more than once rather than a single flat block.
+#[test]
+fn a_pattern_fill_tiles_its_cell_across_the_area() {
+    let fonts = FontManager::new();
+    let cell = {
+        let mut builder = DisplayListBuilder::new(Rect::new(0.0, 0.0, 4.0, 4.0));
+        builder.push(filled(
+            rect(0.0, 0.0, 2.0, 4.0),
+            Color::rgba(255, 0, 0, 255),
+        ));
+        builder.finish(0)
+    };
+    let spec = steleofd_display::PatternSpec {
+        cell: Box::new(cell),
+        width: 4.0,
+        height: 4.0,
+        step_x: 4.0,
+        step_y: 4.0,
+        reflect: steleofd_display::Reflect::Normal,
+    };
+    let page = page_with(vec![DrawOp::Path {
+        path: rect(0.0, 0.0, 20.0, 20.0),
+        fill: Some(Paint::Pattern(Box::new(spec))),
+        stroke: None,
+        stroke_style: StrokeStyle::default(),
+        rule: PaintRule::NonZero,
+    }]);
+    let output = render_page(&page, &fonts, &RenderOptions::default()).expect("render");
+    // The cell's left half is red and its right half is clear, so a row across
+    // the tiles alternates instead of staying one colour. A cell is ~15 px at
+    // 96 DPI, so the first repeat puts its clear half around x=20.
+    let red = pixel(&output, 5, 38);
+    let clear = pixel(&output, 12, 38);
+    assert_eq!(red, [255, 0, 0, 255], "the cell's painted half shows");
+    assert_eq!(
+        clear,
+        [255, 255, 255, 255],
+        "the cell's clear half lets the page through"
+    );
+}
+
+/// A pattern is clipped by the path it fills, so the tiling does not spill
+/// outside the region it is meant to paint.
+#[test]
+fn a_pattern_fill_stays_inside_its_path() {
+    let fonts = FontManager::new();
+    let cell = {
+        let mut builder = DisplayListBuilder::new(Rect::new(0.0, 0.0, 4.0, 4.0));
+        builder.push(filled(
+            rect(0.0, 0.0, 4.0, 4.0),
+            Color::rgba(0, 128, 0, 255),
+        ));
+        builder.finish(0)
+    };
+    let spec = steleofd_display::PatternSpec {
+        cell: Box::new(cell),
+        width: 4.0,
+        height: 4.0,
+        step_x: 4.0,
+        step_y: 4.0,
+        reflect: steleofd_display::Reflect::Normal,
+    };
+    let page = page_with(vec![DrawOp::Path {
+        path: rect(2.0, 2.0, 8.0, 8.0),
+        fill: Some(Paint::Pattern(Box::new(spec))),
+        stroke: None,
+        stroke_style: StrokeStyle::default(),
+        rule: PaintRule::NonZero,
+    }]);
+    let output = render_page(&page, &fonts, &RenderOptions::default()).expect("render");
+    assert_eq!(
+        pixel(&output, 60, 60),
+        [255, 255, 255, 255],
+        "beyond the path the page stays clear"
+    );
+    assert_eq!(pixel(&output, 15, 15)[1], 128, "inside the path is painted");
+}
