@@ -252,14 +252,33 @@ fn registering_a_family_twice_returns_the_first_id() {
 
 #[test]
 fn a_system_family_with_no_resolvable_face_is_reported_missing() {
+    // Nothing named "No Such Family 12345" is installed anywhere, and the
+    // caller says what it is drawing, so a generic face in its place would
+    // still miss the characters. That is a missing font, not a substitute.
     let mut manager = FontManager::new();
     let id = manager
         .registry_mut()
         .register_system("No Such Family 12345");
-    // A system reference with nothing behind it must surface as the documented
-    // missing-font error, which is what a converter checks before rendering.
-    let err = manager.face(id).expect_err("unresolvable");
+    // A code point no installed face carries — the Plane 1 range fonts do not
+    // ship — so the test says "no substitute covers this" on any host.
+    let err = manager
+        .face_for(id, &[0x10_FF_FD])
+        .expect_err("unresolvable");
     assert!(err.to_string().contains("No Such Family 12345"), "{err}");
+    assert!(manager.is_unresolved(id), "and the miss is recorded");
+}
+
+#[test]
+fn a_named_family_is_given_a_generic_face_when_nothing_covers_the_text() {
+    // Clause 11.1 leaves the substitute open when no listed family carries the
+    // characters, so the shape the declaration asked for is still better than
+    // an empty page. The miss is recorded so a caller can say so.
+    let mut manager = FontManager::new();
+    let id = manager
+        .registry_mut()
+        .register_system("No Such Family 12345");
+    let face = manager.face(id).expect("a generic family answers");
+    assert!(!face.family().is_empty(), "and it names what answered");
 }
 
 #[test]
