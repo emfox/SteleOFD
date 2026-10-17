@@ -1,0 +1,158 @@
+//! What the sample that renders but lays out wrong actually places. It is a
+//! VAT invoice laid out by offsets rather than by a face, so the display list,
+//! not a raster, is the witness. The sample is fetched; these skip when absent.
+
+use std::path::PathBuf;
+
+use steleofd_display::DrawOp;
+use steleofd_display::text::GlyphRun;
+
+/// The sample, or nothing when it has not been fetched. CI fetches it, so a
+/// skip there is a fetched file that went missing rather than a quiet pass.
+fn sample() -> Option<PathBuf> {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/fixtures/ofdrw/999.ofd")
+        .canonicalize()
+        .ok()?;
+    if !path.is_file() && std::env::var_os("CI").is_some() {
+        panic!("{} is missing on a CI run", path.display());
+    }
+    path.is_file().then_some(path)
+}
+
+/// The open display list of a page, or nothing when the sample is absent.
+fn page(index: usize) -> Option<steleofd_display::PageDisplay> {
+    let data = std::fs::read(sample()?).ok()?;
+    let doc = steleofd_core::Document::open_bytes(&data).expect("the sample opens");
+    doc.page(index).cloned()
+}
+
+/// The run with the most glyphs on a page: the tax control code here.
+fn longest(page: &steleofd_display::PageDisplay) -> GlyphRun {
+    page.ops
+        .iter()
+        .filter_map(|op| match op {
+            DrawOp::Text(run) => Some(run.clone()),
+            _ => None,
+        })
+        .max_by_key(|run| run.glyphs.len())
+        .expect("a page with text")
+}
+
+fn starts(run: &GlyphRun) -> Vec<(f64, f64)> {
+    let mut out = Vec::new();
+    let mut at = 0.0;
+    for i in 0..run.glyphs.len() {
+        if i > 0 {
+            at += run.advances.get(i - 1).copied().unwrap_or(0.0);
+        }
+        at += run.letter_spacing;
+        out.push(run.transform.apply(at, 0.0));
+    }
+    out
+}
+
+fn round(v: f64) -> f64 {
+    (v * 1000.0).round() / 1000.0
+}
+
+/// Whether two placements agree to a hundredth of a millimetre, which is as
+/// close as a page's own numbers and a float walk over them ever get.
+fn near(left: f64, right: f64) -> bool {
+    (left - right).abs() < 0.005
+}
+
+#[test]
+fn the_invoice_code_is_one_row_a_column_per_glyph() {
+    // `DeltaX="g 11 1.5875 -17.4625"` is eleven steps of 1.5875 and a fall back
+    // to the left edge. A step reading that mishandled either half would put
+    // the digits on top of each other or scatter them across the page.
+    let Some(page) = page(0) else { return };
+    // Twelve glyphs in one run: the code is the only one on the page.
+    let run = page
+        .ops
+        .iter()
+        .filter_map(|op| match op {
+            DrawOp::Text(run) if run.glyphs.len() == 12 => Some(run.clone()),
+            _ => None,
+        })
+        .next()
+        .expect("the invoice code is placed");
+    let placed = starts(&run);
+    assert_eq!(placed.len(), 12, "eleven digits and no more");
+    // The code sits at the object's own origin and never leaves its row.
+    let row = placed[0].1;
+    for (i, (x, y)) in placed.iter().enumerate() {
+        assert!(near(*x, i as f64 * 1.5875), "digit {i} column: {x}");
+        assert_eq!(*y, row, "digit {i} stays on the row");
+    }
+}
+
+#[test]
+fn a_date_drawn_character_by_character_keeps_its_own_characters() {
+    // The date is written with a column of its own between each pair of digits
+    // and month character, which is what a producer writes when a character
+    // does not take the width of the digits beside it.
+    let Some(page) = page(0) else { return };
+    // Several runs hold eleven glyphs; the date is the narrowest of them, since
+    // its last column takes the face width rather than a step of its own.
+    let run = page
+        .ops
+        .iter()
+        .filter_map(|op| match op {
+            DrawOp::Text(run) if run.glyphs.len() == 11 => Some(run.clone()),
+            _ => None,
+        })
+        .min_by(|a, b| {
+            let width = |r: &GlyphRun| r.advances.iter().sum::<f64>() - r.advances[0];
+            width(a).total_cmp(&width(b))
+        })
+        .expect("the date is placed");
+    let placed = starts(&run);
+    let columns: Vec<f64> = placed.iter().map(|(x, _)| round(x / 1.5875)).collect();
+    // The offsets run one column per glyph, so the date reads straight across
+    // and every step is one column but the two that a character takes.
+    assert!(
+        columns.is_sorted(),
+        "the date reads left to right: {columns:?}"
+    );
+    let room: Vec<f64> = columns.windows(2).map(|w| round(w[1] - w[0])).collect();
+    assert!(
+        room.iter().any(|step| *step > 1.0),
+        "a character is given room of its own: {room:?}"
+    );
+}
+
+#[test]
+fn a_tax_control_code_of_a_hundred_and_twelve_characters_runs_off_its_box() {
+    // 112 characters of a 4.2333 mm face, stepped 2.5 mm across a 77 mm box:
+    // the offsets run out after four rows of 28 columns, so the run goes on
+    // past the box rather than wrapping where the producer never said to.
+    let Some(page) = page(0) else { return };
+    let run = longest(&page);
+    let placed = starts(&run);
+    let span = placed.last().expect("glyphs").0 - placed[0].0;
+    assert!(near(span, 95.0 * 2.5), "a column per character, got {span}");
+}
+
+#[test]
+fn the_labels_of_the_template_keep_the_kerning_the_producer_wrote() {
+    // The document sets one glyph 15.57 mm from the next, an artefact of how
+    // the form was drawn. It is placed as written: a layout that tidies a label
+    // is no longer a rendering of the file.
+    let Some(page) = page(0) else { return };
+    // Two labels are set this way, one in each party's block.
+    let wide: Vec<GlyphRun> = page
+        .ops
+        .iter()
+        .filter_map(|op| match op {
+            DrawOp::Text(run) if run.glyphs.len() == 3 => Some(run.clone()),
+            _ => None,
+        })
+        .filter(|run| {
+            let placed = starts(run);
+            near(placed[1].0 - placed[0].0, 15.57) && near(placed[2].0 - placed[1].0, 3.175)
+        })
+        .collect();
+    assert_eq!(wide.len(), 2, "the buyer and the seller row");
+}
