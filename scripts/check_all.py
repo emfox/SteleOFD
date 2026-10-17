@@ -24,6 +24,7 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -58,6 +59,9 @@ class Check:
     needs: tuple[str, ...] = ()
     unset: tuple[str, ...] = ()
     env: tuple[tuple[str, str], ...] = ()
+    # Run the steps under the manifest's minimum toolchain rather than whichever
+    # one is on PATH, so what the manifest claims is what was checked.
+    msrv: bool = False
 
 
 def py(*args: str) -> tuple[str, ...]:
@@ -127,6 +131,15 @@ CHECKS: tuple[Check, ...] = (
         # Only this workspace is held to -D warnings; a dependency's lint is not
         # this build's to fail. CI passes an empty value for the same reason.
         env=(("RUSTFLAGS", ""),),
+    ),
+    # The manifest names the minimum; this checks the workspace under exactly
+    # that toolchain, so `rust-version` is a fact rather than a claim.
+    Check(
+        "msrv",
+        "rust",
+        (("cargo", "check", "--workspace", "--all-targets"),),
+        needs=("cargo", "msrv"),
+        msrv=True,
     ),
     Check(
         "build",
@@ -210,6 +223,36 @@ SAMPLE_DIRS = {
 }
 
 
+def msrv_toolchain() -> str:
+    """The `+toolchain` matching the manifest's `rust-version`, or empty.
+
+    The manifest is the only place the minimum is stated, so it is read here
+    rather than repeated in this script. Empty means no answer: no `rustup`, no
+    `rust-version`, or no installed channel with that version.
+    """
+    matched = re.search(
+        r'^rust-version\s*=\s*"([^"]+)"',
+        (ROOT / "Cargo.toml").read_text(encoding="utf-8"),
+        re.MULTILINE,
+    )
+    if matched is None:
+        return ""
+    listing = subprocess.run(
+        ["rustup", "toolchain", "list"], capture_output=True, text=True,
+    )
+    if listing.returncode != 0:
+        return ""
+    for line in listing.stdout.splitlines():
+        name = line.split()[0] if line.split() else ""
+        # An installed channel carries the full version (`1.92.0`) while the
+        # manifest names the minor (`1.92`), so only the leading two parts are
+        # compared; a pinned nightly is never the minimum and is left out.
+        channel = name.split("-")[0]
+        if channel.count(".") == 2 and channel.rsplit(".", 1)[0] == matched.group(1):
+            return f"+{name}"
+    return ""
+
+
 def precondition(name: str) -> tuple[bool, str]:
     """Whether this machine can run the check, and why not when it cannot."""
     if name in ("cargo", "git"):
@@ -228,6 +271,10 @@ def precondition(name: str) -> tuple[bool, str]:
         if not (ROOT / CORPUS_FILES).is_dir():
             return False, f"{CORPUS_FILES} is missing"
         return True, ""
+    if name == "msrv":
+        if msrv_toolchain():
+            return True, ""
+        return False, "no rustup channel matches rust-version (rustup toolchain install it)"
     directory, script = SAMPLE_DIRS[name]
     if not (ROOT / directory).is_dir():
         return False, f"{directory} is absent (run python3 {script})"
@@ -258,10 +305,13 @@ def run(check: Check, verbose: bool) -> tuple[bool, str, float]:
     captured: list[str] = []
     passed = True
     for step in check.steps:
+        command = list(step)
+        if check.msrv and command[0] == "cargo":
+            command.insert(1, msrv_toolchain())
         if verbose:
-            print(f"    $ {' '.join(step)}", flush=True)
+            print(f"    $ {' '.join(command)}", flush=True)
         done = subprocess.run(
-            step,
+            command,
             cwd=ROOT,
             env=environment(check),
             text=True,
