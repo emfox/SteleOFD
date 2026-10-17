@@ -18,8 +18,11 @@ serde-wasm-bindgen = "0.6"
 console_error_panic_hook = "0.1"
 tracing-wasm = "0.2"
 
+# `wasm-opt` is not run: the binaryen release it downloads rejects the
+# reference types `wasm-bindgen` now emits, and the build fails on input it
+# could not have produced. The Rust release profile is what sizes this out.
 [package.metadata.wasm-pack.profile.release]
-wasm-opt = ["-Oz", "--enable-mutable-globals"]
+wasm-opt = false
 
 [dev-dependencies]
 steleofd-testkit.workspace = true
