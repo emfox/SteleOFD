@@ -81,6 +81,10 @@ def pack(source: Path) -> bytes:
             info = zipfile.ZipInfo(archive_path, date_time=STAMP)
             info.compress_type = zipfile.ZIP_DEFLATED
             info.external_attr = 0o644 << 16
+            # ZipInfo defaults this to the host, so packing on Windows writes a
+            # different central directory than packing on Unix. Pin it to the
+            # value the committed archives carry and `--check` holds anywhere.
+            info.create_system = 3
             archive.writestr(info, (source / origin).read_bytes())
     return bytes(buffer)
 
