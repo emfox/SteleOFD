@@ -35,11 +35,15 @@ ROOT = Path(__file__).resolve().parent.parent
 PYTHON = sys.executable
 
 # Cheap checks first, so a policy mistake is reported before a build is spent.
-GROUPS = ("policy", "repo", "schema", "rust", "corpus", "perf")
+GROUPS = ("policy", "repo", "schema", "rust", "corpus", "perf", "review")
 
 # Groups that need a Rust toolchain, a network fetch or a benchmark run. --quick
 # leaves them out; everything else can finish on a fresh clone.
 SLOW_GROUPS = ("rust", "corpus", "perf")
+
+# Groups whose findings ask for a second look instead of blocking a merge. A
+# check here reports what it noticed and the run still passes with it.
+ADVISORY_GROUPS = ("review",)
 
 CORPUS_FILES = "compliance/corpus"
 
@@ -80,6 +84,14 @@ CHECKS: tuple[Check, ...] = (
         "policy",
         (py("scripts/check_commits.py", "--grandfathered",
             "scripts/commit-baseline.txt"),),
+        needs=("git",),
+    ),
+    # Section 3.1 asks for one logical change per commit; this names the
+    # commits that read as more than one. It reports, it does not block.
+    Check(
+        "commit-scope",
+        "review",
+        (py("scripts/check_commit_scope.py"),),
         needs=("git",),
     ),
     # Artefacts the repository carries: a manifest tool and a build product.
@@ -322,6 +334,7 @@ def main() -> int:
         return 0
 
     failed: list[str] = []
+    noticed: list[str] = []
     skipped: list[tuple[str, str]] = []
     passed: list[str] = []
     started = time.perf_counter()
@@ -341,8 +354,12 @@ def main() -> int:
             passed.append(label)
             print(f"  {check.name:<20} ok      {elapsed:5.1f}s")
             continue
-        failed.append(label)
-        print(f"  {check.name:<20} FAIL    {elapsed:5.1f}s")
+        if check.group in ADVISORY_GROUPS:
+            noticed.append(label)
+            print(f"  {check.name:<20} note    {elapsed:5.1f}s")
+        else:
+            failed.append(label)
+            print(f"  {check.name:<20} FAIL    {elapsed:5.1f}s")
         if not args.verbose and output.strip():
             for line in output.strip().splitlines()[-40:]:
                 print(f"      {line}")
@@ -350,8 +367,12 @@ def main() -> int:
     total = time.perf_counter() - started
     print("\n== summary ==")
     print(f"  {len(passed)} passed, {len(failed)} failed, "
-          f"{len(skipped)} skipped in {total:.1f}s")
+          f"{len(noticed)} noted, {len(skipped)} skipped in {total:.1f}s")
 
+    if noticed:
+        print("\n  noted, and worth a look rather than a block:")
+        for label in noticed:
+            print(f"    {label}")
     if skipped:
         print("\n  skipped, with the reason:")
         for label, why in skipped:
