@@ -220,7 +220,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            dist/android/steleofd-reader-android.apk
+            dist/steleofd-reader-android.apk
             dist/SHA256SUMS
 
   # The libraries other programs link against, and the browser bindings of the
@@ -277,8 +277,16 @@ jobs:
 
       # The tag names the release, and the changelog carries the notes, so the
       # archive contents and the published notes come from the same commit.
+      # The manifest is not attached: each job above already uploaded one for
+      # the files it built, and an asset of the same name is replaced rather
+      # than merged, which would leave the rest of them unlisted.
       - name: Attach the artefacts to the release
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/*
+          files: |
+            dist/libsteleofd_ffi.*
+            dist/steleofd.h
+            dist/*.js
+            dist/*.wasm
+            dist/*.d.ts
           generate_release_notes: true

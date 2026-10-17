@@ -32,17 +32,19 @@ PACKAGE = "org.steleofd.reader"
 ACTIVITY = "android.app.NativeActivity"
 MIN_SDK = 24
 TARGET_SDK = 34
-VERSION_CODE = 1
-VERSION_NAME = "0.1.0"
+# The archive the release publishes, named so the workflow can checksum it
+# beside the desktop executables rather than in a directory of its own.
 ARCHIVE_NAME = "steleofd-reader-android.apk"
 # The name `System.loadLibrary` looks for, which is the crate's library name.
 LIBRARY = "steleofd_reader"
 
+# Written out rather than left to the packager, which defaults both to empty;
+# they are a constant because a rebuild only ever follows a failed tag.
 MANIFEST = f"""<?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="{PACKAGE}"
-    android:versionCode="{VERSION_CODE}"
-    android:versionName="{VERSION_NAME}">
+    android:versionCode="1"
+    android:versionName="0.1.0">
     <uses-sdk android:minSdkVersion="{MIN_SDK}" android:targetSdkVersion="{TARGET_SDK}" />
     <application android:label="SteleOFD Reader" android:hasCode="false">
         <activity
@@ -128,10 +130,10 @@ def keystore(work: Path) -> Path:
 
 
 def package(sdk: Path, library: Path, out: Path) -> Path:
-    """Compile, align and sign the archive into `out/android`."""
-    work = out / "android"
-    if work.exists():
-        shutil.rmtree(work)
+    """Compile, align and sign the archive into `out`, beside everything else."""
+    if out.exists():
+        shutil.rmtree(out)
+    work = out
     work.mkdir(parents=True)
     manifest = write_manifest(work)
 
@@ -168,6 +170,15 @@ def package(sdk: Path, library: Path, out: Path) -> Path:
     # A signature that does not verify is an archive no device will install,
     # so the build fails here rather than at the downloader.
     run([build_tool(sdk, "apksigner"), "verify", str(signed)])
+    # Only the archive is published; the manifest, the key and the unsigned
+    # copies are scaffolding, and a leftover would be checksummed beside it.
+    for leftover in work.iterdir():
+        if leftover == signed:
+            continue
+        if leftover.is_dir():
+            shutil.rmtree(leftover)
+        else:
+            leftover.unlink()
     return signed
 
 
