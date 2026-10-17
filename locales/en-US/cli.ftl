@@ -4,6 +4,12 @@ cli-pages = Pages: { $count }
 cli-page-size = Page size: { $w } x { $h } mm
 cli-version = Version: { $version }
 cli-embedded-fonts = Embedded fonts: { $count }
+cli-font-substituted = Fonts: { $count } not embedded, drawn with a substitute ({ $names })
+cli-font-missing = Warning: { $count } font(s) named { $names } not embedded and not installed, with no substitute covering their text
+cli-missing-glyphs = { $count ->
+    [one] Warning: { $count } character had no glyph in any available font, so the page is missing it
+   *[other] Warning: { $count } characters had no glyph in any available font, so the page is missing them
+}
 cli-signatures = Signatures: { $count }
 cli-no-pages = The document declares no pages
 cli-wrote = Wrote { $path }

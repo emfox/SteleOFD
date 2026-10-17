@@ -127,6 +127,12 @@ pub enum MessageId {
     CliVersion,
     /// Embedded font count line in document info
     CliEmbeddedFonts,
+    /// Font line in document info, naming a face the reader had to supply
+    CliFontSubstituted,
+    /// Font line in document info, naming a face nothing could supply
+    CliFontMissing,
+    /// Warning: glyphs had no outline in any face
+    CliMissingGlyphs,
     /// Signature count line in document info
     CliSignatures,
     /// The document declares no pages
@@ -245,6 +251,9 @@ impl MessageId {
             Self::CliPageSize => "cli-page-size",
             Self::CliVersion => "cli-version",
             Self::CliEmbeddedFonts => "cli-embedded-fonts",
+            Self::CliFontSubstituted => "cli-font-substituted",
+            Self::CliFontMissing => "cli-font-missing",
+            Self::CliMissingGlyphs => "cli-missing-glyphs",
             Self::CliSignatures => "cli-signatures",
             Self::CliNoPages => "cli-no-pages",
             Self::CliWrote => "cli-wrote",
@@ -338,6 +347,9 @@ impl MessageId {
         Self::CliPageSize,
         Self::CliVersion,
         Self::CliEmbeddedFonts,
+        Self::CliFontSubstituted,
+        Self::CliFontMissing,
+        Self::CliMissingGlyphs,
         Self::CliSignatures,
         Self::CliNoPages,
         Self::CliWrote,
@@ -386,6 +398,9 @@ impl MessageId {
                 | Self::CliPageSize
                 | Self::CliVersion
                 | Self::CliEmbeddedFonts
+                | Self::CliFontSubstituted
+                | Self::CliFontMissing
+                | Self::CliMissingGlyphs
                 | Self::CliSignatures
                 | Self::CliWrote
                 | Self::CliRenderedPage
