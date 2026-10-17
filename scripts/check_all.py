@@ -61,7 +61,11 @@ class Check:
 
 
 def py(*args: str) -> tuple[str, ...]:
-    """A sibling script, run by the interpreter running this one."""
+    """A sibling script, run by the interpreter running this one.
+
+    Each argument stays its own word: a step is a sequence of words, so a
+    joined script and argument reads as one executable that cannot be opened.
+    """
     return (PYTHON, *args)
 
 
@@ -79,6 +83,7 @@ CHECKS: tuple[Check, ...] = (
     # Section 4 of docs/CONVENTIONS.md: the policy gates.
     Check("language", "policy", (py("scripts/check_language.py"),)),
     Check("i18n", "policy", (py("scripts/check_i18n.py", "--strict"),)),
+    Check("android", "package", (py("scripts/android_package.py", "selftest"),)),
     Check(
         "commits",
         "policy",
