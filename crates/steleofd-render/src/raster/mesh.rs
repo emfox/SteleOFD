@@ -1,4 +1,4 @@
-//! Mesh shaders: the Gouraud fill of clauses 8.3.6 and 8.3.7.
+//! Mesh shaders: the Gouraud fill of clauses 8.3.4.4 and 8.3.4.5.
 
 use super::*;
 

@@ -259,7 +259,7 @@ pub(crate) fn read_color(node: &Node, cursor: &mut Cursor<'_>) -> Result<ColorRe
         match cursor.next_event()? {
             Event::Start(n) if n.is("AxialShd") => shading = Some(read_axial(&n, cursor)?),
             Event::Start(n) if n.is("RadialShd") => shading = Some(read_radial(&n, cursor)?),
-            // Clauses 8.3.6 and 8.3.7. Both are a coloured mesh; they differ
+            // Clauses 8.3.4.4 and 8.3.4.5. Both are a coloured mesh; they differ
             // only in how the triangles are written, which `read_gouraud`
             // resolves to one triangle list.
             Event::Start(n) if n.is("GouraudShd") => {
@@ -268,7 +268,7 @@ pub(crate) fn read_color(node: &Node, cursor: &mut Cursor<'_>) -> Result<ColorRe
             Event::Start(n) if n.is("LaGouraudShd") => {
                 shading = Some(read_gouraud(&n, cursor, true)?)
             }
-            // Clause 8.3.5: a cell of vector content repeated over the area.
+            // Clause 8.3.3: a cell of vector content repeated over the area.
             Event::Start(n) if n.is("Pattern") => shading = Some(read_pattern(&n, cursor)?),
             Event::Start(other) => cursor.skip_element(&other)?,
             Event::End(_) | Event::Eof => break,
@@ -315,7 +315,7 @@ fn read_radial(node: &Node, cursor: &mut Cursor<'_>) -> Result<Shading> {
     })
 }
 
-/// `GouraudShd` (8.3.6) and `LaGouraudShd` (8.3.7). Both carry a list of
+/// `GouraudShd` (8.3.4.4) and `LaGouraudShd` (8.3.4.5). Both carry a list of
 /// `<Point X Y><Color/></Point>` and a `BackColor`; the lattice form adds a
 /// `VerticesPerRow` that says how the points tile into triangles.
 fn read_gouraud(node: &Node, cursor: &mut Cursor<'_>, lattice: bool) -> Result<Shading> {
@@ -337,8 +337,8 @@ fn read_gouraud(node: &Node, cursor: &mut Cursor<'_>, lattice: bool) -> Result<S
             }
         }
     }
-    // The strip form of 8.3.6 makes one triangle per consecutive triple; the
-    // lattice form of 8.3.7 makes two per 2x2 cell of `VerticesPerRow`.
+    // The strip form of 8.3.4.4 makes one triangle per consecutive triple; the
+    // lattice form of 8.3.4.5 makes two per 2x2 cell of `VerticesPerRow`.
     let triangles = if lattice {
         lattice_triangles(points.len(), per_row.unwrap_or(0))
     } else {
@@ -352,7 +352,7 @@ fn read_gouraud(node: &Node, cursor: &mut Cursor<'_>, lattice: bool) -> Result<S
     })
 }
 
-/// `Pattern` (8.3.5): a cell of vector content repeated over the filled area.
+/// `Pattern` (8.3.3): a cell of vector content repeated over the filled area.
 /// The cell is a page block, read with the same layer reader a page uses, and
 /// an unwritten `XStep`/`YStep` defaults to the cell size.
 fn read_pattern(node: &Node, cursor: &mut Cursor<'_>) -> Result<Shading> {
@@ -408,7 +408,7 @@ fn read_pattern_layers(cursor: &mut Cursor<'_>) -> Result<Vec<Layer>> {
     }
 }
 
-/// The strip form of 8.3.6: every consecutive group of three vertices is one
+/// The strip form of 8.3.4.4: every consecutive group of three vertices is one
 /// triangle, so a short list yields as many as it can.
 fn strip_triangles(count: usize) -> Vec<MeshTriangle> {
     let mut triangles = Vec::new();
@@ -424,7 +424,7 @@ fn strip_triangles(count: usize) -> Vec<MeshTriangle> {
     triangles
 }
 
-/// The lattice form of 8.3.7: `per_row` vertices to a row, each 2x2 cell of the
+/// The lattice form of 8.3.4.5: `per_row` vertices to a row, each 2x2 cell of the
 /// grid making two triangles. A `per_row` below two cannot tile, so it yields
 /// nothing rather than a guess.
 fn lattice_triangles(count: usize, per_row: usize) -> Vec<MeshTriangle> {

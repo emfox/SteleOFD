@@ -40,7 +40,7 @@ const REFERENCING: &[&str] = &[
 /// the root element there, and reading its text would swallow the resources.
 const PAGE_RESOURCES: &[&str] = &["PageRes", "FileLoc"];
 
-/// Resource tables whose entries name the files they hold. Clause 21.2 is
+/// Resource tables whose entries name the files they hold. Clause 7.9 is
 /// about reachability, so a table that points at a file the container does not
 /// carry has to be followed as far as the file name, not just to the table.
 const RESOURCE_TABLES: &[&str] = &["PublicRes", "DocumentRes", "PageRes", "FileRes"];
@@ -163,7 +163,7 @@ impl Auditor {
 
     /// Follow the entries a document points at. A reference to a resource
     /// table is one hop; the files that table names are the hop after it, and
-    /// clause 21.2 is not satisfied until they resolve too.
+    /// clause 7.9 is not satisfied until they resolve too.
     fn audit_resource_tables(
         &self,
         package: &mut Package,

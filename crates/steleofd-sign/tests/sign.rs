@@ -406,7 +406,7 @@ fn gb_t_33190_18_2_2_the_provider_name_is_an_attribute() {
 }
 
 #[test]
-fn gb_t_33190_18_3_a_sealed_document_verifies_and_an_edited_one_does_not() {
+fn gb_t_33190_18_2_1_a_sealed_document_verifies_and_an_edited_one_does_not() {
     // Clause 18.3: sealing fixes the content, so the same descriptor verifies
     // against what was sealed and reports a mismatch once that content moves.
     let sealed = vec![
@@ -442,7 +442,7 @@ fn gb_t_33190_18_3_a_sealed_document_verifies_and_an_edited_one_does_not() {
 }
 
 #[test]
-fn gb_t_33190_18_4_validation_reports_the_scope_it_checked() {
+fn gb_t_33190_18_2_3_validation_reports_the_scope_it_checked() {
     // Clause 18.4: validation covers exactly the files the descriptor names.
     // A file outside that list may change without the seal moving, and that
     // is the scope the check value was computed over.

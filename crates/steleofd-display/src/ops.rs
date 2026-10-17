@@ -175,8 +175,8 @@ pub struct GradientStop {
     pub color: Color,
 }
 
-/// A Gouraud mesh an object carries with it, from clause 8.3.6 (`GouraudShd`)
-/// or the lattice form of 8.3.7. The two are the same once read, since the
+/// A Gouraud mesh an object carries with it, from clause 8.3.4.4 (`GouraudShd`)
+/// or the lattice form of 8.3.4.5. The two are the same once read, since the
 /// lattice only changes how the triangles were written.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MeshSpec {
@@ -197,7 +197,7 @@ pub struct MeshVertex {
     pub color: Color,
 }
 
-/// A pattern an object carries with it, from clause 8.3.5. The cell is vector
+/// A pattern an object carries with it, from clause 8.3.3. The cell is vector
 /// content, so it is flattened once here and the backend only tiles it.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PatternSpec {

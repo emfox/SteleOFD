@@ -723,7 +723,7 @@ fn page_ops(object: &str, params: &str) -> Vec<DrawOp> {
 }
 
 #[test]
-fn gb_t_33190_8_3_4_axial_shading_becomes_a_linear_gradient() {
+fn gb_t_33190_8_3_4_1_axial_shading_becomes_a_linear_gradient() {
     // An AxialShd fill is written as a child of FillColor rather than as a
     // Value attribute. The gradient travels on the paint itself, so the shape
     // is a single op a backend can render without matching an earlier one.
@@ -752,7 +752,7 @@ fn gb_t_33190_8_3_4_axial_shading_becomes_a_linear_gradient() {
 }
 
 #[test]
-fn gb_t_33190_8_3_4_radial_shading_carries_both_radii() {
+fn gb_t_33190_8_3_4_1_radial_shading_carries_both_radii() {
     // A RadialShd names two circles and the clause draws the shading as the
     // cone between them, so both have to reach the gradient op. The clause
     // also allows the shading to be stroked, so the marker covers both paints.
@@ -785,7 +785,7 @@ fn gb_t_33190_8_3_4_radial_shading_carries_both_radii() {
 }
 
 #[test]
-fn gb_t_33190_8_3_4_segments_keep_their_positions_and_colours() {
+fn gb_t_33190_8_3_4_1_segments_keep_their_positions_and_colours() {
     // A Segment's Position is a fraction along the axis and its Color child
     // gives the value there; both have to reach the stop list intact.
     let ops = page_ops(
@@ -821,7 +821,7 @@ fn gb_t_33190_8_3_4_segments_keep_their_positions_and_colours() {
 }
 
 #[test]
-fn gb_t_33190_8_3_6_gouraud_shading_carries_its_coloured_vertices() {
+fn gb_t_33190_8_3_4_4_gouraud_shading_carries_its_coloured_vertices() {
     // A GouraudShd lists its vertices as Point children, each with the colour
     // sampled there; the strip form makes one triangle per consecutive triple.
     let ops = page_ops(
@@ -853,7 +853,7 @@ fn gb_t_33190_8_3_6_gouraud_shading_carries_its_coloured_vertices() {
 }
 
 #[test]
-fn gb_t_33190_8_3_6_a_gouraud_mesh_with_several_strips_keeps_them_apart() {
+fn gb_t_33190_8_3_4_4_a_gouraud_mesh_with_several_strips_keeps_them_apart() {
     // Six vertices are two triangles, not one six-vertex fan, so the mesh
     // covers exactly the triangles the writer drew.
     let ops = page_ops(
@@ -886,7 +886,7 @@ fn gb_t_33190_8_3_6_a_gouraud_mesh_with_several_strips_keeps_them_apart() {
 }
 
 #[test]
-fn gb_t_33190_8_3_7_a_lattice_mesh_tiles_its_points_into_quads() {
+fn gb_t_33190_8_3_4_5_a_lattice_mesh_tiles_its_points_into_quads() {
     // LaGouraudShd names a lattice: VerticesPerRow says how many vertices a row
     // holds, and each 2x2 cell becomes two triangles.
     let ops = page_ops(
@@ -917,7 +917,7 @@ fn gb_t_33190_8_3_7_a_lattice_mesh_tiles_its_points_into_quads() {
 }
 
 #[test]
-fn gb_t_33190_8_3_7_a_lattice_wider_than_it_is_tall_makes_every_cell() {
+fn gb_t_33190_8_3_4_5_a_lattice_wider_than_it_is_tall_makes_every_cell() {
     // Three vertices per row over two rows: two cells across, one down, so four
     // triangles.
     let ops = page_ops(
@@ -947,7 +947,7 @@ fn gb_t_33190_8_3_7_a_lattice_wider_than_it_is_tall_makes_every_cell() {
 }
 
 #[test]
-fn gb_t_33190_8_3_5_a_pattern_carries_its_cell_and_its_tile_size() {
+fn gb_t_33190_8_3_3_a_pattern_carries_its_cell_and_its_tile_size() {
     // A Pattern fill is a cell of vector content repeated over the area, so the
     // cell reaches the paint as a little display list and the step keeps the
     // tile size. An omitted step is the cell size, which tiles edge to edge.
@@ -983,7 +983,7 @@ fn gb_t_33190_8_3_5_a_pattern_carries_its_cell_and_its_tile_size() {
 }
 
 #[test]
-fn gb_t_33190_8_3_5_a_pattern_step_defaults_to_the_cell_size() {
+fn gb_t_33190_8_3_3_a_pattern_step_defaults_to_the_cell_size() {
     // With neither step written the clause tiles the cell at its own size, so
     // the paint's step has to fall back to width and height rather than zero.
     let ops = page_ops(
@@ -1015,7 +1015,7 @@ fn gb_t_33190_8_3_5_a_pattern_step_defaults_to_the_cell_size() {
 }
 
 #[test]
-fn gb_t_33190_8_3_5_a_pattern_records_its_reflect_method() {
+fn gb_t_33190_8_3_3_a_pattern_records_its_reflect_method() {
     // ReflectMethod mirrors alternate rows or columns, so it has to survive on
     // the paint for the tiler to apply it.
     let ops = page_ops(
@@ -1043,7 +1043,7 @@ fn gb_t_33190_8_3_5_a_pattern_records_its_reflect_method() {
 }
 
 #[test]
-fn gb_t_33190_8_3_5_a_reflecting_pattern_mirrors_along_the_axis_it_names() {
+fn gb_t_33190_8_3_3_a_reflecting_pattern_mirrors_along_the_axis_it_names() {
     // `Row` reflects left and right as the row advances, `Column` reflects up
     // and down as the column advances: the field names the axis the mirror
     // travels along, not the direction of the flip.
@@ -1899,7 +1899,7 @@ fn gb_t_33190_8_3_3_alpha_reaches_the_paint() {
 }
 
 #[test]
-fn gb_t_33190_8_6_a_graphics_unit_resolves_from_its_resource_id() {
+fn gb_t_33190_8_5_a_graphics_unit_resolves_from_its_resource_id() {
     // Clause 8.6: an object may name a graphics unit in the resource table,
     // and the unit's own draw parameter then applies in place of an inline
     // one.
@@ -1938,7 +1938,7 @@ fn gb_t_33190_9_3_1_a_path_must_open_with_a_subpath_start() {
 }
 
 #[test]
-fn gb_t_33190_9_4_a_path_keeps_its_data_and_its_clipping() {
+fn gb_t_33190_9_1_a_path_keeps_its_data_and_its_clipping() {
     // Clause 9.4: a path object is its geometry plus the region that limits
     // it, and both have to survive flattening — the clip as its own op, the
     // subject as the path it bounds.
@@ -1971,7 +1971,7 @@ fn gb_t_33190_9_4_a_path_keeps_its_data_and_its_clipping() {
 }
 
 #[test]
-fn gb_t_33190_11_5_reading_direction_and_alignment_are_kept() {
+fn gb_t_33190_11_3_reading_direction_and_alignment_are_kept() {
     // Clause 11.5: a text object states which way its characters run and how
     // they are placed, and a vertical run must not be flattened into a
     // horizontal one.
@@ -1994,7 +1994,7 @@ fn gb_t_33190_11_5_reading_direction_and_alignment_are_kept() {
 }
 
 #[test]
-fn gb_t_33190_7_10_a_page_resource_table_is_read() {
+fn gb_t_33190_7_9_a_page_resource_table_is_read() {
     // Clause 7.10: a page may carry its own resource table at `PageRes`, and
     // a draw parameter declared there has to be reachable from the page body.
     let entries = [
@@ -2041,7 +2041,7 @@ fn gb_t_33190_7_10_a_page_resource_table_is_read() {
 }
 
 #[test]
-fn gb_t_33190_7_10_a_page_resource_table_shadows_the_document_one() {
+fn gb_t_33190_7_9_a_page_resource_table_shadows_the_document_one() {
     // Clause 7.10 read with 7.9: the page table is the nearer of the two, so
     // an id both declare has to resolve to the page's copy.
     let entries = [
@@ -2092,7 +2092,7 @@ fn gb_t_33190_7_10_a_page_resource_table_shadows_the_document_one() {
 }
 
 #[test]
-fn gb_t_33190_7_14_a_thumbnail_is_read_and_may_be_absent() {
+fn gb_t_33190_7_7_a_thumbnail_is_read_and_may_be_absent() {
     // Clause 7.14: a vector graphic may name a preview image by reference id.
     // The id is kept verbatim — resolving it to bytes is the image loader's
     // job — and a unit without one reads back as `None`, not its neighbour's.
@@ -2124,7 +2124,7 @@ fn gb_t_33190_7_14_a_thumbnail_is_read_and_may_be_absent() {
 }
 
 #[test]
-fn gb_t_33190_7_11_viewer_preferences_are_read() {
+fn gb_t_33190_7_5_viewer_preferences_are_read() {
     // Clause 7.11: `VPreferences` says how a reader should open the document.
     // Every child is optional, so a preference that is stated has to survive
     // and one that is not has to stay absent.
@@ -2178,7 +2178,7 @@ fn gb_t_33190_7_11_viewer_preferences_are_read() {
 }
 
 #[test]
-fn gb_t_33190_7_11_a_named_zoom_mode_is_kept_apart_from_a_factor() {
+fn gb_t_33190_7_5_a_named_zoom_mode_is_kept_apart_from_a_factor() {
     // The schema makes `ZoomMode` and `Zoom` a choice, so a named fit mode
     // must not be read as a factor or the other way round.
     let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
@@ -2199,7 +2199,7 @@ fn gb_t_33190_7_11_a_named_zoom_mode_is_kept_apart_from_a_factor() {
 }
 
 #[test]
-fn gb_t_33190_7_11_a_document_without_preferences_reads_them_as_absent() {
+fn gb_t_33190_7_5_a_document_without_preferences_reads_them_as_absent() {
     // The element is optional; a document that omits it must not invent one.
     let doc = steleofd_parser::content::read_document(&document_xml(
         r#"<Page ID="1" BaseLoc="Pages/Page_0/Content.xml"/>"#,
@@ -2213,7 +2213,7 @@ fn gb_t_33190_7_11_a_document_without_preferences_reads_them_as_absent() {
 }
 
 #[test]
-fn gb_t_33190_7_12_permissions_and_valid_period_are_read() {
+fn gb_t_33190_7_5_permissions_and_valid_period_are_read() {
     // Clause 7.12: the document states what a reader may do. The flags are
     // independent and each is optional, so what is stated has to survive and
     // what is not has to stay absent.
@@ -2251,7 +2251,7 @@ fn gb_t_33190_7_12_permissions_and_valid_period_are_read() {
 }
 
 #[test]
-fn gb_t_33190_7_12_print_copies_default_to_no_limit() {
+fn gb_t_33190_7_5_print_copies_default_to_no_limit() {
     // `Copies` defaults to -1, the schema's "no stated limit", so a `Print`
     // that names only `Printable` must not read back as zero copies.
     let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
@@ -2273,7 +2273,7 @@ fn gb_t_33190_7_12_print_copies_default_to_no_limit() {
 }
 
 #[test]
-fn gb_t_33190_7_12_a_document_without_permissions_reads_them_as_absent() {
+fn gb_t_33190_7_5_a_document_without_permissions_reads_them_as_absent() {
     // The element is optional; a document that omits it must not invent one.
     let doc = steleofd_parser::content::read_document(&document_xml(
         r#"<Page ID="1" BaseLoc="Pages/Page_0/Content.xml"/>"#,
@@ -2287,7 +2287,7 @@ fn gb_t_33190_7_12_a_document_without_permissions_reads_them_as_absent() {
 }
 
 #[test]
-fn gb_t_33190_7_13_declared_colour_spaces_are_read() {
+fn gb_t_33190_7_9_declared_colour_spaces_are_read() {
     // Clause 7.13: a `Res` file may declare colour spaces that images then
     // name instead of carrying sRGB samples. The type, bit depth, profile and
     // palette are all part of the declaration.
@@ -2327,7 +2327,7 @@ fn gb_t_33190_7_13_declared_colour_spaces_are_read() {
 }
 
 #[test]
-fn gb_t_33190_7_13_an_unknown_colour_space_type_is_refused() {
+fn gb_t_33190_7_9_an_unknown_colour_space_type_is_refused() {
     // The schema lists three types; anything else is malformed rather than
     // silently read as the default.
     let err = steleofd_parser::content::read_color_spaces(
@@ -2344,7 +2344,7 @@ fn gb_t_33190_7_13_an_unknown_colour_space_type_is_refused() {
 }
 
 #[test]
-fn gb_t_33190_7_13_colour_spaces_reach_the_open_document() {
+fn gb_t_33190_7_9_colour_spaces_reach_the_open_document() {
     // The table is only useful if opening a document actually loads it, and
     // both `Res` tables contribute.
     let entries = [
@@ -2429,7 +2429,7 @@ fn solid_rgb(paint: Paint) -> (u8, u8, u8) {
 }
 
 #[test]
-fn gb_t_33190_7_13_a_colour_reads_in_its_declared_cmyk_space() {
+fn gb_t_33190_7_9_a_colour_reads_in_its_declared_cmyk_space() {
     // Clause 7.13: a colour naming a CMYK space has its four channels read as
     // cyan, magenta, yellow and black, not as four rgb samples.
     let spaces = r#"<?xml version="1.0" encoding="UTF-8"?>
@@ -2448,7 +2448,7 @@ fn gb_t_33190_7_13_a_colour_reads_in_its_declared_cmyk_space() {
 }
 
 #[test]
-fn gb_t_33190_7_13_a_colour_reads_in_its_declared_gray_space() {
+fn gb_t_33190_7_9_a_colour_reads_in_its_declared_gray_space() {
     // A single grey channel broadens to three equal channels.
     let spaces = r#"<?xml version="1.0" encoding="UTF-8"?>
 <Res BaseLoc="Res"><ColorSpaces>
@@ -2462,7 +2462,7 @@ fn gb_t_33190_7_13_a_colour_reads_in_its_declared_gray_space() {
 }
 
 #[test]
-fn gb_t_33190_7_13_an_index_picks_the_palette_entry() {
+fn gb_t_33190_7_9_an_index_picks_the_palette_entry() {
     // An indexed space carries its colours in the palette, and `Index` names
     // the entry; the `Value` is then irrelevant.
     let spaces = r#"<?xml version="1.0" encoding="UTF-8"?>
@@ -2483,7 +2483,7 @@ fn gb_t_33190_7_13_an_index_picks_the_palette_entry() {
 }
 
 #[test]
-fn gb_t_33190_7_13_a_colour_without_a_space_stays_hex() {
+fn gb_t_33190_7_9_a_colour_without_a_space_stays_hex() {
     // No `ColorSpace` attribute means the value is read the ordinary way, so
     // the four-sample reading must not leak onto it.
     let spaces = r#"<?xml version="1.0" encoding="UTF-8"?>
@@ -2498,7 +2498,7 @@ fn gb_t_33190_7_13_a_colour_without_a_space_stays_hex() {
 }
 
 #[test]
-fn gb_t_33190_7_13_an_unknown_space_falls_back_to_hex() {
+fn gb_t_33190_7_9_an_unknown_space_falls_back_to_hex() {
     // A colour naming an id the table does not hold cannot be read in that
     // space; the value is still worth painting rather than dropping.
     let spaces = r#"<?xml version="1.0" encoding="UTF-8"?>

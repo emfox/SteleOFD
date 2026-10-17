@@ -319,9 +319,8 @@ Absent features, not wrong ones, so they sit below the correctness band.
   A colour whose space is absent or unknown keeps its ordinary sRGB reading, so
   nothing that worked before changes. An image's own colour space rides in its
   encoded bytes and is converted by the decoder, so it needed no table lookup.
-- **M5-b** `[x]` ~~The three shading and fill models still standing as
-  deviations: `Pattern` (8.3.5), `GouraudShd` (8.3.6) and `LaGouraudShd`
-  (8.3.7). Each needs a painter, not just a reader.~~ All three are done.
+- **M5-b** `[x]` The three shading and fill models of chapter 8.3 are painted:
+  `Pattern` (8.3.3), `GouraudShd` (8.3.4.4) and `LaGouraudShd` (8.3.4.5).
   The two Gouraud models resolve to one triangle mesh (a strip of triples, or a
   `VerticesPerRow` lattice) and the raster backend writes each triangle's
   interpolated colours per pixel before masking them to the filled path. A

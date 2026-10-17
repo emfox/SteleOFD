@@ -223,7 +223,7 @@ fn a_placement_of_an_undeclared_resource_leaves_the_page_alone() {
 /// Clause 10.1: a placement maps the object's unit square onto the boundary,
 /// and what the resource calls its own size does not move it.
 #[test]
-fn gb_t_33190_10_1_an_image_placement_scales_the_unit_square() {
+fn gb_t_33190_10_an_image_placement_scales_the_unit_square() {
     let png = red_pixel();
     let media = r#"<MultiMedia ID="7" Type="Image"><MediaFile>image.png</MediaFile></MultiMedia>"#;
     let bytes = archive("Doc_0", media, &png);
@@ -282,7 +282,7 @@ fn gb_t_33190_10_1_an_image_placement_scales_the_unit_square() {
 /// document may carry has to reach the painter under its own name rather
 /// than being assumed to be PNG.
 #[test]
-fn gb_t_33190_10_2_each_media_format_reaches_the_painter() {
+fn gb_t_33190_10_each_media_format_reaches_the_painter() {
     let png = red_pixel();
     for (name, expected) in [
         ("image.png", ImageCodec::Png),

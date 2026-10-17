@@ -1,4 +1,4 @@
-//! Pattern fills: the tiling of clause 8.3.5.
+//! Pattern fills: the tiling of clause 8.3.3.
 
 use super::*;
 

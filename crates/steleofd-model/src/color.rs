@@ -66,7 +66,7 @@ pub struct MeshTriangle {
     pub c: usize,
 }
 
-/// How the cells of a pattern repeat, clause 8.3.5.
+/// How the cells of a pattern repeat, clause 8.3.3.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum ReflectMethod {
     /// Repeat the cell as drawn.
@@ -91,7 +91,7 @@ pub enum PatternSpace {
 }
 
 /// A `Pattern` fill: a cell of vector content repeated over the filled area.
-/// Clause 8.3.5 makes the cell a page block, not an image, so the content is
+/// Clause 8.3.3 makes the cell a page block, not an image, so the content is
 /// carried as the same layer list a page holds.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PatternSpec {
@@ -134,7 +134,7 @@ impl PatternSpec {
 }
 
 /// The shadings clause 8.3 defines: a linear axis, a radial cone, and the two
-/// colour-interpolated meshes of 8.3.6 and 8.3.7.
+/// colour-interpolated meshes of 8.3.4.4 and 8.3.4.5.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Shading {
     /// `AxialShd`: a linear gradient from one point to another.
@@ -159,7 +159,7 @@ pub enum Shading {
         /// Colour stops, at least two, in the order written.
         segments: Vec<Segment>,
     },
-    /// `GouraudShd` (8.3.6) and `LaGouraudShd` (8.3.7): a mesh of coloured
+    /// `GouraudShd` (8.3.4.4) and `LaGouraudShd` (8.3.4.5): a mesh of coloured
     /// vertices whose triangles interpolate the colour between them. The two
     /// differ only in how the triangles are written, not in what they mean.
     Gouraud {
@@ -167,13 +167,13 @@ pub enum Shading {
         points: Vec<MeshPoint>,
         /// Triangles over those vertices.
         triangles: Vec<MeshTriangle>,
-        /// Whether the writer used the lattice form of 8.3.7.
+        /// Whether the writer used the lattice form of 8.3.4.5.
         lattice: bool,
         /// Colour for an area no triangle covers, if the writer named one.
         /// Boxed so a shading can nest inside a colour without sizing to it.
         background: Option<Box<ColorRef>>,
     },
-    /// `Pattern` (8.3.5): a cell of vector content repeated over the area.
+    /// `Pattern` (8.3.3): a cell of vector content repeated over the area.
     Pattern(Box<PatternSpec>),
 }
 impl Shading {

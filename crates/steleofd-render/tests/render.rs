@@ -458,7 +458,7 @@ fn an_image_that_will_not_decode_is_skipped_not_fatal() {
 }
 
 /// A mesh fill interpolates its vertex colours across the path it fills, which
-/// is what clauses 8.3.6 and 8.3.7 ask for. The left vertex is red, the right
+/// is what clauses 8.3.4.4 and 8.3.4.5 ask for. The left vertex is red, the right
 /// is blue, so the midpoint is a blend rather than either endpoint.
 #[test]
 fn a_mesh_fill_interpolates_between_its_vertex_colours() {
@@ -557,7 +557,7 @@ fn a_mesh_fill_stays_inside_its_path() {
     assert_eq!(pixel(&output, 15, 15)[1], 255, "inside the path is painted");
 }
 
-/// A pattern fill tiles its cell over the area, which is what clause 8.3.5
+/// A pattern fill tiles its cell over the area, which is what clause 8.3.3
 /// asks for. The cell paints a small square of its own, so a tiled fill shows
 /// that square more than once rather than a single flat block.
 #[test]

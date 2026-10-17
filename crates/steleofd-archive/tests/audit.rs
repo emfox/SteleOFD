@@ -221,8 +221,8 @@ fn findings_name_the_clause_they_derive_from() {
 }
 
 #[test]
-fn gb_t_33190_21_1_a_reference_outside_the_container_fails_the_audit() {
-    // Clause 21.1: an archival container stands alone, so any reference that
+fn gb_t_33190_6_2_a_reference_outside_the_container_fails_the_audit() {
+    // Clause 6.2: an archival container stands alone, so any reference that
     // leaves it is an error rather than a warning.
     let mut entries = healthy();
     entries[1].1 = r#"<ofd:Document xmlns:ofd="http://www.ofdspec.org/2016">
@@ -254,8 +254,8 @@ fn gb_t_33190_21_1_a_reference_outside_the_container_fails_the_audit() {
 }
 
 #[test]
-fn gb_t_33190_21_2_each_declared_resource_must_be_reachable() {
-    // Clause 21.2: a table that names a file the container does not hold is
+fn gb_t_33190_7_9_each_declared_resource_must_be_reachable() {
+    // Clause 7.9: a table that names a file the container does not hold is
     // as broken as one that names nothing at all, so the audit walks every
     // reference rather than trusting the tables it reads.
     let mut entries = healthy();
@@ -282,8 +282,8 @@ fn gb_t_33190_21_2_each_declared_resource_must_be_reachable() {
 }
 
 #[test]
-fn gb_t_33190_21_3_the_audit_reports_a_severity_per_finding() {
-    // Clause 21.3: the report says how badly each problem hurts, so a caller
+fn gb_t_33190_7_9_the_audit_reports_a_severity_per_finding() {
+    // Clause 7.9: the report says how badly each problem hurts, so a caller
     // can archive a document that merely lacks an identifier and refuse one
     // whose document root is gone.
     let warning = audit_of(&{
