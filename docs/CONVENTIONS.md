@@ -96,6 +96,18 @@ to be shared, reviewed or backed up. The count is a habit rather than a rule
 this repository can check; what it protects is the ability to push a run of
 commits that were each verified on their own.
 
+Check the scope of a commit before writing it, not after:
+
+```bash
+git add <the files of this one change>
+git diff --cached --stat      # one reason, or stop and split
+git commit
+```
+
+`git diff --cached --stat` is the cheapest test there is. If the staged files do
+not share a single reason that the subject can state, the change is not one
+change yet.
+
 ## 4. Enforcement
 
 Every check lives in `scripts/`, and `scripts/check_all.py` runs them all:
