@@ -13,6 +13,10 @@ path = "src/main.rs"
 [lib]
 name = "steleofd_reader"
 path = "src/lib.rs"
+# A shared library as well as an rlib: Android loads the reader through
+# `System.loadLibrary` rather than starting it as a program, and a feature that
+# changed this would make the artefact depend on how it was built.
+crate-type = ["rlib", "cdylib"]
 
 [dependencies]
 # The facade re-exports the option and verdict types its own methods take, so
@@ -26,16 +30,59 @@ steleofd-error.workspace = true
 # and names the settings types that go with them.
 steleofd-print.workspace = true
 egui.workspace = true
-eframe.workspace = true
-rfd = "0.17"
+# `eframe` is declared per target below, because Android refuses `accesskit`
+# unless the activity is a game one; the desktop feature set matches its
+# defaults, so nothing there changes.
 image.workspace = true
 tracing.workspace = true
 
+# The platform dialog. `rfd` has no backend for Android, so the reader asks
+# for it only where there is one and reads dropped or passed files instead.
+[target.'cfg(not(target_os = "android"))'.dependencies]
+rfd = "0.17"
+
 # The interface needs a CJK-capable face for Chinese labels, and egui ships
 # none; the system one is read through font-kit, the same resolver the engine
-# uses. wasm32 resolves its own fonts, so the crate drops out there.
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+# uses. A browser and Android have no font-kit, so the crate drops out there.
+[target.'cfg(not(any(target_arch = "wasm32", target_os = "android")))'.dependencies]
 font-kit = "0.13"
+
+# A page starts the web build rather than a window, so it needs the JavaScript
+# glue and a logger that writes to the browser console; Android logs the same
+# way through `log`, which the two share.
+[target.'cfg(any(target_arch = "wasm32", target_os = "android"))'.dependencies]
+log = { workspace = true }
+
+# Android starts the app through this crate, which hands over the activity the
+# event loop needs; eframe re-exports it, but as a path rather than a name.
+[target.'cfg(target_os = "android")'.dependencies]
+android-activity = "0.6"
+# The types `JNI_OnLoad` is declared with; the version is the one the
+# activity crate already links, so there is one copy of it.
+jni = "0.22"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen.workspace = true
+wasm-bindgen-futures.workspace = true
+web-sys = { workspace = true, features = ["Window", "Document", "HtmlCanvasElement"] }
+
+[target.'cfg(not(target_os = "android"))'.dependencies.eframe]
+workspace = true
+default-features = false
+features = ["accesskit", "default_fonts", "wayland", "web_screen_reader", "wgpu", "x11"]
+
+[target.'cfg(target_os = "android")'.dependencies.eframe]
+workspace = true
+default-features = false
+features = ["android-native-activity", "default_fonts", "wayland", "wgpu", "x11"]
+
+
+# The window decorations winit draws itself when a compositor offers none.
+# `eframe` does not pass this through, so the desktop target names winit too.
+[target.'cfg(not(any(target_arch = "wasm32", target_os = "android")))'.dependencies.winit]
+version = "0.30"
+default-features = false
+features = ["wayland-csd-adwaita"]
 
 [dev-dependencies]
 egui.workspace = true

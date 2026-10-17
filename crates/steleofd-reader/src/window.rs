@@ -30,6 +30,16 @@ pub struct WindowRequests {
     pub quit: bool,
 }
 
+/// Android has no file dialog to reach from here: a document arrives through
+/// the activity's intent or a drop, so the actions that would open one are
+/// left out rather than drawn as buttons that do nothing.
+#[cfg(not(target_os = "android"))]
+const HAS_FILE_DIALOG: bool = true;
+
+/// The same, on the one system with no dialog to reach.
+#[cfg(target_os = "android")]
+const HAS_FILE_DIALOG: bool = false;
+
 /// Draw one frame into `ui`, and report what the reader asked for.
 ///
 /// The specification's seven steps in order; nothing here reaches a platform.
@@ -158,7 +168,10 @@ fn draw_menu(ui: &mut Ui, app: &mut App, requests: &mut WindowRequests) {
     egui::Panel::top("menu").show(ui, |ui| {
         ui.horizontal(|ui| {
             let open = app.text(ReaderMessage::Open);
-            if ui.button(open).clicked() {
+            if ui
+                .add_enabled(HAS_FILE_DIALOG, egui::Button::new(open))
+                .clicked()
+            {
                 app.request_open();
                 requests.open_dialog = true;
             }
@@ -216,8 +229,13 @@ fn draw_menu(ui: &mut Ui, app: &mut App, requests: &mut WindowRequests) {
                 ui.separator();
                 let comparing = app.comparison_open();
                 let compare = app.i18n().text(MessageId::ComparePanelTitle);
+                // Comparing asks for a second file, which is the same dialog
+                // Android cannot offer.
                 if ui
-                    .add_enabled(app.is_open(), egui::Button::selectable(comparing, compare))
+                    .add_enabled(
+                        app.is_open() && HAS_FILE_DIALOG,
+                        egui::Button::selectable(comparing, compare),
+                    )
                     .clicked()
                 {
                     app.set_comparison_open(!comparing);

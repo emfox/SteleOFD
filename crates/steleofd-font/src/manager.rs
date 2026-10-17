@@ -199,7 +199,10 @@ impl FontManager {
     /// Find a host face for a reference the package only named, using the
     /// clause 11.1 traits as the match keys: name, then weight and slope, then
     /// a generic family of the declared serif style or fixed width.
-    #[cfg(all(feature = "system-fonts", not(target_arch = "wasm32")))]
+    #[cfg(all(
+        feature = "system-fonts",
+        not(any(target_arch = "wasm32", target_os = "android"))
+    ))]
     fn find_system_font(
         &self,
         entry: &crate::registry::FontEntry,
@@ -217,10 +220,10 @@ impl FontManager {
             properties.style = Style::Italic;
         }
 
-        // Hosts map their generic families differently, so a configured family
-        // is asked for by name before any generic. A host that has none of them
-        // still needs an answer for CJK, hence the wider step in `find_cjk_font`.
-        let pin = self.configured_family();
+        // Hosts map their generic families differently, so the configured
+        // family is asked for by name before any generic. A host that lacks it
+        // still needs an answer for CJK, hence the wider step below.
+        let pin = self.pinned_family();
         thread_local! {
             static SYSTEM: font_kit::source::SystemSource = font_kit::source::SystemSource::new();
         }
@@ -290,15 +293,12 @@ impl FontManager {
             // The configured family, the generic families and any family that
             // covered an earlier run are all names a CJK substitute may wear:
             // Windows and macOS rarely ship the first one.
-            let mut fallback = match &pin {
-                Some(pin) => match pinned_answer(source, &known, pin, &properties)? {
-                    Some(data) if wanted.is_empty() || Self::covers(&data, wanted) => {
-                        self.note_cjk_answered(pin.clone());
-                        return Ok(Some(data));
-                    }
-                    other => other,
-                },
-                None => None,
+            let mut fallback = match pinned_answer(source, &known, &pin, &properties)? {
+                Some(data) if wanted.is_empty() || Self::covers(&data, wanted) => {
+                    self.note_cjk_answered(pin.clone());
+                    return Ok(Some(data));
+                }
+                other => other,
             };
             for generic in order {
                 let Ok(handle) = source.select_best_match(&[generic], &properties) else {
@@ -327,7 +327,10 @@ impl FontManager {
     }
 
     /// A CJK face for an id, or the recorded miss a caller has to report.
-    #[cfg(all(feature = "system-fonts", not(target_arch = "wasm32")))]
+    #[cfg(all(
+        feature = "system-fonts",
+        not(any(target_arch = "wasm32", target_os = "android"))
+    ))]
     fn require_cjk_font(
         &self,
         entry: &crate::registry::FontEntry,
@@ -347,7 +350,10 @@ impl FontManager {
     }
 
     /// [`Self::require_cjk_font`] where no host search is compiled in.
-    #[cfg(not(all(feature = "system-fonts", not(target_arch = "wasm32"))))]
+    #[cfg(not(all(
+        feature = "system-fonts",
+        not(any(target_arch = "wasm32", target_os = "android"))
+    )))]
     fn require_cjk_font(
         &self,
         entry: &crate::registry::FontEntry,
@@ -364,7 +370,10 @@ impl FontManager {
     /// A face for the engine's own CJK substitute, from the families this host
     /// keeps CJK in. Generics come last: font-kit maps them to Latin faces on
     /// Windows and macOS, so a host without the pinned family would go blank.
-    #[cfg(all(feature = "system-fonts", not(target_arch = "wasm32")))]
+    #[cfg(all(
+        feature = "system-fonts",
+        not(any(target_arch = "wasm32", target_os = "android"))
+    ))]
     fn find_cjk_font(
         &self,
         entry: &crate::registry::FontEntry,
@@ -409,7 +418,10 @@ impl FontManager {
 
     /// Families to try before the rest of the host, most specific first: the
     /// configured order, then the family that answered an earlier run.
-    #[cfg(all(feature = "system-fonts", not(target_arch = "wasm32")))]
+    #[cfg(all(
+        feature = "system-fonts",
+        not(any(target_arch = "wasm32", target_os = "android"))
+    ))]
     fn cjk_preferred(&self) -> Vec<String> {
         let mut names: Vec<String> = self.config().search_order().to_vec();
         names.extend(self.cjk_answered());
@@ -512,7 +524,10 @@ impl FontManager {
         let mut wide: Vec<FontId> = Vec::new();
         let mut pinned: Vec<FontId> = Vec::new();
         let mut narrow: Vec<FontId> = Vec::new();
-        let resolvable = cfg!(all(feature = "system-fonts", not(target_arch = "wasm32")));
+        let resolvable = cfg!(all(
+            feature = "system-fonts",
+            not(any(target_arch = "wasm32", target_os = "android"))
+        ));
         for entry in self.registry.iter() {
             match &entry.source {
                 FontSource::Embedded { .. } => {
@@ -600,12 +615,6 @@ impl FontManager {
             .unwrap_or_default()
     }
 
-    /// The family to ask for by name before any generic, or none when the
-    /// configuration names none and the case at hand is not CJK.
-    fn configured_family(&self) -> Option<String> {
-        Some(self.pinned_family())
-    }
-
     /// Forget that a search failed, for a caller that has just changed what
     /// the search would look for.
     pub fn clear_unresolved(&self, id: FontId) {
@@ -638,7 +647,10 @@ impl FontManager {
 
     /// No host search is compiled in — the feature is off, or the target has
     /// no system fonts to resolve — so nothing named can be found.
-    #[cfg(not(all(feature = "system-fonts", not(target_arch = "wasm32"))))]
+    #[cfg(not(all(
+        feature = "system-fonts",
+        not(any(target_arch = "wasm32", target_os = "android"))
+    )))]
     fn find_system_font(
         &self,
         _entry: &crate::registry::FontEntry,
@@ -657,7 +669,10 @@ impl Default for FontManager {
 /// A listed family that carries every code point given, the preferred names
 /// first. A generic family is an alias a host maps once, so it answers with
 /// the Latin default even when a face next to it carries the script.
-#[cfg(all(feature = "system-fonts", not(target_arch = "wasm32")))]
+#[cfg(all(
+    feature = "system-fonts",
+    not(any(target_arch = "wasm32", target_os = "android"))
+))]
 fn covering_family(
     source: &font_kit::source::SystemSource,
     known: &[String],
@@ -688,7 +703,10 @@ fn covering_family(
 
 /// One named family, when the host lists it. Whether it carries the code
 /// points is left to the caller, which knows what it is drawing.
-#[cfg(all(feature = "system-fonts", not(target_arch = "wasm32")))]
+#[cfg(all(
+    feature = "system-fonts",
+    not(any(target_arch = "wasm32", target_os = "android"))
+))]
 fn pinned_answer(
     source: &font_kit::source::SystemSource,
     known: &[String],
@@ -707,7 +725,10 @@ fn pinned_answer(
 /// The first face of a family that matches the declared weight and slope, or
 /// its first face when none does. A family often ships several faces and the
 /// declaration only asks for a shape.
-#[cfg(all(feature = "system-fonts", not(target_arch = "wasm32")))]
+#[cfg(all(
+    feature = "system-fonts",
+    not(any(target_arch = "wasm32", target_os = "android"))
+))]
 fn load_first(
     family: &font_kit::family_handle::FamilyHandle,
     properties: &font_kit::properties::Properties,

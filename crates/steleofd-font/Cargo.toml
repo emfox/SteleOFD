@@ -14,9 +14,10 @@ rustybuzz.workspace = true
 serde.workspace = true
 tracing.workspace = true
 
-# font-kit needs a native fontconfig/dwrite/coretext toolchain, none of which
-# exists for wasm32; browsers resolve fonts themselves, so the crate degrades.
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+# font-kit binds the host's own font stack. Android has none of them, and wasm32
+# resolves its fonts in the browser, so the crate degrades on both and the
+# caller supplies faces instead.
+[target.'cfg(not(any(target_arch = "wasm32", target_os = "android")))'.dependencies]
 font-kit = { version = "0.13", optional = true }
 
 [dev-dependencies]

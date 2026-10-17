@@ -15,7 +15,12 @@ const CANDIDATES: &[&str] = &["Microsoft YaHei", "SimHei", "SimSun", "Microsoft 
 const CANDIDATES: &[&str] = &["PingFang SC", "Hiragino Sans GB", "STHeiti", "Heiti SC"];
 
 /// Family names tried in order until one resolves on this host.
-#[cfg(not(any(target_os = "windows", target_os = "macos")))]
+#[cfg(not(any(
+    target_os = "windows",
+    target_os = "macos",
+    target_os = "android",
+    target_arch = "wasm32"
+)))]
 const CANDIDATES: &[&str] = &[
     "Noto Sans CJK SC",
     "Noto Sans SC",
@@ -26,7 +31,7 @@ const CANDIDATES: &[&str] = &[
 
 /// Read a CJK-capable system font's bytes, or `None` when the host has none.
 /// Face zero of every candidate family is a CJK one.
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(any(target_arch = "wasm32", target_os = "android")))]
 fn load_cjk_font() -> Option<Vec<u8>> {
     use font_kit::family_name::FamilyName;
     use font_kit::handle::Handle;
@@ -52,8 +57,9 @@ fn load_cjk_font() -> Option<Vec<u8>> {
     None
 }
 
-/// The browser resolves its own fonts, so there is nothing to read here.
-#[cfg(target_arch = "wasm32")]
+/// The browser and Android resolve their own fonts, so there is nothing to
+/// read here; both would need a face shipped with the app instead.
+#[cfg(any(target_arch = "wasm32", target_os = "android"))]
 fn load_cjk_font() -> Option<Vec<u8>> {
     None
 }

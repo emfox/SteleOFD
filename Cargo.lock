@@ -5191,11 +5191,14 @@ dependencies = [
 name = "steleofd-reader"
 version = "0.1.0"
 dependencies = [
+ "android-activity",
  "eframe",
  "egui",
  "egui_kittest",
  "font-kit",
  "image",
+ "jni",
+ "log",
  "rfd",
  "steleofd-common",
  "steleofd-core",
@@ -5204,6 +5207,10 @@ dependencies = [
  "steleofd-print",
  "steleofd-testkit",
  "tracing",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
+ "winit",
 ]
 
 [[package]]

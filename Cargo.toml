@@ -88,6 +88,8 @@ serde_json = "1"
 thiserror  = "2"
 anyhow     = "1"
 tracing    = "0.1"
+# eframe's browser logger writes through `log`, which the reader uses on wasm.
+log        = "0.4"
 bitflags   = "2"
 uuid       = { version = "1", features = ["v4", "serde"] }
 
@@ -136,7 +138,7 @@ axum       = "0.8"
 
 # Desktop GUI for the native reader. Pinned below 0.36, which needs Rust 1.95.
 egui = "0.35"
-eframe = "0.35"
+eframe = { version = "0.35", default-features = false }
 
 # Platform integration
 wasm-bindgen       = "0.2"

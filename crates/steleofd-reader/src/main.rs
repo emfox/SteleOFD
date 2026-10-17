@@ -1,49 +1,37 @@
 //! The reader executable: a frame around [`window::draw`], which holds the
-//! layout so it can be driven headlessly. This file owns only the platform
-//! parts: the file dialog, the title bar and the run loop.
+//! layout so it can be driven headlessly. This file owns the platform parts
+//! only, so a page keeps the frame and supplies its own entry in `web.rs`.
 
 // A GUI app must not open a console window on Windows; the attribute is a
 // no-op on the other systems, so it stays unconditional.
 #![cfg_attr(windows, windows_subsystem = "windows")]
 
 use eframe::egui::{self, Ui};
+#[cfg(not(any(target_arch = "wasm32", target_os = "android")))]
 use steleofd_i18n::MessageId;
 use steleofd_reader::App;
+#[cfg(not(any(target_arch = "wasm32", target_os = "android")))]
 use steleofd_reader::ExportFormat;
+#[cfg(not(any(target_arch = "wasm32", target_os = "android")))]
 use steleofd_reader::ReaderMessage;
 use steleofd_reader::window;
 
+#[cfg(target_os = "android")]
+mod android;
+#[cfg(target_arch = "wasm32")]
+mod web;
+
 /// The window state, boxed so `eframe` can own it.
-struct Reader {
+pub(crate) struct Reader {
     app: App,
     /// The title last pushed to the window, so it is pushed only on a change.
     title: String,
 }
 
-fn main() -> eframe::Result {
-    let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default()
-            .with_title("SteleOFD Reader")
-            .with_inner_size([1100.0, 820.0])
-            .with_min_inner_size([640.0, 480.0]),
-        ..Default::default()
-    };
-    eframe::run_native(
-        "SteleOFD Reader",
-        options,
-        Box::new(|cc| {
-            // egui ships latin and cyrillic only, so the Chinese interface
-            // needs a CJK face before the first frame draws.
-            steleofd_reader::fonts::install_cjk_fallback(&cc.egui_ctx);
-            Ok(Box::new(Reader::new()))
-        }),
-    )
-}
-
 impl Reader {
-    fn new() -> Self {
+    pub(crate) fn with_app(app: App) -> Self {
         Self {
-            app: App::new(),
+            app,
             title: String::new(),
         }
     }
@@ -52,18 +40,8 @@ impl Reader {
 impl eframe::App for Reader {
     fn ui(&mut self, ui: &mut Ui, _frame: &mut eframe::Frame) {
         let requests = window::draw(ui, &mut self.app);
-        if requests.open_dialog {
-            open_with_dialog(&mut self.app);
-        }
-        if let Some(format) = requests.export {
-            export_with_dialog(&mut self.app, format);
-        }
-        if requests.print {
-            print_current_view(&mut self.app);
-        }
-        if requests.compare {
-            compare_with_dialog(&mut self.app);
-        }
+        #[cfg(not(any(target_arch = "wasm32", target_os = "android")))]
+        self.serve_platform_requests(&requests);
         self.sync_title(ui);
         if requests.quit {
             ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
@@ -84,9 +62,30 @@ impl Reader {
     }
 }
 
-/// Ask the platform for a second revision and compare it against the open one.
-/// Cancelling is not a failure, so nothing is reported; a comparison that
-/// cannot run reports why.
+/// What the platform does on its own: choose a file, choose where one goes,
+/// reach a printer. The web build has none of this, so the requests stay
+/// pending there rather than being answered with a dialog that cannot open.
+#[cfg(not(any(target_arch = "wasm32", target_os = "android")))]
+impl Reader {
+    fn serve_platform_requests(&mut self, requests: &window::WindowRequests) {
+        if requests.open_dialog {
+            open_with_dialog(&mut self.app);
+        }
+        if let Some(format) = requests.export {
+            export_with_dialog(&mut self.app, format);
+        }
+        if requests.print {
+            print_current_view(&mut self.app);
+        }
+        if requests.compare {
+            compare_with_dialog(&mut self.app);
+        }
+    }
+}
+
+/// The platform asks for a second revision and compares it against the open
+/// one. Cancelling is not a failure; a comparison that cannot run reports why.
+#[cfg(not(any(target_arch = "wasm32", target_os = "android")))]
 fn compare_with_dialog(app: &mut App) {
     let title = app.i18n().text(MessageId::CompareOpenSecond);
     let picked = rfd::FileDialog::new()
@@ -111,6 +110,7 @@ fn compare_with_dialog(app: &mut App) {
 /// Ask the platform for a file, then open it.
 ///
 /// `egui` 0.35 dropped its built-in dialog, so this goes through the platform.
+#[cfg(not(any(target_arch = "wasm32", target_os = "android")))]
 fn open_with_dialog(app: &mut App) {
     let picked = rfd::FileDialog::new()
         .add_filter("OFD document", &["ofd"])
@@ -127,6 +127,7 @@ fn open_with_dialog(app: &mut App) {
 /// Ask the platform where the export should go. A PDF is one file so the
 /// platform names it; PNG writes one file per page, so it names a folder.
 /// Cancelling is not a failure, so nothing is reported.
+#[cfg(not(any(target_arch = "wasm32", target_os = "android")))]
 fn export_with_dialog(app: &mut App, requested: ExportFormat) {
     // Consuming the request also learns the page selection, which the window
     // does not own. Cancelling the dialog leaves the request cleared, so the
@@ -158,6 +159,7 @@ fn export_with_dialog(app: &mut App, requested: ExportFormat) {
 /// Print what the reader is looking at. Neither `egui` nor `eframe` prints, so
 /// the pages on screen are laid out and rasterized here; reaching a printer is
 /// the desktop's own path, and a job that will not rasterize is reported.
+#[cfg(not(any(target_arch = "wasm32", target_os = "android")))]
 fn print_current_view(app: &mut App) {
     let Some(pages) = app.take_print_request() else {
         return;
@@ -167,3 +169,30 @@ fn print_current_view(app: &mut App) {
     }
     app.print_to(pages, app.print_settings());
 }
+
+/// The native entry point: a window, a file dialog and a run loop. Android is
+/// started by the system and the browser by a page, so this is absent there.
+#[cfg(not(any(target_arch = "wasm32", target_os = "android")))]
+fn main() -> eframe::Result {
+    let options = eframe::NativeOptions {
+        viewport: egui::ViewportBuilder::default()
+            .with_title("SteleOFD Reader")
+            .with_inner_size([1100.0, 820.0])
+            .with_min_inner_size([640.0, 480.0]),
+        ..Default::default()
+    };
+    eframe::run_native(
+        "SteleOFD Reader",
+        options,
+        Box::new(|cc| {
+            // egui ships latin and cyrillic only, so the Chinese interface
+            // needs a CJK face before the first frame draws.
+            steleofd_reader::fonts::install_cjk_fallback(&cc.egui_ctx);
+            Ok(Box::new(Reader::with_app(App::new())))
+        }),
+    )
+}
+
+/// Neither of the other two builds has a `main` to start from.
+#[cfg(any(target_arch = "wasm32", target_os = "android"))]
+fn main() {}
