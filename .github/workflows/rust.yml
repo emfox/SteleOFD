@@ -117,6 +117,12 @@ jobs:
       - name: Build every target and feature
         run: cargo build --workspace --all-targets --all-features
 
+      # The layout of a real invoice is pinned against the producer's own
+      # offsets, and that sample is fetched rather than committed. Without it
+      # the tests that read it skip, which passes while proving nothing.
+      - name: Fetch the samples the tests read
+        run: python3 scripts/fetch_ofdrw.py
+
       - name: Test
         run: cargo test --workspace
 
