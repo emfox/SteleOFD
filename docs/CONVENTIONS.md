@@ -7,7 +7,7 @@ and reviewable by contributors worldwide, all engineering artifacts use English.
 
 | Scope | Language | Notes |
 | --- | --- | --- |
-| Rust/C source: identifiers, comments, docs | English only | No CJK anywhere in `.rs`, `.toml`, `.c`, `.h` |
+| Rust/Python/C source: identifiers, comments, docs | English only | No CJK anywhere in `.rs`, `.py`, `.toml`, `.c`, `.h`, `.js`, `.ts` |
 | Commit messages, branch names, PR titles and descriptions | English only | Conventional Commits format |
 | Code review comments, issue titles and bodies | English only | |
 | File names, directory names, config keys | English only | Except fetched test samples, which keep the name their producer gave them ([4.1](#41-exemptions-from-the-language-policy)) |
@@ -70,15 +70,29 @@ file touched, do not restate the diff, and do not write a changelog entry.
 
 ## 4. Enforcement
 
-Five checks run in CI and are expected to pass before any merge:
+Every check lives in `scripts/`, and `scripts/check_all.py` runs them all:
 
 ```bash
-python3 scripts/check_commits.py --grandfathered scripts/commit-baseline.txt
-python3 scripts/check_i18n.py          # message key consistency across locales
-python3 scripts/check_language.py      # English-only policy for code and docs
-python3 scripts/check_compliance.py --check-only
-python3 scripts/validate_ofd.py ...     # corpus against the annex A schemas
+python3 scripts/check_all.py            # everything this machine can run
+python3 scripts/check_all.py --quick    # no cargo, no fetched samples
+python3 scripts/check_all.py --list     # what would run, and why
 ```
+
+It runs what the machine can run and names the reason it skipped the rest, so a
+missing toolchain is visible rather than silently green. `--require-all` turns a
+skip into a failure; a CI runner has every tool, so nothing is skipped there.
+
+CI runs the same checks as separate steps, so a failure lands on the run page
+next to the check that produced it. Grouped by what they need:
+
+| Group | Checks | Needs |
+| --- | --- | --- |
+| `policy` | `check_language.py`, `check_i18n.py --strict`, `check_commits.py` | `git` |
+| `repo` | `release_checksums.py selftest`, `pack_corpus.py --check` | nothing |
+| `schema` | `validate_ofd.py --allow-foreign` over `compliance/corpus` | `lxml` |
+| `rust` | `cargo fmt`, `clippy`, `build` and `test`, the golden images, the headless reader window, `check_compliance.py`, and the matrix freshness diff | `cargo`, `git` |
+| `corpus` | `fetch_corpus.py` and `fetch_gb_samples.py`, `--check` then `--parse` | the fetched samples, `cargo` |
+| `perf` | `check_performance.py` against the budget in [PERFORMANCE.md](PERFORMANCE.md) | a `cargo bench` run |
 
 Commit messages are checked at three points, so a violation is caught before
 it becomes history rather than during a review:
@@ -86,8 +100,11 @@ it becomes history rather than during a review:
 | Where | What it checks |
 | --- | --- |
 | `scripts/hooks/commit-msg` | the message being written, before the commit exists |
-| `.github/workflows/rust.yml` | the commits a push or pull request proposes |
-| `python3 scripts/check_commits.py REF` | the whole reachable history, on demand |
+| `.github/workflows/rust.yml` | the whole reachable history, on a push or a pull request that touches more than documentation |
+| `python3 scripts/check_commits.py REF` | the same history, on demand and locally |
+
+The hook is one line of shell and can be skipped with `--no-verify`; the CI step
+is the one that cannot. That is why both exist.
 
 Install the local hook once per clone:
 
@@ -112,19 +129,25 @@ exemption list at all.
 
 ### 4.1 Exemptions from the language policy
 
-`check_language.py` scans Rust sources, `Cargo.toml` files, and Markdown or reST
-documentation. It fails on CJK characters in any of them and on comment blocks
-longer than three lines.
+`check_language.py` scans Rust and Python sources, `Cargo.toml` files, and
+Markdown or reST documentation. It fails on CJK characters in any of them and on
+comment blocks longer than three lines.
 
-Four exemptions exist, each deliberately narrow:
+Seven exemptions exist, each deliberately narrow:
 
 | Exemption | Where | Why |
 | --- | --- | --- |
-| Whole file | `README.zh-CN.md`, `docs/CONVENTIONS.md`, the two checker scripts | These exist to hold or match Chinese |
+| Whole file | any `*.zh-CN.md` | Section 1 asks a Chinese document to declare the language in its name, so the name is the exemption and a new translation needs no list edit |
 | Whole file | anything under `locales/` | Locale catalogues are the translation data |
 | Whole file and name | fetched test samples under `tests/fixtures/` | A sample is named by the producer that wrote it, and renaming one severs the only link back to where it came from |
-| String literals only | `steleofd-i18n/src/format.rs` | Holds `\u`-escaped locale date and time markers |
+| Whole file | `docs/CONVENTIONS.md`, `scripts/check_language.py`, `scripts/check_i18n.py` | They exist to hold, quote or match Chinese |
+| Whole file | `scripts/fetch_corpus.py`, `scripts/fetch_gb_samples.py` | Their pin lists spell out the producer's own file names, exactly like the samples they fetch |
+| Whole file | `crates/steleofd-i18n/src/format.rs` | Holds the locale day-period literals, which are Chinese and Japanese |
 | Single line | the `README.md` language switcher | The bilingual pair must cross-link by the other language's own name |
+
+The `format.rs` exemption covers the whole file rather than its string literals
+alone: the CJK in it is three literals and no prose, and a Rust lexer inside the
+checker would cost more than that risk is worth.
 
 The sample exemption covers names as well as contents, and it is why the corpus
 is fetched rather than committed: none of it is source, none of it is built, and

@@ -25,6 +25,25 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Section 3 of docs/CONVENTIONS.md, enforced where nobody can skip it. A hook
+  # catches a bad message before the commit exists, but a hook is local: it is
+  # bypassed by --no-verify, absent from a clone that never ran
+  # scripts/install-hooks.sh, and never runs for a commit made in the web
+  # editor. This job reads the whole reachable history rather than a range,
+  # which is a superset of what a push or a pull request proposes and catches a
+  # commit that is already on main. It needs no toolchain, so it costs seconds.
+  commits:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The history is the thing under test; a shallow clone would look at
+          # the tip and nothing else.
+          fetch-depth: 0
+
+      - name: Commit messages
+        run: python3 scripts/check_commits.py --grandfathered scripts/commit-baseline.txt
+
   check:
     runs-on: ubuntu-latest
     steps:
