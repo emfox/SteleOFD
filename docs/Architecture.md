@@ -116,7 +116,34 @@ converting losslessly into the top level `OfdError`.
 Errors carry context such as path, page index and object id, and expose semantic
 predicates like `is_corruption()` so callers can decide whether to degrade.
 
-### 2.5 Safety built in
+### 2.5 Where a line of text goes
+
+Table 46 of GB/T 33190 gives a `TextCode` an origin (`X`, `Y`) and two lists of
+offsets between glyphs. Read plainly, `DeltaX[i]` is a step: the distance glyph
+`i + 1` sits from glyph `i`, with any glyph past the end of the list taking the
+text size instead. Producers need a second reading to lay out a row of digits,
+because a digit is about half an em wide and a step has to be wider than the
+glyph it moves over.
+
+A list shorter than the steps between the glyphs is read as positions: a glyph
+with no entry of its own sits where the next offset puts it, and a negative
+offset starts a new row, which is where it would go read as a step as well.
+`DeltaY` always says where the next row is, so a list that says nothing about it
+leaves the glyph on its row. The rule is one comparison, in `flatten::GlyphAt`:
+
+| Offsets | Glyphs | Read as |
+|---|---|---|
+| one per step, or more | any | steps |
+| fewer than the steps | two or more | positions |
+
+`CharDirection` and `ReadDirection` (table 47) are not implemented, so a run is
+always placed along `+x` and read left to right; a document that turns its lines
+is drawn as if it had not. A producer can also write offsets directly into the
+text, with a space and a `g` standing for a glyph that takes no room of its own;
+that is a property of the string, and it is honoured the same way in either
+reading.
+
+### 2.6 Safety built in
 
 | Threat | Defense |
 |---|---|
@@ -127,7 +154,7 @@ predicates like `is_corruption()` so callers can decide whether to degrade.
 | Missing fonts producing a silently blank page | Every candidate substitute must cover the text; misses land in `missing_fonts` / `missing_glyphs`, are printed by the CLI, and set a non-zero exit code |
 | Edits breaking existing signatures | `EditError::WouldInvalidateSignature`, requiring confirmation |
 
-### 2.6 Zero unsafe
+### 2.7 Zero unsafe
 
 The whole workspace uses `#![forbid(unsafe_code)]`; `steleofd-ffi` is the only
 exemption, because a C ABI requires it. Two designs were reworked to reach this:
