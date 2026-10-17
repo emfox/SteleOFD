@@ -162,13 +162,13 @@ CHECKS: tuple[Check, ...] = (
     Check(
         "corpus-check",
         "corpus",
-        (py("scripts/fetch_corpus.py", "--check"),),
+        (py("scripts/fetch_ofdrw.py", "--check"),),
         needs=("ofdrw-samples",),
     ),
     Check(
         "corpus-parse",
         "corpus",
-        (py("scripts/fetch_corpus.py", "--parse"),),
+        (py("scripts/fetch_ofdrw.py", "--parse"),),
         needs=("cargo", "ofdrw-samples"),
     ),
     Check(
@@ -193,7 +193,7 @@ CHECKS: tuple[Check, ...] = (
 )
 
 SAMPLE_DIRS = {
-    "ofdrw-samples": ("tests/fixtures/ofdrw", "scripts/fetch_corpus.py"),
+    "ofdrw-samples": ("tests/fixtures/ofdrw", "scripts/fetch_ofdrw.py"),
     "gb-samples": ("tests/fixtures/gb-t-33190", "scripts/fetch_gb_samples.py"),
 }
 

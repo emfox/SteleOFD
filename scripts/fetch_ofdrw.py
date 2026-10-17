@@ -25,7 +25,7 @@ from the one the suite was written against is refused rather than silently
 tested.
 
 Usage:
-    python3 scripts/fetch_corpus.py [--out DIR] [--only NAME] [--check] [--parse]
+    python3 scripts/fetch_ofdrw.py [--out DIR] [--only NAME] [--check] [--parse]
 
 `--check` reports which samples are missing or no longer match their pinned
 hash, without downloading anything; that is what CI runs to tell a developer
@@ -130,7 +130,7 @@ def _parse(out: Path) -> int:
     known = set(KNOWN_UNPARSED)
     actual = set(failed)
     ok = len(present) - len(failed)
-    print(f"third-party corpus: {ok}/{len(present)} opened")
+    print(f"ofdrw samples: {ok}/{len(present)} opened")
     for name in sorted(actual - known):
         print(f"  REGRESSION {name}: {failed[name]}")
     for name in sorted(known - actual):
@@ -161,13 +161,13 @@ def _check(wanted: list[str], out: Path, timeout: float) -> int:
         if problem is not None:
             changed.append(f"{name}: {problem}")
     present = len(wanted) - len(missing) - len(changed)
-    print(f"third-party corpus: {present}/{len(wanted)} present and pinned in {out}")
+    print(f"ofdrw samples: {present}/{len(wanted)} present and pinned in {out}")
     for name in missing:
         print(f"  missing {name}")
     for line in changed:
         print(f"  changed {line}")
     if missing or changed:
-        print("run: python3 scripts/fetch_corpus.py")
+        print("run: python3 scripts/fetch_ofdrw.py")
         return 1
     return 0
 

@@ -131,7 +131,7 @@ next to the check that produced it. Grouped by what they need:
 | `repo` | `release_checksums.py selftest`, `pack_corpus.py --check` | nothing |
 | `schema` | `validate_ofd.py --allow-foreign` over `compliance/corpus` | `lxml` |
 | `rust` | `cargo fmt`, `clippy`, `build` and `test`, the golden images, the headless reader window, `check_compliance.py`, and the matrix freshness diff | `cargo`, `git` |
-| `corpus` | `fetch_corpus.py` and `fetch_gb_samples.py`, `--check` then `--parse` | the fetched samples, `cargo` |
+| `corpus` | `fetch_ofdrw.py` and `fetch_gb_samples.py`, `--check` then `--parse` | the fetched samples, `cargo` |
 | `perf` | `check_performance.py` against the budget in [PERFORMANCE.md](PERFORMANCE.md) | a `cargo bench` run |
 | `review` | `check_commit_scope.py`, which names commits that read as more than one change | `git` |
 
@@ -188,7 +188,7 @@ Seven exemptions exist, each deliberately narrow:
 | Whole file | anything under `locales/` | Locale catalogues are the translation data |
 | Whole file and name | fetched test samples under `tests/fixtures/` | A sample is named by the producer that wrote it, and renaming one severs the only link back to where it came from |
 | Whole file | `docs/CONVENTIONS.md`, `scripts/check_language.py`, `scripts/check_i18n.py` | They exist to hold, quote or match Chinese |
-| Whole file | `scripts/fetch_corpus.py`, `scripts/fetch_gb_samples.py` | Their pin lists spell out the producer's own file names, exactly like the samples they fetch |
+| Whole file | `scripts/fetch_ofdrw.py`, `scripts/fetch_gb_samples.py` | Their pin lists spell out the producer's own file names, exactly like the samples they fetch |
 | Whole file | `crates/steleofd-i18n/src/format.rs` | Holds the locale day-period literals, which are Chinese and Japanese |
 | Single line | the `README.md` language switcher | The bilingual pair must cross-link by the other language's own name |
 

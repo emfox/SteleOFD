@@ -25,7 +25,7 @@ ALLOWLIST_FILES = {
     "docs/CONVENTIONS.md": "the policy doc quotes the rule in examples",
     "scripts/check_language.py": "this script matches CJK by definition",
     "scripts/check_i18n.py": "reports CJK key mismatches",
-    "scripts/fetch_corpus.py": "pins samples by the name their producer gave",
+    "scripts/fetch_ofdrw.py": "pins samples by the name their producer gave",
     "scripts/fetch_gb_samples.py": "same reason: the pin lists are upstream names",
 }
 

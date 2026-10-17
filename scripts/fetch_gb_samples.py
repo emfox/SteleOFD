@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Fetch the GB/T 33190-2016 conformance samples the parser tolerates.
 
-`scripts/fetch_corpus.py` pins whatever the reference Java implementation
+`scripts/fetch_ofdrw.py` pins whatever the reference Java implementation
 happened to accept. That covers the shapes a real writer emits, but it cannot
 cover the shapes the standard itself enumerates: those samples exist to probe
 one clause of the specification at a time, deliberately including the ones a

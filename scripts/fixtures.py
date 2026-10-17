@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Fetch sample documents from the pinned fixtures repository.
 
-`fetch_corpus.py` and `fetch_gb_samples.py` both read sample `.ofd` files that
+`fetch_ofdrw.py` and `fetch_gb_samples.py` both read sample `.ofd` files that
 are too large and too third-party to commit here. This module is the one place
 that decides how they arrive, so the two scripts cannot drift apart on the part
 that matters: what a fetched file is allowed to be.

@@ -162,16 +162,16 @@ jobs:
           shared-key: corpus
 
       - name: Fetch the samples
-        run: python3 scripts/fetch_corpus.py
+        run: python3 scripts/fetch_ofdrw.py
 
       - name: Every pinned sample is present
-        run: python3 scripts/fetch_corpus.py --check
+        run: python3 scripts/fetch_ofdrw.py --check
 
       # Not every sample opens: two of them do not, and the reason each does not
       # is recorded in the script. What CI holds is the set, so a sample that
       # breaks for a new reason fails here and one that starts working says so.
       - name: The samples that do not open are still the known ones
-        run: python3 scripts/fetch_corpus.py --parse
+        run: python3 scripts/fetch_ofdrw.py --parse
 
       # The standard's own conformance set, one document per clause. It shares
       # this job because it is fetched the same way and needs the same build.

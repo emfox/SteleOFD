@@ -160,7 +160,7 @@ page.
 
 ### N10. Second-implementation corpus (S1-a, S1-b)
 
-- **S1-a** `[x]` ~~`scripts/fetch_corpus.py` pins documents from the reference Java implementation; nothing committed.~~
+- **S1-a** `[x]` ~~`scripts/fetch_ofdrw.py` pins documents from the reference Java implementation; nothing committed.~~
 - **S1-b** `[x]` ~~Twenty-eight documents opened, six constructs fixed, each covered by `tests/third_party.rs`.~~
 
 ### N11. Image resources reach the page (S1-c … S1-g)
