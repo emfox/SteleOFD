@@ -51,10 +51,12 @@ yet. The interfaces may still move before `0.1.0`.
   attachments that leaves unreachable, and declares `DocType="OFD-A"`.
 - **Font subsetting** — `steleofd-font::subset` rebuilds a face down to the
   glyphs a document uses, carrying whole only a face it cannot rewrite.
-- **Release manifests** — `release.yml` builds the reader for Linux, macOS and
-  Windows beside the C ABI library and the WASM bindings, each shipped with a
-  `SHA256SUMS` manifest; the builds are unsigned, so the checksum is the trust
-  anchor.
+- **Release manifests** — `release.yml` builds the reader for every platform
+  `egui` runs on. The browser build is a page over the same frame, the Android
+  build is an arm64 archive signed with a throwaway key, and both start from
+  the crate's own entry point, so the window, the renderer and the engine are
+  the same code. Each artefact ships beside a `SHA256SUMS` manifest; the builds
+  are unsigned, so the checksum is the trust anchor.
 - **Conformance** — annex A schemas rebuilt from the standard and validated in
   CI; the GB/T 33190 clause register gate.
 - **`proptest` suites** for `package`, `xml` and `model`, and a crash-free

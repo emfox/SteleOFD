@@ -161,9 +161,20 @@ Rust 侧键列表与其 FTL 实际键是否匹配。引擎消息（`crates/stele
 
 ### 发布
 
-推送 `v*` 标签会为 Linux / macOS / Windows 构建桌面阅读器，连同 C ABI 动态库
-与 WASM 绑定一并发布。构建产物**未签名**（项目中不存在签名密钥），因此每个
-release 附带一份 `SHA256SUMS` 清单，作为下载内容唯一可校验的依据：
+推送 `v*` 标签会为 `egui` 支持的各个平台构建阅读器，连同 C ABI 动态库与引擎自身的
+WASM 绑定一并发布：
+
+| 产物 | 平台 | 运行方式 |
+|---|---|---|
+| `steleofd-reader-linux`、`-macos`、`-windows.exe` | 桌面 | 直接运行 |
+| `steleofd-reader-web.zip` | 浏览器 | 解压后用 HTTP 提供；`file://` 页面无法加载模块 |
+| `steleofd-reader-android.apk` | Android 7.0+（arm64） | 侧载安装；用一次性调试密钥签名，不是应用商店上传包 |
+
+iOS 是唯一没做的 `egui` 平台：它的应用必须先经过 macOS 上的签名与打包步骤，而本项目
+不附带任何密钥。
+
+构建产物**未签名**（项目中不存在签名密钥），因此每个 release 附带一份 `SHA256SUMS`
+清单，作为下载内容唯一可校验的依据：
 
 ```bash
 python3 scripts/release_checksums.py verify .

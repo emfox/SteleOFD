@@ -173,10 +173,20 @@ files.
 
 ### Releases
 
-Pushing a `v*` tag builds the desktop reader for Linux, macOS and Windows and
-publishes it with the C ABI library and the WebAssembly bindings. The builds are
-**unsigned** — there is no signing key — so each release carries a `SHA256SUMS`
-manifest as the only thing a download can be held to:
+Pushing a `v*` tag builds the reader for every platform `egui` runs on, and
+publishes it beside the C ABI library and the engine's WebAssembly bindings:
+
+| Artefact | Platform | How it runs |
+|---|---|---|
+| `steleofd-reader-linux`, `-macos`, `-windows.exe` | Desktop | run the file directly |
+| `steleofd-reader-web.zip` | Browser | unzip and serve over HTTP; a `file://` page cannot load the module |
+| `steleofd-reader-android.apk` | Android 7.0+ (arm64) | sideload; signed with a throwaway debug key, not a store upload |
+
+iOS is the one `egui` platform left out: an app for it can only be installed
+after a macOS signing and packaging step, and no key ships with this project.
+
+The builds are **unsigned** — there is no signing key — so each release carries
+a `SHA256SUMS` manifest as the only thing a download can be held to:
 
 ```bash
 python3 scripts/release_checksums.py verify .
