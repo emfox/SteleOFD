@@ -5193,6 +5193,7 @@ dependencies = [
  "eframe",
  "egui",
  "egui_kittest",
+ "font-kit",
  "image",
  "rfd",
  "steleofd-common",
@@ -5201,6 +5202,7 @@ dependencies = [
  "steleofd-i18n",
  "steleofd-print",
  "steleofd-testkit",
+ "tracing",
 ]
 
 [[package]]

@@ -29,6 +29,13 @@ egui.workspace = true
 eframe.workspace = true
 rfd = "0.17"
 image.workspace = true
+tracing.workspace = true
+
+# The interface needs a CJK-capable face for Chinese labels, and egui ships
+# none; the system one is read through font-kit, the same resolver the engine
+# uses. wasm32 resolves its own fonts, so the crate drops out there.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+font-kit = "0.13"
 
 [dev-dependencies]
 egui.workspace = true

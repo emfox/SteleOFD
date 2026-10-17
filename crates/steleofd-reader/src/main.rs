@@ -31,7 +31,12 @@ fn main() -> eframe::Result {
     eframe::run_native(
         "SteleOFD Reader",
         options,
-        Box::new(|_cc| Ok(Box::new(Reader::new()))),
+        Box::new(|cc| {
+            // egui ships latin and cyrillic only, so the Chinese interface
+            // needs a CJK face before the first frame draws.
+            steleofd_reader::fonts::install_cjk_fallback(&cc.egui_ctx);
+            Ok(Box::new(Reader::new()))
+        }),
     )
 }
 
