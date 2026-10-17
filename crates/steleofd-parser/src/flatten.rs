@@ -559,9 +559,6 @@ fn flatten_text(
     colors: &ColorTable,
     builder: &mut DisplayListBuilder,
 ) -> Result<()> {
-    if !t.has_text() {
-        return Ok(());
-    }
     let param = resolve_param(&t.base, params)?;
     let fill_on = t.fill.or(param.and_then(|d| d.fill)).unwrap_or(true);
     // Text is filled by default and stroked only when asked, which is the
@@ -599,8 +596,19 @@ fn flatten_text(
             if code.text.is_empty() {
                 continue;
             }
+            // A list shorter than the text places its glyphs, so a run starts
+            // at the point its first glyph was placed at instead of at the
+            // code's origin plus everything before it.
+            let placed = GlyphAt::new(code, &code.text.chars().collect::<Vec<char>>()).is_placed();
+            let mut previous = Point::new(code.x, code.y);
             for segment in segments_of(code, &t.cg_transforms, size) {
-                let place = Affine::translate(code.x + segment.offset, code.y);
+                let origin = if placed {
+                    previous
+                } else {
+                    Point::new(code.x + segment.offset, code.y)
+                };
+                previous = Point::new(origin.x + segment.span, origin.y);
+                let place = Affine::translate(origin.x, origin.y);
                 let transform = if h_scale == 1.0 {
                     place
                 } else {
@@ -629,6 +637,67 @@ fn flatten_text(
     })
 }
 
+/// Where a `TextCode` puts each of its glyphs, from the offsets in table 46.
+/// A list shorter than the steps between the glyphs is read as positions and a
+/// longer one as steps; docs/Architecture.md says why a producer needs both.
+struct GlyphAt<'a> {
+    code: &'a TextCode,
+    chars: &'a [char],
+    /// List too short for the text, so the entries place glyphs.
+    placed: bool,
+}
+
+impl<'a> GlyphAt<'a> {
+    fn new(code: &'a TextCode, chars: &'a [char]) -> Self {
+        // One step follows every glyph but the last, so anything shorter is
+        // positioning the glyphs it covers instead of moving them.
+        let steps = chars.len().saturating_sub(1);
+        let placed = reach(&code.delta_x, &code.delta_y) < steps;
+        Self {
+            code,
+            chars,
+            placed,
+        }
+    }
+
+    /// Whether the offsets position glyphs for this code.
+    fn is_placed(&self) -> bool {
+        self.placed
+    }
+
+    /// X offset from glyph `i` to glyph `i + 1`, when the list states one.
+    fn delta_x(&self, i: usize) -> Option<f64> {
+        let dx = *self.code.delta_x.get(i)?;
+        // A negative step is the line turning back to its start, and that is
+        // where the next glyph goes either way.
+        if dx < 0.0 {
+            return Some(dx);
+        }
+        // From a glyph that takes no room of its own, the offset is the
+        // distance the line has come, not a step: the glyph sits at it.
+        match self.chars.get(i + 1) {
+            Some(next) if is_running(self.chars[i]) && !is_running(*next) => Some(0.0),
+            _ => Some(dx),
+        }
+    }
+
+    /// Y offset from glyph `i` to glyph `i + 1`, when the list states one.
+    fn delta_y(&self, i: usize) -> Option<f64> {
+        Some(*self.code.delta_y.get(i)?)
+    }
+}
+
+/// Offsets a list supplies before it runs out, counting both axes.
+fn reach(delta_x: &[f64], delta_y: &[f64]) -> usize {
+    delta_x.len().max(delta_y.len())
+}
+
+/// Whether a glyph is one a list may reach past: a space takes no room of its
+/// own, and `g` is how the text says so.
+fn is_running(glyph: char) -> bool {
+    glyph.is_whitespace() || glyph == 'g'
+}
+
 /// One stretch of a `TextCode` as it reaches the display list.
 struct RunSegment {
     /// Codes to draw: glyph indices when `glyph_index` is set, Unicode code
@@ -644,6 +713,9 @@ struct RunSegment {
     advances: Vec<f64>,
     /// The characters this stretch covers.
     text: String,
+    /// Distance this stretch covers, which is where the next one starts
+    /// unless the offsets place it.
+    span: f64,
 }
 
 /// Split a `TextCode` into the stretches a `CGTransform` carves out of it.
@@ -651,12 +723,13 @@ struct RunSegment {
 /// carries glyph indices, so the two kinds never share a run.
 fn segments_of(code: &TextCode, transforms: &[CGTransform], size: f64) -> Vec<RunSegment> {
     let chars: Vec<char> = code.text.chars().collect();
+    let at = GlyphAt::new(code, &chars);
     // DeltaX[i] is the offset from glyph i's drawing point to glyph i + 1's,
     // so it replaces the advance instead of adding to the size. An absent
     // entry leaves the text size, the only advance there is to use.
     let advance_at = |i: usize| {
-        let dx = code.delta_x.get(i).copied();
-        let dy = code.delta_y.get(i).copied().unwrap_or(0.0);
+        let dx = at.delta_x(i);
+        let dy = at.delta_y(i).unwrap_or(0.0);
         match dx {
             Some(dx) => (dx + dy).max(0.0),
             None => size + dy,
@@ -700,6 +773,7 @@ fn segments_of(code: &TextCode, transforms: &[CGTransform], size: f64) -> Vec<Ru
                 offset,
                 advances,
                 text: chars[at..start].iter().collect(),
+                span,
             });
             offset += span;
         }
@@ -721,6 +795,7 @@ fn segments_of(code: &TextCode, transforms: &[CGTransform], size: f64) -> Vec<Ru
             offset,
             advances,
             text: chars[start..end].iter().collect(),
+            span,
         });
         offset += span;
         at = end;
@@ -728,6 +803,7 @@ fn segments_of(code: &TextCode, transforms: &[CGTransform], size: f64) -> Vec<Ru
     if at < chars.len() {
         let glyphs: Vec<u16> = chars[at..].iter().map(|c| u32::from(*c) as u16).collect();
         let advances: Vec<f64> = (at..chars.len()).map(advance_at).collect();
+        let span: f64 = advances.iter().sum();
         out.push(RunSegment {
             glyphs,
             glyph_index: false,
@@ -735,6 +811,7 @@ fn segments_of(code: &TextCode, transforms: &[CGTransform], size: f64) -> Vec<Ru
             offset,
             advances,
             text: chars[at..].iter().collect(),
+            span,
         });
     }
     out

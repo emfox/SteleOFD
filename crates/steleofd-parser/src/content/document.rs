@@ -1127,24 +1127,40 @@ fn read_cg_transform(cursor: &mut Cursor<'_>, node: &Node) -> Result<CGTransform
     Ok(t)
 }
 
-/// Parse a `DeltaX`/`DeltaY` per-glyph adjustment list, where `g` stands for
-/// "the adjustment the glyph before had"; a leading `g` means none at all.
+/// Parse a `DeltaX`/`DeltaY` list: bare numbers, or `g count value`, which
+/// repeats `value` for `count` offsets. Both forms are in the wild; how the
+/// list is then read against the text is `flatten::GlyphAt`'s question.
 fn parse_delta_list(element: &str, attr: &str, raw: &str) -> Result<Vec<f64>> {
     let mut out: Vec<f64> = Vec::new();
-    for token in raw.split_whitespace() {
+    let mut tokens = raw.split_whitespace();
+    while let Some(token) = tokens.next() {
         if token.eq_ignore_ascii_case("g") {
-            out.push(out.last().copied().unwrap_or(0.0));
+            let count = match tokens.next() {
+                Some(n) => n.parse::<usize>().map_err(|_| invalid(element, attr, n))?,
+                None => return Err(invalid(element, attr, raw)),
+            };
+            let value = match tokens.next() {
+                Some(v) => v.parse::<f64>().map_err(|_| invalid(element, attr, v))?,
+                None => return Err(invalid(element, attr, raw)),
+            };
+            out.extend(std::iter::repeat_n(value, count));
             continue;
         }
-        out.push(token.parse::<f64>().map_err(|_| {
-            OfdError::Xml(steleofd_error::XmlError::InvalidAttribute {
-                element: element.to_string(),
-                attr: attr.to_string(),
-                value: raw.to_string(),
-            })
-        })?);
+        out.push(
+            token
+                .parse::<f64>()
+                .map_err(|_| invalid(element, attr, raw))?,
+        );
     }
     Ok(out)
+}
+
+fn invalid(element: &str, attr: &str, value: &str) -> OfdError {
+    OfdError::Xml(steleofd_error::XmlError::InvalidAttribute {
+        element: element.to_string(),
+        attr: attr.to_string(),
+        value: value.to_string(),
+    })
 }
 
 fn read_text_code(cursor: &mut Cursor<'_>, node: &Node) -> Result<TextCode> {

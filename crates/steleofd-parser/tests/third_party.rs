@@ -85,15 +85,15 @@ impl Fixture {
     }
 }
 
-/// A per-glyph adjustment list may carry `g`, meaning "the same adjustment as
-/// the glyph before". A Chinese invoice writes `DeltaX="g 10 6.5297"`
-/// throughout, so refusing `g` refused the document.
+/// A list may state one offset many times with `g count value`. A Chinese
+/// invoice writes `DeltaX="g 11 1.5875 -17.4625"` for a line of digits, so
+/// refusing the token refused the document.
 #[test]
-fn a_delta_list_may_repeat_the_previous_adjustment_with_g() {
+fn a_delta_list_may_repeat_one_offset_with_g() {
     let mut fixture = Fixture::page(
         "",
         r#"<TextObject ID="2" Boundary="0 0 100 10" Font="3" Size="3">
-             <TextCode X="0" Y="5" DeltaX="g 10 6.5297">Zhejiang</TextCode>
+             <TextCode X="0" Y="5" DeltaX="g 7 1.5875 -11.1125">Zhejiang</TextCode>
            </TextObject>"#,
     );
     let doc = fixture.parse();
@@ -101,17 +101,21 @@ fn a_delta_list_may_repeat_the_previous_adjustment_with_g() {
     assert!(text.contains("Zhejiang"), "the run is placed, got {text:?}");
 }
 
-/// A leading `g` has no glyph before it to repeat, so it means no adjustment.
+/// A `g` with no count states nothing, and that is an error rather than a
+/// guess: a list this file cannot read is a placement nobody can vouch for.
 #[test]
-fn a_leading_g_means_no_adjustment() {
+fn a_g_without_its_count_is_refused() {
     let mut fixture = Fixture::page(
         "",
         r#"<TextObject ID="2" Boundary="0 0 100 10" Font="3" Size="3">
-             <TextCode X="0" Y="5" DeltaX="g g 2.5 g">abc</TextCode>
+             <TextCode X="0" Y="5" DeltaX="2.5 g">abc</TextCode>
            </TextObject>"#,
     );
     let doc = fixture.parse();
-    assert!(fixture.flatten(&doc).contains("abc"));
+    match fixture.0.page_display(&doc, 0) {
+        Err(err) => assert!(err.to_string().contains("DeltaX"), "got {err}"),
+        Ok(_) => panic!("a g with no count must not be read as an offset"),
+    }
 }
 
 /// `B` is a cubic Bezier from the current point, so six numbers where `C`
