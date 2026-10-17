@@ -225,9 +225,10 @@ P0–P9 sequence is closed; what is left is tracked in
 behind it in [`compliance/CLAUSES.md`](compliance/CLAUSES.md): 56 clauses are
 registered, every one of them `verified`. The clause numbers are read out of
 the standard's transcribed text by
-[`scripts/extract_clauses.py`](scripts/extract_clauses.py), which reads each
-numbered heading and checks the result against the standard's own contents
-pages, so a row cannot cite a clause the standard does not have.
+[`scripts/gbt33190.py`](scripts/gbt33190.py), which reads each numbered
+heading and checks the result against the contents pages the standard prints,
+so a row cannot cite a clause the standard does not have. The same script
+rebuilds the annex A schemas under `compliance/schema/annex-a`.
 What the engine can and cannot draw with is set out face by face in
 [`docs/FONTS.md`](docs/FONTS.md). How it compares to other readers in the
 field, page by page against a second vendor's output, is in

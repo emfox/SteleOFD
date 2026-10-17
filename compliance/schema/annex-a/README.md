@@ -9,17 +9,26 @@ the standard**, not taken from an official machine-readable release.
 | --- | --- |
 | Standard | GB/T 33190-2016, fixed layout documents |
 | Location | Annex A (normative) Schema, A.1 to A.13 |
-| Rebuild script | `scripts/extract_schema.py` |
-| Input | The standard as published PDF |
+| Rebuild script | `scripts/gbt33190.py schemas` |
+| Input | `GBT33190-2016.zh_CN.md`, the transcription of the standard as published PDF |
 
-Annex A is set staircase-indented. Glyphs such as `<`, `/`, `:` and `>` are
-drawn with a bounding box about 3.6pt taller than the letters, so grouping
-words by their top edge splits a printed line in two and turns
-`</xs:sequence>` into `</:>` plus `xssequence`. The script clusters words by
-the **centre** of their bounding box instead: punctuation and letters then sit
-about 1.4pt apart while rows are 15.7pt apart, which separates cleanly. Each
-row is ordered by left edge, and an XSD/OFD vocabulary splits the runs the
-extractor had glued together, such as `elementname=` or `schemaxmlns=`.
+The schemas are read out of the transcription rather than off the printed page.
+Annex A is set staircase-indented, and glyphs such as `<`, `/`, `:` and `>` are
+drawn with a bounding box about 3.6pt taller than the letters, so turning the
+page into text means clustering words by the centre of their bounding box,
+restoring the spaces the extractor drops inside long runs, and splitting
+`elementname=` back into two tokens. That work belongs to the transcription,
+and is done by `gb-t-33190-text/scripts/pdf_to_markdown.py` alongside the text
+it produces.
+
+```
+python3 scripts/gbt33190.py --fetch schemas --out compliance/schema/annex-a   # rewrite
+python3 scripts/gbt33190.py --fetch schemas --check compliance/schema/annex-a # verify
+```
+
+`--check` compares the XML tree of each file with the one the transcription
+carries, so a difference in how the tags are laid out is not a difference in
+the schema. Both commands report all 13 files.
 
 ## Known printing defect
 
@@ -48,11 +57,11 @@ printed page 94 (PDF 101), `QuadraticBezier` with `Point1`/`Point2`/`Point3`,
 `Signature`/`Signatures`/`SignedInfo` on the printed pages 109 and 110 (PDF
 116 and 117). Every one carries our spelling; none carries the wiki's.
 
-`scripts/cross_check_schema.py` automates the same comparison: it OCRs the
-annex and, for each disputed name, requires the printed page to carry ours and
-to carry the wiki's variant zero times. All eleven pairs pass. The result is
-that no change followed from the comparison — an independent transcription is
-now on record as disagreeing, and we are on the standard's side.
+The comparison was made by rendering the annex pages, OCRing them, and
+requiring the printed page to carry our spelling and the wiki's variant zero
+times; all eleven pairs passed. The result is that no change followed from the
+comparison — an independent transcription is now on record as disagreeing, and
+we are on the standard's side.
 
 ## Trustworthiness
 
@@ -74,8 +83,7 @@ them should say so.
 ## Usage
 
 ```console
-python3 scripts/extract_schema.py <standard.pdf>          # regenerate
-python3 scripts/cross_check_schema.py <standard.pdf>      # settle a spelling
+python3 scripts/gbt33190.py --fetch schemas --check compliance/schema/annex-a
 python3 scripts/pack_corpus.py --check                    # archives match sources
 python3 scripts/validate_ofd.py --allow-foreign \
     $(find compliance/corpus -name '*.ofd' -o -name '*.xml')

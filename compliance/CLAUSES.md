@@ -21,10 +21,10 @@ register that decides which clauses those are. There is one status in use —
 ## The numbers come from the standard
 
 Every number is read out of the standard by
-[`scripts/extract_clauses.py`](../scripts/extract_clauses.py) rather than taken
-from a reading of it. What the script reads is not the PDF but the
-transcription beside it, `GBT33190-2016.zh_CN.md`, which the pinned fixtures
-repository holds next to the issued document:
+[`scripts/gbt33190.py`](../scripts/gbt33190.py) rather than taken from a
+reading of it. What the script reads is not the PDF but the transcription
+beside it, `GBT33190-2016.zh_CN.md`, which the pinned fixtures repository
+holds next to the issued document:
 
 - The transcription was produced mechanically from the PDF by
   `gb-t-33190-text/scripts/pdf_to_markdown.py`, which is kept with the text
@@ -39,7 +39,8 @@ repository holds next to the issued document:
   sit one level shallower than their numbers imply, so the depth in the output
   comes from the number itself.
 - The schema listings of annex A are fenced code and are skipped, so an XML
-  fragment can never be read as a heading.
+  fragment can never be read as a heading. The same script reads them out as
+  the XSD files under `compliance/schema/annex-a`.
 - The contents pages are read as well -- the bulleted list under the contents
   heading, where a page number follows each title -- and the two lists are
   compared. Both readings return 108 headings: clauses 1-20, the annex A
@@ -50,7 +51,7 @@ repository holds next to the issued document:
   reported and is not treated as a miss.
 
 ```
-$ python3 scripts/extract_clauses.py --fetch \
+$ python3 scripts/gbt33190.py --fetch clauses \
       --register compliance/gb-t-33190.toml
 108 clauses
 contents list 94 clauses, 94 of them read back alike
