@@ -4,8 +4,9 @@ on:
   push:
     branches: [main]
     # A docs-only or licence-only commit has nothing for the Rust gate to say,
-    # and the gate is the expensive part of a push.
-    paths-ignore:
+    # and the gate is the expensive part of a push. An empty commit changes no
+    # path either, so it does not start a run.
+    paths-ignore: &ignored-paths
       - 'docs/**'
       - '**.md'
       - 'LICENSE'
@@ -13,12 +14,7 @@ on:
       - '.github/ISSUE_TEMPLATE/**'
   pull_request:
     branches: [main]
-    paths-ignore:
-      - 'docs/**'
-      - '**.md'
-      - 'LICENSE'
-      - '.gitignore'
-      - '.github/ISSUE_TEMPLATE/**'
+    paths-ignore: *ignored-paths
 
 env:
   CARGO_TERM_COLOR: always
