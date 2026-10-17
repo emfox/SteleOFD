@@ -87,29 +87,37 @@ fn each_id_keeps_the_file_its_own_declaration_names() {
 }
 
 #[test]
-fn a_font_that_names_no_file_stays_out_of_the_table() {
+fn a_font_that_names_no_file_is_kept_as_an_unshipped_declaration() {
+    // Dropping the declaration is what made a named face render blank with no
+    // warning: nothing downstream knew the document had asked for it. It is
+    // kept, marked as not embedded, with the family a host search needs.
     let bytes = archive(
         r#"<?xml version="1.0" encoding="UTF-8"?>
 <Res BaseLoc="Res"><Fonts>
-  <Font ID="7" FontName="Orbitron"/>
+  <Font ID="7" FontName="Orbitron" FamilyName="Orbitron"/>
 </Fonts></Res>"#,
         &[("Doc_0/Res/Orbitron-Bold.ttf", face_bytes(9))],
     );
     let table = table(&bytes);
-    assert!(table.is_empty(), "there are no bytes to hand over");
+    let seven = table.get(&7).expect("the declaration is kept");
+    assert!(!seven.embedded, "and says it ships no file");
+    assert!(seven.data.is_empty(), "so there are no bytes to hand over");
+    assert_eq!(seven.family, "Orbitron");
 }
 
 #[test]
-fn a_declared_file_the_package_does_not_hold_stays_out_of_the_table() {
+fn a_declared_file_the_package_does_not_hold_is_kept_unshipped() {
     let bytes = archive(
         r#"<?xml version="1.0" encoding="UTF-8"?>
 <Res BaseLoc="Res"><Fonts>
-  <Font ID="7" FontName="Orbitron"><FontFile>missing.ttf</FontFile></Font>
+  <Font ID="7" FontName="Orbitron" FamilyName="Orbitron"><FontFile>missing.ttf</FontFile></Font>
 </Fonts></Res>"#,
         &[("Doc_0/Res/Orbitron-Bold.ttf", face_bytes(9))],
     );
     let table = table(&bytes);
-    assert!(table.is_empty(), "a dangling file name loads nothing");
+    let seven = table.get(&7).expect("the declaration is kept");
+    assert!(!seven.embedded, "a dangling file name resolves to nothing");
+    assert!(seven.data.is_empty());
 }
 
 #[test]
