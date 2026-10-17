@@ -124,7 +124,7 @@ predicates like `is_corruption()` so callers can decide whether to degrade.
 | Zip bomb | Entry count and decompressed size ceilings (512 MB) |
 | Stack exhaustion via deep nesting | `DisplayListBuilder::max_depth`, default 64 |
 | Hostile document hanging the renderer | `RenderError::BudgetExceeded`, degrading to partial output |
-| Missing fonts producing garbled text | Pre-check via `FontRegistry::missing_families()` |
+| Missing fonts producing a silently blank page | Every candidate substitute must cover the text; misses land in `missing_fonts` / `missing_glyphs`, are printed by the CLI, and set a non-zero exit code |
 | Edits breaking existing signatures | `EditError::WouldInvalidateSignature`, requiring confirmation |
 
 ### 2.6 Zero unsafe

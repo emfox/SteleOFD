@@ -44,31 +44,36 @@ pins today's behaviour so the day it changes, the test fails.
    face at index zero and the rest are unreachable. Producers that embed a
    collection as a single file and expect more than its first face will be
    short of glyphs.
-4. **Fallback is applied, and the chain covers CJK.** `Document::open` calls
-   `FontManager::build_fallback_chain` once every declared face is registered,
-   and every backend resolves a run code through `FontManager::outline_for_code`,
-   which substitutes from the chain when the run's own face lacks the
-   character. A code the display list already resolved to a glyph id is never
-   substituted, since an index only means anything against the face it came
-   from. When no wide face is registered at all — the common case for a
-   document that names a CJK face without shipping one — the chain adds a
-   substitute resolved from `default_cjk_family`. A caller that would rather
-   not depend on the host can pin its own: `FontRegistry::register_fallback_with_data`
-   registers a substitute that carries its bytes, and such a face is consulted
-   ahead of a system one that may not resolve. A run whose own face will not
-   load at all is given one more chance through the chain
-   (`steleofd_display::run_face`), so a document naming a face it never shipped
-   still draws instead of rendering blank. Reporting catches up with it: every
-   backend counts a run that reaches the output short a glyph
-   (`missing_glyph_runs`) and the raster backend counts a run whose face would
-   not load (`skipped_font_runs`), both apart from `dropped_runs`. Two limits
-   remain. The registry is still filled from the ids the pages actually name,
-   so a face a document declares but never draws with never joins the chain.
-   And a substitute is chained only where one can be resolved or pinned, so a
-   build with no system fonts and none supplied — wasm, or `system-fonts` off
-   with nothing pinned — still drops what it cannot cover. `tests/font.rs` and
-   `tests/core.rs` pin both the chain and the substitution, each from the
-   repo's own fixtures rather than a host font.
+4. **A named face that is not shipped is searched for, then reported.** When a
+   document names a face and ships no `FontFile`, the declaration is kept
+   (`FontSource::Unshipped`) rather than dropped, so nothing downstream has to
+   guess why a page is blank. On first use the host is searched in the order
+   clause 11.1's traits describe: the family name the declaration gives (only
+   a family the font source really lists is selected, by exact name), the same
+   family in the declared `Bold`/`Italic` shape, then the `default_cjk_family`
+   and finally a generic family chosen by `FixedWidth` then `Serif`. A
+   candidate is accepted only if it actually carries the characters about to be
+   drawn — a generic family is a shape, not a coverage promise, and `monospace`
+   resolving to a Latin-only face is how a "substitute" still produced a blank
+   page. When no listed family covers the text, every listed family is tried
+   before the shape alone is accepted. A run whose own face will not load gets
+   one more chance through the chain (`steleofd_display::run_face_for`), and a
+   code the chain cannot cover is counted, not swallowed.
+
+   Reporting is the other half, and it is not optional: `RasterOutput` and
+   `ConversionStats` both carry `missing_fonts` and `missing_glyphs`,
+   `Document::missing_fonts()` exposes them to any caller, and the CLI prints
+   them on stderr and exits non-zero (`Report::warn`) for `info`, `render` and
+   `convert`. A face that could not be found is never described as "drawn with
+   a substitute": if the text did not get drawn, the message says so.
+
+   One limit remains by design: a build with no system fonts and nothing pinned
+   (`system-fonts` off, or wasm) can find nothing, so it reports every named
+   face as missing rather than drawing something unrelated. `tests/font.rs`,
+   `tests/core.rs` and `crates/steleofd-parser/tests/fonts.rs` pin the chain,
+   the substitution and the unshipped-declaration contract from the repo's own
+   fixtures rather than a host font.
+
 5. **No subsetting on the way out.** Embedded faces are carried whole. A
    document that embeds a 20 MB CJK collection pays for it in every conversion,
    which is M2-b.
@@ -78,10 +83,12 @@ pins today's behaviour so the day it changes, the test fails.
 The path is short and every step is a clause:
 
 1. **Clause 7.9** — the document's `PublicRes.xml` and `DocumentRes.xml` carry
-   a `Fonts` table. Each `Font` names a resource id, a family name and a
-   `FontFile`, resolved against the table's `BaseLoc`. This is the step that was
-   missing for so long: the table was parsed and dropped, so every document
-   silently used a system face instead.
+   a `Fonts` table. Each `Font` names a resource id, a family name and,
+   optionally, a `FontFile` resolved against the table's `BaseLoc`. Clause 11.1
+   makes the file optional on purpose: the rest of the entry — `FamilyName`,
+   `Charset`, `Serif`, `Bold`, `Italic`, `FixedWidth` — is what a reader matches
+   a substitute against when it ships no file. An entry without one is kept as
+   an unshipped declaration for exactly that purpose, not discarded.
 2. **Clause 11.1** — a `TextObject` names a face by that id. The id resolves to
    the file above.
 3. **Clause 11.4** — a `CGTransform` names glyph indices for a stretch of the
