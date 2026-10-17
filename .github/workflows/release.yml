@@ -15,10 +15,10 @@ env:
 
 jobs:
   # The desktop reader is the one artefact a person can actually use, so it is
-  # built for all three desktop systems from one job per system. Windows and
-  # macOS builders have their fontconfig story solved differently on Linux, so
-  # the dependency step is not shared.
-  reader:
+  # built once per desktop system. The three do not share a dependency step:
+  # fontconfig arrives through the system package manager on Linux, through
+  # Homebrew on macOS and through MSYS2's pkg-config on Windows.
+  desktop:
     strategy:
       fail-fast: false
       matrix:
@@ -82,10 +82,10 @@ jobs:
         shell: bash
         run: |
           mkdir -p dist
-          case "${{ runner.os }}" in
-            Linux)   cp target/release/steleofd-reader dist/steleofd-reader-linux ;;
-            Windows) cp target/x86_64-pc-windows-gnu/release/steleofd-reader.exe dist/steleofd-reader-windows.exe ;;
-            macOS)   cp target/release/steleofd-reader dist/steleofd-reader-macos ;;
+          case "${{ matrix.os }}" in
+            ubuntu-latest)  cp target/release/steleofd-reader dist/steleofd-reader-linux ;;
+            windows-latest) cp target/x86_64-pc-windows-gnu/release/steleofd-reader.exe dist/steleofd-reader-windows.exe ;;
+            macos-latest)   cp target/release/steleofd-reader dist/steleofd-reader-macos ;;
           esac
           ls -la dist
 
@@ -102,6 +102,129 @@ jobs:
             dist/steleofd-reader-*
             dist/SHA256SUMS
 
+  # The same reader, built for the browser. It is a separate job because its
+  # output is a page rather than an executable: `wasm-bindgen` writes the module
+  # and the glue, and `web/` supplies the canvas they draw into.
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: release-web
+
+      - name: Install wasm-bindgen
+        uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-bindgen
+
+      # The page's entry point lives in the binary crate, beside the frame it
+      # wraps, so the binary is what `wasm-bindgen` turns into the module.
+      - name: Build the reader for the browser
+        run: |
+          cargo build --release --target wasm32-unknown-unknown -p steleofd-reader
+          wasm-bindgen --target web --out-name steleofd_reader --no-typescript \
+            --out-dir crates/steleofd-reader/pkg \
+            target/wasm32-unknown-unknown/release/steleofd-reader.wasm
+
+      - name: Collect the page
+        run: |
+          mkdir -p dist
+          cp -r crates/steleofd-reader/web dist/web
+          cp -r crates/steleofd-reader/pkg dist/web/pkg
+          # The page imports the module by a relative path, so the directory
+          # can be served from anywhere, including straight off a disk.
+          cat > dist/web/serve.txt <<'EOF'
+          Serve this directory over HTTP; a browser will not load the module
+          from a file:// URL. Any static server works, for example:
+
+              python3 -m http.server --directory web 8080
+          EOF
+          ls -la dist/web
+
+      - name: Package the page
+        run: |
+          cd dist
+          zip -qr steleofd-reader-web.zip web
+          ls -la
+
+      - name: Checksum the page
+        run: python3 scripts/release_checksums.py generate dist
+
+      - name: Attach the page to the release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/steleofd-reader-web.zip
+            dist/SHA256SUMS
+
+  # Android needs a native library the activity can load, and an archive the
+  # system can install. The SDK and NDK are fetched here; the archive is put
+  # together by a script, so no Gradle project is committed for three files.
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: release-android
+
+      - name: Install the Android SDK tools
+        run: |
+          SDK="$RUNNER_TEMP/android-sdk"
+          echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
+          mkdir -p "$SDK/cmdline-tools"
+          curl -sSLo cmdline-tools.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+          unzip -q cmdline-tools.zip -d "$SDK/cmdline-tools"
+          mv "$SDK/cmdline-tools/cmdline-tools" "$SDK/cmdline-tools/latest"
+          # The NDK is the compiler and linker this target needs; the platform
+          # is the android.jar the activity is compiled against.
+          yes | "$SDK/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$SDK" --licenses > /dev/null
+          "$SDK/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$SDK" \
+            "ndk;27.2.12479018" "platforms;android-34" "build-tools;34.0.0" > /dev/null
+
+      - name: Build the native library
+        run: |
+          NDK="$ANDROID_HOME/ndk/27.2.12479018"
+          TOOLCHAIN="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          # A cdylib rather than the binary: the activity loads the symbol
+          # table through System.loadLibrary, and only a library exports one.
+          CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$TOOLCHAIN/aarch64-linux-android24-clang" \
+            cargo build --release --lib -p steleofd-reader --target aarch64-linux-android
+
+      - name: Assemble the package
+        run: |
+          python3 scripts/android_package.py \
+            --sdk "$ANDROID_HOME" \
+            --lib target/aarch64-linux-android/release/libsteleofd_reader.so \
+            --out dist
+
+      - name: Checksum the package
+        run: python3 scripts/release_checksums.py generate dist
+
+      - name: Attach the package to the release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/android/steleofd-reader-android.apk
+            dist/SHA256SUMS
+
+  # The libraries other programs link against, and the browser bindings of the
+  # engine itself. These are the same on every desktop system, so one build.
   artefacts:
     runs-on: ubuntu-latest
     steps:
@@ -116,7 +239,7 @@ jobs:
       - name: Install system dependencies
         run: sudo apt-get update && sudo apt-get install -y libfontconfig1-dev pkg-config
 
-      # Dependencies only, for the same reason the reader job above states.
+      # Dependencies only, for the same reason the desktop job above states.
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
         with:
@@ -147,7 +270,7 @@ jobs:
           cp crates/steleofd-wasm/pkg/*.d.ts dist/ 2>/dev/null || true
           ls -la dist
 
-      # Same reason as the reader job: no signing key ships with a release, so
+      # Same reason as the desktop job: no signing key ships with a release, so
       # every artefact is published beside the digest that identifies it.
       - name: Checksum the artefacts
         run: python3 scripts/release_checksums.py generate dist

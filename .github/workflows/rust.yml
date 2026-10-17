@@ -125,6 +125,12 @@ jobs:
 
       - name: Release checksums round-trip
         run: python3 scripts/release_checksums.py selftest
+
+      # The Android archive is assembled by a script; its layout is checked
+      # here so a change to it fails on a push rather than on a release tag.
+      - name: Android package layout
+        run: python3 scripts/android_package.py selftest
+
       - name: GB/T 33190 conformance register
         run: python3 scripts/check_compliance.py --check-only
 
