@@ -85,9 +85,26 @@ def parse_ftl(path: Path) -> tuple[dict[str, set[str]], list[str]]:
             keys[key] |= set(VAR_RE.findall(line))
             continue
 
-        # Continuation line or select branch; attribute it to the previous key
-        if current and (line.startswith((" ", "\t")) or line.lstrip().startswith(("*[", "["))):
-            keys[current] |= set(VAR_RE.findall(line))
+        # Continuation line or select branch; attribute it to the previous key.
+        # A multiline select can close at column zero (`} to { $format }`), so
+        # treat a leading `}` the same as indentation — otherwise the trailing
+        # placeholders on that line are lost.
+        if current and (
+            line.startswith((" ", "\t", "}"))
+            or line.lstrip().startswith(("*[", "["))
+        ):
+            stripped = line.lstrip()
+            # A select variant key ([one] / *[other]) is syntax, not a placeholder,
+            # yet the leading `[$name]`-shaped `[one]` reads as one. An embedded
+            # `[0]` even reads as a `{ $0 }`-style variable. Drop the variant-key
+            # prefix before scanning for real placeholders.
+            if stripped.startswith("*["):
+                stripped = stripped[2:]
+            elif stripped.startswith("["):
+                stripped = stripped[1:]
+            if "]" in stripped:
+                stripped = stripped.split("]", 1)[1]
+            keys[current] |= set(VAR_RE.findall(stripped))
             continue
 
         # A line like `some prose = value` uses natural language as a key, which is invalid
