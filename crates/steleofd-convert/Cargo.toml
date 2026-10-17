@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+repository.workspace = true
 
 # Conversion reads one display list and writes another format,
 # so it depends on display plus the relevant format readers and writers.

@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+repository.workspace = true
 
 # Printing consumes the same display list as screen rendering,
 # which is what keeps output faithful to the preview.
