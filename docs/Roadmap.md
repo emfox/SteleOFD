@@ -12,14 +12,14 @@ place.
 ## When
 
 `0.1.1` is gone: it repaired what `0.1.0` said about itself and changed no
-behaviour. Six items carry a version, and everything else is marked
+behaviour. Seven items carry a version, and everything else is marked
 `unversioned`: it is agreed to be worth doing, but no release has claimed it,
 and putting a number on it today would be a guess dressed as a plan.
 
 | Version | Theme |
 | --- | --- |
 | `0.2` | R1 the document that renders but lays out wrong, R4 what verification leaves unchecked, R5 the gates that are missing |
-| `0.3` | R2 the reader rebuilt on a published application-UI guideline, R6 what the budgets do not measure |
+| `0.3` | R2 the reader rebuilt on a published application-UI guideline, R18 text placed without its direction, R6 what the budgets do not measure |
 | `0.3+` | R3 the Android build that crashes on open |
 | unversioned | R7 publishing the crates, R8 packaging, and the rest |
 
@@ -52,7 +52,7 @@ that no other row does; a `0.3+` promise would be one the project cannot keep.
 
 | # | Item | Target | Why it ranks here | Done when |
 | --- | --- | --- | --- | --- |
-| R1 | **CJK text lays out wrong.** `ofdrw/999.ofd` — a real VAT invoice from a Huhuang SDK producer, pinned in `emfox/OFD-fixtures` and fetched by `scripts/fetch_ofdrw.py` — now shows its Chinese text, because the font fallback finds a face that covers the code points, but the lines, spacing and positions are not what the document describes. | `0.2` | Wrong output on a real document, which comes first: a legal document that reads but sits crooked is still one nobody can print. | The sample's lines, glyph advances and baselines match the document's own text objects on a golden image, and the fallback path is covered by that image rather than by a count. |
+| R1 | **CJK text lays out wrong.** `ofdrw/999.ofd`, a VAT invoice from a Huhuang SDK producer, came out with its Chinese readable but its lines crooked. The cause was the offsets in table 46: a producer writes one offset per column and leaves `g`, the spaces and the digits to stand for glyphs that take no room of their own, so a list shorter than the text places glyphs rather than stepping over them. Both readings now exist and the page reads as an invoice. What is left is the direction attributes of table 47, and a place to hang the sample: it is fetched, not committed, so the tests that pin the layout skip on a machine that has not fetched it. | `0.2` | Wrong output on a real document, which comes first: a legal document that reads but sits crooked is still one nobody can print. | The layout tests in `crates/steleofd-core/tests` hold the sample's own offsets, and `tests/fixtures/ofdrw` is fetched by every job that runs them, so a change to the flattening fails CI rather than a developer's memory. |
 | R4 | **Verification checks the maths and not the certificate.** `verification` proves that a key signed the bytes; nothing proves the key belongs to who the document says, nothing compares the certificate's validity window against the signature time, and `signed_digest` refuses any check method other than SM3 while the README promises international algorithms. An encrypted container is recorded at open and then never mentioned again, so what a caller sees for one is untested. | `0.2` | This is the second rule: a verdict of valid that skipped the trust question is worse than a slow reader, because it is the answer people act on. | A signature with a certificate outside its validity window, a certificate from another issuer, a SHA-256 check value, and an encrypted container each get a verdict of their own, and the README states exactly which of them is checked. |
 | R5 | **The gates that a 686-package tree needs and does not have.** No dependency audit runs in CI; `cargo-fuzz` covers the ZIP and XML readers only, while the TrueType parser, the DER/X.509 reader and the PDF writer all take bytes from outside; and no test opens a document, edits it, writes it, opens the result and compares. | `0.2` | Enforcement ranks fourth, but it is cheap here and it guards exactly the code the first two rows change. | `cargo-audit` (or `cargo-deny`) fails the build on a vulnerable dependency, three fuzz targets exist for the uncovered parsers, and a read-write-read test covers each editing command. |
 
@@ -61,6 +61,7 @@ that no other row does; a `0.3+` promise would be one the project cannot keep.
 | # | Item | Target | Why it ranks here | Done when |
 | --- | --- | --- | --- | --- |
 | R2 | **The reader's interface.** It obeys `Ui-spec.md`, which was written for the window that exists. That spec was built on no published application-UI guideline, and the window has outgrown it: panels, the toolbar, the dialogs, and settings that do not exist yet — a theme, a type scale, high contrast — need a rulebook a new contributor can look up rather than one we invented. | `0.3` | It does not affect output, so it ranks below R1; but it is the surface every other delivery form is judged by. | A chosen guideline is named in `Ui-spec.md` with the clauses the window follows, the reader is rebuilt against it with nothing the old spec required removed without a note, and a theme, a type scale and a contrast setting exist because the guideline asks for them. |
+| R18 | **Text direction is not read.** `CharDirection` and `ReadDirection` (table 47) are parsed nowhere: `flatten` places every run along `+x` and reads it left to right, so a vertical heading or a right-to-left line is drawn as if the document had not asked. The conformance test that mentions the attributes only asserts the text stays searchable, which is why the gap survived. | `0.3` | It is the other half of R1: the same flattening, the same class of wrong output, but no document in the corpus asks for it. | A run with each of the four values on each attribute is placed at the coordinates table 47 describes, the conformance test asserts the placement rather than the searchability, and the corpus holds one vertical document. |
 | R6 | **What the budgets do not measure.** `Performance.md` carries five timings for one page each, and no memory ceiling at all — while the documents this is for are scanned invoices of tens of pages, where a single A4 at 300 dpi is about 26 MB once decoded. Nothing measures a many-page document, and the render cache is deferred "until measured", which has not been scheduled. | `0.3` | It follows R2 because a memory ceiling defines what the cache may hold, and the cache is the window's business. | `Performance.md` states a peak-memory ceiling per page and per document, `check_performance.py` enforces it, and a benchmark over a twenty-page document exists beside the one-page ones. |
 
 ### 0.3+
@@ -104,8 +105,8 @@ a caller says so rather than in advance.
   `docs/Interop.md` §6.
 - **`0.1.0` and `0.1.1` changed no behaviour.** The first rewrote the release
   notes by capability and renamed the documents to `Conventions.md`; the second
-  fixed where the release notes come from and a placeholder `repository`. The
-  first release that changes behaviour is `0.2`, through R1.
+  fixed where the release notes come from and a placeholder `repository`.
+  Layout changes from here on land in `0.2`, with R1.
 - **Far-term work is not scheduled.** The rows above describe a direction, not
   dates.
 
