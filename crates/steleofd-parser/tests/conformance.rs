@@ -1043,6 +1043,21 @@ fn gb_t_33190_8_3_5_a_pattern_records_its_reflect_method() {
 }
 
 #[test]
+fn gb_t_33190_8_3_5_a_reflecting_pattern_mirrors_along_the_axis_it_names() {
+    // `Row` reflects left and right as the row advances, `Column` reflects up
+    // and down as the column advances: the field names the axis the mirror
+    // travels along, not the direction of the flip.
+    use steleofd_display::Reflect;
+    assert_eq!(Reflect::Normal.mirrors(1, 1), (false, false));
+    assert_eq!(Reflect::Row.mirrors(1, 0), (false, false));
+    assert_eq!(Reflect::Row.mirrors(0, 1), (true, false));
+    assert_eq!(Reflect::Column.mirrors(1, 0), (false, true));
+    assert_eq!(Reflect::Column.mirrors(0, 1), (false, false));
+    assert_eq!(Reflect::RowAndColumn.mirrors(1, 1), (true, true));
+    assert_eq!(Reflect::RowAndColumn.mirrors(2, 2), (false, false));
+}
+
+#[test]
 fn gb_t_33190_8_4_clip_area_narrows_the_drawing_to_a_path() {
     // The clip is state, so the object is bracketed by a save and a restore
     // around the ClipPath command; drawing after the restore is unaffected.

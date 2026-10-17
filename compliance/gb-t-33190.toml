@@ -283,6 +283,7 @@ tests = [
   "gb_t_33190_8_3_5_a_pattern_carries_its_cell_and_its_tile_size",
   "gb_t_33190_8_3_5_a_pattern_step_defaults_to_the_cell_size",
   "gb_t_33190_8_3_5_a_pattern_records_its_reflect_method",
+  "gb_t_33190_8_3_5_a_reflecting_pattern_mirrors_along_the_axis_it_names",
 ]
 
 [[item]]

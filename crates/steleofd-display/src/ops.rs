@@ -230,14 +230,14 @@ pub enum Reflect {
 }
 
 impl Reflect {
-    /// Whether a cell at the given column and row is mirrored, in cell units.
-    /// A step that does not land on a whole cell still counts as the next one,
-    /// so the sign of the quotient is what decides.
+    /// Whether a cell at the given column and row is mirrored.
+    /// The field named is the one the mirroring runs along: a `Row` reflects
+    /// left and right as the row advances.
     pub fn mirrors(&self, col: i64, row: i64) -> (bool, bool) {
         let mirror_x =
-            matches!(self, Reflect::Row | Reflect::RowAndColumn) && col.rem_euclid(2) == 1;
+            matches!(self, Reflect::Row | Reflect::RowAndColumn) && row.rem_euclid(2) == 1;
         let mirror_y =
-            matches!(self, Reflect::Column | Reflect::RowAndColumn) && row.rem_euclid(2) == 1;
+            matches!(self, Reflect::Column | Reflect::RowAndColumn) && col.rem_euclid(2) == 1;
         (mirror_x, mirror_y)
     }
 }
