@@ -1,35 +1,56 @@
 //! A CJK substitute on a host that does not ship the family the engine pins:
 //! Windows and macOS keep their ideographs elsewhere, and font-kit maps the
-//! generic names to Latin faces, so a host with no Noto face must still find one.
+//! generic names to Latin faces. Each claim is arranged out of the host's way.
 
-use steleofd_font::{FontId, FontManager};
+use steleofd_font::{FontConfig, FontId, FontManager};
 
 /// A family name no host installs, used where the point is a missing face.
 const ABSENT: &str = "No Such Family 98765";
 
+/// The one code point no installed face carries: an unassigned Plane 16 slot.
+const UNASSIGNED: u32 = 0x10_FF_FD;
+
+/// The CJK fixture, for a manager that must find no Chinese at all.
+fn cjk_fixture() -> std::sync::Arc<Vec<u8>> {
+    std::sync::Arc::new(
+        std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/data/steleofd-cjk-subset.ttf"
+        ))
+        .expect("cjk fixture"),
+    )
+}
+
 #[test]
 fn a_loaded_substitute_is_searched_again_for_characters_it_lacks() {
-    // A face is cached for an id once any caller accepts it, so a run of Han
-    // after a run of Latin would reuse the Latin face and drop every mark.
+    // A cached face the run cannot use must send the search out again rather
+    // than be reused. The pinned face covers Latin only, and the one configured
+    // family is a name the host lacks, so a miss is the right answer.
     let mut manager = FontManager::new();
-    let wide = manager
-        .registry_mut()
-        .register_fallback_with_data("cjk-pinned", None);
-    assert!(manager.face_for(wide, &[b'A' as u32]).is_ok());
-    // Whether the host has a Han face decides the outcome; either way the
-    // cached single-face answer must not be handed back unchanged.
-    let _ = manager.face_for(wide, &[0x4E2D]);
-    assert!(
-        manager.cjk_answered().is_some() || manager.is_unresolved(wide),
-        "a Han run is either answered by a new face or reported, never ignored"
+    manager.set_config(FontConfig::new([ABSENT], std::iter::empty::<&str>()));
+    let wide = manager.registry_mut().register_fallback_with_data(
+        "cjk-pinned",
+        Some(std::sync::Arc::new(
+            std::fs::read(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/tests/data/steleofd-latin-subset.ttf"
+            ))
+            .expect("latin fixture"),
+        )),
     );
+    assert!(manager.face_for(wide, &[b'A' as u32]).is_ok());
+    assert!(
+        manager.face_for(wide, &[UNASSIGNED]).is_err(),
+        "the cached face is asked again, not handed back"
+    );
+    assert!(manager.is_unresolved(wide), "and the miss is recorded");
 }
 
 #[test]
 fn an_unresolved_mark_can_be_cleared_by_changing_the_search() {
     let mut manager = FontManager::new();
     let id = manager.registry_mut().register_system(ABSENT);
-    assert!(manager.face_for(id, &[0x10_FF_FD]).is_err());
+    assert!(manager.face_for(id, &[UNASSIGNED]).is_err());
     assert!(manager.is_unresolved(id));
     manager.clear_unresolved(id);
     assert!(!manager.is_unresolved(id), "the search may run again");
@@ -39,7 +60,7 @@ fn an_unresolved_mark_can_be_cleared_by_changing_the_search() {
 fn setting_the_pinned_family_clears_answers_that_depended_on_it() {
     let mut manager = FontManager::new();
     let id = manager.registry_mut().register_system(ABSENT);
-    assert!(manager.face_for(id, &[0x10_FF_FD]).is_err());
+    assert!(manager.face_for(id, &[UNASSIGNED]).is_err());
     assert!(manager.is_unresolved(id));
     manager.set_default_cjk_family("SimSun");
     assert!(
@@ -67,27 +88,21 @@ fn a_list_of_ids_can_be_marked_unresolved_in_one_call() {
 }
 
 #[test]
-fn a_host_without_the_pinned_family_still_finds_chinese() {
-    // The pinned family is what a Linux desktop usually has and Windows and
-    // macOS usually do not, so this names one this machine also lacks and
-    // asserts only that a Han run is answered by something that draws it.
+fn a_family_the_host_lacks_can_still_be_answered_by_a_configured_one() {
+    // The failure this guards against is a search that reports success for a
+    // face that draws nothing. The configured list names a family the host
+    // does not have; what answers is the repo's own face, registered under it.
     let mut manager = FontManager::new();
-    manager.set_default_cjk_family("Microsoft YaHei");
-    let wide = manager
+    manager.set_config(FontConfig::new([ABSENT], std::iter::empty::<&str>()));
+    let id = manager
         .registry_mut()
-        .register_fallback_with_data("cjk-pinned", None);
-    let Ok(face) = manager.face_for(wide, &[0x4E2D]) else {
-        // No CJK face on this host at all: the miss has to be reported.
-        assert!(manager.is_unresolved(wide));
-        return;
-    };
+        .register_fallback_with_data(ABSENT, Some(cjk_fixture()));
+    let face = manager
+        .face_for(id, &[0x4E2D])
+        .expect("the pinned bytes answer");
     assert!(
         face.has_codepoint(0x4E2D),
         "the substitute must draw the character it was found for"
-    );
-    assert!(
-        manager.cjk_answered().is_some(),
-        "and the family that answered is remembered"
     );
 }
 

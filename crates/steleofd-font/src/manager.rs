@@ -137,20 +137,12 @@ impl FontManager {
                     .into());
                 }
             },
-            // The engine's own substitute starts from the pinned CJK family
-            // and only takes a generic when this host cannot answer with it.
+            // The engine's own substitute. Pinned bytes are the caller's answer
+            // for CJK and are not stretched over code points they lack: a
+            // fallback that covers everything is the same lie as a blank page.
             FontSource::Fallback { .. } => match entry.data.clone() {
-                Some(data) => data,
-                None => match self.find_cjk_font(&entry, wanted)? {
-                    Some(data) => data,
-                    None => {
-                        self.note_unresolved(id);
-                        return Err(FontError::Missing {
-                            family: entry.described_name().to_string(),
-                        }
-                        .into());
-                    }
-                },
+                Some(data) if wanted.is_empty() || Self::covers(&data, wanted) => data,
+                _ => self.require_cjk_font(&entry, id, wanted)?,
             },
         };
         let is_fallback = matches!(entry.source, FontSource::Fallback { .. });
@@ -334,6 +326,41 @@ impl FontManager {
         })
     }
 
+    /// A CJK face for an id, or the recorded miss a caller has to report.
+    #[cfg(all(feature = "system-fonts", not(target_arch = "wasm32")))]
+    fn require_cjk_font(
+        &self,
+        entry: &crate::registry::FontEntry,
+        id: FontId,
+        wanted: &[u32],
+    ) -> Result<Arc<Vec<u8>>> {
+        match self.find_cjk_font(entry, wanted)? {
+            Some(data) => Ok(data),
+            None => {
+                self.note_unresolved(id);
+                Err(FontError::Missing {
+                    family: entry.described_name().to_string(),
+                }
+                .into())
+            }
+        }
+    }
+
+    /// [`Self::require_cjk_font`] where no host search is compiled in.
+    #[cfg(not(all(feature = "system-fonts", not(target_arch = "wasm32"))))]
+    fn require_cjk_font(
+        &self,
+        entry: &crate::registry::FontEntry,
+        id: FontId,
+        _wanted: &[u32],
+    ) -> Result<Arc<Vec<u8>>> {
+        self.note_unresolved(id);
+        Err(FontError::Missing {
+            family: entry.described_name().to_string(),
+        }
+        .into())
+    }
+
     /// A face for the engine's own CJK substitute, from the families this host
     /// keeps CJK in. Generics come last: font-kit maps them to Latin faces on
     /// Windows and macOS, so a host without the pinned family would go blank.
@@ -345,12 +372,14 @@ impl FontManager {
     ) -> Result<Option<Arc<Vec<u8>>>> {
         use font_kit::properties::Properties;
 
-        let data = self.find_system_font(entry, wanted)?;
+        let guess = self.find_system_font(entry, wanted)?;
         // A search with nothing to cover, or one that found a covering face,
         // has already answered; only an uncovered guess needs the wider walk.
-        if wanted.is_empty() || data.as_ref().is_some_and(|d| Self::covers(d, wanted)) {
-            return Ok(data);
+        if wanted.is_empty() || guess.as_ref().is_some_and(|d| Self::covers(d, wanted)) {
+            return Ok(guess);
         }
+        // The guess is never the answer: a face that carries none of the text
+        // draws nothing, so the miss is reported instead of papered over.
         thread_local! {
             static SYSTEM: font_kit::source::SystemSource = font_kit::source::SystemSource::new();
         }
@@ -374,7 +403,7 @@ impl FontManager {
                 self.note_cjk_answered(family);
                 Some(data)
             }
-            None => data,
+            None => None,
         })
     }
 
