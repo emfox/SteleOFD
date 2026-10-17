@@ -2,6 +2,10 @@
 //! layout so it can be driven headlessly. This file owns only the platform
 //! parts: the file dialog, the title bar and the run loop.
 
+// A GUI app must not open a console window on Windows; the attribute is a
+// no-op on the other systems, so it stays unconditional.
+#![cfg_attr(windows, windows_subsystem = "windows")]
+
 use eframe::egui::{self, Ui};
 use steleofd_i18n::MessageId;
 use steleofd_reader::App;
