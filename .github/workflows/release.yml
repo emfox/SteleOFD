@@ -25,16 +25,23 @@ jobs:
         include:
           - os: ubuntu-latest
             name: linux
+            target: ""
           - os: windows-latest
             name: windows
+            # The GNU target, not MSVC: the result runs without a matching
+            # Visual C++ redistributable on the machine that downloads it.
+            target: x86_64-pc-windows-gnu
           - os: macos-latest
             name: macos
+            target: ""
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
 
       - name: Install toolchain
         uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
 
       # font-kit needs fontconfig headers to build its sys crate; Linux calls
       # them fontconfig, macOS and Windows builders use the same headers but the
@@ -45,9 +52,15 @@ jobs:
       - name: Install system dependencies
         if: runner.os == 'macOS'
         run: brew install fontconfig pkg-config
+      # mingw-w64 supplies the GNU linker and runtime the `*-windows-gnu`
+      # target links against; pkg-config finds the fontconfig headers the
+      # MSYS2 environment ships for the GNU toolchain.
       - name: Install system dependencies
         if: runner.os == 'Windows'
-        run: choco install -y pkgconfiglite
+        shell: bash
+        run: |
+          choco install -y mingw
+          echo "C:/ProgramData/mingw64/mingw64/bin" >> "$GITHUB_PATH"
 
       # Dependencies only, not the whole `target/`: caching every artefact made
       # a multi-gigabyte blob whose restore cost more than the build it saved.
@@ -57,7 +70,13 @@ jobs:
           shared-key: release-reader
 
       - name: Build the reader
-        run: cargo build --release -p steleofd-reader
+        shell: bash
+        run: |
+          if [ -n "${{ matrix.target }}" ]; then
+            cargo build --release -p steleofd-reader --target "${{ matrix.target }}"
+          else
+            cargo build --release -p steleofd-reader
+          fi
 
       - name: Collect the executable
         shell: bash
@@ -65,7 +84,7 @@ jobs:
           mkdir -p dist
           case "${{ runner.os }}" in
             Linux)   cp target/release/steleofd-reader dist/steleofd-reader-linux ;;
-            Windows) cp target/release/steleofd-reader.exe dist/steleofd-reader-windows.exe ;;
+            Windows) cp target/x86_64-pc-windows-gnu/release/steleofd-reader.exe dist/steleofd-reader-windows.exe ;;
             macOS)   cp target/release/steleofd-reader dist/steleofd-reader-macos ;;
           esac
           ls -la dist
