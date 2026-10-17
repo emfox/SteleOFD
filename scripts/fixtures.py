@@ -26,6 +26,13 @@ governs the files in the same atomic transfer as the files themselves.
 Reaching codeload is the network's problem, not this module's: it uses whatever
 proxy the environment configures, like every other HTTP client here, so there
 is one place to fix when GitHub is slow rather than one per script.
+
+The variable is `https_proxy`, and it has to be that one. `urllib` reads only
+`http_proxy`, `https_proxy` and `no_proxy`; `ALL_PROXY` -- which curl and git
+honour -- is invisible to it, so a shell that reaches GitHub through a
+`ALL_PROXY=socks5h://...` and nothing else will see this module hang on a
+direct connection until the timeout expires. Set `https_proxy` when the
+environment sets only `ALL_PROXY`.
 """
 
 from __future__ import annotations
@@ -40,7 +47,7 @@ import zipfile
 
 # The fixtures repository, pinned by commit: see the module docstring.
 FIXTURES = "emfox/OFD-fixtures"
-COMMIT = "da4ea9221f00cf8f30be1afffca103c9532f7171"
+COMMIT = "d8ec65e23cef0bbc1645ff0759bdd140cd3f9849"
 ARCHIVE = "https://codeload.github.com/" + FIXTURES + "/tar.gz/" + COMMIT
 USER_AGENT = "steleofd-corpus"
 

@@ -37,6 +37,7 @@ tests = [
     "gb_t_33190_6_2_self_contained_document_passes",
     "gb_t_33190_6_2_reference_outside_the_container_is_rejected",
     "gb_t_33190_6_2_reference_escaping_the_container_is_rejected",
+    "gb_t_33190_6_2_a_reference_outside_the_container_fails_the_audit",
 ]
 
 [[item]]
@@ -81,6 +82,12 @@ status = "verified"
 tests = [
     "gb_t_33190_7_5_document_root_requires_pages",
     "gb_t_33190_7_5_missing_doc_id_is_only_a_warning",
+    "gb_t_33190_7_5_viewer_preferences_are_read",
+    "gb_t_33190_7_5_a_named_zoom_mode_is_kept_apart_from_a_factor",
+    "gb_t_33190_7_5_a_document_without_preferences_reads_them_as_absent",
+    "gb_t_33190_7_5_permissions_and_valid_period_are_read",
+    "gb_t_33190_7_5_print_copies_default_to_no_limit",
+    "gb_t_33190_7_5_a_document_without_permissions_reads_them_as_absent",
 ]
 
 [[item]]
@@ -96,7 +103,10 @@ tests = [
 clause = "7.7"
 title = "Page object"
 status = "verified"
-tests = ["gb_t_33190_7_7_page_content_may_live_in_base_loc"]
+tests = [
+    "gb_t_33190_7_7_page_content_may_live_in_base_loc",
+    "gb_t_33190_7_7_a_thumbnail_is_read_and_may_be_absent",
+]
 
 [[item]]
 clause = "7.8"
@@ -114,61 +124,23 @@ tests = [
     "gb_t_33190_7_9_unreachable_resource_is_reported",
     "gb_t_33190_7_9_page_level_resource_is_checked_too",
     "gb_t_33190_7_9_draw_params_resolve_from_the_resource_table",
+    "gb_t_33190_7_9_a_page_resource_table_is_read",
+    "gb_t_33190_7_9_a_page_resource_table_shadows_the_document_one",
+    "gb_t_33190_7_9_declared_colour_spaces_are_read",
+    "gb_t_33190_7_9_an_unknown_colour_space_type_is_refused",
+    "gb_t_33190_7_9_colour_spaces_reach_the_open_document",
+    "gb_t_33190_7_9_a_colour_reads_in_its_declared_cmyk_space",
+    "gb_t_33190_7_9_a_colour_reads_in_its_declared_gray_space",
+    "gb_t_33190_7_9_an_index_picks_the_palette_entry",
+    "gb_t_33190_7_9_a_colour_without_a_space_stays_hex",
+    "gb_t_33190_7_9_an_unknown_space_falls_back_to_hex",
+    "gb_t_33190_7_9_each_declared_resource_must_be_reachable",
+    "gb_t_33190_7_9_the_audit_reports_a_severity_per_finding",
 ]
-
-[[item]]
-clause = "7.10"
-title = "Page-level resource table"
-status = "verified"
-tests = [
-    "gb_t_33190_7_10_a_page_resource_table_is_read",
-    "gb_t_33190_7_10_a_page_resource_table_shadows_the_document_one",
-]
-
-[[item]]
-clause = "7.11"
-title = "Viewer preferences"
-status = "verified"
-tests = [
-    "gb_t_33190_7_11_viewer_preferences_are_read",
-    "gb_t_33190_7_11_a_named_zoom_mode_is_kept_apart_from_a_factor",
-    "gb_t_33190_7_11_a_document_without_preferences_reads_them_as_absent",
-]
-
-[[item]]
-clause = "7.12"
-title = "Permissions and valid period"
-status = "verified"
-tests = [
-    "gb_t_33190_7_12_permissions_and_valid_period_are_read",
-    "gb_t_33190_7_12_print_copies_default_to_no_limit",
-    "gb_t_33190_7_12_a_document_without_permissions_reads_them_as_absent",
-]
-
-[[item]]
-clause = "7.13"
-title = "Declared colour spaces"
-status = "verified"
-tests = [
-    "gb_t_33190_7_13_declared_colour_spaces_are_read",
-    "gb_t_33190_7_13_an_unknown_colour_space_type_is_refused",
-    "gb_t_33190_7_13_colour_spaces_reach_the_open_document",
-    "gb_t_33190_7_13_a_colour_reads_in_its_declared_cmyk_space",
-    "gb_t_33190_7_13_a_colour_reads_in_its_declared_gray_space",
-    "gb_t_33190_7_13_an_index_picks_the_palette_entry",
-    "gb_t_33190_7_13_a_colour_without_a_space_stays_hex",
-    "gb_t_33190_7_13_an_unknown_space_falls_back_to_hex",
-]
-
-[[item]]
-clause = "7.14"
-title = "Thumbnail resource"
-status = "verified"
-tests = ["gb_t_33190_7_14_a_thumbnail_is_read_and_may_be_absent"]
 
 [[item]]
 clause = "8.1.1"
-title = "Object space"
+title = "Object space (8.1.1-8.1.4)"
 status = "verified"
 tests = ["gb_t_33190_8_1_1_object_space_agrees_with_the_page_space"]
 
@@ -195,13 +167,6 @@ clause = "8.1.5"
 title = "Transformation matrix"
 status = "verified"
 tests = ["gb_t_33190_8_1_5_ctm_orders_rows_as_a_b_c_d_e_f"]
-
-[[item]]
-clause = "8.1.6"
-title = "Print quality"
-status = "deviation"
-note = "not read; a device hint, and no sample carries one"
-tests = []
 
 [[item]]
 clause = "8.2.1"
@@ -261,47 +226,42 @@ tests = [
 
 [[item]]
 clause = "8.3.3"
-title = "Transparency"
-status = "verified"
-tests = ["gb_t_33190_8_3_3_alpha_reaches_the_paint"]
-
-[[item]]
-clause = "8.3.4"
-title = "Gradient"
-status = "verified"
-tests = [
-  "gb_t_33190_8_3_4_axial_shading_becomes_a_linear_gradient",
-  "gb_t_33190_8_3_4_radial_shading_carries_both_radii",
-  "gb_t_33190_8_3_4_segments_keep_their_positions_and_colours",
-]
-
-[[item]]
-clause = "8.3.5"
 title = "Pattern fill"
 status = "verified"
 tests = [
-  "gb_t_33190_8_3_5_a_pattern_carries_its_cell_and_its_tile_size",
-  "gb_t_33190_8_3_5_a_pattern_step_defaults_to_the_cell_size",
-  "gb_t_33190_8_3_5_a_pattern_records_its_reflect_method",
-  "gb_t_33190_8_3_5_a_reflecting_pattern_mirrors_along_the_axis_it_names",
+    "gb_t_33190_8_3_3_alpha_reaches_the_paint",
+    "gb_t_33190_8_3_3_a_pattern_carries_its_cell_and_its_tile_size",
+    "gb_t_33190_8_3_3_a_pattern_step_defaults_to_the_cell_size",
+    "gb_t_33190_8_3_3_a_pattern_records_its_reflect_method",
+    "gb_t_33190_8_3_3_a_reflecting_pattern_mirrors_along_the_axis_it_names",
 ]
 
 [[item]]
-clause = "8.3.6"
+clause = "8.3.4.1"
+title = "Gradient"
+status = "verified"
+tests = [
+  "gb_t_33190_8_3_4_1_axial_shading_becomes_a_linear_gradient",
+  "gb_t_33190_8_3_4_1_radial_shading_carries_both_radii",
+  "gb_t_33190_8_3_4_1_segments_keep_their_positions_and_colours",
+]
+
+[[item]]
+clause = "8.3.4.4"
 title = "Gouraud shading"
 status = "verified"
 tests = [
-  "gb_t_33190_8_3_6_gouraud_shading_carries_its_coloured_vertices",
-  "gb_t_33190_8_3_6_a_gouraud_mesh_with_several_strips_keeps_them_apart",
+  "gb_t_33190_8_3_4_4_gouraud_shading_carries_its_coloured_vertices",
+  "gb_t_33190_8_3_4_4_a_gouraud_mesh_with_several_strips_keeps_them_apart",
 ]
 
 [[item]]
-clause = "8.3.7"
+clause = "8.3.4.5"
 title = "Lattice-form Gouraud shading"
 status = "verified"
 tests = [
-  "gb_t_33190_8_3_7_a_lattice_mesh_tiles_its_points_into_quads",
-  "gb_t_33190_8_3_7_a_lattice_wider_than_it_is_tall_makes_every_cell",
+  "gb_t_33190_8_3_4_5_a_lattice_mesh_tiles_its_points_into_quads",
+  "gb_t_33190_8_3_4_5_a_lattice_wider_than_it_is_tall_makes_every_cell",
 ]
 
 [[item]]
@@ -322,13 +282,10 @@ note = "A path area becomes a clip path; a text area becomes a clip run the back
 clause = "8.5"
 title = "Graphics object base"
 status = "verified"
-tests = ["gb_t_33190_8_5_object_carries_boundary_and_visibility"]
-
-[[item]]
-clause = "8.6"
-title = "Graphics unit base"
-status = "verified"
-tests = ["gb_t_33190_8_6_a_graphics_unit_resolves_from_its_resource_id"]
+tests = [
+    "gb_t_33190_8_5_object_carries_boundary_and_visibility",
+    "gb_t_33190_8_5_a_graphics_unit_resolves_from_its_resource_id",
+]
 
 [[item]]
 clause = "9.1"
@@ -338,6 +295,7 @@ tests = [
   "gb_t_33190_9_1_path_defaults_are_stroke_on_and_fill_off",
   "gb_t_33190_9_1_a_draw_param_supplies_the_stroke_and_fill_switches",
   "gb_t_33190_9_1_graphic_unit_line_width_overrides_the_draw_param",
+  "gb_t_33190_9_1_a_path_keeps_its_data_and_its_clipping",
 ]
 
 [[item]]
@@ -382,31 +340,15 @@ status = "verified"
 tests = ["gb_t_33190_9_3_5_arc_is_split_into_cubics"]
 
 [[item]]
-clause = "9.4"
-title = "Path object content"
-status = "verified"
-tests = ["gb_t_33190_9_4_a_path_keeps_its_data_and_its_clipping"]
-
-[[item]]
 clause = "10"
 title = "Image object"
 status = "verified"
 tests = [
   "gb_t_33190_10_image_object_requires_resource_id",
   "gb_t_33190_10_an_image_object_fills_the_unit_square_of_its_ctm",
+  "gb_t_33190_10_an_image_placement_scales_the_unit_square",
+  "gb_t_33190_10_each_media_format_reaches_the_painter",
 ]
-
-[[item]]
-clause = "10.1"
-title = "Image placement"
-status = "verified"
-tests = ["gb_t_33190_10_1_an_image_placement_scales_the_unit_square"]
-
-[[item]]
-clause = "10.2"
-title = "Image encoding"
-status = "verified"
-tests = ["gb_t_33190_10_2_each_media_format_reaches_the_painter"]
 
 [[item]]
 clause = "11.1"
@@ -432,6 +374,7 @@ tests = [
     "gb_t_33190_11_3_delta_attributes_place_each_glyph",
     "gb_t_33190_11_3_a_delta_list_may_cover_every_glyph",
     "gb_t_33190_11_3_no_delta_keeps_the_text_size",
+    "gb_t_33190_11_3_reading_direction_and_alignment_are_kept",
 ]
 
 [[item]]
@@ -448,12 +391,6 @@ tests = [
 ]
 
 [[item]]
-clause = "11.5"
-title = "Text direction and alignment"
-status = "verified"
-tests = ["gb_t_33190_11_5_reading_direction_and_alignment_are_kept"]
-
-[[item]]
 clause = "12"
 title = "Video"
 status = "verified"
@@ -465,16 +402,6 @@ tests = [
 [[item]]
 clause = "13"
 title = "Composite object"
-status = "verified"
-tests = [
-  "gb_t_33190_13_a_composite_object_places_a_vector_resource",
-  "gb_t_33190_13_a_vector_resource_holds_its_own_page_block",
-  "gb_t_33190_13_a_composite_object_draws_its_resources_content",
-]
-
-[[item]]
-clause = "13.1"
-title = "Composite graphics unit"
 status = "verified"
 note = "a placed CompositeObject resolves to the unit's content, or to its substitution image when the unit carries no vector content"
 tests = [
@@ -530,7 +457,10 @@ tests = [
 clause = "18.2.1"
 title = "File digest"
 status = "verified"
-tests = ["gb_t_33190_18_2_1_digest_covers_every_reference"]
+tests = [
+    "gb_t_33190_18_2_1_digest_covers_every_reference",
+    "gb_t_33190_18_2_1_a_sealed_document_verifies_and_an_edited_one_does_not",
+]
 
 [[item]]
 clause = "18.2.2"
@@ -552,6 +482,7 @@ tests = [
   "gb_t_33190_18_2_3_a_stamp_records_where_it_sits",
   "gb_t_33190_18_2_3_a_seal_resolves_to_its_image_and_placements",
   "gb_t_33190_18_2_3_a_seal_with_no_image_still_places",
+  "gb_t_33190_18_2_3_validation_reports_the_scope_it_checked",
 ]
 
 [[item]]
@@ -565,18 +496,6 @@ tests = [
     "gb_t_33190_18_2_4_a_timestamp_over_other_bytes_is_unbound",
     "gb_t_33190_18_2_4_a_timestamp_whose_proof_is_wrong_is_unverified",
 ]
-
-[[item]]
-clause = "18.3"
-title = "Signature sealing"
-status = "verified"
-tests = ["gb_t_33190_18_3_a_sealed_document_verifies_and_an_edited_one_does_not"]
-
-[[item]]
-clause = "18.4"
-title = "Signature validation"
-status = "verified"
-tests = ["gb_t_33190_18_4_validation_reports_the_scope_it_checked"]
 
 [[item]]
 clause = "19.1"
@@ -594,23 +513,6 @@ tests = [
     "gb_t_33190_20_1_attachment_list_is_optional",
 ]
 
-[[item]]
-clause = "21.1"
-title = "Archival profile: self-containment"
-status = "verified"
-tests = ["gb_t_33190_21_1_a_reference_outside_the_container_fails_the_audit"]
-
-[[item]]
-clause = "21.2"
-title = "Archival profile: reachability"
-status = "verified"
-tests = ["gb_t_33190_21_2_each_declared_resource_must_be_reachable"]
-
-[[item]]
-clause = "21.3"
-title = "Archival profile: report"
-status = "verified"
-tests = ["gb_t_33190_21_3_the_audit_reports_a_severity_per_finding"]
 
 [[item]]
 clause = "A.1"
