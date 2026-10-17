@@ -7,8 +7,13 @@ use super::*;
 pub(crate) enum TextOutcome {
     /// Every glyph the run named was drawn.
     Drawn,
-    /// The run drew, but at least one glyph had no outline in its face.
-    ShortGlyphs,
+    /// The run drew, but some of its glyphs had no outline in any face. The
+    /// count is carried rather than a flag: one missing ideograph in a heading
+    /// and a run of them are the same boolean and not the same problem.
+    ShortGlyphs {
+        /// Glyph positions that came out empty.
+        glyphs: usize,
+    },
     /// The run's face could not be loaded, so the run was skipped.
     NoFace,
 }
@@ -24,13 +29,23 @@ pub(crate) fn draw_text(
     if run.glyphs.is_empty() {
         return Ok(TextOutcome::Drawn);
     }
-    // A face that will not load costs its own run, not the whole page, and
-    // the run is counted in `skipped_font_runs`. The chain gets one more
-    // chance before that, so a document naming an unshipped face still draws.
-    let Some(face) = steleofd_display::run_face(fonts, run) else {
+    // A face that will not load costs its run, not the page, and is counted in
+    // `skipped_font_runs`. The chain gets one more chance, told what the run
+    // is about to draw so the substitute can cover those characters.
+    let wanted = run_wanted(run);
+    let Some(face) = steleofd_display::run_face_for(fonts, run, &wanted) else {
         return Ok(TextOutcome::NoFace);
     };
     draw_text_inner(pixmap, run, state, page_box, fonts, face, options)
+}
+
+/// The code points a run will draw, or nothing when its codes are glyph
+/// indices. `text` is no help there: it serves search and copy, not drawing.
+pub(crate) fn run_wanted(run: &GlyphRun) -> Vec<u32> {
+    if run.codes_are_glyphs {
+        return Vec::new();
+    }
+    run.glyphs.iter().map(|&c| u32::from(c)).collect()
 }
 
 pub(crate) fn draw_text_inner(
@@ -43,15 +58,17 @@ pub(crate) fn draw_text_inner(
     options: &RenderOptions,
 ) -> Result<TextOutcome> {
     let mut offset = 0.0f64;
-    let mut missing = false;
+    let mut missing = 0usize;
+    let wanted = run_wanted(run);
     for (i, &gid) in run.glyphs.iter().enumerate() {
         if i > 0 {
             offset += run.advances.get(i - 1).copied().unwrap_or(0.0);
         }
         offset += run.letter_spacing;
-        let Some((outline, _source)) = fonts.outline_for_code(&face, gid, run.codes_are_glyphs)
+        let Some((outline, _source)) =
+            fonts.outline_for_code_in(&face, gid, run.codes_are_glyphs, &wanted)
         else {
-            missing = true;
+            missing += 1;
             continue;
         };
         // Outlines are normalized to 1/1000 em with y pointing up: scale to
@@ -67,8 +84,8 @@ pub(crate) fn draw_text_inner(
             pixmap.fill_path(&ts_path, &p, FillRule::Winding, Transform::identity(), None);
         }
     }
-    Ok(if missing {
-        TextOutcome::ShortGlyphs
+    Ok(if missing > 0 {
+        TextOutcome::ShortGlyphs { glyphs: missing }
     } else {
         TextOutcome::Drawn
     })

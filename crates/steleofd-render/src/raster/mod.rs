@@ -8,7 +8,7 @@ use steleofd_common::Rect;
 use steleofd_display::ops::{Color, GradientStop, LineCap, LineJoin};
 use steleofd_display::{DrawOp, GlyphRun, ImageRef, PageDisplay, Paint, PaintRule, StrokeStyle};
 use steleofd_error::{OfdError, RenderError, Result};
-use steleofd_font::FontManager;
+use steleofd_font::{FontManager, Unresolved};
 use steleofd_geometry::{Affine, Path, PathSegment};
 use tiny_skia::{
     FillRule, IntSize, LineCap as TsLineCap, LineJoin as TsLineJoin, Mask, Paint as TsPaint,
@@ -54,7 +54,26 @@ pub struct RasterOutput {
     /// rejected. Like a missing font, one broken resource costs only its own
     /// placement, not the page around it.
     pub skipped_image_ops: usize,
+    /// Glyph positions that resolved to no outline at all: the face was found
+    /// but does not carry the character, and no substitute did either. These
+    /// are the marks the page is silently short of.
+    pub missing_glyphs: usize,
+    /// Faces the document asked for and this build could not supply, one entry
+    /// per face rather than per run. Empty is the only value that means the
+    /// page is complete.
+    pub missing_fonts: Vec<Unresolved>,
     pixmap: Pixmap,
+}
+
+impl RasterOutput {
+    /// Whether the page is missing anything it was supposed to draw.
+    pub fn is_complete(&self) -> bool {
+        self.missing_glyph_runs == 0
+            && self.skipped_font_runs == 0
+            && self.skipped_image_ops == 0
+            && self.missing_glyphs == 0
+            && self.missing_fonts.is_empty()
+    }
 }
 
 impl RasterOutput {
@@ -115,6 +134,7 @@ pub fn render_page(
     let mut missing_glyph_runs = 0usize;
     let mut skipped_font_runs = 0usize;
     let mut skipped_image_ops = 0usize;
+    let mut missing_glyphs = 0usize;
 
     for op in &page.ops {
         match op {
@@ -209,8 +229,16 @@ pub fn render_page(
             DrawOp::Text(run) => {
                 match draw_text(&mut pixmap, run, &state, page.page_box, fonts, options)? {
                     TextOutcome::Drawn => {}
-                    TextOutcome::ShortGlyphs => missing_glyph_runs += 1,
-                    TextOutcome::NoFace => skipped_font_runs += 1,
+                    TextOutcome::ShortGlyphs { glyphs } => {
+                        missing_glyph_runs += 1;
+                        missing_glyphs += glyphs;
+                    }
+                    TextOutcome::NoFace => {
+                        // No face at all, so every mark is absent; counted as
+                        // glyphs too, so one counter answers what is missing.
+                        skipped_font_runs += 1;
+                        missing_glyphs += run.len();
+                    }
                 }
             }
             DrawOp::Image {
@@ -240,6 +268,8 @@ pub fn render_page(
         missing_glyph_runs,
         skipped_font_runs,
         skipped_image_ops,
+        missing_glyphs,
+        missing_fonts: fonts.unresolved(),
         pixmap,
     })
 }
