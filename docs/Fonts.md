@@ -172,4 +172,4 @@ The path is short and every step is a clause:
 
 The matrix above covers steps 1 to 4 as an engine. It says nothing about how a
 backend paints the outline: that is the raster and vector exporters, which
-`docs/ROADMAP.md` does not list as open.
+`docs/Roadmap.md` does not list as open.

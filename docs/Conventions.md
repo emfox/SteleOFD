@@ -11,14 +11,27 @@ and reviewable by contributors worldwide, all engineering artifacts use English.
 | Commit messages, branch names, PR titles and descriptions | English only | Conventional Commits format |
 | Code review comments, issue titles and bodies | English only | |
 | File names, directory names, config keys | English only | Except fetched test samples, which keep the name their producer gave them ([4.1](#41-exemptions-from-the-language-policy)) |
+| Document names | Sentence case: `Architecture.md`, not `ARCHITECTURE.md` | `README.md` and `CHANGELOG.md` keep their names, which are the ones every repository uses ([1.1](#11-document-names)) |
 | `README` | Bilingual | `README.md` (English, default) + `README.zh-CN.md`, cross-linked |
+| `CHANGELOG` | English only | Release notes describe the product, not the people reading it; the README is the only bilingual document |
 | Other project documents (`docs/`) | English preferred | Chinese allowed only when a document is explicitly user-facing, and must be named `*.zh-CN.md` |
 | UI strings shown to end users | Any locale | Must live in `locales/<tag>/*.ftl`, never hardcoded |
+
+### 1.1 Document names
+
+A document is named in sentence case: `Conventions.md`, `Ui-spec.md`, not
+`CONVENTIONS.md`. All-caps was once a way to shout a file to the front of a
+listing, and it survives on habit rather than on a rule any style guide states.
+`README.md` and `CHANGELOG.md` keep their names, which are the same in every
+repository and are the one convention a reader arrives with; everything under
+`docs/` is renamed, since those names are this project's own. A compound is
+hyphenated with only its first word capitalised, and a translation keeps the
+`.zh-CN.md` suffix section 1 asks for.
 
 ### User-facing text is never hardcoded
 
 Engine and business layers must not contain literal user-facing text. See
-[docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md) for the engine-layer-zero-text
+[docs/Architecture.md](../docs/Architecture.md) for the engine-layer-zero-text
 rule and the error-code plus parameters pattern.
 
 ## 2. Comment density
@@ -132,7 +145,7 @@ next to the check that produced it. Grouped by what they need:
 | `schema` | `validate_ofd.py --allow-foreign` over `compliance/corpus` | `lxml` |
 | `rust` | `cargo fmt`, `clippy`, the `msrv` check, `build` and `test`, the golden images, the headless reader window, `check_compliance.py`, and the matrix freshness diff | `cargo`, `git`, and the Rust channel named by `rust-version` for `msrv` |
 | `corpus` | `fetch_ofdrw.py` and `fetch_gb_samples.py`, `--check` then `--parse` | the fetched samples, `cargo` |
-| `perf` | `check_performance.py` against the budget in [PERFORMANCE.md](PERFORMANCE.md) | a `cargo bench` run |
+| `perf` | `check_performance.py` against the budget in [Performance.md](Performance.md) | a `cargo bench` run |
 | `review` | `check_commit_scope.py`, which names commits that read as more than one change | `git` |
 
 `msrv` is the one check that runs under a toolchain other than the one on
@@ -193,7 +206,7 @@ Seven exemptions exist, each deliberately narrow:
 | Whole file | any `*.zh-CN.md` | Section 1 asks a Chinese document to declare the language in its name, so the name is the exemption and a new translation needs no list edit |
 | Whole file | anything under `locales/` | Locale catalogues are the translation data |
 | Whole file and name | fetched test samples under `tests/fixtures/` | A sample is named by the producer that wrote it, and renaming one severs the only link back to where it came from |
-| Whole file | `docs/CONVENTIONS.md`, `scripts/check_language.py`, `scripts/check_i18n.py` | They exist to hold, quote or match Chinese |
+| Whole file | `docs/Conventions.md`, `scripts/check_language.py`, `scripts/check_i18n.py` | They exist to hold, quote or match Chinese |
 | Whole file | `scripts/fetch_ofdrw.py`, `scripts/fetch_gb_samples.py` | Their pin lists spell out the producer's own file names, exactly like the samples they fetch |
 | Whole file | `crates/steleofd-i18n/src/format.rs` | Holds the locale day-period literals, which are Chinese and Japanese |
 | Single line | the `README.md` language switcher | The bilingual pair must cross-link by the other language's own name |

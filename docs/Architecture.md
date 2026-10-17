@@ -258,7 +258,7 @@ The reader owns its own `ReaderMessage` list and its own `reader.ftl`, and merge
 it into the engine bundle with `I18nBuilder::add_resource`, reaching its strings
 through the key-based `I18n::text_key`. The engine never names a widget it does
 not own, which is why `steleofd-i18n` holds engine messages only. The reader's
-layout and per-frame flow are fixed in [`UI-SPEC.md`](UI-SPEC.md).
+layout and per-frame flow are fixed in [`Ui-spec.md`](Ui-spec.md).
 
 **Current state:** 73 engine keys and 32 reader keys, each across 2 locales with
 identical key sets within its catalogue.
@@ -280,7 +280,7 @@ would have seen raw key names instead of text.
 ### 5.5 Reader window rules
 
 The desktop reader keeps its layout zones and its per-frame flow in
-[`UI-SPEC.md`](UI-SPEC.md), which also records why the window draws nothing it
+[`Ui-spec.md`](Ui-spec.md), which also records why the window draws nothing it
 cannot test. It is a separate document because the rules are about behaviour
 over time, not about the shape of a layer.
 
@@ -360,8 +360,9 @@ opt-level = "s"         # size first for WASM
 displaying a single OFD page, then broaden capabilities. That yields end-to-end
 feedback early instead of spinning inside abstraction layers.
 
-**Still to build:** the original sequence is complete, and what is left is
-listed in [`ROADMAP.md`](ROADMAP.md). Clause-level conformance is tracked in
+**Still to build:** the original sequence is complete and shipped as `0.1.0`;
+what is left, and which release has claimed it, is in
+[`Roadmap.md`](Roadmap.md). Clause-level conformance is tracked in
 `compliance/gb-t-33190.toml`; 74 clauses are registered, 73 of them `verified`
 and one — `8.1.6` `PrintQuality` — a `deviation` with a stated reason. The
 register is the single source of truth that `scripts/check_compliance.py` gates
