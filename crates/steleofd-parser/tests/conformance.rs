@@ -546,17 +546,31 @@ fn gb_t_33190_11_3_char_space_widens_the_advance() {
 }
 
 #[test]
-fn gb_t_33190_11_3_delta_attributes_adjust_each_advance() {
-    // DeltaX and DeltaY are per-glyph adjustments; the advance of glyph i is
-    // the size plus that glyph's deltas.
+fn gb_t_33190_11_3_delta_attributes_place_each_glyph() {
+    // DeltaX[i] offsets glyph i + 1 from glyph i's drawing point, so it
+    // replaces the advance; the list runs one shorter than the text, leaving
+    // the last glyph at the text size.
     let run = glyph_run(
         "",
-        r#"<TextCode X="0" Y="0" DeltaX="1 2 3" DeltaY="0.5 0.5 0.5">ABC</TextCode>"#,
+        r#"<TextCode X="0" Y="0" DeltaX="1 2" DeltaY="0.5 0.5">ABC</TextCode>"#,
     );
     assert_eq!(run.advances.len(), 3);
-    assert_eq!(run.advances[0], 6.5);
-    assert_eq!(run.advances[1], 7.5);
-    assert_eq!(run.advances[2], 8.5);
+    assert_eq!(run.advances[0], 1.5);
+    assert_eq!(run.advances[1], 2.5);
+    assert_eq!(run.advances[2], 5.0, "the last glyph keeps the text size");
+}
+
+#[test]
+fn gb_t_33190_11_3_a_delta_list_may_cover_every_glyph() {
+    // One entry per glyph leaves the last unused: no glyph follows it.
+    let run = glyph_run("", r#"<TextCode X="0" Y="0" DeltaX="1 2 3">ABC</TextCode>"#);
+    assert_eq!(run.advances, vec![1.0, 2.0, 3.0]);
+}
+
+#[test]
+fn gb_t_33190_11_3_no_delta_keeps_the_text_size() {
+    let run = glyph_run("", r#"<TextCode X="0" Y="0">ABC</TextCode>"#);
+    assert_eq!(run.advances, vec![5.0, 5.0, 5.0], "Size is 5");
 }
 
 #[test]

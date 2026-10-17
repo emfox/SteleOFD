@@ -428,7 +428,9 @@ status = "verified"
 tests = [
     "gb_t_33190_11_3_text_code_origin_becomes_the_run_transform",
     "gb_t_33190_11_3_char_space_widens_the_advance",
-    "gb_t_33190_11_3_delta_attributes_adjust_each_advance",
+    "gb_t_33190_11_3_delta_attributes_place_each_glyph",
+    "gb_t_33190_11_3_a_delta_list_may_cover_every_glyph",
+    "gb_t_33190_11_3_no_delta_keeps_the_text_size",
 ]
 
 [[item]]

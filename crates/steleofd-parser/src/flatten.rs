@@ -651,10 +651,16 @@ struct RunSegment {
 /// carries glyph indices, so the two kinds never share a run.
 fn segments_of(code: &TextCode, transforms: &[CGTransform], size: f64) -> Vec<RunSegment> {
     let chars: Vec<char> = code.text.chars().collect();
+    // DeltaX[i] is the offset from glyph i's drawing point to glyph i + 1's,
+    // so it replaces the advance instead of adding to the size. An absent
+    // entry leaves the text size, the only advance there is to use.
     let advance_at = |i: usize| {
-        let dx = code.delta_x.get(i).copied().unwrap_or(0.0);
+        let dx = code.delta_x.get(i).copied();
         let dy = code.delta_y.get(i).copied().unwrap_or(0.0);
-        size + dx + dy
+        match dx {
+            Some(dx) => (dx + dy).max(0.0),
+            None => size + dy,
+        }
     };
 
     // A transform names the characters it covers and the glyphs that replace
