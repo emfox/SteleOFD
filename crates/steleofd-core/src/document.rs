@@ -88,6 +88,12 @@ impl Document {
         &self.fonts
     }
 
+    /// Faces this document asks for and this build could not supply. Filled by
+    /// rendering, since a face is only searched for when a page needs it.
+    pub fn missing_fonts(&self) -> Vec<steleofd_font::Unresolved> {
+        self.fonts.unresolved()
+    }
+
     /// Mutable access to the font manager, for callers that bring their own
     /// faces and want to register them under the ids the list already uses.
     pub fn fonts_mut(&mut self) -> &mut FontManager {
@@ -125,6 +131,59 @@ impl Document {
             .page(index)
             .ok_or_else(|| out_of_range(index, self.page_count()))?;
         steleofd_render::render_page(page, &self.fonts, options)
+    }
+
+    /// Rasterize one page and encode it as PNG, reporting what the page was
+    /// short of. The face search only happens while drawing, so a caller that
+    /// needs to warn about a missing font has to ask here and not before.
+    #[cfg(feature = "convert")]
+    pub fn to_png_with_stats(
+        &self,
+        index: usize,
+        options: &steleofd_render::RenderOptions,
+    ) -> Result<(Vec<u8>, steleofd_render::RasterOutput)> {
+        let page = self
+            .page(index)
+            .ok_or_else(|| out_of_range(index, self.page_count()))?;
+        let raster = steleofd_render::render_page(page, &self.fonts, options)?;
+        let png = steleofd_convert::png::encode_png(&raster, index)?;
+        Ok((png, raster))
+    }
+
+    /// Convert one page to SVG, with the conversion's own counts.
+    #[cfg(feature = "convert")]
+    pub fn to_svg_with_stats(
+        &self,
+        index: usize,
+    ) -> Result<(String, steleofd_convert::ConversionStats)> {
+        let page = self
+            .page(index)
+            .ok_or_else(|| out_of_range(index, self.page_count()))?;
+        steleofd_convert::page_to_svg_with_stats(
+            page,
+            &steleofd_convert::SvgOptions {
+                fonts: Some(&self.fonts),
+                ..Default::default()
+            },
+        )
+    }
+
+    /// Convert one page to PDF, with the conversion's own counts.
+    #[cfg(feature = "pdf")]
+    pub fn to_pdf_with_stats(
+        &self,
+        index: usize,
+    ) -> Result<(Vec<u8>, steleofd_convert::ConversionStats)> {
+        let page = self
+            .page(index)
+            .ok_or_else(|| out_of_range(index, self.page_count()))?;
+        steleofd_convert::page_to_pdf_with_stats(
+            page,
+            &steleofd_convert::PdfOptions {
+                fonts: Some(&self.fonts),
+                ..Default::default()
+            },
+        )
     }
 
     /// Rasterize several pages, in parallel when the async feature is on.
@@ -387,8 +446,8 @@ fn page_ids(parsed: &steleofd_parser::ParsedDocument) -> std::collections::HashM
 }
 
 /// Register the fonts the document declares, keyed by the id the display list
-/// references. Referenced but undeclared ids point at one system substitute,
-/// so a document that names a font without shipping it still renders.
+/// references. A face named without a file keeps its declaration's traits; an
+/// id never declared at all points at the generic family.
 fn register_container_fonts(
     package: &mut Package,
     doc_dir: &str,
@@ -403,6 +462,9 @@ fn register_container_fonts(
         let Some(resource) = declared.get(id) else {
             continue;
         };
+        if !resource.embedded {
+            continue;
+        }
         let family = if resource.family.is_empty() {
             "embedded".to_string()
         } else {
@@ -424,24 +486,27 @@ fn register_container_fonts(
         map.insert(*id, registered);
     }
 
-    // Referenced but not embedded: point those ids at one system substitute, so
-    // a document that names a font without shipping it still renders.
-    let unembedded: Vec<u32> = used
-        .into_iter()
-        .filter(|id| !map.contains_key(id))
-        .collect();
-    if !unembedded.is_empty() {
-        let substitute = fonts.registry_mut().register_system(SUBSTITUTE_FAMILY);
-        for id in unembedded {
-            map.insert(id, substitute);
+    // Referenced but not embedded: each keeps its own declaration, since
+    // clause 11.1's traits are what a host search matches on and two faces
+    // that differ only in weight are not one face.
+    let declared_by_id: HashMap<u32, steleofd_parser::fonts::FontResource> = declared;
+    for id in used {
+        if map.contains_key(&id) {
+            continue;
         }
+        let registered = match declared_by_id.get(&id) {
+            Some(resource) => fonts
+                .registry_mut()
+                .register_unshipped(resource.family.clone(), resource.traits.clone()),
+            None => fonts.registry_mut().register_system(SUBSTITUTE_FAMILY),
+        };
+        map.insert(id, registered);
     }
     Ok(map)
 }
 
-/// Family used when a document references a font it does not embed.
-/// A generic alias every system resolver knows, so the substitute degrades to
-/// whatever sans face the machine has.
+/// Family used when a document references a font id it never declares.
+/// Nothing about the face is known, so the generic alias is all there is.
 const SUBSTITUTE_FAMILY: &str = "sans-serif";
 
 /// Every font id the display list actually references, sorted.
