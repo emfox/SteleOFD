@@ -84,5 +84,56 @@ reader for every platform `egui` runs on, so the release page is worth a look.
 - Commit subjects are measured in bytes and capped at 75; the commit-message rule
   is enforced in CI rather than trusted.
 
+### Capability, by area
+
+The section above says what a downstream user of the libraries would notice.
+This one records the work each area of the engine received, which is what the
+roadmap used to carry per task. It is grouped rather than chronological, and
+it names the result rather than the milestone that produced it.
+
+- **Correctness** — a placed `CompositeObject` draws its own vector resource
+  (`13.1`); a `Text` clip area emits its own op so every backend resolves the
+  glyph outlines (`8.4`); the standard's own clause samples are fetched and
+  parsed in CI, which found GIF, undecodable-image and `./`-rooted `DocRoot`
+  defects; the third-party corpus of 28 documents opened with six constructs
+  fixed.
+- **Enforcement** — a golden-image suite comparing against committed PNGs, which
+  found a gradient painting black; a documented per-stage performance budget
+  with a CI check that fails only on a large regression; `cargo-semver-checks`
+  against the last tag; a coverage floor; a pinned toolchain.
+- **Fonts** — a fallback chain resolved through `FontManager::outline_for_code`,
+  so a document naming a face it does not ship still shows its text; the family
+  list moved into a configurable `FontConfig` rather than the search code; a
+  miss is now reported instead of stretching a face over text it lacks; and
+  `steleofd-font::subset` rebuilds an embedded face down to the glyphs a
+  document uses (28 648 → 2 804 bytes on the sample).
+- **Signatures** — seal and incremental update, so a signed document can carry a
+  countersignature (`18.2.4`); GB/T 20520 timestamp countersignature
+  verification with a four-way verdict (`Absent`, `Unbound`, `Unverified`,
+  `Bound`); and the GB/T 42133-2022 archival profile (`6.2.2`).
+- **Server** — a persistent store that survives a restart, API-key
+  authentication with per-tenant scoping, rate limiting and a request timeout
+  budget, a graceful drain, and OpenAPI documentation held to the same route
+  list as the router.
+- **Rendering** — colour spaces painted for fill and stroke values, index
+  palettes honoured; the three chapter 8.3 fill models (`Pattern`, `GouraudShd`,
+  `LaGouraudShd`); `RadialShd` end centre and radius carried to every backend,
+  meshes reaching PDF as `ShadingType 4` and patterns reaching SVG as native
+  `<pattern>`; the JBIG2 codec moved out of the IR crate into `steleofd-io`.
+  Blending is recorded as deliberately unsupported: the standard defines no
+  blend mode, and `Alpha` is the whole of its transparency model.
+- **Reader** — print from the current view, an annotation list that turns to the
+  page it names, seal appearance rendering on each page's raster, a two-revision
+  comparison view, and keyboard navigation. It now runs on every platform
+  `egui` does: desktop, a browser page over `wasm`, and an Android archive.
+- **Interoperability** — a nine-page golden book compared against another
+  vendor's reader and a second implementation's source, which showed four gaps
+  in the oracle and three in our own reading; the full evidence is in
+  [`docs/INTEROP.md`](docs/INTEROP.md).
+- **Repository** — the four aging source files split into module roots with no
+  behaviour change, the largest now under 700 lines; a shared `steleofd-testkit`
+  replacing about 800 lines of duplicated builders; property and fuzz tests over
+  every parser entry point; and integration tests for the six thin crates.
+
 [Unreleased]: https://github.com/emfox/SteleOFD/compare/v0.1.0-rc.1...main
 [0.1.0-rc.1]: https://github.com/emfox/SteleOFD/releases/tag/v0.1.0-rc.1

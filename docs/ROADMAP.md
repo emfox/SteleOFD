@@ -1,532 +1,60 @@
-# Roadmap
-
-SteleOFD has all 26 crates of the original plan built, tested and pushed. The
-original P0-P9 sequence is finished; this document is what comes after it.
-
-The plan is organised by horizon rather than by layer, because the remaining
-work is no longer "build the next crate" but "make what exists trustworthy,
-then make it fast, then make it complete". Each horizon states its exit
-criterion, so it is always obvious whether it is done.
-
-Within each horizon the open tasks are ordered by **what the project is for**,
-then by what unblocks what. The README says OFD is the legal carrier for
-official documents, licences, invoices and archives, so the ranking puts
-legal validity and archival correctness first, rendering correctness second,
-and performance and looks last. Finishing an item is not what earns it an
-early slot; hurting a real document is what costs it one.
-
-Ranking rule, applied to every open task:
-
-1. **Wrong output on a real document** — a reader that renders a legal
-   document incorrectly is worse than one that renders it slowly.
-2. **Blocks the thing above it** — a task that unblocks several others moves
-   up regardless of its own size.
-3. **Enforcement** — a check that stops a regression is worth more than the
-   feature it guards, because the feature will be rewritten and the check
-   will not.
-4. **Everything else** — order within this band is by size, smallest first.
-
-Finished tasks are one line: struck through, no explanation. Open tasks carry
-the note a person would need to start them.
-
-## Where the project stands
-
-| Measure | Value |
-| --- | --- |
-| Crates | 26 (L0 foundation through L5 delivery) |
-| Source | 48,635 lines of Rust, measured with `find crates -name '*.rs'` |
-| Tests | 1,105 passing |
-| Delivery forms | `cli`, `wasm`, `ffi`, `server`, `reader`, all on the `core` facade |
-| Standard clauses | 74 registered in GB/T 33190-2016: 73 `verified`, 1 `deviation` (`8.1.6`, with a stated reason) |
-| Languages | `en-US` and `zh-CN`, 73 engine message keys plus 32 reader keys, parity enforced in CI |
-| CI | fmt, clippy, build, test, all-features test, i18n, language, conformance, XSD validation, corpus freshness, fuzz smoke run |
-
-## Honest gaps
-
-These are the things a new contributor would otherwise discover the hard way.
-Each one is a real, verified finding, not a guess.
-
-1. **One clause is a `deviation`.** `8.1.6` (`PrintQuality`) is recorded as a
-   deviation because the annex A `Page.xsd` and `Document.xsd` carry no such
-   element, so there is nothing in a document to assert against; the reason
-   travels in the register. The register in `compliance/gb-t-33190.toml` is the
-   source of truth and lists the status of each clause by name.
-2. **The documented format support outran the code.** Five cargo features
-   (`render`'s `backend-canvas`/`backend-svg`/`backend-pdf`, and `convert`'s
-   `office`/`ocr`) were declared and referenced nowhere, while `README`
-   advertised "HTML and Office" conversion. The three empty render backends are
-   gone; `office` and `ocr` stay as named placeholders with a comment saying
-   nothing consumes them. M5-f is where they would land. The README now says the
-   same thing the code does.
-3. **The OFD corpus is one file.** `compliance/corpus/minimal.ofd` is the only
-   document the XSD validation and the test suites actually read, so a construct
-   our writer never emits is a construct we have never read outside
-   `tests/third_party.rs` and the standard's own fetched samples. M0-c and M5-f.
-4. **`README.zh-CN.md` has fallen behind the English README twice.** It stated
-   the project was at P3 and P5, then carried the pre-inflation clause figures.
-   It is level again as of this pass, but the maintenance rule is the reason it
-   is listed here: every count in it is a copy, and a copy drifts.
-5. **The reader is now a reader.** It opens, rasterizes, navigates, searches,
-   verifies, prints, shows annotations and seals, compares two revisions,
-   exports and takes the keyboard, and `release.yml` builds and checksums it for
-   Linux, macOS and Windows. What is still missing is a signing key, so the
-   builds are unsigned. See M6.
-6. **A placed `CompositeObject` draws its own content.** The `13.1` stand-in op
-   is gone: the resource table is read at open and a placed unit emits its own
-   vector content. The reader for `CompositeGraphicUnits` is reached, not merely
-   tested. See M0-a.
-7. **The server was the weakest delivery form.** `cli`, `wasm`, `ffi` and
-   `reader` were usable; `server` had an in-memory store, no authentication and
-   no drain. All three are in now, so it is a deployable service rather than a
-   prototype. See M4.
-
----
-
-## Near term: earn the word "done" — finished
-
-Nothing here added capability. Everything here made the existing crates
-trustworthy to someone who did not write them. Exit criterion was: a new
-contributor can clone, test, and trust the project without asking a question.
-The criterion is met; every task below is closed, and the section is kept as
-the record of what it took.
-
-### N1. A shared test kit (N1-a … N1-c)
-
-- **N1-a** `[x]` ~~`steleofd-testkit` carries the OFD zip builder, the base64/DER/SM2-certificate helpers, and the signed and unsigned fixtures.~~
-- **N1-b** `[x]` ~~`sign`, `wasm`, `ffi` and `server` import from it; about 800 lines of duplicated builders deleted.~~
-- **N1-c** `[x]` ~~It is a `[dev-dependencies]` entry everywhere and declares `publish = false`.~~
-
-### N2. Close the untested-clause gap, lowest risk first (N2-a … N2-e)
-
-- **N2-a** `[x]` ~~Structural clauses `5.4`, `6.1`, `7.1`, `7.2`, `19.1`, `20.1`, `A.1`.~~
-- **N2-b** `[x]` ~~Drawing parameters `8.2.1`, `8.2.2`, `8.2.4`, `8.2.5`, `9.2`; three parser bugs fixed.~~
-- **N2-c** `[x]` ~~Text and font `11.1`, `11.3`, `11.4`, `7.8`; four flattening gaps fixed.~~
-- **N2-d** `[x]` ~~Graphics features `8.3.4`, `8.4`, `9.1`.~~
-- **N2-e** `[x]` ~~Feature tail `12`, `13`, `14.1`, `15`, `16`, `17`, `18.2.2`, `18.2.3`; clause count closes at 47 of 47.~~
-
-A clause moves to `verified` only when a linked test actually asserts it. The
-gate script stays the single source of truth; `docs/COMPLIANCE.md` is
-regenerated, never hand-edited.
-
-### N3. Property and fuzz testing (N3-a … N3-d)
-
-- **N3-a** `[x]` ~~Property tests for `package`, five invariants; found and fixed a name-normalisation round-trip defect.~~
-- **N3-b** `[x]` ~~Property tests for `xml` and `model`: reading may fail, never panic; a parsed value survives a `Display` round trip.~~
-- **N3-c** `[x]` ~~`cargo-fuzz` targets `package_open` and `xml_cursor` under `fuzz/`, nightly, 20,000 runs in CI.~~
-- **N3-d** `[x]` ~~A crash-free invariant test feeding random bytes to every public entry point.~~
-
-### N4. Integration tests for the six thin crates (N4-a … N4-f)
-
-- **N4-a** `[x]` ~~`convert`: 11 tests.~~
-- **N4-b** `[x]` ~~`xml`: 21 tests.~~
-- **N4-c** `[x]` ~~`model`: 18 tests.~~
-- **N4-d** `[x]` ~~`font`: 18 tests.~~
-- **N4-e** `[x]` ~~`display`: 17 tests.~~
-- **N4-f** `[x]` ~~`render`: 11 tests.~~
-
-### N5. Documentation and release hygiene (N5-a … N5-d)
-
-- **N5-a** `[x]` ~~`README.zh-CN.md` level with `README.md` again.~~ (fell behind twice more; see Honest gaps 4)
-- **N5-b** `[x]` ~~`CHANGELOG.md`, following Keep a Changelog, driven by the conventional-commit history.~~
-- **N5-c** `[x]` ~~`cargo-semver-checks` in CI, comparing against the latest `v*` tag.~~
-- **N5-d** `[x]` ~~A release workflow on a `v*` tag, building `cdylib`, `staticlib` and wasm artefacts.~~
-
-### N6. Corpus and CI (N6-a … N6-c)
-
-- **N6-a** `[x]` ~~`compliance/corpus/features/` joins `minimal/`; found two real defects and grew `--allow-foreign`.~~
-- **N6-b** `[x]` ~~The `coverage` job: `cargo-llvm-cov` over the workspace, baseline 87.56% lines with an 85% floor.~~
-- **N6-c** `[x]` ~~CI pins toolchain 1.99.0 rather than following `stable`.~~
-
-### N7. The desktop reader, first surface (U1-a … U1-c)
-
-- [x] **U1-a** ~~A window, a menu bar and a document area in `crates/steleofd-reader`, pure `egui`/`eframe` on `core`.~~
-- [x] **U1-b** ~~Open via dialog and drag-and-drop, document facts, page counter and navigation wired to `reader-*` strings.~~
-- [x] **U1-c** ~~`tests/window.rs` drives the real widget tree through `egui_kittest` with no display.~~
-
-Exit criterion: a person can open an `.ofd` in a native window and read every
-page.
-
-### N8. Layout, zoom and search (U2-a … U2-c)
-
-- **U2-a** `[x]` ~~`reader-layout-*` is live; `viewer::visible_pages` is a pure function of layout, page and count.~~
-- **U2-b** `[x]` ~~Rendering moved off the draw path into `render_worker`; real zoom and generation-based cancellation.~~
-- **U2-c** `[x]` ~~The search panel as zone Z5, hits reduced to page, snippet and rectangle, canvas highlight.~~
-
-### N9. Verification, export and access (U3-a … U3-c)
-
-- **U3-a** `[x]` ~~A signature panel as zone Z6, with three verdicts so an unverifiable signature is amber, not red.~~
-- **U3-b** `[x]` ~~Export the visible selection as one PDF or one PNG per page, off the draw path.~~
-- **U3-c** `[x]` ~~Full keyboard navigation and a locale switch from the existing catalogues.~~
-
-### N10. Second-implementation corpus (S1-a, S1-b)
-
-- **S1-a** `[x]` ~~`scripts/fetch_ofdrw.py` pins documents from the reference Java implementation; nothing committed.~~
-- **S1-b** `[x]` ~~Twenty-eight documents opened, six constructs fixed, each covered by `tests/third_party.rs`.~~
-
-### N11. Image resources reach the page (S1-c … S1-g)
-
-- **S1-c** `[x]` ~~The `MultiMedia` table is read at open; media bytes resolved and attached to each placement.~~
-- **S1-d** `[x]` ~~The image placement transform was composed on the wrong side; case-insensitive entry matching added.~~
-- **S1-e** `[x]` ~~JBIG2 through `hayro-jbig2` with `simd` off; `rust-version` moved to 1.92.~~
-- **S1-f** `[x]` ~~A clip is the union of every area of every clip, not just the first.~~
-- **S1-g** `[x]` ~~`KNOWN_UNPARSED` is empty: all sixteen samples open and convert in three formats.~~
-
-### N12. Where an object's content lands (S2-a)
-
-- **S2-a** `[x]` ~~Content space is the unit square plus a CTM that scales it onto the boundary; clips, masks and the page position all corrected.~~
-
----
-
-## Mid term: make it fast and complete
-
-This is where the remaining work lives. Order within it is by the ranking rule
-at the top of this document: wrong output first, then what unblocks what, then
-enforcement, then the rest. Exit criterion: the engine holds a performance
-budget it is measured against, and every clause the project claims to implement
-is either `verified` or `deviation` with a stated reason — no `partial` left.
-The second half of that criterion already holds: the register carries no
-`partial` row, only one `deviation` (`8.1.6`) and 73 `verified`.
-
-### M0. Correctness on real documents (M0-a … M0-c)
-
-The top band. Each of these was a document that rendered wrong, not a feature
-that was absent, which is why they came before everything else. All three are
-closed; the band is kept as the record of what it took.
-
-- **M0-a** `[x]` ~~Resolve a placed `CompositeObject` to its vector resource.
-  Clause 13.1 is `verified`: the resource table is read at open and a placed
-  unit draws its own content.~~
-- **M0-b** `[x]` ~~Read a `Text` clip area, closing `8.4`. A text area emits
-  `DrawOp::ClipText` and every backend resolves the glyph outlines.~~
-- **M0-c** `[x]` ~~Tolerance tests over the corpus. The standard's own clause
-  samples are fetched and parsed in CI, and the third-party corpus is already
-  covered; GIF, undecodable images and a `./`-rooted `DocRoot` were the three
-  defects it found.~~
-
-### M1. Enforcement before features (M1-a … M1-c)
-
-A guard is worth more than the feature it protects: the feature gets rewritten,
-the guard does not.
-
-- **M1-a** `[x]` ~~A golden-image suite: render to PNG, compare against
-  committed references, gate on a pixel-difference threshold. It found the
-  gradient defect the op-level tests could not see: a shape whose fill was a
-  shading painted black unless its standalone gradient op was matched first.~~
-- **M1-b** `[x]` ~~A documented performance budget: a stated ceiling per stage
-  for the one-page case, set well above the measured baseline so only a large,
-  deliberate regression crosses it.~~
-- **M1-c** `[x]` ~~A CI job that runs the benchmarks and fails only on a large,
-  deliberate regression: `scripts/check_performance.py` reads criterion's
-  output and checks each budgeted stage against the ceiling in
-  `docs/PERFORMANCE.md`.~~
-
-### M2. Fonts, the other correctness surface (M2-a … M2-b)
-
-Faces are resolved by declared id and bare CFF is read (done; the CJK/Latin/RTL
-matrix is in `docs/FONTS.md`).
-
-- **M2-a** `[x]` ~~Act on the fallback chain in the reader.~~ Every backend now
-  resolves a run code through `FontManager::outline_for_code`, which substitutes
-  from the chain when the run's own face lacks the character; a code already
-  resolved to a glyph id is never substituted. When no wide face is registered
-  the chain adds one from `default_cjk_family`, which is what a document naming
-  a CJK face it does not ship needs — `helloworld.ofd` went from a blank page to
-  its text. Two limits stand and are recorded in `docs/FONTS.md` gap 4: the
-  registry is filled only from the ids the pages name, and a substitute is
-  chained only where one can be resolved (not wasm, not `system-fonts` off).
-- **M2-b** `[x]` ~~Subset embedded fonts instead of carrying whole faces.~~ A
-  document that embeds a 20 MB CJK collection pays for it in every conversion.
-  `steleofd-font::subset` rebuilds `glyf`, `loca`, `cmap`, `maxp`, `hmtx`,
-  `hhea` and `head` down to the glyphs it is asked for and renumbers them; a
-  face it cannot rewrite without losing it (CFF, or no `cmap`) is carried
-  whole. `register_container_fonts` drives it from the display list, so a run
-  carrying code points keeps its face intact rather than being guessed at.
-  `Orbitron-Bold.ttf` measured 28 648 → 2 804 bytes, an order of magnitude.
-
-### M3. Signature depth (M3-a … M3-c)
-
-`18.2.2` and `18.2.3` are already `verified`; what remains is the depth a
-legal carrier needs.
-
-- **M3-a** `[x]` ~~Seal and incremental update, so a signed document can be
-  extended without breaking its signature. This is the one that matters
-  legally: a document that cannot be signed twice cannot carry a
-  countersignature.~~ `read_coverage` states what each signature protects, from
-  its `References`, and lists the container entries outside the union of every
-  signature's scope — the surface a later update touches. The `18.2.4`
-  verification already tolerates an extended container: only the files a
-  descriptor names move its check value, so a page or a second signature added
-  afterwards leaves an earlier seal `Valid`.
-- **M3-b** Timestamp countersignature verification. `steleofd-crypto` reads a
-  GB/T 20520 token — the profile GM/T 0099-2020 clause 7.2.5 points an OFD
-  signature timestamp at — as a CMS `SignedData` wrapping a `TSTInfo` the TSA
-  signs with SM2 over SM3, and `TimeStampToken::verify_tsa_signature` checks the
-  TSA proof against its own certificate. `steleofd-sign` reads the token off the
-  `<Timestamp>` element and `verify_timestamp` returns one of four verdicts:
-  `Absent` (no token), `Unbound` (the token's `messageImprint` is not the SM3 of
-  the signature's `check_value`, so the proof covers other bytes), `Unverified`
-  (the imprint matches but the TSA signature does not verify) or `Bound`. The
-  facade exposes it as `Document::verify_timestamps`, mirroring
-  `verify_signatures`. Registered under clause `18.2.4`.
-- **M3-c** The archival profile. `steleofd-archive` both checks an OFD against
-  GB/T 42133-2022 and produces the profile: `archive()` strips the optional
-  structures clause 6.2.2 names (`Permissions`, `VPreferences`, `Extensions`,
-  `Keywords`, `Attachments`), drops the attachment files that leaves
-  unreachable, and declares `DocType="OFD-A"` on the result, returning a record
-  of what it changed. Registered under clause `6.2.2`. The image-format and
-  font-subsetting conversions 42133 also names stay out on purpose: each is a
-  fidelity trade-off (a subset font that loses a glyph a later edit needs, an
-  image re-encode that loses a transparency layer) that needs a per-call
-  decision rather than a default.
-
-### M4. Server production readiness (M4-a … M4-e)
-
-Ranks here rather than lower because the `server` crate is one of the four
-delivery forms the README advertises, and it was the one furthest from being
-deployable. All five are done.
-
-- **[x] M4-a** ~~Replace the in-memory store with a persistent one.~~
-  `Store::persistent` writes each document under a directory and a sidecar
-  recording its tenant, and adopts what an earlier process left, so an id
-  survives a restart. `STELEOFD_DATA_DIR` selects it; unset stays memory only.
-- **[x] M4-b** ~~Authentication and per-tenant authorisation.~~
-  A key ring read from `STELEOFD_API_KEYS` resolves a caller to a tenant, and
-  every document is scoped to its uploader. With no keys every caller shares
-  one implicit tenant, so a trial run needs no setup.
-- **[x] M4-c** ~~Rate limiting and a real request timeout budget.~~
-  A per-caller token bucket with a burst, plus a request timeout set past the
-  slowest route (PDF conversion) so a slow render is not cut off by it.
-- **[x] M4-d** ~~Graceful drain, so a rolling deploy does not cut a render in
-  half.~~ A stop is announced, the socket stops accepting, and in-flight work
-  gets a bounded grace period above the request timeout.
-- **[x] M4-e** ~~OpenAPI documentation generated from the route definitions.~~
-  Hand-written rather than derived, but `openapi::PATHS` is the single list the
-  router and the description are both held to, so a route on one and not the
-  other fails a test rather than a reader.
-
-### M5. Rendering completeness (M5-a … M5-f)
-
-Absent features, not wrong ones, so they sit below the correctness band.
-
-- **M5-a** `[x]` ~~Paint the colour spaces clause 7.13 declares. The declaration
-  side is done: the `ColorSpaces` table is read at open and
-  `ParsedDocument::color_spaces` carries each space's type, depth, profile and
-  palette. What is left is the painting side — no backend consumes the table
-  yet, so an image naming a CMYK space is still decoded as sRGB.~~ The painting
-  side is done for colour values: a `FillColor` or `StrokeColor` naming a space
-  has its channels read in that space at flatten time, a four-channel list
-  being CMYK and a single channel grey, and an `Index` picks the palette entry.
-  A colour whose space is absent or unknown keeps its ordinary sRGB reading, so
-  nothing that worked before changes. An image's own colour space rides in its
-  encoded bytes and is converted by the decoder, so it needed no table lookup.
-- **M5-b** `[x]` The three shading and fill models of chapter 8.3 are painted:
-  `Pattern` (8.3.3), `GouraudShd` (8.3.4.4) and `LaGouraudShd` (8.3.4.5).
-  The two Gouraud models resolve to one triangle mesh (a strip of triples, or a
-  `VerticesPerRow` lattice) and the raster backend writes each triangle's
-  interpolated colours per pixel before masking them to the filled path. A
-  `Pattern`'s cell is a page block, so it is flattened into the paint and
-  rasterized once, then tiled across the area with its `ReflectMethod`, again
-  masked to the path. `8.1.6` PrintQuality stays a deviation for a different
-  reason: the element is absent from the vendored Annex A schema entirely, so
-  there is nothing to read.
-- **M5-c** Blending and transparency modes. Closed as deliberately not
-  supported: GB/T 33190-2016 defines no blend-mode element or attribute, and its
-  only transparency control is the per-object `Alpha` the engine already honours
-  in every backend. There is no gap to fill, so the finding is recorded in
-  `docs/INTEROP.md` §6 rather than left as an open item. A producer that writes a
-  blend mode anyway is writing a non-standard extension, which the reader
-  ignores like any unrecognised attribute.
-- **M5-d** Bring each test-verified drawing feature to full parity. `RadialShd`
-  end centre and radius travel with the op and each backend reduces the cone to
-  what it can paint. The Gouraud mesh and the `Pattern` cell now do too: a mesh
-  reaches PDF as a `ShadingType 4` free-form triangle shading, one colour per
-  vertex, so the file interpolates rather than showing a mean colour, and a
-  `Pattern` reaches SVG as a native `<pattern>` spanning one step. A reflecting
-  pattern reaches SVG too, as a 2x2 block of mirrored copies that then tiles
-  normally, so the reflection is real rather than a repeated cell. One limit
-  remains and is recorded rather than hidden: SVG 1.1 has no mesh gradient, so a
-  mesh keeps its mean colour there.
-- **M5-e** `[x]` ~~Move the JBIG2 codec out of `display`. The IR crate carries a
-  full decoder (`display/src/jbig2.rs`, via `hayro-jbig2`) that only `render`
-  and `convert` call; the IR layer should hold data structures, not codecs.~~
-  The decoder now lives in `steleofd-io`, the L0 crate that owns byte-level
-  capability, and `display` no longer depends on `hayro-jbig2`. The parser,
-  render and convert crates reach it through `steleofd_io::jbig2`, and the
-  codec-specific `dimensions_for` helper is gone: the one caller matches on the
-  codec itself, so the codec crate holds no image-set type.
-- **M5-f** Interoperability. Test against documents produced by other real OFD
-  implementations (M0-c is the corpus half of this), round-trip the
-  standard's own examples if the working group publishes any, and the Office
-  conversion the `office` feature on `convert` and `core` names as a
-  placeholder. OCR rides with it. The nine-page golden book was rendered by
-  another vendor's reader and compared page by page. Five pages agree to
-  anti-aliasing; the four that differ were re-checked against the standard's
-  own text, because the vendor is one of the four bodies that drafted it and a
-  difference is not evidence of a fault on their side. That audit holds: each
-  of the four is a gap in the oracle, measured, not assumed.
-  `AxialShd` and `RadialShd` come out as one flat black — its gradient page has
-  a single non-white colour and its radial page two colours, where ours carry
-  a ramp of hundreds. A page box wider than `CommonData.PageArea` is ignored:
-  it renders the 297x100 mm page into a 1.67 ratio box, ours into 2.97. And on
-  the clip page it draws the clip area as a bare outline rather than a mask,
-  so the object it should confine is never filled — the outline sits exactly on
-  the clip rectangle our own render confines the fill to, and tables 34 and 35
-  make that fill the required result.
-  The comparison paid for itself in the other direction too: it exposed three
-  defects in our own fixtures and reader — `FillRule` for `Rule`,
-  `Fill`/`Stroke` defaults taken from the wrong model, and path coordinates
-  read as absolute where the standard makes them offsets from the boundary
-  corner. A second reader was then cross-checked on the same four pages, so no
-  conclusion rests on one comparison: `ofdrw` 2.4.0, whose `AWTMaker` fills a
-  `Fill="true"` path and strokes a `Stroke="true"` one exactly as tables 34
-  and 35 say, takes the page box from the page's own area before
-  `CommonData.PageArea`, and — telling in the other direction — carries no
-  shading code at all. On every one of the four points it stands with us.
-  The cross-check also undid one of our own conclusions: `Clips` does read a
-  `TransFlag`, but it is an OFD 1.2 extension, not in the 2016 XSD, and the
-  spec default is `true` where real files, the official reader samples among
-  them, write `false`. We had guessed the default backwards. The attribute is
-  gone; the clip stays in object space unconditionally, which is what the 2016
-  text says and what every sample does. The full four-way comparison, with the
-  per-page evidence and the second reader's source citations, is in
-  [INTEROP.md](INTEROP.md).
-
-### M6. The reader, completed (M6-a … M6-f)
-
-The reader works; these are the parts of a reader people expect that it does
-not have. Ranked by how often a real reader needs them.
-
-- **M6-a** `[x]` ~~Print, straight from the reader's current view. `steleofd-print`
-  exists and nothing calls it from the reader, so this is wiring, not writing.~~
-  `print_worker` mirrors `export_worker`; the menu prints the pages on screen.
-- **M6-b** `[x]` ~~Annotation display and navigation. Clause 15 is verified, so the
-  model is there and only the view is missing.~~
-  The document names its index, the parser joins marks back to pages, and the
-  reader lists them by page and turns to the one picked.
-- **M6-c** `[x]` ~~Signature appearance rendering — the visual half of the `18.2.3`
-  model that is already read.~~
-  `read_seals` resolves the seal image beside the descriptor and joins each
-  `StampAnnot` to it; `Document::seals` maps the `PageRef` id to a page index,
-  and the reader stamps each seal onto its page's raster. An image a package
-  does not ship keeps its placement with empty bytes rather than vanishing.
-- **M6-d** Installable builds for the platforms people deploy on, and an
-  offline story. `release.yml` builds the desktop reader for Linux, macOS and
-  Windows from one job per system plus the C ABI library and the WebAssembly
-  bindings, and every artefact ships beside a `SHA256SUMS` manifest:
-  `scripts/release_checksums.py` generates it next to the bytes so it can never
-  describe a file the tag did not build, and verifies a directory of downloads
-  offline (its `selftest` mode is a CI step). The builds are **unsigned** —
-  there is no signing key in the project — so the checksum is stated to be the
-  only trust anchor rather than implying a signature that is not there.
-- **M6-e** `[x]` ~~A document comparison view for two revisions of the same
-  file.~~ `Document::compare` diffs two flattened display lists page by page and
-  names each page's change (added, removed, resized, text, graphics), and the
-  reader's comparison panel picks a second file, lists the pages that moved and
-  turns to one when picked. The comparison is over what each page draws, so two
-  files that render the same compare equal even when their markup differs.
-- **M6-f** Move the reader's interface strings out of `steleofd-i18n`. Done: the
-  reader owns a `ReaderMessage` list and a `locales/{en-US,zh-CN}/reader.ftl`
-  beside the crate that shows the strings, loaded through a key-based
-  `I18n::text_key` so the engine bundle needs no reader ids. `steleofd-i18n`
-  now holds engine messages only (73 keys, was 105), and the i18n parity script
-  checks both catalogues against their own Rust key lists.
-
-### M7. Repository hygiene
-
-- **[x] M7-a** ~~Split the aging files. `parser/src/content.rs` (1,560),
-  `convert/src/pdf.rs` (1,442), `render/src/raster.rs` (1,306) and
-  `reader/src/app.rs` (1,055) have outgrown one screen of scrolling. Pure
-  reorganisation, no behaviour change; worth one deliberate pass rather than a
-  drip.~~ Done: each file became a module root with its parts beside it, and
-  the largest is now under 700 lines. Every function body was checked to be
-  byte-identical, and the reader's `#[cfg(test)]` block stayed in the root so
-  test names did not move.
-
----
-
-## Far term: become the reference implementation
-
-Exit criterion: a third party can build an application on SteleOFD without
-reading its source.
-
-### F1. Developer experience
-
-Task-based documentation with a worked example per delivery form, and examples
-that are compiled in CI so they cannot rot. A screenshot-driven tour of the
-desktop reader, generated from the same build the tests exercise.
-
-### F2. Extensibility
-
-A public API for custom colour profiles, font providers and render backends,
-so an organisation can plug in its own without forking the engine. The command
-stream render backend (a browser re-zooms vectors instead of resampling a
-bitmap) is a candidate for this surface; it is not declared until it exists.
-
-### F3. Standards movement
-
-Track the revisions of GB/T 33190 and the related OFD series, and keep the
-annex A schemas regenerable from the standard text rather than hand-edited.
-
-### F4. Ecosystem
-
-Package releases for the platforms people actually deploy on, a Java binding
-alongside the C ABI for the OA systems that need one, and a stable plugin
-point for third-party signature providers.
-
-### F5. Other shells for the same engine
-
-`egui` is a build decision, not a belief. The engine is a library, and these
-are the other ways an organisation may reasonably want to put a front end on
-it. Each is a separate crate that depends on `core`; none of them changes the
-engine.
-
-- **F5-a** A Tauri shell, for organisations that want a web front end with a
-  native window. It buys CSS layout and accessibility for free, at the cost of
-  a second toolchain and webkit2gtk in CI.
-- **F5-b** A Qt or GTK binding, for desktops that embed the reader in an
-  existing native application rather than shipping a standalone one.
-- **F5-c** A browser shell, the reader built on the `wasm` bindings, for the
-  cases where a document may not leave the user's machine as a file — served
-  from an intranet with the document never uploaded.
-
-F5-c is the one that overlaps with the existing `wasm` crate. `wasm` is the
-engine crossing into a browser; a browser *reader* is a product built on it.
-
----
-
-## Sequencing
-
-The near term is finished; everything open is mid term. Within it the bands
-run in order:
-
-**M0 first.** These are documents that render wrong today, and they were the
-last clause gaps standing between the conformance number and the word "done".
-All three are closed: `13.1`, `8.4` and the corpus tolerance tests are
-`verified`. M0-a and M0-b were independent of each other and of everything
-else.
-
-**M1 second, but start it in parallel with M0.** A golden-image suite is worth
-more the earlier it exists, because it is what stops M0-a and M0-b from
-regressing the moment they land. M1-b and M1-c depend on M1-a for something to
-compare against, and M1-b needs M1-a's output to define a pixel budget.
-
-**M2 third.** M2-a needs nothing from M0 or M1, so it can run alongside them.
-M2-b depends on M2-a in the sense that subsetting a face the chain cannot use
-buys nothing.
-**M3 fourth.** M3-a is independent. M3-c is the reason M0 matters: an archival
-check over a document that renders wrong is checking the wrong bytes.
-
-**M4 through M7.** M4 is done — the server is deployable. M5 depends on M1-a,
-because every item in it is a rendering change and none of them can be verified
-without golden images; M5-a, M5-b, M5-c and M5-e are done, and M5-d is down to
-one recorded SVG limit. M6 and M7 are done. So what is left in the mid term is
-M5-d and M5-f, the two items that are last because they are the ones no
-existing test could catch on its own.
-
-Far term is deliberately not scheduled. It describes a direction, not dates.
-
-## How to propose changes
-
-Roadmap changes follow the same rule as code: open an issue, state the
-problem, name the exit criterion. A task without a verifiable exit criterion
-does not belong here.
+# What is left
+
+SteleOFD builds, tests and releases on every platform `egui` runs on, and the
+register holds no `partial` clause. What this file lists is the work that is
+still open, and nothing else: the record of what the finished work took is in
+[`CHANGELOG.md`](../CHANGELOG.md).
+
+The previous roadmap carried four horizons of closed tasks. Keeping them made
+the open items hard to find, so they were folded into the changelog and this
+file took their place.
+
+## Ranking
+
+Open items are ordered by **what the project is for**, then by what unblocks
+what. The README says OFD is the legal carrier for official documents, licences,
+invoices and archives, so the order puts wrong output on a real document first,
+then distribution and legal completeness, then the rest.
+
+1. **Wrong output on a real document** — a reader that renders a legal document
+   incorrectly is worse than one that is slow.
+2. **Blocks the thing above it** — an item that unblocks several others moves up
+   regardless of its own size.
+3. **Enforcement** — a check that stops a regression outlives the feature it
+   guards.
+4. **Everything else** — smallest first.
+
+## Open
+
+| # | Item | Why it ranks here | Done when |
+| --- | --- | --- | --- |
+| O1 | **A corpus from more than one producer.** `compliance/corpus` carries our own documents plus the standard's fetched samples; the 28-document third-party set is fetched, not committed. | A construct our writer never emits is one we have only ever read through somebody else's file. This is the highest-value open item because it grows the number of real documents every other row is checked against. | The committed corpus holds documents from at least two producers, and CI validates all of them against the annex A schemas. |
+| O2 | **Signed builds.** Every artefact ships unsigned, with `SHA256SUMS` as the only trust anchor. | A person installing an `.exe` or an `.apk` for a legal document gets a system warning instead of a signature. | The desktop and Android builds are signed and the release notes name the key rather than the checksum. |
+| O3 | **A package for the platforms people deploy on.** The release page has loose executables, not a `.deb`, `.rpm`, `.dmg` or Windows installer. | Installs and upgrades are how an OA deployment adopts a tool. It sits below O1 and O2 because the executable already runs. | At least one Linux package and one macOS bundle are published per tag and install without a manual step. |
+| O4 | **The last export parity gap.** SVG 1.1 has no mesh gradient, so a Gouraud mesh keeps its mean colour there. | One recorded limit, in one export format, and no SVG construct that removes it. | Either an SVG output that carries the mesh, or the limit documented as final in `docs/INTEROP.md`. |
+| O5 | **The constructs `office` and `ocr` name.** The two `convert` features are declared placeholders; nothing consumes them. | Chapter-level conversion is absent rather than wrong, so it ranks below the corpus and distribution work. | DOCX or OOXML conversion reads a document without a fidelity loss the changelog has to hedge, or the features are deleted. |
+| O6 | **A worked example per delivery form, compiled in CI.** | The crates are documented; what is missing is a start-to-finish example a third party can copy. | Five examples build in CI, one per delivery form, and each is linked from the README. |
+| O7 | **A public extension surface** for colour profiles, font providers and render backends. | An organisation cannot plug in its own without forking. It follows the examples because an extension point without a worked example is a guess. | The three provider traits are public, documented, and exercised by the `F1` examples. |
+| O8 | **Other shells.** A Tauri shell and a Qt or GTK binding, each a separate crate over `core`. | Both are alternatives to the shipped `egui` reader, not gaps in it. | A second shell opens a document and draws a page through `core` alone. |
+| O9 | **Track GB/T 33190 revisions** and keep the annex A schemas regenerable from the standard text. | Nothing is pending today; this is the standing task that keeps it that way. | A new revision of the standard regenerates the schemas with the existing scripts and the register stays consistent. |
+| O10 | **Keep the two READMEs level.** They drifted twice, and every number in them is a copy. | Real, but it is maintenance rather than capability. | A check in CI compares the numbers the Chinese README states against the English one. |
+
+A browser shell over the `wasm` bindings is not listed: the reader now builds
+for `wasm32` and ships as a page in each release, which is what it would have
+asked for.
+
+## Standing constraints
+
+- **`8.1.6` `PrintQuality` stays a `deviation`.** Annex A carries no such
+  element, so there is nothing in a document to assert against. The reason
+  travels in the register and the row is not open.
+- **Blending is deliberately unsupported.** GB/T 33190-2016 defines no blend
+  mode; `Alpha` is the whole of its transparency model. Recorded in
+  `docs/INTEROP.md` §6.
+- **Far-term work is not scheduled.** The rows above describe a direction, not
+  dates.
+
+## How to propose a change
+
+Open an issue, state the problem, name the exit criterion. A task without a
+verifiable exit criterion does not belong here.
