@@ -17,8 +17,8 @@ fontconfig, reached through `font-kit` by the reader on Linux.
 
 Status: the original plan is complete. All 26 crates are built and tested, the
 five delivery forms (`cli`, `wasm`, `ffi`, `server`, `reader`) sit on one `core`
-facade, and the engine holds a documented performance budget. `0.1.0` is the
-first release. What is left to build, and which release has claimed it, is in
+facade, and the engine holds a documented performance budget. The current
+release is `0.1.1`. What is left to build, and which release has claimed it, is in
 [`docs/Roadmap.md`](docs/Roadmap.md); what this version offers is in the
 [`CHANGELOG`](CHANGELOG.md).
 
