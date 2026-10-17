@@ -9,21 +9,26 @@ producer should not write.
 
 These come from an open-source toolkit mirror of the standard's own test set,
 covering GB/T 33190 section 6.1 (the ZIP container) and section 6.2 (the file
-structure). They are third-party and not ours, so nothing is committed: the
-script downloads the published archive, unpacks the nested container, and
-restores the GBK-encoded Chinese names, which the ZIP was written with and
-which the toolkit's own listing does not.
+structure). They are third-party and not ours, so nothing is committed.
 
-The upstream host blocks datacenter clients on its raw path, so the mirror
-listed below is used; both serve the same blob.
+They used to be pulled as a nested archive from that mirror, which served the
+blob by an id its owner is free to rewrite -- the same defect as a branch name.
+`emfox/OFD-fixtures` stores the published archive itself instead, at a commit,
+with a SHA-256 in its `manifest.json`; `scripts/fixtures.py` says how both are
+held to. Only the archive is stored, not the documents unpacked out of it, so
+every byte can be checked against the publisher and nothing has to be trusted
+to a reconstruction. That puts the peeling here: `Desktop.zip` holds
+`ofd标准测试文件.zip`, which holds the thirteen documents, and both archives
+write their Chinese names as GBK without the UTF-8 flag.
 
 Usage:
     python3 scripts/fetch_gb_samples.py [--out DIR] [--check] [--parse]
 
-`--check` reports what is missing without downloading, which is what CI runs.
-`--parse` opens every sample that is present and compares the set that fails
-against `KNOWN_UNPARSED`: a sample that breaks for a new reason is a
-regression, and one that starts working means the list is stale.
+`--check` reports what is missing or no longer matches its pinned hash, without
+downloading anything; that is what CI runs. `--parse` opens every sample that
+is present and compares the set that fails against `KNOWN_UNPARSED`: a sample
+that breaks for a new reason is a regression, and one that starts working means
+the list is stale.
 """
 
 from __future__ import annotations
@@ -31,18 +36,15 @@ from __future__ import annotations
 import argparse
 import io
 import sys
-import urllib.error
-import urllib.request
 import zipfile
 from pathlib import Path
 
-# The published archive, pinned by blob id so a mirror drift cannot silently
-# change what the suite runs against.
-MIRROR = "https://raw.atomgit.com"
-BLOB = "open-source-toolkit/886653/blobs/5f19f117681ba58457e3969f613580922d3e760d/Desktop.zip"
-URL = MIRROR + "/" + BLOB
+from fixtures import FixtureError, Fixtures
 
-# The inner archive, and the directory the thirteen documents land in.
+SET = "gb-t-33190"
+
+# The published archive, and the archive it contains. Both are ZIPs.
+ARCHIVE = "Desktop.zip"
 INNER = "ofd标准测试文件.zip"
 
 # Why the set is here, one line per document. The names are the standard's own
@@ -74,17 +76,11 @@ KNOWN_UNPARSED: dict[str, str] = {}
 PARSE_COMMAND = "cargo run --quiet -p steleofd-cli -- info".split()
 
 
-def _fetch(timeout: float) -> bytes:
-    request = urllib.request.Request(URL, headers={"User-Agent": "steleofd-corpus"})
-    with urllib.request.urlopen(request, timeout=timeout) as response:
-        return response.read()
-
-
 def _decode_name(info: zipfile.ZipInfo) -> str:
     """Restore a GBK file name the archive wrote without the UTF-8 flag.
 
-    The producer stored the names as GBK bytes and left the UTF-8 bit clear, so
-    the reader decodes them as code page 437. Re-encoding that and decoding as
+    The publisher stored the names as GBK bytes and left the UTF-8 bit clear,
+    so a reader decodes them as code page 437. Re-encoding that and decoding as
     GBK recovers the Chinese the clause numbers are written in.
     """
     if info.flag_bits & 0x800:
@@ -96,29 +92,25 @@ def _decode_name(info: zipfile.ZipInfo) -> str:
         return info.filename
 
 
-def _unpack(outer: bytes, out: Path) -> list[str]:
-    """Peel the nested archive and write the OFD documents into `out`."""
-    with zipfile.ZipFile(io.BytesIO(outer)) as top:
-        inner_bytes = None
-        for name in top.namelist():
-            if _decode_name(top.getinfo(name)) == INNER or name.endswith(".zip"):
-                inner_bytes = top.read(name)
-                break
-        if inner_bytes is None:
-            raise ValueError(f"no inner archive in the downloaded blob (has {top.namelist()})")
-
-    written: list[str] = []
-    with zipfile.ZipFile(io.BytesIO(inner_bytes)) as inner:
-        for info in inner.infolist():
-            if info.is_dir():
-                continue
-            name = _decode_name(info)
-            if not name.lower().endswith(".ofd"):
-                continue
-            target = out / Path(name).name
-            target.write_bytes(inner.read(info))
-            written.append(target.name)
-    return written
+def _documents(archive: bytes) -> dict[str, bytes]:
+    """Peel both layers of the published archive down to the OFD documents."""
+    try:
+        with zipfile.ZipFile(io.BytesIO(archive)) as outer:
+            inner = None
+            for info in outer.infolist():
+                if _decode_name(info) == INNER:
+                    inner = outer.read(info)
+                    break
+            if inner is None:
+                raise FixtureError(f"{ARCHIVE} holds no {INNER}")
+            with zipfile.ZipFile(io.BytesIO(inner)) as layer:
+                return {
+                    _decode_name(info): layer.read(info)
+                    for info in layer.infolist()
+                    if not info.is_dir() and _decode_name(info).lower().endswith(".ofd")
+                }
+    except (zipfile.BadZipFile, OSError) as error:
+        raise FixtureError(f"cannot unpack {ARCHIVE}: {error}") from error
 
 
 def _sanity(name: str, blob: bytes) -> str | None:
@@ -165,6 +157,40 @@ def _parse(out: Path) -> int:
     return 0
 
 
+def _check(out: Path, timeout: float) -> int:
+    """Report what is absent or changed, without writing anything."""
+    try:
+        pinned = Fixtures(SET, timeout)
+    except FixtureError as error:
+        print(f"FAIL fixtures: {error}", file=sys.stderr)
+        return 1
+    try:
+        documents = _documents(pinned.read(ARCHIVE))
+    except FixtureError as error:
+        print(f"FAIL archive: {error}", file=sys.stderr)
+        return 1
+    missing: list[str] = []
+    stale: list[str] = []
+    for name in sorted(SAMPLES):
+        path = out / name
+        if not path.is_file():
+            missing.append(name)
+        elif path.read_bytes() != documents.get(name):
+            stale.append(name)
+    present = len(SAMPLES) - len(missing) - len(stale)
+    print(f"GB/T 33190 samples: {present}/{len(SAMPLES)} present in {out}")
+    for name in missing:
+        print(f"  missing {name}")
+    for name in stale:
+        # The hash lives on the archive, so a document is compared with the
+        # archive's copy: same answer, without a second manifest entry to keep.
+        print(f"  changed {name}: differs from the pinned archive")
+    if missing or stale:
+        print("run: python3 scripts/fetch_gb_samples.py")
+        return 1
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -182,43 +208,37 @@ def main() -> int:
         return _parse(args.out)
 
     if args.check:
-        missing = [n for n in sorted(SAMPLES) if not (args.out / n).is_file()]
-        present = len(SAMPLES) - len(missing)
-        print(f"GB/T 33190 samples: {present}/{len(SAMPLES)} present in {args.out}")
-        for name in missing:
-            print(f"  missing {name}")
-        if missing:
-            print("run: python3 scripts/fetch_gb_samples.py")
-        return 1 if missing else 0
+        return _check(args.out, args.timeout)
 
     try:
-        outer = _fetch(args.timeout)
-    except (urllib.error.URLError, TimeoutError, OSError) as error:
-        print(f"FAIL download: {error}", file=sys.stderr)
+        pinned = Fixtures(SET, args.timeout)
+    except FixtureError as error:
+        print(f"FAIL fixtures: {error}", file=sys.stderr)
+        return 1
+
+    try:
+        documents = _documents(pinned.read(ARCHIVE))
+    except FixtureError as error:
+        print(f"FAIL archive: {error}", file=sys.stderr)
         return 1
 
     args.out.mkdir(parents=True, exist_ok=True)
-    try:
-        written = _unpack(outer, args.out)
-    except (zipfile.BadZipFile, ValueError) as error:
-        print(f"FAIL unpack: {error}", file=sys.stderr)
-        return 1
-
     failures = 0
     for name in sorted(SAMPLES):
-        target = args.out / name
-        if not target.is_file():
-            print(f"FAIL {name}: not present in the downloaded archive", file=sys.stderr)
+        blob = documents.get(name)
+        if blob is None:
+            print(f"FAIL {name}: not present in the published archive", file=sys.stderr)
             failures += 1
             continue
-        problem = _sanity(name, target.read_bytes())
+        problem = _sanity(name, blob)
         if problem is not None:
             print(f"FAIL {name}: {problem}", file=sys.stderr)
             failures += 1
             continue
-        print(f"ok   {name:<40} {target.stat().st_size:>9,} bytes")
+        (args.out / name).write_bytes(blob)
+        print(f"ok   {name:<40} {len(blob):>9,} bytes")
 
-    print(f"\n{len(SAMPLES) - failures}/{len(SAMPLES)} unpacked into {args.out} ({len(written)} found)")
+    print(f"\n{len(SAMPLES) - failures}/{len(SAMPLES)} fetched into {args.out}")
     return 1 if failures else 0
 
 
