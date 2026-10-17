@@ -502,6 +502,7 @@ impl SvgSink<'_> {
         }
         if missing > 0 {
             self.stats.missing_glyph_runs += 1;
+            self.stats.missing_glyphs += missing;
         }
         if drawn > 0 {
             self.stats.outlined_glyphs += drawn;
@@ -774,9 +775,18 @@ pub fn page_to_svg(
     page: &steleofd_display::PageDisplay,
     options: &SvgOptions<'_>,
 ) -> Result<String> {
+    Ok(page_to_svg_with_stats(page, options)?.0)
+}
+
+/// The same conversion, with what it did to the page: a caller that wants to
+/// warn about a face it could not find needs the counts, not just the bytes.
+pub fn page_to_svg_with_stats(
+    page: &steleofd_display::PageDisplay,
+    options: &SvgOptions<'_>,
+) -> Result<(String, ConversionStats)> {
     let mut sink = SvgSink::new(page.page_box, options);
     replay(page, &mut sink)?;
-    Ok(sink.finish().0)
+    Ok(sink.finish())
 }
 
 /// Convert a whole display list, one SVG document per page.

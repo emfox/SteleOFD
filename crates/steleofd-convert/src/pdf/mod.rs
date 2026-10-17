@@ -320,6 +320,7 @@ impl<'a> PdfSink<'a> {
         }
         if missing > 0 {
             self.stats.missing_glyph_runs += 1;
+            self.stats.missing_glyphs += missing;
         }
         if drawn > 0 {
             self.stats.outlined_glyphs += drawn;
@@ -629,11 +630,22 @@ pub fn page_to_pdf(
     page: &steleofd_display::PageDisplay,
     options: &PdfOptions<'_>,
 ) -> Result<Vec<u8>> {
+    Ok(page_to_pdf_with_stats(page, options)?.0)
+}
+
+/// The same conversion, with what it did to the page. A PDF that dropped a
+/// run for want of a font is still a valid PDF, so the counts are the only
+/// way a caller learns the page is not the document it came from.
+pub fn page_to_pdf_with_stats(
+    page: &steleofd_display::PageDisplay,
+    options: &PdfOptions<'_>,
+) -> Result<(Vec<u8>, crate::ConversionStats)> {
     let mut sink = PdfSink::new(page.page_box, options);
     replay(page, &mut sink)?;
+    let stats = sink.stats.clone();
     let mut doc = Document::new();
     let page_id = sink.emit_page(&mut doc)?;
-    finish_document(&mut doc, vec![page_id])
+    Ok((finish_document(&mut doc, vec![page_id])?, stats))
 }
 
 /// Convert a whole display list into one multi-page PDF document.
