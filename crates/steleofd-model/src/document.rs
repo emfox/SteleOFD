@@ -563,12 +563,27 @@ pub struct Font {
     /// Family name, when the declaration carries one.
     #[serde(rename = "FamilyName", skip_serializing_if = "Option::is_none")]
     pub family_name: Option<String>,
-    /// Character set the face covers, such as `prc` or `unicode`.
-    #[serde(rename = "CharSet", skip_serializing_if = "Option::is_none")]
+    /// Character set the face covers, such as `prc` or `big5`. Clause 11.1
+    /// spells the attribute `Charset`; `CharSet` is read too, since writers
+    /// in the field emit both and the older spelling is already in our model.
+    #[serde(
+        rename = "Charset",
+        alias = "CharSet",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub charset: Option<String>,
-    /// Whether the face is bold.
+    /// Whether the face is serifed, for matching a substitute.
+    #[serde(rename = "Serif", skip_serializing_if = "Option::is_none")]
+    pub serif: Option<bool>,
+    /// Whether the face is bold, for matching a substitute.
     #[serde(rename = "Bold", skip_serializing_if = "Option::is_none")]
     pub bold: Option<bool>,
+    /// Whether the face is italic, for matching a substitute.
+    #[serde(rename = "Italic", skip_serializing_if = "Option::is_none")]
+    pub italic: Option<bool>,
+    /// Whether the face is monospaced, for matching a substitute.
+    #[serde(rename = "FixedWidth", skip_serializing_if = "Option::is_none")]
+    pub fixed_width: Option<bool>,
     /// Path of the font file, relative to the table's `BaseLoc`.
     #[serde(rename = "FontFile", default)]
     pub font_file: String,

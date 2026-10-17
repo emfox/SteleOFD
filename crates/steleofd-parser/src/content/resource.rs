@@ -75,11 +75,17 @@ fn push_font(cursor: &mut Cursor<'_>, node: &Node, list: &mut FontList) -> Resul
         id: id.to_string(),
         font_name: a.get("FontName").unwrap_or("").to_string(),
         family_name: a.get("FamilyName").map(str::to_string),
-        charset: a.get("CharSet").map(str::to_string),
-        bold: match a.get("Bold") {
-            Some(raw) => Some(parse_bool("Font", "Bold", raw)?),
-            None => None,
-        },
+        // Clause 11.1 spells it `Charset`; writers in the field emit `CharSet`
+        // just as often, and both name the same thing.
+        charset: a
+            .get("Charset")
+            .or_else(|| a.get("CharSet"))
+            .filter(|v| !v.is_empty())
+            .map(str::to_string),
+        serif: read_optional_bool(a, "Serif")?,
+        bold: read_optional_bool(a, "Bold")?,
+        italic: read_optional_bool(a, "Italic")?,
+        fixed_width: read_optional_bool(a, "FixedWidth")?,
         font_file,
     });
     Ok(())
@@ -341,4 +347,12 @@ fn read_composite_graphic_unit(
         }
     }
     Ok(unit)
+}
+
+/// Read a boolean attribute that may be absent.
+fn read_optional_bool(a: &steleofd_xml::Attributes, name: &str) -> Result<Option<bool>> {
+    match a.get(name) {
+        Some(raw) if !raw.is_empty() => Ok(Some(parse_bool("Font", name, raw)?)),
+        _ => Ok(None),
+    }
 }
