@@ -51,7 +51,13 @@ jobs:
 
       # Pinned rather than `stable`: a rolling toolchain turns every new lint
       # upstream ships into a red build nobody asked for. Raising the version
-      # here is a deliberate commit, and it is the one the sandbox can match.
+      # here is a deliberate commit.
+      #
+      # This is the toolchain the project is built with, not the minimum it
+      # supports: `rust-version` in the workspace manifest states that, and the
+      # two are independent. A new feature usable at a lower version does not
+      # raise either, so the pinned number moving here means a lint baseline
+      # moved, nothing about what a consumer needs.
       - name: Install toolchain
         uses: dtolnay/rust-toolchain@1.99.0
         with:
@@ -60,6 +66,16 @@ jobs:
       # font-kit needs fontconfig headers to build its sys crate.
       - name: Install system dependencies
         run: sudo apt-get update && sudo apt-get install -y libfontconfig1-dev pkg-config
+
+      # `rust-version` in the workspace manifest is a claim until something
+      # builds under it. The version is read from the manifest rather than
+      # written here, so the one place that states the minimum is also the one
+      # place that would have to change.
+      - name: Install the minimum toolchain
+        run: |
+          msrv=$(grep -m1 '^rust-version' Cargo.toml | cut -d'"' -f2)
+          echo "MSRV=$msrv" >> "$GITHUB_ENV"
+          rustup toolchain install "$msrv" --profile minimal
 
       # `Swatinem/rust-cache` caches the registry and the *dependency* artefacts
       # rather than the whole `target/`. Caching all of `target/` made a single
@@ -73,6 +89,11 @@ jobs:
 
       - name: Format
         run: cargo fmt --all --check
+
+      # Every check below runs on the pinned toolchain; this one runs on the
+      # minimum, which is the only way the manifest's claim is ever tested.
+      - name: Build on the minimum supported Rust
+        run: cargo +"$MSRV" check --workspace --all-targets
 
       # `-D warnings` is passed to clippy rather than through RUSTFLAGS, which
       # would apply to every dependency too and let someone else's crate fail
