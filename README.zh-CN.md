@@ -4,13 +4,14 @@ OFD（Open Fixed-layout Document，版式文档）的 Rust 实现，涵盖阅读
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
-[![Rust](https://img.shields.io/badge/rust-1.85%2B-orange)](https://www.rust-lang.org/)
+[![Rust](https://img.shields.io/badge/rust-1.92%2B-orange)](https://www.rust-lang.org/)
 [![Edition](https://img.shields.io/badge/edition-2024-blue)](https://doc.rust-lang.org/edition-guide/rust-2024/)
 [![License](https://img.shields.io/badge/license-Apache--2.0-green)](LICENSE)
 [![Standard](https://img.shields.io/badge/standard-GB%2FT%2033190--2016-red)]()
 
 SteleOFD 是 [GB/T 33190-2016《电子文件存储与交换格式 版式文档》](https://openstd.samr.gov.cn/bzgk/gb/newGbInfo?hcno=3AF6682D939116B6F5EED53D01A9DB5D)
-的 Rust 实现。从解析到渲染全部自研，不依赖任何 C/C++ 库。
+的 Rust 实现。从解析到渲染全部自研，仓库里唯一的 C 库是 fontconfig——
+由 reader 在 Linux 上经 `font-kit` 调用。
 
 当前进度：原始规划已全部完成。26 个 crate 全部就位并通过测试，五种交付形态
 （`cli` / `wasm` / `ffi` / `server` / `reader`）共用同一个 `core` 门面，内核有
@@ -121,7 +122,12 @@ FormatError::PageOutOfRange { index: 42, total: 100 }
 
 ## 快速开始
 
-需要 Rust 1.85+（Edition 2024），无需 C 工具链。
+需要 Rust 1.92+（Edition 2024），这一版本由工作区清单的 `rust-version` 声明；
+CI 实际使用的版本写在 `.github/workflows/rust.yml` 里。是否可用，跑一次
+`cargo check --workspace` 即可确认。
+
+构建各 crate 不需要 C 工具链。Linux 上的 reader 是例外：`font-kit` 链接
+fontconfig，机器上没有对应头文件时需安装 `libfontconfig1-dev` 与 `pkg-config`。
 
 ```bash
 git clone https://github.com/emfox/SteleOFD.git

@@ -5,14 +5,15 @@ conversion and signature verification.
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
-[![Rust](https://img.shields.io/badge/rust-1.85%2B-orange)](https://www.rust-lang.org/)
+[![Rust](https://img.shields.io/badge/rust-1.92%2B-orange)](https://www.rust-lang.org/)
 [![Edition](https://img.shields.io/badge/edition-2024-blue)](https://doc.rust-lang.org/edition-guide/rust-2024/)
 [![License](https://img.shields.io/badge/license-Apache--2.0-green)](LICENSE)
 [![Standard](https://img.shields.io/badge/standard-GB%2FT%2033190--2016-red)]()
 
 SteleOFD implements [GB/T 33190-2016, the Chinese national standard for
 fixed-layout electronic documents](https://openstd.samr.gov.cn/bzgk/gb/newGbInfo?hcno=3AF6682D939116B6F5EED53D01A9DB5D).
-Parsing and rendering are written from scratch; there is no C or C++ dependency.
+Parsing and rendering are written from scratch; the one C library in the tree is
+fontconfig, reached through `font-kit` by the reader on Linux.
 
 Status: the original plan is complete. All 26 crates are built and tested, the
 five delivery forms (`cli`, `wasm`, `ffi`, `server`, `reader`) sit on one `core`
@@ -133,7 +134,13 @@ engine never names a widget it does not own.
 
 ## Getting started
 
-Rust 1.85+ with Edition 2024. No C toolchain needed.
+Rust 1.92+ with Edition 2024, which is what `rust-version` in the workspace
+manifest states; `.github/workflows/rust.yml` names the version CI builds with.
+`cargo check --workspace` is enough to confirm a toolchain works.
+
+Building the crates needs no C toolchain. The reader is the exception on Linux:
+`font-kit` links fontconfig, so a machine without the headers needs
+`libfontconfig1-dev` and `pkg-config` installed.
 
 ```bash
 git clone https://github.com/emfox/SteleOFD.git
