@@ -15,7 +15,9 @@ section only when a release actually has one.
 ## [0.1.0] - 2026-10-17
 
 The first release. It is cut from `0.1.0-rc.1`: **the two tags differ in the
-documentation and in no code at all**. The
+documentation and in no code at all**. This file and `docs/Roadmap.md` are
+rewritten, and the documents under `docs/` are renamed `Conventions.md` rather
+than `CONVENTIONS.md`. The
 candidate was a candidate because no crate has been published yet and the
 interfaces may still move, not because anything known was missing.
 
