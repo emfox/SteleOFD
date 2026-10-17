@@ -20,4 +20,4 @@ pub use ops::{
 pub use page::{PageInfo, RenderQuality, Viewport};
 pub use resource::{ImageCodec, ImageRef, ResolvedFont, ResolvedResources};
 pub use shading::{FocalCone, RadialForm, radial_form};
-pub use text::{GlyphRun, TextSpan, run_face};
+pub use text::{GlyphRun, TextSpan, run_face, run_face_for};

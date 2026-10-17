@@ -63,15 +63,23 @@ impl GlyphRun {
 /// fallback chain, so a document naming a face it never shipped can still draw.
 /// A glyph index run is never rescued, since an index means nothing without it.
 pub fn run_face(fonts: &FontManager, run: &GlyphRun) -> Option<Arc<FontFace>> {
-    if let Ok(face) = fonts.face(run.font) {
+    run_face_for(fonts, run, &[])
+}
+
+/// [`run_face`], told what the run is going to draw, so the substitute is one
+/// that covers those characters rather than one that merely exists.
+pub fn run_face_for(fonts: &FontManager, run: &GlyphRun, wanted: &[u32]) -> Option<Arc<FontFace>> {
+    if let Ok(face) = fonts.face_for(run.font, wanted) {
         return Some(face);
     }
     if run.codes_are_glyphs {
         return None;
     }
-    run.glyphs
-        .iter()
-        .find_map(|&code| fonts.fallback_for(u32::from(code)).map(|(_, face)| face))
+    run.glyphs.iter().find_map(|&code| {
+        fonts
+            .fallback_for_wanted(u32::from(code), wanted)
+            .map(|(_, face)| face)
+    })
 }
 
 /// A [`GlyphRun`] expanded to character granularity.
