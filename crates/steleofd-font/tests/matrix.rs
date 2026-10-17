@@ -1,5 +1,5 @@
 //! The font coverage matrix: one real face per script the project claims to
-//! draw. `docs/FONTS.md` is the table and this file proves each row of it.
+//! draw. `docs/Fonts.md` is the table and this file proves each row of it.
 //! Samples are escapes, so the file stays English under the language policy.
 
 use std::sync::Arc;

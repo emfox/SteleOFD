@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check commit messages against section 3 of docs/CONVENTIONS.md.
+"""Check commit messages against section 3 of docs/Conventions.md.
 
 The rule is one line of subject, optionally followed by at most two lines of
 body. Anything longer belongs in docs/, where it can be reviewed properly.
@@ -21,7 +21,7 @@ import re
 import subprocess
 import sys
 
-# Section 3 of docs/CONVENTIONS.md: the allowed commit types.
+# Section 3 of docs/Conventions.md: the allowed commit types.
 TYPES = {
     "feat", "fix", "docs", "chore", "refactor", "perf", "test", "build", "ci",
 }
@@ -107,7 +107,7 @@ def report(entries: list[tuple[str, str, str]]) -> int:
     total = len(entries)
     if rejected:
         print(f"\n{rejected} of {total} commit(s) break section 3 of "
-              f"docs/CONVENTIONS.md")
+              f"docs/Conventions.md")
     else:
         print(f"OK: {total} commit(s) follow the convention")
     return rejected

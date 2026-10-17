@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Performance gate: compare a benchmark run against the stated budget.
 
-The budget lives in `docs/PERFORMANCE.md` and is what makes a benchmark
+The budget lives in `docs/Performance.md` and is what makes a benchmark
 actionable; this script is what turns it into a pass/fail line. It reads the
 criterion output a `cargo bench` run leaves in `target/criterion/` and checks
 each budgeted benchmark's point estimate against its ceiling.
@@ -23,7 +23,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 CRITERION = REPO / "target" / "criterion"
 
-# One entry per budget line in docs/PERFORMANCE.md. `path` is the directory
+# One entry per budget line in docs/Performance.md. `path` is the directory
 # criterion writes under target/criterion, `budget_us` the ceiling in
 # microseconds for the one-page case. Keep both in step with the document: the
 # script is the enforcement, the document is the explanation.
@@ -98,7 +98,7 @@ def main() -> int:
                 f"({factor:.1f}x)"
             )
         print("\nA cross here is a deliberate argument, not a merge: either the")
-        print("change is worth it and docs/PERFORMANCE.md moves, or it is not.")
+        print("change is worth it and docs/Performance.md moves, or it is not.")
         return 1
 
     print("\nOK: every budgeted benchmark is within budget")

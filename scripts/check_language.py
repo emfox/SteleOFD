@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Enforce the English-only and comment-density policy. See docs/CONVENTIONS.md."""
+"""Enforce the English-only and comment-density policy. See docs/Conventions.md."""
 
 from __future__ import annotations
 
@@ -22,14 +22,14 @@ CJK_RANGES = (
 
 # Paths exempt from the code-language rule, with a one-line reason each.
 ALLOWLIST_FILES = {
-    "docs/CONVENTIONS.md": "the policy doc quotes the rule in examples",
+    "docs/Conventions.md": "the policy doc quotes the rule in examples",
     "scripts/check_language.py": "this script matches CJK by definition",
     "scripts/check_i18n.py": "reports CJK key mismatches",
     "scripts/fetch_ofdrw.py": "pins samples by the name their producer gave",
     "scripts/fetch_gb_samples.py": "same reason: the pin lists are upstream names",
 }
 
-# Section 1 of docs/CONVENTIONS.md: a Chinese document is allowed when its name
+# Section 1 of docs/Conventions.md: a Chinese document is allowed when its name
 # declares the language. The marker is the exemption, so a new translation needs
 # no list edit, and Chinese in an English document still fails.
 ALLOWLIST_SUFFIX = ".zh-CN.md"
@@ -181,7 +181,7 @@ def main() -> int:
     print(f"\nFAILED: {len(failures)} violation(s)\n")
     for f in failures:
         print(f"  {f}")
-    print("\nSee docs/CONVENTIONS.md for the rules.")
+    print("\nSee docs/Conventions.md for the rules.")
     return 1
 
 

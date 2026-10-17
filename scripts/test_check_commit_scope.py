@@ -40,7 +40,7 @@ class AreaTest(unittest.TestCase):
 
     def test_other_paths_group_by_first_segment(self):
         self.assertEqual(scope.area("README.md"), "README.md")
-        self.assertEqual(scope.area("docs/CONVENTIONS.md"), "docs")
+        self.assertEqual(scope.area("docs/Conventions.md"), "docs")
 
 
 class ReviewTest(unittest.TestCase):

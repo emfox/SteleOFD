@@ -12,11 +12,12 @@ section only when a release actually has one.
 
 ## [Unreleased]
 
-## [0.1.0-rc.1] - 2026-10-17
+## [0.1.0] - 2026-10-17
 
-The first release. It is a candidate because no crate has been published yet and
-the interfaces may still move before `0.1.0`, not because anything known is
-missing.
+The first release. It is cut from `0.1.0-rc.1`: **the two tags differ in the
+documentation and in no code at all**. The
+candidate was a candidate because no crate has been published yet and the
+interfaces may still move, not because anything known was missing.
 
 ### What this is
 
@@ -33,7 +34,7 @@ optional capabilities (sign, crypto, convert, edit, search, archive, print),
 each behind its own feature; L4 is `steleofd-core`, the one entry point that
 trims the engine by feature; L5 is the delivery forms, because a CLI, a browser
 page, a C header, an HTTP service and a window can share an engine but not a
-shape. [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) draws it out.
+shape. [`docs/Architecture.md`](docs/Architecture.md) draws it out.
 
 ### Reading
 
@@ -110,13 +111,14 @@ the checksum is the trust anchor.
 
 A nine-page golden book is compared against another vendor's reader and a second
 implementation's source, which showed four gaps in the oracle and three in our
-own reading; the evidence is in [`docs/INTEROP.md`](docs/INTEROP.md). The
+own reading; the evidence is in [`docs/Interop.md`](docs/Interop.md). The
 third-party corpus of 28 documents opens cleanly, and the standard's own clause
 samples are parsed in CI on every push.
 
 ### Known limits
 
-- No crate is published yet; `0.1.0` follows once the interfaces settle.
+- No crate is published to a registry yet, so this release is a source tag
+  and a set of artefacts rather than a `cargo add steleofd-core`.
 - Blending is deliberately unsupported: the standard defines no blend mode, and
   `Alpha` is the whole of its transparency model.
 - Office formats and OCR are planned, not built.
@@ -124,5 +126,6 @@ samples are parsed in CI on every push.
   holds no keys.
 - The release artefacts are unsigned, so trust rests on the checksums.
 
-[Unreleased]: https://github.com/emfox/SteleOFD/compare/v0.1.0-rc.1...main
+[Unreleased]: https://github.com/emfox/SteleOFD/compare/v0.1.0...main
+[0.1.0]: https://github.com/emfox/SteleOFD/releases/tag/v0.1.0
 [0.1.0-rc.1]: https://github.com/emfox/SteleOFD/releases/tag/v0.1.0-rc.1

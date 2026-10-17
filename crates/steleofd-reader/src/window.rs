@@ -1,5 +1,5 @@
 //! The window's zones, drawn against a `Ui` so they can run headlessly.
-//! Everything here obeys `docs/UI-SPEC.md`: panels in a fixed order, the canvas
+//! Everything here obeys `docs/Ui-spec.md`: panels in a fixed order, the canvas
 //! state asked of `App`, and no string drawn that the catalogue did not give.
 
 use crate::message::ReaderMessage;

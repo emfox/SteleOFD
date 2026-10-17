@@ -15,8 +15,8 @@ SteleOFD 是 [GB/T 33190-2016《电子文件存储与交换格式 版式文档�
 
 当前进度：原始规划已全部完成。26 个 crate 全部就位并通过测试，五种交付形态
 （`cli` / `wasm` / `ffi` / `server` / `reader`）共用同一个 `core` 门面，内核有
-可量化的性能预算把关。尚待完成的事项见 [`docs/ROADMAP.md`](docs/ROADMAP.md)，
-各领域已完成的工作见 [`CHANGELOG`](CHANGELOG.md)。
+可量化的性能预算把关。`0.1.0` 是首个发布版本：尚待完成的事项及其所属版本见
+[`docs/Roadmap.md`](docs/Roadmap.md)，本版本提供了什么见 [`CHANGELOG`](CHANGELOG.md)。
 
 ## 特性
 
@@ -222,14 +222,15 @@ GB/T 33476 分为三个部分，本项目遵循的是第 1、2 部分。GM/T 009
 
 26 个 crate 已全部就位，五种交付形态（`cli` / `wasm` / `ffi` / `server` /
 `reader`）共用同一个 `core` 门面。后续规划见
-[`docs/ROADMAP.md`](docs/ROADMAP.md)，按近期 / 中期 / 远期三个阶段组织。
+[`docs/Roadmap.md`](docs/Roadmap.md)，每一项标注了已被哪个版本认领，未认领的记为
+`unversioned`。
 条款级覆盖情况见
 [`compliance/gb-t-33190.toml`](compliance/gb-t-33190.toml)：共登记 74 条，其中
 73 条为 `verified`，唯一未覆盖的 `8.1.6`（`PrintQuality`）带 `deviation` 说明 ——
 该元素在附录 A 的 Schema 中并不存在，文档里没有任何可断言的字节。
-字体支持矩阵见 [`docs/FONTS.md`](docs/FONTS.md)，与其他阅读器逐页对照的结果见
-[`docs/INTEROP.md`](docs/INTEROP.md)，性能基线与跑法见
-[`docs/PERFORMANCE.md`](docs/PERFORMANCE.md)。
+字体支持矩阵见 [`docs/Fonts.md`](docs/Fonts.md)，与其他阅读器逐页对照的结果见
+[`docs/Interop.md`](docs/Interop.md)，性能基线与跑法见
+[`docs/Performance.md`](docs/Performance.md)。
 
 ## 贡献
 
@@ -243,7 +244,7 @@ python3 scripts/check_language.py
 ```
 
 新增代码需附带测试，且不得引入 `unsafe`（`steleofd-ffi` 因 C ABI 需要豁免）。
-代码、注释、commit message 与 issue 一律使用英文，见 [docs/CONVENTIONS.md](docs/CONVENTIONS.md)。
+代码、注释、commit message 与 issue 一律使用英文，见 [docs/Conventions.md](docs/Conventions.md)。
 
 ## 许可证
 

@@ -17,9 +17,10 @@ fontconfig, reached through `font-kit` by the reader on Linux.
 
 Status: the original plan is complete. All 26 crates are built and tested, the
 five delivery forms (`cli`, `wasm`, `ffi`, `server`, `reader`) sit on one `core`
-facade, and the engine holds a documented performance budget. What is left to
-build is listed in [`docs/ROADMAP.md`](docs/ROADMAP.md); what each area already
-has is in the [`CHANGELOG`](CHANGELOG.md).
+facade, and the engine holds a documented performance budget. `0.1.0` is the
+first release. What is left to build, and which release has claimed it, is in
+[`docs/Roadmap.md`](docs/Roadmap.md); what this version offers is in the
+[`CHANGELOG`](CHANGELOG.md).
 
 ## Features
 
@@ -238,7 +239,7 @@ rather than the national standards one.
 All 26 crates are in place, and the five delivery forms (`cli`, `wasm`, `ffi`,
 `server`, `reader`) sit on the same `core` facade. Every task in the original
 P0–P9 sequence is closed; what is left is tracked in
-[`docs/ROADMAP.md`](docs/ROADMAP.md). Clause-level coverage lives in
+[`docs/Roadmap.md`](docs/Roadmap.md). Clause-level coverage lives in
 [`compliance/gb-t-33190.toml`](compliance/gb-t-33190.toml) and the method
 behind it in [`compliance/CLAUSES.md`](compliance/CLAUSES.md): 56 clauses are
 registered, every one of them `verified`. The clause numbers are read out of
@@ -248,12 +249,12 @@ heading and checks the result against the contents pages the standard prints,
 so a row cannot cite a clause the standard does not have. The same script
 rebuilds the annex A schemas under `compliance/schema/annex-a`.
 What the engine can and cannot draw with is set out face by face in
-[`docs/FONTS.md`](docs/FONTS.md). How it compares to other readers in the
+[`docs/Fonts.md`](docs/Fonts.md). How it compares to other readers in the
 field, page by page against a second vendor's output, is in
-[`docs/INTEROP.md`](docs/INTEROP.md).
+[`docs/Interop.md`](docs/Interop.md).
 
 Performance baselines, and how to run them, are in
-[`docs/PERFORMANCE.md`](docs/PERFORMANCE.md).
+[`docs/Performance.md`](docs/Performance.md).
 
 ## Contributing
 
@@ -268,7 +269,7 @@ python3 scripts/check_language.py
 
 New code needs tests. Do not introduce `unsafe`; `steleofd-ffi` is the only
 documented exemption, because a C ABI requires it. Code, comments, commit
-messages and issues are English only: [docs/CONVENTIONS.md](docs/CONVENTIONS.md).
+messages and issues are English only: [docs/Conventions.md](docs/Conventions.md).
 
 ## License
 

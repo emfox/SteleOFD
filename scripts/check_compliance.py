@@ -2,7 +2,7 @@
 """Conformance gate for the GB/T 33190-2016 register.
 
 Checks that every verified clause links to a real test, that no
-`gb_t_33190_*` test is orphaned, and regenerates docs/COMPLIANCE.md.
+`gb_t_33190_*` test is orphaned, and regenerates docs/Compliance.md.
 
 The register stores bare test names; cargo reports them qualified by module,
 so both sides are compared on the last path segment.

@@ -7,7 +7,7 @@
 #   deviation - deliberately not followed; reason in `note`
 #
 # Test names follow `gb_t_33190_<clause>_<slug>` and are collected by
-# scripts/check_compliance.py, which also regenerates docs/COMPLIANCE.md.
+# scripts/check_compliance.py, which also regenerates docs/Compliance.md.
 
 standard = "GB/T 33190-2016"
 title = "Electronic files storage and exchange formats - Fixed layout documents"

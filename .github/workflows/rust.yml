@@ -25,7 +25,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Section 3 of docs/CONVENTIONS.md, enforced where nobody can skip it. A hook
+  # Section 3 of docs/Conventions.md, enforced where nobody can skip it. A hook
   # catches a bad message before the commit exists, but a hook is local: it is
   # bypassed by --no-verify, absent from a clone that never ran
   # scripts/install-hooks.sh, and never runs for a commit made in the web
@@ -158,7 +158,7 @@ jobs:
       - name: Compliance matrix is current
         run: |
           python3 scripts/check_compliance.py
-          git diff --exit-code docs/COMPLIANCE.md
+          git diff --exit-code docs/Compliance.md
 
       - name: Committed corpus archives match their sources
         run: python3 scripts/pack_corpus.py --check
@@ -211,7 +211,7 @@ jobs:
       - name: Every clause sample still opens
         run: python3 scripts/fetch_gb_samples.py --parse
 
-  # The budget in docs/PERFORMANCE.md, enforced. It runs the benchmarks and
+  # The budget in docs/Performance.md, enforced. It runs the benchmarks and
   # checks each one-page figure against its ceiling, which is set well above
   # the baseline: only a change that makes a page cost several times what it
   # did crosses it. Ordinary noise and different hardware do not.

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Report commits that carry more than one logical change.
 
-Section 3.1 of docs/CONVENTIONS.md asks for one logical change per commit. A
+Section 3.1 of docs/Conventions.md asks for one logical change per commit. A
 script cannot read intent, so this reports the shape a squashed commit leaves:
 one commit whose changed lines are spread across areas that no single change
 explains.
@@ -37,7 +37,7 @@ MIN_SECONDARY_LINES = 40
 
 # Files generated from another change in the same commit, so they never count
 # as an area of their own: regenerating one is part of touching its source.
-GENERATED = {"docs/COMPLIANCE.md", "Cargo.lock"}
+GENERATED = {"docs/Compliance.md", "Cargo.lock"}
 
 SUBJECT_RE = re.compile(r"^([a-z]+)(?:\(([^)]+)\))?: (.+)$")
 

@@ -84,7 +84,7 @@ def corpus_targets() -> list[str]:
 
 
 CHECKS: tuple[Check, ...] = (
-    # Section 4 of docs/CONVENTIONS.md: the policy gates.
+    # Section 4 of docs/Conventions.md: the policy gates.
     Check("language", "policy", (py("scripts/check_language.py"),)),
     Check("i18n", "policy", (py("scripts/check_i18n.py", "--strict"),)),
     Check("android", "package", (py("scripts/android_package.py", "selftest"),)),
@@ -178,7 +178,7 @@ CHECKS: tuple[Check, ...] = (
         "rust",
         (
             py("scripts/check_compliance.py"),
-            ("git", "diff", "--exit-code", "--", "docs/COMPLIANCE.md"),
+            ("git", "diff", "--exit-code", "--", "docs/Compliance.md"),
         ),
         needs=("cargo", "git"),
     ),
@@ -208,7 +208,7 @@ CHECKS: tuple[Check, ...] = (
         (py("scripts/fetch_gb_samples.py", "--parse"),),
         needs=("cargo", "gb-samples"),
     ),
-    # The budget in docs/PERFORMANCE.md, read from a benchmark run's output.
+    # The budget in docs/Performance.md, read from a benchmark run's output.
     Check(
         "performance",
         "perf",
