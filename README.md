@@ -224,10 +224,10 @@ P0–P9 sequence is closed; what is left is tracked in
 [`compliance/gb-t-33190.toml`](compliance/gb-t-33190.toml) and the method
 behind it in [`compliance/CLAUSES.md`](compliance/CLAUSES.md): 56 clauses are
 registered, every one of them `verified`. The clause numbers are read out of
-the printed standard by [`scripts/extract_clauses.py`](scripts/extract_clauses.py),
-which assembles each heading from the page geometry and checks the result
-against the standard's own contents pages, so a row cannot cite a clause the
-standard does not have.
+the standard's transcribed text by
+[`scripts/extract_clauses.py`](scripts/extract_clauses.py), which reads each
+numbered heading and checks the result against the standard's own contents
+pages, so a row cannot cite a clause the standard does not have.
 What the engine can and cannot draw with is set out face by face in
 [`docs/FONTS.md`](docs/FONTS.md). How it compares to other readers in the
 field, page by page against a second vendor's output, is in

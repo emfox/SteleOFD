@@ -20,32 +20,47 @@ register that decides which clauses those are. There is one status in use —
 
 ## The numbers come from the standard
 
-Every number is read out of the printed standard by
+Every number is read out of the standard by
 [`scripts/extract_clauses.py`](../scripts/extract_clauses.py) rather than taken
-from a reading of it. The script works on the PDF's text layer:
+from a reading of it. What the script reads is not the PDF but the
+transcription beside it, `GBT33190-2016.zh_CN.md`, which the pinned fixtures
+repository holds next to the issued document:
 
-- A heading is printed in the heading face (`FZHTK--GBK1-0`) and starts at one
-  of a handful of left edges, one per depth. Body text is `FZSSK`, table cells
-  `E-BZ`.
-- The runs that make up a deep number sit on the same baseline but on
-  different edges, and the inner digit of a four-level number is lifted a
-  couple of points to line the figure up in height, so runs are gathered into
-  rows by baseline before the row is read.
-- A row is a heading when it parses as `<number><space><Chinese title>` at an
-  edge. `3.1 fixed layout` sets no white space after its number and is a term,
-  not a clause; a sentence that opens with a number and runs on is body text
-  set in the heading face.
-- The contents pages are read the same way and the two lists are compared. The
-  body scan finds 107 headings across clauses 1–20 and annex A, and reads all
-  72 contents entries back with an identical title.
+- The transcription was produced mechanically from the PDF by
+  `gb-t-33190-text/scripts/pdf_to_markdown.py`, which is kept with the text
+  because its only output is the text. Assembling a heading there means
+  knowing that `8.3.3` is printed as three runs on three baselines and that a
+  deep number is split across four, so that knowledge stays with the
+  transcriber. This repository reads the result and never needs the geometry.
+- A heading is a `#` line that opens with a clause number. The transcription
+  sets the depth the number has: chapter headings, then `###` for `8.3`,
+  `####` for `8.3.4.1`, and `A.1 OFD.xsd` under the annex label. The hash
+  count is not trusted to agree with the number for annex A, whose sections
+  sit one level shallower than their numbers imply, so the depth in the output
+  comes from the number itself.
+- The schema listings of annex A are fenced code and are skipped, so an XML
+  fragment can never be read as a heading.
+- The contents pages are read as well -- the bulleted list under the contents
+  heading, where a page number follows each title -- and the two lists are
+  compared. Both readings return 108 headings: clauses 1-20, the annex A
+  label, and the 13 schemas. All 94 contents entries read back with an
+  identical title.
+- One title of the two readings differs by a space, at `9.3.1`: the body sets a
+  space before `XML`, the contents do not. The comparison is exact, so this is
+  reported and is not treated as a miss.
 
 ```
-$ python3 scripts/extract_clauses.py 33190-2016-gbt-cd-300.pdf \
+$ python3 scripts/extract_clauses.py --fetch \
       --register compliance/gb-t-33190.toml
-107 clauses
-contents list 72 clauses, 72 of them read back alike
+108 clauses
+contents list 94 clauses, 94 of them read back alike
 register claims 56 clauses, 56 of them in the standard
 ```
+
+`--fetch` reads the transcription out of the fixtures commit, held to the
+SHA-256 its manifest records; pass a path instead to read a local copy. Point
+`https_proxy` at the proxy for the fetch to leave the machine -- `urllib` does
+not read `ALL_PROXY`.
 
 `--register` refuses a row whose clause the standard does not number, which is
 what keeps the register from drifting away from the text.
