@@ -74,6 +74,35 @@ pins today's behaviour so the day it changes, the test fails.
    the substitution and the unshipped-declaration contract from the repo's own
    fixtures rather than a host font.
 
+### What carries across operating systems, and what does not
+
+The algorithm is host-independent; the answers are not, because the faces a
+host installs are not. Nothing in the search is keyed to a platform API: every
+step goes through `font_kit::source::SystemSource`, which font-kit implements
+over fontconfig on Linux, DirectWrite on Windows and Core Text on macOS and
+iOS, with the same `all_families` / `select_family_by_name` surface.
+
+| Step | Depends on the host | Why |
+| --- | --- | --- |
+| Exact family name | Only the spelling | A document naming `SimSun` finds it on Windows and is reported missing on a Linux host that does not have it; the reverse holds for `Noto Sans CJK SC` |
+| `Bold` / `Italic` | No | Weight and slope are compared per face, whatever the family |
+| Pinned family | Yes | `Noto Sans CJK SC` is the usual Linux answer and is rarely installed on Windows or macOS, so the next row is what they take |
+| CJK family list | Yes, but by name | `CJK_FAMILIES` names the faces each host keeps Chinese in — `Microsoft YaHei` and `SimSun` on Windows, `PingFang SC` and `Hiragino Sans GB` on macOS, `WenQuanYi Zen Hei` and `Droid Sans Fallback` on Linux — and the first that covers the text wins |
+| Generic families | Yes | font-kit maps `sans-serif` to Arial and `monospace` to Courier New on Windows and macOS: Latin faces both. This is why they come last, not first |
+| Coverage check | No | `FontFace::covers` reads the code points out of the face itself |
+
+`crates/steleofd-font/tests/host.rs` pins the rules a host without the pinned
+family depends on — a cached face is searched again for characters it lacks, a
+run of Han is never answered by the Latin face the previous run left in the
+cache, a changed pinned family clears the recorded misses — so those run on
+Linux CI as well. The one thing Linux CI cannot prove is that a Windows
+workstation actually picks `Microsoft YaHei`; that needs a Windows runner,
+which this repository does not have yet.
+
+The CJK list is data, not policy: `FontManager::set_default_cjk_family` and the
+`cjk_answered` memory (the family that answered last is tried first next time)
+cover the case of a host whose face has a name nobody listed.
+
 5. **No subsetting on the way out.** Embedded faces are carried whole. A
    document that embeds a 20 MB CJK collection pays for it in every conversion,
    which is M2-b.
