@@ -12,6 +12,22 @@ section only when a release actually has one.
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-10-18
+
+A repair release for `0.1.0`: no behaviour changed, and the two defects were
+both in what the release said about itself rather than in what it does.
+
+- **The release page carried no notes.** The workflow asked GitHub to generate
+  them from the commit range, and the first release has no previous release to
+  compare against, so `v0.1.0` published with an empty body. The notes now come
+  from this file, through `scripts/release_notes.py`, so the release page and
+  the changelog are one text from one commit. The script also makes the
+  changelog's relative links absolute, which a release page needs and a
+  repository file does not.
+- **`repository` was a placeholder.** Every crate inherited
+  `https://example.com/ofd/steleofd-rs`, which is not a repository. It now names
+  this one, which is what a published `Cargo.toml` and docs.rs read.
+
 ## [0.1.0] - 2026-10-17
 
 The first release. It is cut from `0.1.0-rc.1`: **the two tags differ in the
@@ -128,6 +144,7 @@ samples are parsed in CI on every push.
   holds no keys.
 - The release artefacts are unsigned, so trust rests on the checksums.
 
-[Unreleased]: https://github.com/emfox/SteleOFD/compare/v0.1.0...main
+[Unreleased]: https://github.com/emfox/SteleOFD/compare/v0.1.1...main
+[0.1.1]: https://github.com/emfox/SteleOFD/releases/tag/v0.1.1
 [0.1.0]: https://github.com/emfox/SteleOFD/releases/tag/v0.1.0
 [0.1.0-rc.1]: https://github.com/emfox/SteleOFD/releases/tag/v0.1.0-rc.1

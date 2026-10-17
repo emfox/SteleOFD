@@ -38,13 +38,14 @@ ARCHIVE_NAME = "steleofd-reader-android.apk"
 # The name `System.loadLibrary` looks for, which is the crate's library name.
 LIBRARY = "steleofd_reader"
 
-# Written out rather than left to the packager, which defaults both to empty;
-# they are a constant because a rebuild only ever follows a failed tag.
+# Written out rather than left to the packager, which defaults both to empty.
+# The code is the manifest's `major*10000 + minor*100 + patch`, which Android
+# requires to increase with every published version and no more than that.
 MANIFEST = f"""<?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="{PACKAGE}"
-    android:versionCode="1"
-    android:versionName="0.1.0">
+    android:versionCode="101"
+    android:versionName="0.1.1">
     <uses-sdk android:minSdkVersion="{MIN_SDK}" android:targetSdkVersion="{TARGET_SDK}" />
     <application android:label="SteleOFD Reader" android:hasCode="false">
         <activity
