@@ -280,6 +280,14 @@ jobs:
       # The manifest is not attached: each job above already uploaded one for
       # the files it built, and an asset of the same name is replaced rather
       # than merged, which would leave the rest of them unlisted.
+      #
+      # The notes are read out of `CHANGELOG.md` rather than generated from the
+      # commit range: generated notes say what the work was, and on the first
+      # release there is no previous release to compare against, which left
+      # `v0.1.0` published with an empty body.
+      - name: Read the release notes from the changelog
+        run: python3 scripts/release_notes.py "$GITHUB_REF_NAME" > dist/RELEASE_NOTES.md
+
       - name: Attach the artefacts to the release
         uses: softprops/action-gh-release@v2
         with:
@@ -289,4 +297,5 @@ jobs:
             dist/*.js
             dist/*.wasm
             dist/*.d.ts
-          generate_release_notes: true
+          body_path: dist/RELEASE_NOTES.md
+          generate_release_notes: false
