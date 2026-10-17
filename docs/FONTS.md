@@ -105,7 +105,8 @@ to change it.
 
 5. **No subsetting on the way out.** Embedded faces are carried whole. A
    document that embeds a 20 MB CJK collection pays for it in every conversion,
-   which is M2-b.
+   which is what `steleofd-font::subset` exists to avoid; the limits it answers
+   to are its own module documentation.
 
 ## Font families as configuration
 
@@ -170,5 +171,5 @@ The path is short and every step is a clause:
    of the three raw CFF faces in the corpus carry a `.ttf` name.
 
 The matrix above covers steps 1 to 4 as an engine. It says nothing about how a
-backend paints the outline: that is the raster and vector exporters, and their
-coverage is tracked under M3 in the [roadmap](ROADMAP.md).
+backend paints the outline: that is the raster and vector exporters, which
+`docs/ROADMAP.md` does not list as open.

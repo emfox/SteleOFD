@@ -14,7 +14,8 @@ SteleOFD 是 [GB/T 33190-2016《电子文件存储与交换格式 版式文档�
 
 当前进度：原始规划已全部完成。26 个 crate 全部就位并通过测试，五种交付形态
 （`cli` / `wasm` / `ffi` / `server` / `reader`）共用同一个 `core` 门面，内核有
-可量化的性能预算把关。后续工作见 [`docs/ROADMAP.md`](docs/ROADMAP.md)。
+可量化的性能预算把关。尚待完成的事项见 [`docs/ROADMAP.md`](docs/ROADMAP.md)，
+各领域已完成的工作见 [`CHANGELOG`](CHANGELOG.md)。
 
 ## 特性
 

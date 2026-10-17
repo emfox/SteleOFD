@@ -16,8 +16,9 @@ Parsing and rendering are written from scratch; there is no C or C++ dependency.
 
 Status: the original plan is complete. All 26 crates are built and tested, the
 five delivery forms (`cli`, `wasm`, `ffi`, `server`, `reader`) sit on one `core`
-facade, and the engine holds a documented performance budget. Remaining work is
-tracked in [`docs/ROADMAP.md`](docs/ROADMAP.md).
+facade, and the engine holds a documented performance budget. What is left to
+build is listed in [`docs/ROADMAP.md`](docs/ROADMAP.md); what each area already
+has is in the [`CHANGELOG`](CHANGELOG.md).
 
 ## Features
 

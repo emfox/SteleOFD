@@ -3,9 +3,9 @@
 An OFD reader is only useful if it agrees with the other readers in the
 field. This document records the differences found between SteleOFD and
 other implementations on the same documents, what the standard says about
-each, and which side each difference falls on. It is the evidence half of
-**M5-f** in [ROADMAP.md](ROADMAP.md), kept separate because the finding
-outlives the milestone.
+each, and which side each difference falls on. It is evidence, not a task
+list: the finding outlives whatever item in [ROADMAP.md](ROADMAP.md) it came
+from.
 
 The rule for every entry: a difference is not a fault on the other side
 until the standard's own text says so. Several of the bodies that produced
