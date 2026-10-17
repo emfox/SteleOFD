@@ -22,17 +22,22 @@ CJK_RANGES = (
 
 # Paths exempt from the code-language rule, with a one-line reason each.
 ALLOWLIST_FILES = {
-    "README.zh-CN.md": "Chinese README is the point of this file",
-    "docs/README.zh-CN.md": "Chinese README variant",
-    "docs/CONVENTIONS.md": "policy doc quotes the rule in examples",
+    "docs/CONVENTIONS.md": "the policy doc quotes the rule in examples",
     "scripts/check_language.py": "this script matches CJK by definition",
     "scripts/check_i18n.py": "reports CJK key mismatches",
-    "DESIGN.zh-CN.md": "Chinese design document",
+    "scripts/fetch_corpus.py": "pins samples by the name their producer gave",
+    "scripts/fetch_gb_samples.py": "same reason: the pin lists are upstream names",
 }
 
-# Files allowed to contain CJK string literals only when they are locale data.
+# Section 1 of docs/CONVENTIONS.md: a Chinese document is allowed when its name
+# declares the language. The marker is the exemption, so a new translation needs
+# no list edit, and Chinese in an English document still fails.
+ALLOWLIST_SUFFIX = ".zh-CN.md"
+
+# Files exempt as locale data. The whole file is skipped rather than its string
+# literals alone: the CJK in it is the day-period markers and no prose.
 ALLOWLIST_CJK_LITERALS = {
-    "crates/steleofd-i18n/src/format.rs": "locale date and time markers",
+    "crates/steleofd-i18n/src/format.rs": "locale day-period markers",
 }
 
 # Lines exempt from the language rule even inside otherwise English files.
@@ -42,10 +47,12 @@ ALLOWLIST_LINE_RE = re.compile(r"\[\u7b80\u4f53\u4e2d\u6587\]\(README\.zh-CN\.md
 # Documentation that must stay English. Everything else under docs/ is checked too.
 DOC_SUFFIXES = {".md", ".rst"}
 
-# User-facing locales legitimately contain CJK.
+# User-facing locales legitimately contain CJK, the engine's and the reader's.
 LOCALE_DIR = "locales"
 
-CODE_SUFFIXES = {".rs", ".toml", ".c", ".h", ".js", ".ts"}
+# Python is scanned too: the scripts are engineering artifacts, and the two that
+# hold Chinese are the ones named in ALLOWLIST_FILES.
+CODE_SUFFIXES = {".rs", ".toml", ".c", ".h", ".js", ".ts", ".py"}
 
 COMMENT_RE = re.compile(r"^\s*(///|//!|//)")
 MAX_COMMENT_BLOCK = 3
@@ -67,10 +74,10 @@ ALLOWLIST_DIRS = {
 
 
 def is_allowlisted(rel: str) -> bool:
-    if rel in ALLOWLIST_FILES:
+    if rel in ALLOWLIST_FILES or rel.endswith(ALLOWLIST_SUFFIX):
         return True
     parts = rel.split("/")
-    if any(p in LOCALE_DIR for p in parts):
+    if LOCALE_DIR in parts:
         return True
     return any(rel.startswith(d.rstrip("/") + "/") for d in ALLOWLIST_DIRS)
 
