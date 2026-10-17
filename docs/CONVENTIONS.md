@@ -68,6 +68,34 @@ Allowed types: `feat`, `fix`, `docs`, `chore`, `refactor`, `perf`, `test`, `buil
 The subject alone should be enough to understand the change. Do not list every
 file touched, do not restate the diff, and do not write a changelog entry.
 
+### 3.1 One logical change per commit
+
+A commit carries **one** logical change: a new behaviour, a new test, or a fix.
+Not two, and not a fix tangled with the test that proves it is a fix.
+
+Commit as the change is finished. Do not accumulate work in the tree and split
+it afterwards: a split made from memory separates hunks that belong together
+and joins hunks that do not, and neither failure is visible in the diff. The
+history is written while the reason for each hunk is still known, or it is
+written badly.
+
+What counts as one change:
+
+| Together, one commit | Together, still wrong |
+| --- | --- |
+| A behaviour and the test that fails without it | Two unrelated fixes |
+| A register entry and the generated matrix, moved by the same test | A refactor and a behaviour change |
+| A source change and its own doc correction | A source change and an unrelated doc typo |
+
+A test that arrives before the behaviour it covers, because the behaviour is
+not written yet, commits alone and says so. A behaviour whose test lives in a
+later commit is a behaviour that shipped unproven.
+
+Push when about eight commits have accumulated, or earlier when something needs
+to be shared, reviewed or backed up. The count is a habit rather than a rule
+this repository can check; what it protects is the ability to push a run of
+commits that were each verified on their own.
+
 ## 4. Enforcement
 
 Every check lives in `scripts/`, and `scripts/check_all.py` runs them all:
@@ -93,6 +121,13 @@ next to the check that produced it. Grouped by what they need:
 | `rust` | `cargo fmt`, `clippy`, `build` and `test`, the golden images, the headless reader window, `check_compliance.py`, and the matrix freshness diff | `cargo`, `git` |
 | `corpus` | `fetch_corpus.py` and `fetch_gb_samples.py`, `--check` then `--parse` | the fetched samples, `cargo` |
 | `perf` | `check_performance.py` against the budget in [PERFORMANCE.md](PERFORMANCE.md) | a `cargo bench` run |
+| `review` | `check_commit_scope.py`, which names commits that read as more than one change | `git` |
+
+Everything in `review` reports rather than blocks. A script can measure where
+the lines landed; it cannot know why they landed there, and a move, a rename or
+an i18n change that reaches its callers all look like a squash from the outside.
+The check exists to put the candidates in front of a reader, so the run says
+`note` and still passes.
 
 Commit messages are checked at three points, so a violation is caught before
 it becomes history rather than during a review:
