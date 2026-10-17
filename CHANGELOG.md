@@ -11,9 +11,12 @@ step-by-step.
 
 ## [Unreleased]
 
-Everything below is unreleased: the workspace builds, every crate is in place
-and the original P0–P9 sequence is complete, but no crate has been published
-yet. The interfaces may still move before `0.1.0`.
+## [0.1.0-rc.1] - 2026-10-17
+
+The first release candidate: the workspace builds, every crate is in place and
+the original P0–P9 sequence is complete, but no crate has been published yet.
+The interfaces may still move before `0.1.0`. This is the first cut with a
+reader for every platform `egui` runs on, so the release page is worth a look.
 
 ### Added
 
@@ -81,4 +84,5 @@ yet. The interfaces may still move before `0.1.0`.
 - Commit subjects are measured in bytes and capped at 75; the commit-message rule
   is enforced in CI rather than trusted.
 
-[Unreleased]: https://github.com/emfox/SteleOFD/commits/main
+[Unreleased]: https://github.com/emfox/SteleOFD/compare/v0.1.0-rc.1...main
+[0.1.0-rc.1]: https://github.com/emfox/SteleOFD/releases/tag/v0.1.0-rc.1
