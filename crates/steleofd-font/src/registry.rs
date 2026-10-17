@@ -22,11 +22,48 @@ pub enum FontSource {
         /// Requested family name.
         family: String,
     },
+    /// A face the document named and shipped no file for. Unlike
+    /// [`Self::System`] it has not been found anywhere yet, so a reader can
+    /// still tell "resolved from the host" from "asked for and missing".
+    Unshipped {
+        /// Family name the declaration named.
+        family: String,
+    },
     /// Unresolved; a substitute face will be used.
     Fallback {
         /// Family name that was requested.
         requested: String,
     },
+}
+
+/// What the document said about a face it did not ship. Clause 11.1 lists
+/// these for exactly this purpose: matching a substitute against them.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FontTraits {
+    /// Family name, when the declaration names one.
+    pub family: Option<String>,
+    /// Character class the face was declared for, such as `prc` or `big5`.
+    pub charset: Option<String>,
+    /// Whether the face is serifed.
+    pub serif: Option<bool>,
+    /// Whether the face is bold.
+    pub bold: Option<bool>,
+    /// Whether the face is italic.
+    pub italic: Option<bool>,
+    /// Whether the face is monospaced.
+    pub fixed_width: Option<bool>,
+}
+
+impl FontTraits {
+    /// Whether the declaration said nothing but the name.
+    pub fn is_empty(&self) -> bool {
+        self == &Self::default()
+    }
+
+    /// The family to search a host for, falling back to the declared name.
+    pub fn search_family<'a>(&'a self, name: &'a str) -> &'a str {
+        self.family.as_deref().unwrap_or(name)
+    }
 }
 
 /// A registered font.
@@ -44,6 +81,44 @@ pub struct FontEntry {
     pub data: Option<Arc<Vec<u8>>>,
     /// Whether the face covers CJK.
     pub is_cjk: bool,
+    /// What the declaration said, when it named a face it did not ship.
+    pub traits: Option<FontTraits>,
+    /// Whether this entry stands in for a face no host face was found for.
+    pub unresolved: bool,
+}
+
+impl FontEntry {
+    /// The family to ask a host for: the declared family name when there is
+    /// one, otherwise the name the document gave the face.
+    pub fn search_family(&self) -> &str {
+        match &self.traits {
+            Some(traits) => traits.search_family(&self.family),
+            None => &self.family,
+        }
+    }
+
+    /// What the document named, for a message a person reads.
+    pub fn described_name(&self) -> &str {
+        if self.family.is_empty() {
+            "unnamed"
+        } else {
+            &self.family
+        }
+    }
+}
+
+/// A face a document asked for and the reader could not draw with.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Unresolved {
+    /// The id the display list uses for it.
+    pub id: FontId,
+    /// The name the document gave the face.
+    pub family: String,
+    /// What the declaration said about it, when it said anything.
+    pub traits: Option<FontTraits>,
+    /// How the package presented it: embedded with unreadable bytes, or only
+    /// named. A named face is the case a host search is meant to cover.
+    pub source: FontSource,
 }
 
 /// Deduplicating registry of fonts.
@@ -82,6 +157,8 @@ impl FontRegistry {
             source: FontSource::Embedded { path: path.into() },
             is_cjk: detect_cjk(&data),
             data: Some(data),
+            traits: None,
+            unresolved: false,
         });
         self.dedup.insert(hash, id);
         self.by_family.entry(family).or_insert(id);
@@ -104,8 +181,41 @@ impl FontRegistry {
             },
             is_cjk: false,
             data: None,
+            traits: None,
+            unresolved: false,
         });
         self.by_family.insert(family, id);
+        id
+    }
+
+    /// Register a face the document named but did not ship, with the clause
+    /// 11.1 traits a host search matches on. Its source stays `Unshipped`, not
+    /// `System`, because nothing has been found for it yet.
+    pub fn register_unshipped(&mut self, family: impl Into<String>, traits: FontTraits) -> FontId {
+        let family = family.into();
+        // Two declarations of one family that agree on everything a match can
+        // see are the same reference; one that differs in weight or slope is
+        // not, and gets its own id.
+        if let Some(&id) = self.by_family.get(&family)
+            && let Ok(entry) = self.get(id)
+            && entry.traits.as_ref() == Some(&traits)
+        {
+            return id;
+        }
+        let id = FontId(self.entries.len() as u32);
+        self.entries.push(FontEntry {
+            id,
+            family: family.clone(),
+            postscript_name: None,
+            source: FontSource::Unshipped {
+                family: traits.search_family(&family).to_string(),
+            },
+            is_cjk: false,
+            data: None,
+            traits: Some(traits),
+            unresolved: false,
+        });
+        self.by_family.entry(family).or_insert(id);
         id
     }
 
@@ -141,6 +251,11 @@ impl FontRegistry {
             },
             is_cjk,
             data,
+            // The engine's own substitute is a bare family name — it is often
+            // the literal "sans-serif" — so an empty trait set is what a host
+            // search should see, not a set of guesses.
+            traits: Some(FontTraits::default()),
+            unresolved: false,
         });
         self.by_family.insert(family, id);
         id
@@ -168,14 +283,29 @@ impl FontRegistry {
         self.entries.iter()
     }
 
-    /// Families with no usable data, checked before conversion to avoid garbled
-    /// output: a face is missing until it holds bytes, whether embedded or
-    /// resolved.
+    /// Families with no usable bytes yet, embedded or resolved. A reference
+    /// the manager has given up on is excluded; see [`Self::unresolved`].
     pub fn missing_families(&self) -> Vec<&str> {
         self.entries
             .iter()
-            .filter(|e| e.data.is_none())
+            .filter(|e| e.data.is_none() && !e.unresolved)
             .map(|e| e.family.as_str())
+            .collect()
+    }
+
+    /// What a document asked for and did not get, one record per id. A face
+    /// the package never shipped is otherwise invisible: a blank run and a
+    /// drawn one look alike in a PNG.
+    pub fn unresolved(&self) -> Vec<Unresolved> {
+        self.entries
+            .iter()
+            .filter(|e| e.unresolved)
+            .map(|e| Unresolved {
+                id: e.id,
+                family: e.described_name().to_string(),
+                traits: e.traits.clone(),
+                source: e.source.clone(),
+            })
             .collect()
     }
 }
