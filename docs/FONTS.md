@@ -87,7 +87,7 @@ iOS, with the same `all_families` / `select_family_by_name` surface.
 | Exact family name | Only the spelling | A document naming `SimSun` finds it on Windows and is reported missing on a Linux host that does not have it; the reverse holds for `Noto Sans CJK SC` |
 | `Bold` / `Italic` | No | Weight and slope are compared per face, whatever the family |
 | Pinned family | Yes | `Noto Sans CJK SC` is the usual Linux answer and is rarely installed on Windows or macOS, so the next row is what they take |
-| CJK family list | Yes, but by name | `CJK_FAMILIES` names the faces each host keeps Chinese in — `Microsoft YaHei` and `SimSun` on Windows, `PingFang SC` and `Hiragino Sans GB` on macOS, `WenQuanYi Zen Hei` and `Droid Sans Fallback` on Linux — and the first that covers the text wins |
+| CJK family list | Yes, but by name | `default_cjk_families()` names the faces each host keeps Chinese in — `Microsoft YaHei` and `SimSun` on Windows, `PingFang SC` and `Hiragino Sans GB` on macOS, `WenQuanYi Zen Hei` and `Droid Sans Fallback` on Linux — and the first that covers the text wins |
 | Generic families | Yes | font-kit maps `sans-serif` to Arial and `monospace` to Courier New on Windows and macOS: Latin faces both. This is why they come last, not first |
 | Coverage check | No | `FontFace::covers` reads the code points out of the face itself |
 
@@ -99,13 +99,53 @@ Linux CI as well. The one thing Linux CI cannot prove is that a Windows
 workstation actually picks `Microsoft YaHei`; that needs a Windows runner,
 which this repository does not have yet.
 
-The CJK list is data, not policy: `FontManager::set_default_cjk_family` and the
-`cjk_answered` memory (the family that answered last is tried first next time)
-cover the case of a host whose face has a name nobody listed.
+The list itself is configuration, not code: see [Font families as
+configuration](#font-families-as-configuration) for where it comes from and how
+to change it.
 
 5. **No subsetting on the way out.** Embedded faces are carried whole. A
    document that embeds a 20 MB CJK collection pays for it in every conversion,
    which is M2-b.
+
+## Font families as configuration
+
+No family name is hard-wired into the search. The names live in a [`FontConfig`]
+that the manager is handed, and the engine owns only the *default* value of it.
+
+| Layer | Where it lives | Who sets it |
+| --- | --- | --- |
+| Built-in default | `default_cjk_families()` in `crates/steleofd-font/src/config.rs` | The engine, once, as data |
+| Host or user | Any caller holding a `FontManager` | `set_config`, or `set_default_cjk_family` for one family |
+| Document | Not read yet — see below | — |
+
+`FontConfig` has two ordered lists. `cjk_families` leads the search and
+`fallback_families` trails it; neither replaces what the engine ships, so a
+configured list is a preference over the default rather than a map of every host.
+`with_fallback_from` layers one configuration over another for a caller that
+wants a document's names over a user's, and the whole type is `serde`, so a
+configuration file is a small JSON object:
+
+```json
+{
+  "cjk_families": ["My Preferred CJK"],
+  "fallback_families": ["My Last Resort"]
+}
+```
+
+The one name that is still a string in the search code is `"cjk-substitute"`,
+and it is not a host family at all: it is the *registry* id under which the
+engine's own last-resort face is cached, so a caller can pin bytes to it.
+
+**The document layer is designed, not wired.** Reading a `substitute-matching`
+list out of `OFD.xml` needs a schema change first: `validate_ofd.py` checks the
+root against the standard's own schema, and an element the standard does not
+define would be rejected by `scripts/check_all.py`. Clause 11.1 also places the
+`Font` element in a namespace a publisher cannot extend, so a reader that
+accepted one would be reading a document no other reader can. Until that
+decision is made, a host-level configuration is the way to name a family the
+built-in list does not know.
+
+[`FontConfig`]: https://docs.rs/steleofd-font/latest/steleofd_font/struct.FontConfig.html
 
 ## How a face gets from a document to a glyph
 
