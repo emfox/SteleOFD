@@ -95,6 +95,13 @@ CHECKS: tuple[Check, ...] = (
         needs=("git",),
     ),
     # Artefacts the repository carries: a manifest tool and a build product.
+    # The checkers are code too. A checker that silently narrows what it
+    # reports is worse than one that fails, so it gets the same treatment.
+    Check(
+        "self-tests",
+        "repo",
+        (py("-m", "unittest", "discover", "-s", "scripts", "-p", "test_*.py"),),
+    ),
     Check("checksums", "repo", (py("scripts/release_checksums.py", "selftest"),)),
     Check("corpus-pack", "repo", (py("scripts/pack_corpus.py", "--check"),)),
     # Annex A, over the corpus that ships with the tree.

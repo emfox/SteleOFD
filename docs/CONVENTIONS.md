@@ -128,7 +128,7 @@ next to the check that produced it. Grouped by what they need:
 | Group | Checks | Needs |
 | --- | --- | --- |
 | `policy` | `check_language.py`, `check_i18n.py --strict`, `check_commits.py` | `git` |
-| `repo` | `release_checksums.py selftest`, `pack_corpus.py --check` | nothing |
+| `repo` | the checkers' own unit tests, `release_checksums.py selftest`, `pack_corpus.py --check` | nothing |
 | `schema` | `validate_ofd.py --allow-foreign` over `compliance/corpus` | `lxml` |
 | `rust` | `cargo fmt`, `clippy`, `build` and `test`, the golden images, the headless reader window, `check_compliance.py`, and the matrix freshness diff | `cargo`, `git` |
 | `corpus` | `fetch_ofdrw.py` and `fetch_gb_samples.py`, `--check` then `--parse` | the fetched samples, `cargo` |
