@@ -100,7 +100,9 @@ it names the result rather than the milestone that produced it.
 - **Enforcement** — a golden-image suite comparing against committed PNGs, which
   found a gradient painting black; a documented per-stage performance budget
   with a CI check that fails only on a large regression; `cargo-semver-checks`
-  against the last tag; a coverage floor; a pinned toolchain.
+  against the last tag; a coverage floor; a pinned toolchain; and the minimum
+  Rust version built in CI and checkable locally, so `rust-version` is tested
+  rather than restated by hand.
 - **Fonts** — a fallback chain resolved through `FontManager::outline_for_code`,
   so a document naming a face it does not ship still shows its text; the family
   list moved into a configurable `FontConfig` rather than the search code; a

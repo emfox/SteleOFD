@@ -130,10 +130,16 @@ next to the check that produced it. Grouped by what they need:
 | `policy` | `check_language.py`, `check_i18n.py --strict`, `check_commits.py` | `git` |
 | `repo` | the checkers' own unit tests, `release_checksums.py selftest`, `pack_corpus.py --check` | nothing |
 | `schema` | `validate_ofd.py --allow-foreign` over `compliance/corpus` | `lxml` |
-| `rust` | `cargo fmt`, `clippy`, `build` and `test`, the golden images, the headless reader window, `check_compliance.py`, and the matrix freshness diff | `cargo`, `git` |
+| `rust` | `cargo fmt`, `clippy`, the `msrv` check, `build` and `test`, the golden images, the headless reader window, `check_compliance.py`, and the matrix freshness diff | `cargo`, `git`, and the Rust channel named by `rust-version` for `msrv` |
 | `corpus` | `fetch_ofdrw.py` and `fetch_gb_samples.py`, `--check` then `--parse` | the fetched samples, `cargo` |
 | `perf` | `check_performance.py` against the budget in [PERFORMANCE.md](PERFORMANCE.md) | a `cargo bench` run |
 | `review` | `check_commit_scope.py`, which names commits that read as more than one change | `git` |
+
+`msrv` is the one check that runs under a toolchain other than the one on
+`PATH`: it reads `rust-version` from the workspace manifest and runs
+`cargo +<that version> check`, so the minimum the project states is a fact
+rather than a claim. It skips, with the reason, on a machine that has not
+installed that channel.
 
 Everything in `review` reports rather than blocks. A script can measure where
 the lines landed; it cannot know why they landed there, and a move, a rename or
