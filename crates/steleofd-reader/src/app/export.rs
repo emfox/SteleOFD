@@ -116,14 +116,14 @@ impl App {
             ExportFormat::Pdf => self.text_with(
                 ReaderMessage::ExportPdfDone,
                 [
-                    ("count", report.pages.to_string().into()),
+                    ("count", (report.pages as i64).into()),
                     ("path", path.unwrap_or_default().into()),
                 ],
             ),
             ExportFormat::Png => self.text_with(
                 ReaderMessage::ExportPngDone,
                 [
-                    ("count", report.written.len().to_string().into()),
+                    ("count", (report.written.len() as i64).into()),
                     ("path", path.unwrap_or_default().into()),
                 ],
             ),
@@ -230,8 +230,8 @@ impl App {
             self.text_with(
                 ReaderMessage::PrintDone,
                 [
-                    ("pages", report.sheets.len().to_string().into()),
-                    ("sheets", report.sheet_count.to_string().into()),
+                    ("pages", (report.sheets.len() as i64).into()),
+                    ("sheets", (report.sheet_count as i64).into()),
                     (
                         "paper",
                         self.text(match report.settings.paper {

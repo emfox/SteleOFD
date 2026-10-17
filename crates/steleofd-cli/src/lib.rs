@@ -232,7 +232,7 @@ fn convert(
     let mut lines = vec![i18n.text_with(
         MessageId::CliConverted,
         [
-            ("count", (count as i64).to_string().into()),
+            ("count", (count as i64).into()),
             ("format", format.label().into()),
         ],
     )];
@@ -356,8 +356,8 @@ fn print(path: &Path, paper: PaperArg, dpi: f64, copies: usize, i18n: &I18n) -> 
     let text = i18n.text_with(
         MessageId::CliPrintPlan,
         [
-            ("pages", fmt.integer(job.pages.len() as i64).into()),
-            ("sheets", fmt.integer(sheets as i64).into()),
+            ("pages", (job.pages.len() as i64).into()),
+            ("sheets", (sheets as i64).into()),
             ("paper", paper.label().into()),
             ("dpi", fmt.decimal(dpi, 0).into()),
         ],

@@ -24,12 +24,20 @@ sign-panel-title = Signatures
 
 # Annotations, clause 15. Read apart from the pages they mark up.
 annot-panel-title = Annotations
-annot-count = { $count } annotation(s)
+annot-count = { $count ->
+    [0] No annotations
+    [one] { $count } annotation
+   *[other] { $count } annotations
+}
 annot-none = This document has no annotations
 
 # Comparison, two revisions of one file. Read over the flattened pages.
 compare-panel-title = Comparison
 compare-open-second = Open Revision to Compare
 compare-identical = The two revisions draw the same pages
-compare-changed = { $count } page(s) changed
+compare-changed = { $count ->
+    [0] No pages changed
+    [one] { $count } page changed
+   *[other] { $count } pages changed
+}
 compare-page = Page { $page }: { $change }

@@ -15,21 +15,27 @@ sign-count = { $count ->
    *[other] { $count } 个签名
 }
 
-sign-signer = 签章人：{ $name }
+sign-signer = 签署人：{ $name }
 sign-signed-at = 签署时间：{ $time }
 sign-algorithm = 算法：{ $algo }
 sign-issuer = 颁发机构：{ $issuer }
 sign-export-report = 导出验签报告
-sign-panel-title = 签章
+sign-panel-title = 签名
 
 # Annotations, clause 15. Read apart from the pages they mark up.
 annot-panel-title = 注释
-annot-count = 共 { $count } 条注释
+annot-count = { $count ->
+    [0] 无注释
+   *[other] 共 { $count } 条注释
+}
 annot-none = 本文档没有注释
 
 # Comparison, two revisions of one file. Read over the flattened pages.
 compare-panel-title = 版本比较
 compare-open-second = 打开用于比较的版本
 compare-identical = 两个版本绘制的页面相同
-compare-changed = 共 { $count } 页有改动
+compare-changed = { $count ->
+    [0] 没有页面改动
+   *[other] 共 { $count } 页有改动
+}
 compare-page = 第 { $page } 页：{ $change }

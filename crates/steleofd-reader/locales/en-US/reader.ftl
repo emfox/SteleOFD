@@ -2,7 +2,7 @@
 
 reader-open = Open File
 reader-close = Close Document
-reader-drop-hint = Drop an .ofd file here, or use Open File
+reader-drop-hint = Drop an .ofd file here, or use "Open File"
 reader-info = Document: { $name }
 reader-page-of = Page { $current } of { $total }
 reader-zoom = Zoom { $percent }%
@@ -19,16 +19,28 @@ reader-no-match = No matches found
 reader-export = Export
 reader-export-pdf = Export as PDF
 reader-export-png = Export as PNG
-reader-export-pdf-done = Wrote { $count } page(s) as PDF: { $path }
-reader-export-png-done = Wrote { $count } PNG(s): { $path }
+reader-export-pdf-done = Wrote { $count ->
+    [one] { $count } page
+   *[other] { $count } pages
+} as PDF: { $path }
+reader-export-png-done = Wrote { $count ->
+    [one] { $count } PNG
+   *[other] { $count } PNG files
+}: { $path }
 reader-export-pdf-title = Export PDF
 reader-export-png-title = Choose a folder for the PNG files
 reader-print = Print
-reader-print-done = Printed { $pages } page(s) on { $sheets } sheet(s), { $paper }
+reader-print-done = Printed { $pages ->
+    [one] { $pages } page
+   *[other] { $pages } pages
+} on { $sheets ->
+    [one] { $sheets } sheet
+   *[other] { $sheets } sheets
+}, { $paper }
 reader-paper-a3 = A3
 reader-paper-a4 = A4
 reader-paper-a5 = A5
 reader-paper-b5 = B5
 reader-paper-letter = Letter
 reader-paper-legal = Legal
-reader-paper-document = document paper
+reader-paper-document = Document paper

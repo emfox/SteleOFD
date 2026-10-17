@@ -195,7 +195,7 @@ fn convert_to_pdf_holds_the_whole_document() {
     ]);
     assert!(report.ok);
     assert!(
-        report.text.contains("Converted 1 page(s) to pdf"),
+        report.text.contains("Converted 1 page to pdf"),
         "{}",
         report.text
     );
@@ -302,9 +302,7 @@ fn print_plans_the_job_over_the_whole_document() {
     assert!(report.ok);
     // Simplex by default, so each copy lands on its own sheet.
     assert!(
-        report
-            .text
-            .contains("2 page(s) on 2 sheet(s), A4 at 300 dpi"),
+        report.text.contains("2 pages on 2 sheets, A4 at 300 dpi"),
         "{}",
         report.text
     );
