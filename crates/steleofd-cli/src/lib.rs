@@ -28,17 +28,38 @@ pub struct Report {
     pub text: String,
     /// False when the command ran but its outcome is a failure.
     pub ok: bool,
+    /// Problems that did not stop the command: a substituted face, characters
+    /// no face carried. They go to stderr and make the exit code nonzero, so a
+    /// script cannot mistake a degraded page for a good one.
+    pub warnings: Vec<String>,
 }
 
 impl Report {
     /// A successful report.
     pub fn ok(text: String) -> Self {
-        Self { text, ok: true }
+        Self {
+            text,
+            ok: true,
+            warnings: Vec::new(),
+        }
     }
 
     /// A report that should turn the exit code nonzero.
     pub fn failed(text: String) -> Self {
-        Self { text, ok: false }
+        Self {
+            text,
+            ok: false,
+            warnings: Vec::new(),
+        }
+    }
+
+    /// Attach warnings, and step the exit code down when there are any.
+    pub fn warn(mut self, warnings: Vec<String>) -> Self {
+        if !warnings.is_empty() {
+            self.ok = false;
+        }
+        self.warnings = warnings;
+        self
     }
 }
 
@@ -136,12 +157,65 @@ fn info(path: &Path, i18n: &I18n) -> Result<Report> {
     if doc.page_count() == 0 {
         lines.push(i18n.text(MessageId::CliNoPages));
     }
+    // Info is asked precisely because something looked wrong, so every face is
+    // resolved here rather than waiting for a page to need it: a document that
+    // names a face it never shipped says so even before anything is drawn.
+    resolve_fonts(&doc);
+    let mut warnings = Vec::new();
+    lines.extend(font_lines(&doc, i18n, &fmt, &mut warnings));
     let signatures = doc.signatures().map(|list| list.len()).unwrap_or(0);
     lines.push(i18n.text_with(
         MessageId::CliSignatures,
         [("count", fmt.integer(signatures as i64).into())],
     ));
-    Ok(Report::ok(lines.join("\n")))
+    Ok(Report::ok(lines.join("\n")).warn(warnings))
+}
+
+/// Load every face the registry holds, so `unresolved` is complete.
+fn resolve_fonts(doc: &Document) {
+    for entry in doc.fonts().registry().iter() {
+        let _ = doc.fonts().face(entry.id);
+    }
+}
+
+/// Two lines at most: the faces a substitute covered, and the ones nothing
+/// could. A declaration the host searched for and found is not news.
+fn font_lines(
+    doc: &Document,
+    i18n: &I18n,
+    fmt: &LocalizedFormat,
+    warnings: &mut Vec<String>,
+) -> Vec<String> {
+    let mut substituted = Vec::new();
+    let mut missing = Vec::new();
+    for face in doc.missing_fonts() {
+        match face.source {
+            FontSource::System { .. } => substituted.push(face.family),
+            _ => missing.push(face.family),
+        }
+    }
+    let mut lines = Vec::new();
+    if !substituted.is_empty() {
+        lines.push(i18n.text_with(
+            MessageId::CliFontSubstituted,
+            [
+                ("count", fmt.integer(substituted.len() as i64).into()),
+                ("names", substituted.join(", ").into()),
+            ],
+        ));
+    }
+    if !missing.is_empty() {
+        let line = i18n.text_with(
+            MessageId::CliFontMissing,
+            [
+                ("count", fmt.integer(missing.len() as i64).into()),
+                ("names", missing.join(", ").into()),
+            ],
+        );
+        warnings.push(line.clone());
+        lines.push(line);
+    }
+    lines
 }
 
 fn render(
@@ -155,13 +229,11 @@ fn render(
     let out = output
         .map(Path::to_path_buf)
         .unwrap_or_else(|| PathBuf::from(format!("page-{page}.png")));
-    let png = doc.to_png(
-        page,
-        &RenderOptions {
-            dpi,
-            ..Default::default()
-        },
-    )?;
+    let options = RenderOptions {
+        dpi,
+        ..Default::default()
+    };
+    let (png, raster) = doc.to_png_with_stats(page, &options)?;
     std::fs::write(&out, png)?;
     let fmt = LocalizedFormat::new(i18n.locale().clone());
     let text = [
@@ -178,7 +250,55 @@ fn render(
         ),
     ]
     .join("\n");
-    Ok(Report::ok(text))
+    // The page was written either way. What it is short of is said on stderr
+    // and in the exit code, because a PNG of a blank page looks exactly like
+    // a PNG of a page that had nothing on it.
+    let mut warnings = font_warnings(&doc, i18n, &fmt);
+    warnings.extend(glyph_warning(raster.missing_glyphs, i18n, &fmt));
+    Ok(Report::ok(text).warn(warnings))
+}
+
+/// Faces the document wanted and did not get, one line per face.
+fn font_warnings(doc: &Document, i18n: &I18n, fmt: &LocalizedFormat) -> Vec<String> {
+    let mut substituted = Vec::new();
+    let mut missing = Vec::new();
+    for face in doc.missing_fonts() {
+        match face.source {
+            FontSource::System { .. } => substituted.push(face.family),
+            _ => missing.push(face.family),
+        }
+    }
+    let mut lines = Vec::new();
+    if !substituted.is_empty() {
+        lines.push(i18n.text_with(
+            MessageId::CliFontSubstituted,
+            [
+                ("count", fmt.integer(substituted.len() as i64).into()),
+                ("names", substituted.join(", ").into()),
+            ],
+        ));
+    }
+    if !missing.is_empty() {
+        lines.push(i18n.text_with(
+            MessageId::CliFontMissing,
+            [
+                ("count", fmt.integer(missing.len() as i64).into()),
+                ("names", missing.join(", ").into()),
+            ],
+        ));
+    }
+    lines
+}
+
+/// A line when characters were left out because no face carried them.
+fn glyph_warning(missing: usize, i18n: &I18n, fmt: &LocalizedFormat) -> Vec<String> {
+    if missing == 0 {
+        return Vec::new();
+    }
+    vec![i18n.text_with(
+        MessageId::CliMissingGlyphs,
+        [("count", fmt.integer(missing as i64).into())],
+    )]
 }
 
 fn convert(
@@ -203,10 +323,19 @@ fn convert(
         None => (0..pages).collect(),
     };
 
+    // A conversion that loses a face or a glyph still writes a file, so the
+    // counts collected on the way out are the only sign it happened.
+    let mut missing_glyphs = 0usize;
     let (count, wrote) = match format {
         FormatArg::Pdf => {
             let out = dir.join(format!("{stem}.pdf"));
-            std::fs::write(&out, doc.to_pdf()?)?;
+            let mut pdf = Vec::new();
+            for index in &indices {
+                let (bytes, stats) = doc.to_pdf_with_stats(*index)?;
+                missing_glyphs += stats.missing_glyphs;
+                pdf = bytes;
+            }
+            std::fs::write(&out, pdf)?;
             (pages, Some(out))
         }
         FormatArg::Png => {
@@ -216,14 +345,18 @@ fn convert(
             };
             for index in &indices {
                 let out = dir.join(format!("{stem}-{index}.png"));
-                std::fs::write(&out, doc.to_png(*index, &options)?)?;
+                let (png, raster) = doc.to_png_with_stats(*index, &options)?;
+                missing_glyphs += raster.missing_glyphs;
+                std::fs::write(&out, png)?;
             }
             (indices.len(), None)
         }
         FormatArg::Svg => {
             for index in &indices {
                 let out = dir.join(format!("{stem}-{index}.svg"));
-                std::fs::write(&out, doc.to_svg(*index)?)?;
+                let (svg, stats) = doc.to_svg_with_stats(*index)?;
+                missing_glyphs += stats.missing_glyphs;
+                std::fs::write(&out, svg)?;
             }
             (indices.len(), None)
         }
@@ -242,7 +375,10 @@ fn convert(
             [("path", out.display().to_string().into())],
         ));
     }
-    Ok(Report::ok(lines.join("\n")))
+    let work = LocalizedFormat::new(i18n.locale().clone());
+    let mut warnings = font_warnings(&doc, i18n, &work);
+    warnings.extend(glyph_warning(missing_glyphs, i18n, &work));
+    Ok(Report::ok(lines.join("\n")).warn(warnings))
 }
 
 fn verify(path: &Path, i18n: &I18n) -> Result<Report> {
@@ -271,6 +407,7 @@ fn verify(path: &Path, i18n: &I18n) -> Result<Report> {
     Ok(Report {
         text: lines.join("\n"),
         ok,
+        warnings: Vec::new(),
     })
 }
 
@@ -332,6 +469,7 @@ fn audit(path: &Path, i18n: &I18n) -> Result<Report> {
     Ok(Report {
         text: lines.join("\n"),
         ok,
+        warnings: Vec::new(),
     })
 }
 

@@ -17,6 +17,11 @@ fn main() -> ExitCode {
             if !report.text.is_empty() {
                 println!("{}", report.text);
             }
+            // Warnings go to stderr: a caller piping the output wants the
+            // result alone, and a terminal still shows both.
+            for warning in &report.warnings {
+                eprintln!("{warning}");
+            }
             if report.ok {
                 ExitCode::SUCCESS
             } else {
