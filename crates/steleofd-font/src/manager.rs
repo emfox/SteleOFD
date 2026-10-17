@@ -18,6 +18,8 @@ pub struct FontManager {
     faces: RwLock<HashMap<FontId, Arc<FontFace>>>,
     fallback_chain: RwLock<Vec<FontId>>,
     default_cjk_family: RwLock<String>,
+    /// Family a CJK substitute came from on this host, once one has answered.
+    cjk_answered: RwLock<Option<String>>,
     /// Ids a host search already came back empty for. Asking again cannot
     /// change the answer, and a glyph loop would ask once per character.
     unresolved: RwLock<HashSet<FontId>>,
@@ -40,6 +42,7 @@ impl FontManager {
             faces: RwLock::new(HashMap::new()),
             fallback_chain: RwLock::new(Vec::new()),
             default_cjk_family: RwLock::new("Noto Sans CJK SC".to_string()),
+            cjk_answered: RwLock::new(None),
             unresolved: RwLock::new(HashSet::new()),
         }
     }
@@ -70,11 +73,19 @@ impl FontManager {
             if wanted.is_empty() || f.covers(wanted) {
                 return Ok(f);
             }
-            self.note_unresolved(id);
-            return Err(FontError::Missing {
-                family: f.family().to_string(),
+            // A substitute chosen for other characters can still be wrong for
+            // these, so it is searched again before the face is given up on.
+            let substitutable = matches!(
+                self.registry.get(id).map(|e| &e.source),
+                Ok(FontSource::Unshipped { .. } | FontSource::Fallback { .. })
+            );
+            if !substitutable {
+                self.note_unresolved(id);
+                return Err(FontError::Missing {
+                    family: f.family().to_string(),
+                }
+                .into());
             }
-            .into());
         }
         // A search that already failed is not repeated: the answer cannot
         // change, and a glyph loop asks once per character.
@@ -128,7 +139,7 @@ impl FontManager {
             // and only takes a generic when this host cannot answer with it.
             FontSource::Fallback { .. } => match entry.data.clone() {
                 Some(data) => data,
-                None => match self.find_system_font(&entry, wanted)? {
+                None => match self.find_cjk_font(&entry, wanted)? {
                     Some(data) => data,
                     None => {
                         self.note_unresolved(id);
@@ -212,6 +223,10 @@ impl FontManager {
             properties.style = Style::Italic;
         }
 
+        // Hosts map their generic families differently, so the default family
+        // is asked for by name before any generic. A host that never had it
+        // still needs an answer for CJK, hence the wider step in `find_cjk_font`.
+        let pin = self.pinned_family();
         thread_local! {
             static SYSTEM: font_kit::source::SystemSource = font_kit::source::SystemSource::new();
         }
@@ -278,35 +293,16 @@ impl FontManager {
                     font_kit::family_name::FamilyName::Monospace,
                 ]),
             }
-            // Hosts map their generic families differently, so the pinned
-            // default is asked for by name before any generic: that is what
-            // keeps `cjk-substitute` stable across machines.
-            let pinned = self
-                .default_cjk_family
-                .read()
-                .map(|s| s.clone())
-                .unwrap_or_else(|_| "Noto Sans CJK SC".to_string());
-            let pinned_key = pinned.to_lowercase();
-            let pinned_data = if known.contains(&pinned_key) {
-                source
-                    .select_family_by_name(&pinned)
-                    .ok()
-                    .map(|h| load_first(&h, &properties))
-                    .transpose()?
-                    .flatten()
-            } else {
-                None
+            // The pinned family, the generic families and any family that
+            // covered an earlier run are all names a CJK substitute may wear:
+            // Windows and macOS rarely ship the pinned one.
+            let mut fallback = match pinned_answer(source, &known, &pin, &properties)? {
+                Some(data) if wanted.is_empty() || Self::covers(&data, wanted) => {
+                    self.note_cjk_answered(pin.clone());
+                    return Ok(Some(data));
+                }
+                other => other,
             };
-            if let Some(data) = pinned_data.as_ref()
-                && (wanted.is_empty() || Self::covers(data, wanted))
-            {
-                return Ok(Some(data.clone()));
-            }
-
-            // The default family, when the host has it, is the shape-neutral
-            // answer this fallback most wants; the generic families come
-            // after it and only replace it when they cover more.
-            let mut fallback = pinned_data;
             for generic in order {
                 let Ok(handle) = source.select_best_match(&[generic], &properties) else {
                     continue;
@@ -321,13 +317,83 @@ impl FontManager {
                 // Coverage often lives in a family beside the generic — a
                 // Latin default for `sans-serif`, `Noto Sans CJK SC` next to
                 // it — so those are asked for by name before the shape alone.
-                if let Some(data) = covering_family(source, &known, wanted, &properties)? {
+                if let Some((family, data)) =
+                    covering_family(source, &known, wanted, &properties, &self.cjk_preferred())
+                {
+                    self.note_cjk_answered(family);
                     return Ok(Some(data));
                 }
                 fallback.get_or_insert(data);
             }
             Ok(fallback)
         })
+    }
+
+    /// A face for the engine's own CJK substitute, from the families this host
+    /// keeps CJK in. Generics come last: font-kit maps them to Latin faces on
+    /// Windows and macOS, so a host without the pinned family would go blank.
+    #[cfg(all(feature = "system-fonts", not(target_arch = "wasm32")))]
+    fn find_cjk_font(
+        &self,
+        entry: &crate::registry::FontEntry,
+        wanted: &[u32],
+    ) -> Result<Option<Arc<Vec<u8>>>> {
+        use font_kit::properties::Properties;
+
+        let data = self.find_system_font(entry, wanted)?;
+        // A search with nothing to cover, or one that found a covering face,
+        // has already answered; only an uncovered guess needs the wider walk.
+        if wanted.is_empty() || data.as_ref().is_some_and(|d| Self::covers(d, wanted)) {
+            return Ok(data);
+        }
+        thread_local! {
+            static SYSTEM: font_kit::source::SystemSource = font_kit::source::SystemSource::new();
+        }
+        let found = SYSTEM.with(|source| {
+            let known: Vec<String> = source
+                .all_families()
+                .unwrap_or_default()
+                .into_iter()
+                .map(|name| name.to_lowercase())
+                .collect();
+            covering_family(
+                source,
+                &known,
+                wanted,
+                &Properties::new(),
+                &self.cjk_preferred(),
+            )
+        });
+        Ok(match found {
+            Some((family, data)) => {
+                self.note_cjk_answered(family);
+                Some(data)
+            }
+            None => data,
+        })
+    }
+
+    /// Families to try before the rest of the host, most specific first: the
+    /// pinned default, the names each host keeps CJK in, and the one that
+    /// answered an earlier run.
+    #[cfg(all(feature = "system-fonts", not(target_arch = "wasm32")))]
+    fn cjk_preferred(&self) -> Vec<String> {
+        let mut names = vec![self.pinned_family()];
+        names.extend(CJK_FAMILIES.iter().map(|f| (*f).to_string()));
+        names.extend(self.cjk_answered());
+        names
+    }
+
+    /// Say which family last answered a CJK substitute.
+    pub fn note_cjk_answered(&self, family: impl Into<String>) {
+        if let Ok(mut slot) = self.cjk_answered.write() {
+            *slot = Some(family.into());
+        }
+    }
+
+    /// The family a CJK substitute came from on this host, if one has.
+    pub fn cjk_answered(&self) -> Option<String> {
+        self.cjk_answered.read().ok().and_then(|s| s.clone())
     }
 
     /// Find a face in the fallback chain that covers a code point.
@@ -349,7 +415,7 @@ impl FontManager {
             if let Ok(face) = self.face(id)
                 && face.glyph_id(codepoint).is_some()
             {
-                if wanted.len() > 1 && !face.covers(wanted) {
+                if wanted.len() > 1 && !face.covers(wanted) && face.covers(&[codepoint]) {
                     first.get_or_insert((id, face));
                     continue;
                 }
@@ -466,10 +532,39 @@ impl FontManager {
             .unwrap_or_default()
     }
 
-    /// Set the family used when CJK text needs a substitute.
+    /// Set the family used when CJK text needs a substitute. Ids already
+    /// remembered as unresolved are cleared: the answer they carry is the one
+    /// this changes.
     pub fn set_default_cjk_family(&self, family: impl Into<String>) {
         if let Ok(mut f) = self.default_cjk_family.write() {
             *f = family.into();
+        }
+        if let Ok(mut set) = self.unresolved.write() {
+            set.clear();
+        }
+    }
+
+    /// The family a CJK substitute asks for first on this host.
+    pub fn pinned_family(&self) -> String {
+        self.default_cjk_family
+            .read()
+            .map(|s| s.clone())
+            .unwrap_or_else(|_| "Noto Sans CJK SC".to_string())
+    }
+
+    /// Forget that a search failed, for a caller that has just changed what
+    /// the search would look for.
+    pub fn clear_unresolved(&self, id: FontId) {
+        if let Ok(mut set) = self.unresolved.write() {
+            set.remove(&id);
+        }
+    }
+
+    /// Mark every id given as unresolved, for a renderer that gave up on all
+    /// of them in one page.
+    pub fn mark_unresolved(&self, ids: &[FontId]) {
+        if let Ok(mut set) = self.unresolved.write() {
+            set.extend(ids.iter().copied());
         }
     }
 
@@ -505,27 +600,68 @@ impl Default for FontManager {
     }
 }
 
-/// A listed family that carries every code point given, in the order the host
-/// lists them. The generic families are aliases a host maps once, so they
-/// answer with the Latin default even when a face next to it has the script.
+/// A listed family that carries every code point given, the preferred names
+/// first. A generic family is an alias a host maps once, so it answers with
+/// the Latin default even when a face next to it carries the script.
 #[cfg(all(feature = "system-fonts", not(target_arch = "wasm32")))]
 fn covering_family(
     source: &font_kit::source::SystemSource,
     known: &[String],
     wanted: &[u32],
     properties: &font_kit::properties::Properties,
-) -> Result<Option<Arc<Vec<u8>>>> {
-    for name in known {
+    preferred: &[String],
+) -> Option<(String, Arc<Vec<u8>>)> {
+    let mut names: Vec<&str> = preferred.iter().map(String::as_str).collect();
+    names.extend(known.iter().map(String::as_str));
+    let mut seen: Vec<String> = Vec::new();
+    for name in names {
+        let key = name.to_lowercase();
+        if seen.contains(&key) {
+            continue;
+        }
+        seen.push(key);
         let Ok(handle) = source.select_family_by_name(name) else {
             continue;
         };
-        if let Some(data) = load_first(&handle, properties)?
+        if let Ok(Some(data)) = load_first(&handle, properties)
             && FontManager::covers(&data, wanted)
         {
-            return Ok(Some(data));
+            return Some((name.to_string(), data));
         }
     }
-    Ok(None)
+    None
+}
+
+/// Families that keep CJK on the hosts this engine runs on, in the order a
+/// document without a shipped CJK face would want them: the same glyph shapes
+/// the pinned Noto face draws, then the system defaults of Windows and macOS.
+const CJK_FAMILIES: &[&str] = &[
+    "Noto Sans CJK SC",
+    "Source Han Sans SC",
+    "Microsoft YaHei",
+    "SimSun",
+    "PingFang SC",
+    "Hiragino Sans GB",
+    "WenQuanYi Zen Hei",
+    "Droid Sans Fallback",
+];
+
+/// The pinned family, when the host lists it. Whether it carries the code
+/// points is left to the caller, which knows what it is drawing.
+#[cfg(all(feature = "system-fonts", not(target_arch = "wasm32")))]
+fn pinned_answer(
+    source: &font_kit::source::SystemSource,
+    known: &[String],
+    pin: &str,
+    properties: &font_kit::properties::Properties,
+) -> Result<Option<Arc<Vec<u8>>>> {
+    if !known.contains(&pin.to_lowercase()) {
+        return Ok(None);
+    }
+    let Ok(handle) = source.select_family_by_name(pin) else {
+        return Ok(None);
+    };
+    load_first(&handle, properties)
 }
 
 /// The first face of a family that matches the declared weight and slope, or
