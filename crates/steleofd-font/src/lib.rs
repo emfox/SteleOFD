@@ -6,6 +6,7 @@
 #![warn(missing_docs)]
 
 pub mod cff;
+pub mod config;
 pub mod face;
 pub mod manager;
 pub mod metrics;
@@ -13,6 +14,7 @@ pub mod registry;
 pub mod shape;
 pub mod subset;
 
+pub use config::{FamilyList, FontConfig, default_cjk_families};
 pub use face::FontFace;
 pub use manager::FontManager;
 pub use metrics::{FontMetrics, GlyphOutline};

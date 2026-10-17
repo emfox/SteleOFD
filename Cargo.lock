@@ -5089,6 +5089,7 @@ dependencies = [
  "font-kit",
  "rustybuzz",
  "serde",
+ "serde_json",
  "steleofd-common",
  "steleofd-error",
  "steleofd-geometry",

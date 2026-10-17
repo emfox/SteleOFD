@@ -8,6 +8,7 @@ use std::sync::{Arc, RwLock};
 use steleofd_error::{FontError, Result};
 use steleofd_geometry::Path;
 
+use crate::config::FontConfig;
 use crate::face::FontFace;
 use crate::registry::{FontId, FontRegistry, FontSource, Unresolved};
 
@@ -17,7 +18,8 @@ pub struct FontManager {
     registry: FontRegistry,
     faces: RwLock<HashMap<FontId, Arc<FontFace>>>,
     fallback_chain: RwLock<Vec<FontId>>,
-    default_cjk_family: RwLock<String>,
+    /// Families to search, and the one substituted for a missing glyph.
+    config: RwLock<FontConfig>,
     /// Family a CJK substitute came from on this host, once one has answered.
     cjk_answered: RwLock<Option<String>>,
     /// Ids a host search already came back empty for. Asking again cannot
@@ -41,7 +43,7 @@ impl FontManager {
             registry: FontRegistry::new(),
             faces: RwLock::new(HashMap::new()),
             fallback_chain: RwLock::new(Vec::new()),
-            default_cjk_family: RwLock::new("Noto Sans CJK SC".to_string()),
+            config: RwLock::new(FontConfig::default()),
             cjk_answered: RwLock::new(None),
             unresolved: RwLock::new(HashSet::new()),
         }
@@ -223,10 +225,10 @@ impl FontManager {
             properties.style = Style::Italic;
         }
 
-        // Hosts map their generic families differently, so the default family
-        // is asked for by name before any generic. A host that never had it
+        // Hosts map their generic families differently, so a configured family
+        // is asked for by name before any generic. A host that has none of them
         // still needs an answer for CJK, hence the wider step in `find_cjk_font`.
-        let pin = self.pinned_family();
+        let pin = self.configured_family();
         thread_local! {
             static SYSTEM: font_kit::source::SystemSource = font_kit::source::SystemSource::new();
         }
@@ -293,15 +295,18 @@ impl FontManager {
                     font_kit::family_name::FamilyName::Monospace,
                 ]),
             }
-            // The pinned family, the generic families and any family that
+            // The configured family, the generic families and any family that
             // covered an earlier run are all names a CJK substitute may wear:
-            // Windows and macOS rarely ship the pinned one.
-            let mut fallback = match pinned_answer(source, &known, &pin, &properties)? {
-                Some(data) if wanted.is_empty() || Self::covers(&data, wanted) => {
-                    self.note_cjk_answered(pin.clone());
-                    return Ok(Some(data));
-                }
-                other => other,
+            // Windows and macOS rarely ship the first one.
+            let mut fallback = match &pin {
+                Some(pin) => match pinned_answer(source, &known, pin, &properties)? {
+                    Some(data) if wanted.is_empty() || Self::covers(&data, wanted) => {
+                        self.note_cjk_answered(pin.clone());
+                        return Ok(Some(data));
+                    }
+                    other => other,
+                },
+                None => None,
             };
             for generic in order {
                 let Ok(handle) = source.select_best_match(&[generic], &properties) else {
@@ -374,12 +379,10 @@ impl FontManager {
     }
 
     /// Families to try before the rest of the host, most specific first: the
-    /// pinned default, the names each host keeps CJK in, and the one that
-    /// answered an earlier run.
+    /// configured order, then the family that answered an earlier run.
     #[cfg(all(feature = "system-fonts", not(target_arch = "wasm32")))]
     fn cjk_preferred(&self) -> Vec<String> {
-        let mut names = vec![self.pinned_family()];
-        names.extend(CJK_FAMILIES.iter().map(|f| (*f).to_string()));
+        let mut names: Vec<String> = self.config().search_order().to_vec();
         names.extend(self.cjk_answered());
         names
     }
@@ -532,24 +535,46 @@ impl FontManager {
             .unwrap_or_default()
     }
 
-    /// Set the family used when CJK text needs a substitute. Ids already
-    /// remembered as unresolved are cleared: the answer they carry is the one
-    /// this changes.
-    pub fn set_default_cjk_family(&self, family: impl Into<String>) {
-        if let Ok(mut f) = self.default_cjk_family.write() {
-            *f = family.into();
+    /// The families this manager searches, as configured or as shipped.
+    pub fn config(&self) -> FontConfig {
+        self.config.read().map(|c| c.clone()).unwrap_or_default()
+    }
+
+    /// Replace the search configuration. Ids already remembered as unresolved
+    /// are cleared: the answer they carry is the one this changes.
+    pub fn set_config(&self, config: FontConfig) {
+        if let Ok(mut slot) = self.config.write() {
+            *slot = config;
         }
         if let Ok(mut set) = self.unresolved.write() {
             set.clear();
         }
     }
 
-    /// The family a CJK substitute asks for first on this host.
+    /// Search one family first. Whatever was configured stays behind it, and
+    /// when nothing was configured the shipped list does, so naming one family
+    /// narrows the order without throwing the host's own faces away.
+    pub fn set_default_cjk_family(&self, family: impl Into<String>) {
+        let family = family.into();
+        let mut config = self.config();
+        config.cjk_families = config.cjk_families.prepend(&family);
+        self.set_config(config);
+    }
+
+    /// The family a CJK substitute asks for first on this host: whatever the
+    /// configuration puts first, the shipped list when it says nothing.
     pub fn pinned_family(&self) -> String {
-        self.default_cjk_family
-            .read()
-            .map(|s| s.clone())
-            .unwrap_or_else(|_| "Noto Sans CJK SC".to_string())
+        self.config()
+            .search_order()
+            .first()
+            .cloned()
+            .unwrap_or_default()
+    }
+
+    /// The family to ask for by name before any generic, or none when the
+    /// configuration names none and the case at hand is not CJK.
+    fn configured_family(&self) -> Option<String> {
+        Some(self.pinned_family())
     }
 
     /// Forget that a search failed, for a caller that has just changed what
@@ -632,21 +657,7 @@ fn covering_family(
     None
 }
 
-/// Families that keep CJK on the hosts this engine runs on, in the order a
-/// document without a shipped CJK face would want them: the same glyph shapes
-/// the pinned Noto face draws, then the system defaults of Windows and macOS.
-const CJK_FAMILIES: &[&str] = &[
-    "Noto Sans CJK SC",
-    "Source Han Sans SC",
-    "Microsoft YaHei",
-    "SimSun",
-    "PingFang SC",
-    "Hiragino Sans GB",
-    "WenQuanYi Zen Hei",
-    "Droid Sans Fallback",
-];
-
-/// The pinned family, when the host lists it. Whether it carries the code
+/// One named family, when the host lists it. Whether it carries the code
 /// points is left to the caller, which knows what it is drawing.
 #[cfg(all(feature = "system-fonts", not(target_arch = "wasm32")))]
 fn pinned_answer(
