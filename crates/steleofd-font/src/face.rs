@@ -218,6 +218,26 @@ impl FontFace {
     pub fn has_codepoint(&self, codepoint: u32) -> bool {
         self.glyph_id(codepoint).is_some()
     }
+
+    /// Whether the face covers every code point given. Whitespace is skipped:
+    /// a space is often drawn from the fallback rather than mapped, and a run
+    /// whose only unmapped character is a space still reads correctly.
+    pub fn covers(&self, codepoints: &[u32]) -> bool {
+        self.with_face(|face| {
+            codepoints.iter().all(|&cp| {
+                if cp < 0x20 || is_space(cp) {
+                    return true;
+                }
+                char::from_u32(cp).is_some_and(|ch| face.glyph_index(ch).is_some())
+            })
+        })
+        .unwrap_or(false)
+    }
+}
+
+/// Whitespace a face need not map to count as covering a run.
+fn is_space(cp: u32) -> bool {
+    matches!(cp, 0x20 | 0xA0 | 0x3000)
 }
 
 /// Turn a charset read off a CID-keyed CFF into the reverse map a glyph
