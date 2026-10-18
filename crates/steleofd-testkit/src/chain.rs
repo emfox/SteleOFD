@@ -380,3 +380,147 @@ mod tests {
         assert!(cert.is_expired_at(1_700_000_000));
     }
 }
+
+#[cfg(test)]
+mod path_tests {
+    use super::*;
+    use steleofd_crypto::{Certificate, PathError, TrustAnchors, validate_path};
+
+    fn chain_and_anchors() -> (TestChain, TrustAnchors, Certificate) {
+        let chain = chain();
+        let mut anchors = TrustAnchors::none();
+        anchors.add(&chain.root_der).expect("root is an anchor");
+        let leaf = Certificate::parse_der(&chain.leaf_der).expect("leaf parses");
+        (chain, anchors, leaf)
+    }
+
+    #[test]
+    fn a_leaf_reaches_the_root_through_the_intermediate() {
+        let (chain, anchors, leaf) = chain_and_anchors();
+        let intermediate = Certificate::parse_der(&chain.intermediate_der).expect("intermediate");
+        let path = validate_path(&leaf, &anchors, &[intermediate]).expect("path completes");
+        assert_eq!(path.len(), 3, "leaf, intermediate, root");
+        assert_eq!(path.first().expect("leaf").subject(), "CN=Test Signer");
+        assert_eq!(path.last().expect("root").subject(), "CN=Test Root");
+    }
+
+    #[test]
+    fn a_leaf_whose_issuer_is_absent_has_no_path() {
+        let (_chain, anchors, leaf) = chain_and_anchors();
+        let err = validate_path(&leaf, &anchors, &[]).expect_err("no intermediate");
+        assert_eq!(
+            err,
+            PathError::IssuerMissing {
+                subject: "CN=Test Signer".into(),
+                issuer: "CN=Test Intermediate".into()
+            }
+        );
+    }
+
+    #[test]
+    fn a_leaf_signed_by_a_foreign_key_breaks_the_path() {
+        let (chain, anchors, _) = chain_and_anchors();
+        let mut leaf = CertSpec::end_entity("Test Signer", "Test Intermediate", 3);
+        leaf.subject_key_id = Some(key_id(&chain.leaf_key));
+        leaf.authority_key_id = Some(key_id(&chain.intermediate_key));
+        // Re-signed by the wrong key, but still naming the right issuer.
+        let der = cert_der(&leaf, &chain.leaf_key.public_bytes(), &chain.root_key);
+        let forged = Certificate::parse_der(&der).expect("forged leaf parses");
+        let intermediate = Certificate::parse_der(&chain.intermediate_der).expect("intermediate");
+        let err = validate_path(&forged, &anchors, &[intermediate]).expect_err("signature");
+        assert_eq!(
+            err,
+            PathError::SignatureInvalid {
+                subject: "CN=Test Signer".into()
+            }
+        );
+    }
+
+    #[test]
+    fn a_link_naming_the_wrong_issuer_key_breaks_the_path() {
+        let (chain, anchors, _) = chain_and_anchors();
+        let mut leaf = CertSpec::end_entity("Test Signer", "Test Intermediate", 3);
+        // The authority key identifier points at the root, not the intermediate.
+        leaf.authority_key_id = Some(key_id(&chain.root_key));
+        let der = cert_der(&leaf, &chain.leaf_key.public_bytes(), &chain.intermediate_key);
+        let leaf = Certificate::parse_der(&der).expect("leaf parses");
+        let intermediate = Certificate::parse_der(&chain.intermediate_der).expect("intermediate");
+        let err = validate_path(&leaf, &anchors, &[intermediate]).expect_err("key identifier");
+        assert!(matches!(err, PathError::SignatureInvalid { .. }), "{err:?}");
+    }
+
+    #[test]
+    fn an_expired_root_still_completes_the_path() {
+        let chain = chain();
+        let intermediate = Certificate::parse_der(&chain.intermediate_der).expect("intermediate");
+        let leaf = Certificate::parse_der(&chain.leaf_der).expect("leaf parses");
+        let mut anchors = TrustAnchors::none();
+        // Validity is clause f)'s question, not the path's, so a window that
+        // is already closed must not stop the walk.
+        let root = CertSpec::ca("Test Root", "Test Root", 1)
+            .between("200101000000Z", "200201000000Z");
+        let mut root = root;
+        root.subject_key_id = Some(key_id(&chain.root_key));
+        let root_der = cert_der(&root, &chain.root_key.public_bytes(), &chain.root_key);
+        anchors.add(&root_der).expect("anchor");
+        assert!(validate_path(&leaf, &anchors, &[intermediate]).is_ok());
+    }
+
+    #[test]
+    fn an_empty_anchor_set_never_completes() {
+        let chain = chain();
+        let intermediate = Certificate::parse_der(&chain.intermediate_der).expect("intermediate");
+        let leaf = Certificate::parse_der(&chain.leaf_der).expect("leaf parses");
+        let err = validate_path(&leaf, &TrustAnchors::none(), &[intermediate])
+            .expect_err("no anchor");
+        assert!(matches!(err, PathError::NoAnchor | PathError::IssuerMissing { .. }), "{err:?}");
+    }
+
+    #[test]
+    fn a_path_longer_than_the_root_allows_is_refused() {
+        let chain = chain();
+        let intermediate = Certificate::parse_der(&chain.intermediate_der).expect("intermediate");
+        let leaf = Certificate::parse_der(&chain.leaf_der).expect("leaf parses");
+        // The root permits no certificate between itself and the leaf, and
+        // this chain has one, so the constraint is exceeded by the second link.
+        let mut root = CertSpec::ca("Test Root", "Test Root", 1);
+        root.subject_key_id = Some(key_id(&chain.root_key));
+        root.basic_constraints = Some(BasicConstraints {
+            ca: true,
+            path_len: Some(0),
+        });
+        let root_der = cert_der(&root, &chain.root_key.public_bytes(), &chain.root_key);
+        let mut anchors = TrustAnchors::none();
+        anchors.add(&root_der).expect("anchor");
+        let err = validate_path(&leaf, &anchors, &[intermediate]).expect_err("too long");
+        assert_eq!(
+            err,
+            PathError::PathTooLong {
+                subject: "CN=Test Root".into(),
+                limit: 0
+            }
+        );
+    }
+
+    #[test]
+    fn an_end_entity_cannot_issue() {
+        let chain = chain();
+        let leaf = Certificate::parse_der(&chain.leaf_der).expect("leaf parses");
+        // A second leaf claiming to be the issuer of the first: same structure,
+        // but basicConstraints says it is not a CA.
+        let mut impostor = CertSpec::end_entity("Test Intermediate", "Test Root", 9);
+        impostor.subject_key_id = Some(key_id(&chain.intermediate_key));
+        impostor.authority_key_id = Some(key_id(&chain.root_key));
+        let der = cert_der(&impostor, &chain.intermediate_key.public_bytes(), &chain.root_key);
+        let impostor = Certificate::parse_der(&der).expect("impostor parses");
+        let mut anchors = TrustAnchors::none();
+        anchors.add(&chain.root_der).expect("root");
+        let err = validate_path(&leaf, &anchors, &[impostor]).expect_err("not a CA");
+        assert_eq!(
+            err,
+            PathError::NotACa {
+                subject: "CN=Test Intermediate".into()
+            }
+        );
+    }
+}
