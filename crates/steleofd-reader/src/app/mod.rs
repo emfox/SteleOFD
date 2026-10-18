@@ -13,6 +13,8 @@ use crate::render_worker::RenderQueue;
 use crate::shortcuts::{self, ZOOM_STEP};
 use crate::viewer::{self, DroppedFile, Layout, PageCache};
 
+pub use appearance::{TextSize, ThemeChoice};
+
 /// A failure the reader shows in its own words.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AppError {
@@ -75,6 +77,12 @@ pub struct App {
     comparison: Option<Comparison>,
     /// Whether the comparison panel is showing.
     comparison_open: bool,
+    /// The theme the window draws in.
+    theme: ThemeChoice,
+    /// How large interface text is drawn.
+    text_size: TextSize,
+    /// Whether high contrast tightens the theme in force.
+    high_contrast: bool,
     error: Option<AppError>,
     info: Option<String>,
     want_open: bool,
@@ -179,6 +187,7 @@ impl Default for App {
     }
 }
 
+mod appearance;
 mod compare;
 mod export;
 mod mark;
@@ -219,6 +228,9 @@ impl App {
             print_settings: None,
             comparison: None,
             comparison_open: false,
+            theme: ThemeChoice::default(),
+            text_size: TextSize::default(),
+            high_contrast: false,
             error: None,
             info: None,
             want_open: false,

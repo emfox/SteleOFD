@@ -6,9 +6,10 @@ use crate::message::ReaderMessage;
 use eframe::egui::{self, TextureOptions, Ui};
 use steleofd_i18n::MessageId;
 
-use crate::app::{App, Canvas, Fit, Verdict};
+use crate::app::{App, Canvas, Fit, TextSize, ThemeChoice, Verdict};
 use crate::export_worker::ExportFormat;
 use crate::shortcuts;
+use crate::theme::{self, Style, Token};
 use crate::viewer::{DroppedFile, Layout, MAX_DPI, MIN_DPI};
 
 /// The widest a page is drawn, so a large window does not blur a small page.
@@ -42,12 +43,15 @@ const HAS_FILE_DIALOG: bool = false;
 
 /// Draw one frame into `ui`, and report what the reader asked for.
 ///
-/// The specification's seven steps in order; nothing here reaches a platform.
+/// The specification's steps in order; nothing here reaches a platform.
 pub fn draw(ui: &mut Ui, app: &mut App) -> WindowRequests {
     let mut requests = WindowRequests::default();
     // Step 1 collects finished rasters before anything is drawn, so a page the
     // worker finished during the last frame is on screen in this one.
     app.poll();
+    // Appearance lands before the first widget is built: `egui` resolves a
+    // style when a widget is made, so a late push would flash for one frame.
+    apply_appearance(ui, app);
     take_drops(ui, app);
     draw_menu(ui, app, &mut requests);
     draw_toolbar(ui, app);
@@ -69,6 +73,49 @@ pub fn draw(ui: &mut Ui, app: &mut App) -> WindowRequests {
     requests.export = app.wants_export();
     requests.print = app.wants_print();
     requests
+}
+
+/// Step 3: push the reader's theme, text size and contrast into `egui`. The
+/// setting belongs to `App`; this is the one place it reaches the toolkit.
+fn apply_appearance(ui: &mut Ui, app: &App) {
+    let theme = match app.theme() {
+        ThemeChoice::System => ui.ctx().system_theme().unwrap_or(egui::Theme::Light),
+        ThemeChoice::Light => egui::Theme::Light,
+        ThemeChoice::Dark => egui::Theme::Dark,
+    };
+    let scale = app.text_size().scale();
+    let sharp = app.high_contrast();
+    // One scheme is dressed per pass, and only when a setting moved: rebuilding
+    // both style tables every frame would re-rasterize the glyph atlas.
+    let stamp = (theme, app.text_size(), sharp);
+    let applied = ui
+        .ctx()
+        .data(|data| data.get_temp::<(egui::Theme, TextSize, bool)>(appearance_id()));
+    if applied != Some(stamp) {
+        theme::apply(ui.ctx(), theme, scale, sharp);
+        ui.ctx()
+            .data_mut(|data| data.insert_temp(appearance_id(), stamp));
+    }
+}
+
+/// The key the applied appearance is remembered under, so it is rebuilt once.
+fn appearance_id() -> egui::Id {
+    egui::Id::new("reader-appearance")
+}
+
+/// One of the window's colours, in the scheme and contrast in force.
+fn colour(ui: &Ui, app: &App, token: Token) -> egui::Color32 {
+    theme::colour(ui.ctx(), app.high_contrast(), token)
+}
+
+/// A label in one of the window's colours and one of its named styles. The
+/// point size is set here rather than looked up in the style table, because a
+/// popup is built before step 3 has registered the named styles in it.
+fn toned(ui: &Ui, app: &App, text: impl Into<String>, token: Token, style: Style) -> egui::RichText {
+    let scale = app.text_size().scale();
+    egui::RichText::new(text)
+        .color(colour(ui, app, token))
+        .size(style.points(scale))
 }
 
 /// Resolve the keys pressed this frame into intent, after the panels have
@@ -163,86 +210,145 @@ fn take_drops(ui: &mut Ui, app: &mut App) {
     }
 }
 
-/// Z1: document-level actions. Page-level ones belong in the toolbar.
+/// Z1: document-level actions, in the three groups the header-bar pattern asks
+/// for: what changes the document, what changes what is shown, and what writes
+/// a file or changes the interface. A control's place never moves.
 fn draw_menu(ui: &mut Ui, app: &mut App, requests: &mut WindowRequests) {
     egui::Panel::top("menu").show(ui, |ui| {
         ui.horizontal(|ui| {
-            let open = app.text(ReaderMessage::Open);
-            if ui
-                .add_enabled(HAS_FILE_DIALOG, egui::Button::new(open))
-                .clicked()
-            {
-                app.request_open();
-                requests.open_dialog = true;
-            }
-            let close = app.close_label();
-            if ui
-                .add_enabled(app.is_open(), egui::Button::new(&close))
-                .clicked()
-            {
-                app.close();
-            }
+            draw_document_actions(ui, app, requests);
             ui.separator();
-            let search = app.search_heading();
-            let open = app.search_open();
-            // There is nothing to search with no document open, so the toggle
-            // is disabled rather than hidden: it is a page-level action and the
-            // bar must not reflow as the document comes and goes.
-            if ui
-                .add_enabled(app.is_open(), egui::Button::selectable(open, search))
-                .clicked()
-            {
-                app.set_search_open(!open);
-            }
-            let signatures = app.signatures_heading();
-            let showing = app.signatures_open();
-            if ui
-                .add_enabled(app.is_open(), egui::Button::selectable(showing, signatures))
-                .clicked()
-            {
-                app.set_signatures_open(!showing);
-            }
-            let annotations = app.annotations_heading();
-            let listing = app.annotations_open();
-            if ui
-                .add_enabled(
-                    app.is_open(),
-                    egui::Button::selectable(listing, annotations),
-                )
-                .clicked()
-            {
-                app.set_annotations_open(!listing);
-            }
-            for (key, layout) in [
-                (ReaderMessage::LayoutSingle, Layout::Single),
-                (ReaderMessage::LayoutDouble, Layout::Facing),
-                (ReaderMessage::LayoutContinuous, Layout::Continuous),
-            ] {
-                let label = app.text(key);
-                if ui.selectable_label(app.layout() == layout, label).clicked() {
-                    app.set_layout(layout);
-                }
-            }
+            draw_panel_toggles(ui, app);
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                draw_settings(ui, app);
                 draw_exports(ui, app);
-                draw_locales(ui, app);
                 ui.separator();
-                let comparing = app.comparison_open();
-                let compare = app.i18n().text(MessageId::ComparePanelTitle);
-                // Comparing asks for a second file, which is the same dialog
-                // Android cannot offer.
-                if ui
-                    .add_enabled(
-                        app.is_open() && HAS_FILE_DIALOG,
-                        egui::Button::selectable(comparing, compare),
-                    )
-                    .clicked()
-                {
-                    app.set_comparison_open(!comparing);
-                }
+                draw_comparison_toggle(ui, app);
+                draw_locales(ui, app);
             });
         });
     });
+}
+
+/// The two actions that change which document is open. Both carry a tooltip:
+/// "close" on a document is not obviously "close this one".
+fn draw_document_actions(ui: &mut Ui, app: &mut App, requests: &mut WindowRequests) {
+    let open = app.text(ReaderMessage::Open);
+    if ui
+        .add_enabled(HAS_FILE_DIALOG, egui::Button::new(&open))
+        .on_hover_text(&open)
+        .clicked()
+    {
+        app.request_open();
+        requests.open_dialog = true;
+    }
+    let close = app.close_label();
+    let hint = app.text(ReaderMessage::CloseHint);
+    if ui
+        .add_enabled(app.is_open(), egui::Button::new(&close))
+        .on_hover_text(&hint)
+        .clicked()
+    {
+        app.close();
+    }
+}
+
+/// The toggles that show a panel. Each is disabled rather than hidden while no
+/// document is open, so the group keeps its width as documents come and go.
+fn draw_panel_toggles(ui: &mut Ui, app: &mut App) {
+    let search = app.search_heading();
+    let open = app.search_open();
+    if ui
+        .add_enabled(app.is_open(), egui::Button::selectable(open, &search))
+        .on_hover_text(&search)
+        .clicked()
+    {
+        app.set_search_open(!open);
+    }
+    let signatures = app.signatures_heading();
+    let showing = app.signatures_open();
+    if ui
+        .add_enabled(app.is_open(), egui::Button::selectable(showing, &signatures))
+        .on_hover_text(&signatures)
+        .clicked()
+    {
+        app.set_signatures_open(!showing);
+    }
+    let annotations = app.annotations_heading();
+    let listing = app.annotations_open();
+    if ui
+        .add_enabled(app.is_open(), egui::Button::selectable(listing, &annotations))
+        .on_hover_text(&annotations)
+        .clicked()
+    {
+        app.set_annotations_open(!listing);
+    }
+    for (key, layout) in [
+        (ReaderMessage::LayoutSingle, Layout::Single),
+        (ReaderMessage::LayoutDouble, Layout::Facing),
+        (ReaderMessage::LayoutContinuous, Layout::Continuous),
+    ] {
+        let label = app.text(key);
+        let chosen = app.layout() == layout;
+        if ui
+            .selectable_label(chosen, &label)
+            .on_hover_text(&label)
+            .clicked()
+        {
+            app.set_layout(layout);
+        }
+    }
+}
+
+/// Comparing asks for a second file, which is the same dialog Android cannot
+/// offer, so the control is disabled there rather than drawn as a dead button.
+fn draw_comparison_toggle(ui: &mut Ui, app: &mut App) {
+    let comparing = app.comparison_open();
+    let compare = app.i18n().text(MessageId::ComparePanelTitle);
+    if ui
+        .add_enabled(
+            app.is_open() && HAS_FILE_DIALOG,
+            egui::Button::selectable(comparing, &compare),
+        )
+        .on_hover_text(&compare)
+        .clicked()
+    {
+        app.set_comparison_open(!comparing);
+    }
+}
+
+/// The appearance settings, as a menu so the three controls are named once and
+/// only the reader who wants them pays for the space.
+fn draw_settings(ui: &mut Ui, app: &mut App) {
+    let label = app.text(ReaderMessage::Settings);
+    let mut theme = app.theme();
+    let mut size = app.text_size();
+    let mut sharp = app.high_contrast();
+    ui.menu_button(&label, |ui| {
+        ui.label(toned(ui, app, app.theme_label(), Token::Dim, Style::Caption));
+        for choice in ThemeChoice::ALL {
+            let name = app.theme_name(choice);
+            ui.selectable_value(&mut theme, choice, name);
+        }
+        ui.separator();
+        let heading = app.text_size_label();
+        ui.label(toned(ui, app, heading, Token::Dim, Style::Caption));
+        for choice in TextSize::ALL {
+            let name = app.text_size_name(choice);
+            ui.selectable_value(&mut size, choice, name);
+        }
+        ui.separator();
+        let name = app.high_contrast_label();
+        let hint = app.high_contrast_hint();
+        ui.checkbox(&mut sharp, name).on_hover_text(&hint);
+    })
+    .response
+    .on_hover_text(&label);
+    // Written back after the menu, so a choice the reader made this frame is
+    // the one `App` holds; the state machine is still the only place it lives.
+    app.set_theme(theme);
+    app.set_text_size(size);
+    app.set_high_contrast(sharp);
 }
 
 /// The language choices, each written in its own language so a reader who
@@ -264,60 +370,56 @@ fn draw_locales(ui: &mut Ui, app: &mut App) {
 fn draw_exports(ui: &mut Ui, app: &mut App) {
     let busy = app.is_exporting();
     let printing = app.is_printing();
-    ui.label(app.text(ReaderMessage::Export));
+    let export = app.text(ReaderMessage::Export);
+    ui.label(toned(ui, app, export, Token::Dim, Style::Caption));
     let print = app.print_label_text();
     // Printing is bounded by the paper the reader has, not by a file, so the
     // button hands the job to the host at once rather than holding a request
     // open while a dialog is up.
     if ui
-        .add_enabled(app.is_open() && !printing, egui::Button::new(print))
+        .add_enabled(app.is_open() && !printing, egui::Button::new(&print))
+        .on_hover_text(&print)
         .clicked()
     {
         app.request_print();
     }
     let pdf = app.text(ReaderMessage::ExportPdf);
     if ui
-        .add_enabled(app.is_open() && !busy, egui::Button::new(pdf))
+        .add_enabled(app.is_open() && !busy, egui::Button::new(&pdf))
+        .on_hover_text(&pdf)
         .clicked()
     {
         app.request_export(ExportFormat::Pdf);
     }
     let png = app.text(ReaderMessage::ExportPng);
     if ui
-        .add_enabled(app.is_open() && !busy, egui::Button::new(png))
+        .add_enabled(app.is_open() && !busy, egui::Button::new(&png))
+        .on_hover_text(&png)
         .clicked()
     {
         app.request_export(ExportFormat::Png);
     }
 }
 
-/// Z2: actions on the page on screen. Controls disable rather than hide.
+/// Z2: actions on the page on screen. Page controls on the left, the zoom on
+/// the right, which is the split Z1 uses. Controls disable rather than hide.
 fn draw_toolbar(ui: &mut Ui, app: &mut App) {
     egui::Panel::top("toolbar").show(ui, |ui| {
         ui.horizontal(|ui| {
-            if ui
-                .add_enabled(app.has_previous(), egui::Button::new("◀"))
-                .clicked()
-            {
-                app.previous_page();
-            }
-            if ui
-                .add_enabled(app.has_next(), egui::Button::new("▶"))
-                .clicked()
-            {
-                app.next_page();
-            }
+            draw_paging(ui, app);
             ui.separator();
             let fit_width = app.text(ReaderMessage::FitWidth);
             if ui
-                .selectable_label(app.fit() == Some(Fit::Width), fit_width)
+                .selectable_label(app.fit() == Some(Fit::Width), &fit_width)
+                .on_hover_text(&fit_width)
                 .clicked()
             {
                 app.set_fit(Fit::Width);
             }
             let fit_page = app.text(ReaderMessage::FitPage);
             if ui
-                .selectable_label(app.fit() == Some(Fit::Page), fit_page)
+                .selectable_label(app.fit() == Some(Fit::Page), &fit_page)
+                .on_hover_text(&fit_page)
                 .clicked()
             {
                 app.set_fit(Fit::Page);
@@ -338,6 +440,27 @@ fn draw_toolbar(ui: &mut Ui, app: &mut App) {
     });
 }
 
+/// The two paging arrows. Their symbols are not language, so they are written
+/// inline; their tooltips are words, so a first-time reader has something.
+fn draw_paging(ui: &mut Ui, app: &mut App) {
+    let previous = app.text(ReaderMessage::PrevPage);
+    if ui
+        .add_enabled(app.has_previous(), egui::Button::new("◀"))
+        .on_hover_text(&previous)
+        .clicked()
+    {
+        app.previous_page();
+    }
+    let next = app.text(ReaderMessage::NextPage);
+    if ui
+        .add_enabled(app.has_next(), egui::Button::new("▶"))
+        .on_hover_text(&next)
+        .clicked()
+    {
+        app.next_page();
+    }
+}
+
 /// Z5: the search panel, on the left because results are a list.
 /// It is drawn before the canvas, so the canvas measures the space left for
 /// pages rather than the whole window.
@@ -346,7 +469,8 @@ fn draw_search(ui: &mut Ui, app: &mut App) {
         return;
     }
     egui::Panel::left("search").show(ui, |ui| {
-        ui.heading(app.search_panel_title());
+        let title = app.search_panel_title();
+        ui.label(toned(ui, app, title, Token::Text, Style::Title1));
         let mut query = app.query().to_string();
         let placeholder = app.search_placeholder();
         let response = ui.add(
@@ -360,18 +484,21 @@ fn draw_search(ui: &mut Ui, app: &mut App) {
         }
         ui.add_enabled_ui(!app.hits().is_empty(), |ui| {
             ui.horizontal(|ui| {
-                if ui.button("◀").clicked() {
+                let previous = app.text(ReaderMessage::PrevHit);
+                if ui.button("◀").on_hover_text(&previous).clicked() {
                     app.previous_hit();
                 }
-                if ui.button("▶").clicked() {
+                let next = app.text(ReaderMessage::NextHit);
+                if ui.button("▶").on_hover_text(&next).clicked() {
                     app.next_hit();
                 }
-                ui.label(app.search_count_label());
+                let count = app.search_count_label();
+                ui.label(toned(ui, app, count, Token::Dim, Style::Caption));
             });
         });
         if app.no_match() {
             let notice = app.no_match_label();
-            ui.label(egui::RichText::new(notice).weak());
+            ui.label(toned(ui, app, notice, Token::Dim, Style::Body));
         }
         ui.separator();
         // The hit list, so a reader can see where they all are rather than
@@ -399,8 +526,10 @@ fn draw_signatures(ui: &mut Ui, app: &mut App) {
         return;
     }
     egui::Panel::left("signatures").show(ui, |ui| {
-        ui.heading(app.signatures_heading());
-        ui.label(app.signature_count_label());
+        let heading = app.signatures_heading();
+        ui.label(toned(ui, app, heading, Token::Text, Style::Title1));
+        let count = app.signature_count_label();
+        ui.label(toned(ui, app, count, Token::Dim, Style::Caption));
         ui.separator();
         egui::ScrollArea::vertical()
             .id_salt("signature-list")
@@ -413,28 +542,25 @@ fn draw_signatures(ui: &mut Ui, app: &mut App) {
                 }
                 for report in &reports {
                     let verdict = app.signature_status_label(report);
-                    // Red for a broken signature, green for one that holds.
-                    // The colour carries the same meaning as the word, so it
-                    // is an extra cue rather than the only one.
-                    let colour = match report.verdict {
-                        Verdict::Valid => egui::Color32::from_rgb(40, 140, 60),
-                        Verdict::Tampered => egui::Color32::from_rgb(180, 40, 40),
+                    // The word is the verdict and the colour only repeats it,
+                    // which is what keeps the panel readable without colour.
+                    let (token, symbol) = match report.verdict {
+                        Verdict::Valid => (Token::Valid, "✓"),
+                        Verdict::Tampered => (Token::Tampered, "✗"),
                         // Amber, not red: unknown is not the same as wrong.
-                        Verdict::Unverified => egui::Color32::from_rgb(180, 130, 30),
-                        // Amber too: the proof holds, the issuer is a policy
-                        // question rather than an incident.
-                        Verdict::Untrusted => egui::Color32::from_rgb(180, 130, 30),
+                        Verdict::Unverified => (Token::Unverified, "?"),
+                        // The proof holds; the issuer is a policy question.
+                        Verdict::Untrusted => (Token::Unverified, "!"),
                     };
-                    ui.colored_label(colour, verdict);
-                    for line in [
+                    let text = format!("{symbol} {verdict}");
+                    ui.label(toned(ui, app, text, token, Style::Title4));
+                    let details = [
                         app.signature_signer_label(report),
                         app.signature_time_label(report),
                         app.signature_algorithm_label(report),
-                    ]
-                    .into_iter()
-                    .flatten()
-                    {
-                        ui.label(egui::RichText::new(line).weak());
+                    ];
+                    for line in details.into_iter().flatten() {
+                        ui.label(toned(ui, app, line, Token::Dim, Style::Caption));
                     }
                     ui.separator();
                 }
@@ -450,14 +576,18 @@ fn draw_annotations(ui: &mut Ui, app: &mut App) {
         return;
     }
     egui::Panel::left("annotations").show(ui, |ui| {
-        ui.heading(app.annotations_heading());
-        ui.label(app.annotation_count_label());
+        let heading = app.annotations_heading();
+        ui.label(toned(ui, app, heading, Token::Text, Style::Title1));
+        let count = app.annotation_count_label();
+        ui.label(toned(ui, app, count, Token::Dim, Style::Caption));
         if app.annotation_count() > 0 {
             ui.horizontal(|ui| {
-                if ui.button("◀").clicked() {
+                let previous = app.text(ReaderMessage::PrevAnnotation);
+                if ui.button("◀").on_hover_text(&previous).clicked() {
                     app.previous_annotation();
                 }
-                if ui.button("▶").clicked() {
+                let next = app.text(ReaderMessage::NextAnnotation);
+                if ui.button("▶").on_hover_text(&next).clicked() {
                     app.next_annotation();
                 }
             });
@@ -470,7 +600,7 @@ fn draw_annotations(ui: &mut Ui, app: &mut App) {
                     // A document with no annotations is not a failure; it is a
                     // fact, and the count line above already states it.
                     let notice = app.no_annotations_label();
-                    ui.label(egui::RichText::new(notice).weak());
+                    ui.label(toned(ui, app, notice, Token::Dim, Style::Body));
                     return;
                 }
                 let selected = app.annotation_index();
@@ -491,16 +621,18 @@ fn draw_comparison(ui: &mut Ui, app: &mut App, requests: &mut WindowRequests) {
         return;
     }
     egui::Panel::left("comparison").show(ui, |ui| {
-        ui.heading(app.comparison_heading());
+        let heading = app.comparison_heading();
+        ui.label(toned(ui, app, heading, Token::Text, Style::Title1));
         let pick = app.i18n().text(MessageId::CompareOpenSecond);
-        if ui.button(pick).clicked() {
+        if ui.button(&pick).on_hover_text(&pick).clicked() {
             requests.compare = true;
         }
         let Some(comparison) = app.comparison() else {
             return;
         };
         ui.separator();
-        ui.label(app.comparison_summary());
+        let summary = app.comparison_summary();
+        ui.label(toned(ui, app, summary, Token::Dim, Style::Body));
         if comparison.is_identical() {
             return;
         }
@@ -527,14 +659,14 @@ fn draw_canvas(ui: &mut Ui, app: &mut App) {
         Canvas::Empty => {
             let hint = app.drop_hint();
             ui.centered_and_justified(|ui| {
-                ui.label(egui::RichText::new(hint).weak());
+                ui.label(toned(ui, app, hint, Token::Dim, Style::Body));
             });
         }
         // The message itself belongs to Z4; stating it twice would put the
         // same sentence on screen twice. Z3 only says something went wrong.
         Canvas::Failed => {
             let notice = app.error_label();
-            ui.colored_label(egui::Color32::from_rgb(180, 40, 40), &notice);
+            ui.label(toned(ui, app, notice, Token::Tampered, Style::Body));
         }
         // The pages on screen are already rasterized or are on their way, so
         // both cases draw the same thing; the pending page is simply absent
@@ -568,7 +700,7 @@ fn draw_pages(ui: &mut Ui, app: &mut App) {
         });
     if blank {
         let notice = app.blank_notice();
-        ui.label(egui::RichText::new(notice).weak());
+        ui.label(toned(ui, app, notice, Token::Dim, Style::Body));
     }
 }
 
@@ -621,11 +753,7 @@ fn draw_annotations_on(ui: &Ui, app: &App, page: usize, area: egui::Rect, drawn:
         if !annotation.visible {
             continue;
         }
-        let colour = if current {
-            egui::Color32::from_rgb(60, 120, 220)
-        } else {
-            egui::Color32::from_rgb(140, 180, 240)
-        };
+        let colour = colour(ui, app, Token::Accent).gamma_multiply(if current { 1.0 } else { 0.55 });
         let scaled = scale_hit(boundary, page_box, area, drawn);
         painter.rect_stroke(
             scaled,
@@ -649,11 +777,9 @@ fn draw_highlights(ui: &Ui, app: &App, page: usize, area: egui::Rect, drawn: egu
     };
     let painter = ui.painter();
     for (rect, current) in hits {
-        let colour = if current {
-            egui::Color32::from_rgb(255, 150, 0)
-        } else {
-            egui::Color32::from_rgb(255, 220, 120)
-        };
+        // The current hit is drawn full strength and the rest faded, so
+        // "where am I" and "where are the others" both read at a glance.
+        let colour = colour(ui, app, Token::Unverified).gamma_multiply(if current { 1.0 } else { 0.45 });
         let scaled = scale_hit(rect, page_box, area, drawn);
         painter.rect_filled(scaled, 0.0, colour.gamma_multiply(0.35));
         painter.rect_stroke(
@@ -686,31 +812,34 @@ fn scale_hit(
 fn draw_status(ui: &mut Ui, app: &mut App) {
     egui::Panel::bottom("status").show(ui, |ui| {
         ui.horizontal(|ui| {
-            if let Some(err) = app.error() {
-                ui.colored_label(egui::Color32::from_rgb(180, 40, 40), &err.message);
-            } else {
-                // A finished export speaks before the document description,
-                // because it is the newest thing that happened and the reader
-                // is waiting to hear whether the file appeared.
-                if let Some(label) = app.export_label() {
-                    ui.label(egui::RichText::new(label).weak());
-                    ui.separator();
-                }
-                // A print job is the newest thing after an export, so it speaks
-                // next: the reader wants to know how many sheets went out.
-                if let Some(label) = app.print_label() {
-                    ui.label(egui::RichText::new(label).weak());
-                    ui.separator();
-                }
-                let info = app.info_label();
-                if !info.is_empty() {
-                    ui.label(egui::RichText::new(info).weak());
-                    ui.separator();
-                }
-                ui.label(app.page_label());
-            }
+            let Some(err) = app.error() else {
+                draw_status_facts(ui, app);
+                return;
+            };
+            let message = err.message.clone();
+            ui.label(toned(ui, app, message, Token::Tampered, Style::Body));
         });
     });
+}
+
+/// The other half of Z4: a finished export and print speak first, because they
+/// are the newest thing that happened, then the document, then the page.
+fn draw_status_facts(ui: &mut Ui, app: &mut App) {
+    if let Some(label) = app.export_label() {
+        ui.label(toned(ui, app, label, Token::Dim, Style::Caption));
+        ui.separator();
+    }
+    if let Some(label) = app.print_label() {
+        ui.label(toned(ui, app, label, Token::Dim, Style::Caption));
+        ui.separator();
+    }
+    let info = app.info_label();
+    if !info.is_empty() {
+        ui.label(toned(ui, app, info, Token::Dim, Style::Caption));
+        ui.separator();
+    }
+    let page = app.page_label();
+    ui.label(toned(ui, app, page, Token::Text, Style::Body));
 }
 
 /// Translate what the platform handed over into the reader's own type.

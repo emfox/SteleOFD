@@ -12,6 +12,34 @@ section only when a release actually has one.
 
 ## [Unreleased]
 
+### Reader interface
+
+- **The window is built on a published guideline.** `Ui-spec.md` named no
+  application-UI guideline, so a new contributor had to infer the rules from the
+  window that happened to exist. It now names the GNOME Human Interface
+  Guidelines, lists the clauses this window follows and where each one lands,
+  and records the two it does not take and why: `egui` draws windows on five
+  platforms, and a GNOME-only widget set would leave four of them with two
+  toolkits in one frame.
+- **A theme, a text size and high contrast.** The theme offers follow-the-system,
+  light and dark rather than two, because a reader who told their desktop to go
+  dark has already answered. The text size scales the whole type scale from one
+  base, so `130%` moves every style and none can drift out of proportion. High
+  contrast is a switch on top of the theme rather than a fourth theme, so a
+  reader who needs it keeps the light-or-dark choice they made.
+- **Every colour and size is a token.** Colour literals had been spread through
+  the window — a red for a failure, a green for a good signature, an amber that
+  meant "cannot tell" — and each of them was right in one theme and unreadable
+  in the other. They now live in one table with a light and a dark column, and a
+  test proves each text-on-panel pair clears 4.5:1 and that high contrast clears
+  7:1 without losing the hue a reader recognises.
+- **A verdict is never carried by colour alone.** The signature panel writes the
+  verdict out and adds a symbol, so it survives a colour-blind reader, a
+  monochrome display and a printout.
+- **Every control says what it does.** The paging arrows are symbols rather than
+  words, so each now has a tooltip; so does every other button in the two header
+  rows.
+
 ### Rendering
 
 - **A run read downwards keeps its glyphs upright.** Table 47 measures both

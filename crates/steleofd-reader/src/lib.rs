@@ -11,11 +11,13 @@ pub mod message;
 pub mod print_worker;
 pub mod render_worker;
 pub mod shortcuts;
+pub mod theme;
 pub mod viewer;
 pub mod window;
 
 pub use app::{
-    App, AppError, Canvas, ExportReport, Fit, Hit, PrintReport, SignatureReport, Verdict,
+    App, AppError, Canvas, ExportReport, Fit, Hit, PrintReport, SignatureReport, TextSize,
+    ThemeChoice, Verdict,
 };
 pub use export_worker::{ExportFormat, ExportQueue, ExportRequest, ExportResult};
 pub use message::ReaderMessage;

@@ -9,7 +9,7 @@ use egui_kittest::kittest::{NodeT, Queryable};
 use steleofd_i18n::{I18n, Locale, MessageId};
 use steleofd_reader::viewer::Layout;
 use steleofd_reader::window;
-use steleofd_reader::{App, Canvas, Fit, ReaderMessage};
+use steleofd_reader::{App, Canvas, Fit, ReaderMessage, TextSize, ThemeChoice};
 
 /// The real minimal document from the conformance fixtures.
 fn minimal() -> PathBuf {
@@ -660,4 +660,76 @@ fn a_comparison_that_matches_says_so() {
     let identical = label(MessageId::CompareIdentical);
     assert_eq!(harness.state().comparison_summary(), identical);
     harness.get_by_label_contains(&identical);
+}
+
+#[test]
+fn the_settings_offer_three_themes_and_follow_the_system_by_default() {
+    let mut harness = harness(App::new());
+    assert_eq!(
+        harness.state().theme(),
+        ThemeChoice::System,
+        "a reader who told their desktop to go dark has told this window too"
+    );
+    harness.get_by_label(&reader_label(ReaderMessage::Settings)).click();
+    harness.run();
+    for choice in ThemeChoice::ALL {
+        harness.get_by_label(&harness.state().theme_name(choice));
+    }
+    let dark = harness.state().theme_name(ThemeChoice::Dark);
+    harness.get_by_label(&dark).click();
+    harness.run();
+    assert_eq!(harness.state().theme(), ThemeChoice::Dark);
+}
+
+#[test]
+fn the_settings_offer_three_text_sizes_and_the_scale_moves_every_style() {
+    let mut harness = harness(App::new());
+    harness.get_by_label(&reader_label(ReaderMessage::Settings)).click();
+    harness.run();
+    for size in TextSize::ALL {
+        harness.get_by_label(&harness.state().text_size_name(size));
+    }
+    let normal = harness
+        .state()
+        .style_points(steleofd_reader::theme::Style::Body);
+    let larger = harness.state().text_size_name(TextSize::Larger);
+    harness.get_by_label(&larger).click();
+    harness.run();
+    let scaled = harness
+        .state()
+        .style_points(steleofd_reader::theme::Style::Body);
+    assert!(scaled > normal, "{scaled} is not larger than {normal}");
+}
+
+#[test]
+fn high_contrast_is_a_switch_rather_than_a_fourth_theme() {
+    let mut harness = harness(App::new());
+    let choice = harness.state().theme();
+    harness.get_by_label(&reader_label(ReaderMessage::Settings)).click();
+    harness.run();
+    let switch = harness.state().high_contrast_label();
+    harness.get_by_label(&switch).click();
+    harness.run();
+    assert!(harness.state().high_contrast(), "the switch turned on");
+    assert_eq!(
+        harness.state().theme(),
+        choice,
+        "the theme is untouched, which is what keeps light-or-dark the reader's"
+    );
+}
+
+#[test]
+fn a_theme_never_moves_the_document() {
+    let mut app = App::new();
+    app.open_path(&minimal()).expect("the fixture opens");
+    app.go_to(0);
+    let before = app.page_count();
+    let mut harness = harness(app);
+    harness.get_by_label(&reader_label(ReaderMessage::Settings)).click();
+    harness.run();
+    let light = harness.state().theme_name(ThemeChoice::Light);
+    harness.get_by_label(&light).click();
+    harness.run();
+    assert_eq!(harness.state().page_count(), before);
+    assert!(harness.state().is_open(), "a setting never closes a document");
 }

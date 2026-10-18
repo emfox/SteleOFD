@@ -98,6 +98,50 @@ pub enum ReaderMessage {
     PaperLegal,
     /// The paper the document itself declares
     PaperDocument,
+    /// Label on the button that opens the appearance settings
+    Settings,
+    /// Heading over the theme choices
+    Theme,
+    /// Theme that follows the desktop
+    ThemeSystem,
+    /// Light theme
+    ThemeLight,
+    /// Dark theme
+    ThemeDark,
+    /// Heading over the text-size choices
+    TextSize,
+    /// The base text size
+    TextSizeNormal,
+    /// One step larger
+    TextSizeLarge,
+    /// Two steps larger
+    TextSizeLarger,
+    /// The high-contrast switch
+    HighContrast,
+    /// What the high-contrast switch does
+    HighContrastHint,
+    /// Previous page, as a tooltip
+    PrevPage,
+    /// Next page, as a tooltip
+    NextPage,
+    /// Previous search hit, as a tooltip
+    PrevHit,
+    /// Next search hit, as a tooltip
+    NextHit,
+    /// Previous annotation, as a tooltip
+    PrevAnnotation,
+    /// Next annotation, as a tooltip
+    NextAnnotation,
+    /// Closing the document, as a tooltip
+    CloseHint,
+    /// A signature that holds
+    VerdictValid,
+    /// A signature that does not hold
+    VerdictTampered,
+    /// A signature nothing can confirm
+    VerdictUnverified,
+    /// A sound proof whose signer is not trusted
+    VerdictUntrusted,
 }
 
 impl ReaderMessage {
@@ -136,6 +180,28 @@ impl ReaderMessage {
             Self::PaperLetter => "reader-paper-letter",
             Self::PaperLegal => "reader-paper-legal",
             Self::PaperDocument => "reader-paper-document",
+            Self::Settings => "reader-settings",
+            Self::Theme => "reader-theme",
+            Self::ThemeSystem => "reader-theme-system",
+            Self::ThemeLight => "reader-theme-light",
+            Self::ThemeDark => "reader-theme-dark",
+            Self::TextSize => "reader-text-size",
+            Self::TextSizeNormal => "reader-text-size-normal",
+            Self::TextSizeLarge => "reader-text-size-large",
+            Self::TextSizeLarger => "reader-text-size-larger",
+            Self::HighContrast => "reader-high-contrast",
+            Self::HighContrastHint => "reader-high-contrast-hint",
+            Self::PrevPage => "reader-prev-page",
+            Self::NextPage => "reader-next-page",
+            Self::PrevHit => "reader-prev-hit",
+            Self::NextHit => "reader-next-hit",
+            Self::PrevAnnotation => "reader-prev-annotation",
+            Self::NextAnnotation => "reader-next-annotation",
+            Self::CloseHint => "reader-close-hint",
+            Self::VerdictValid => "reader-verdict-valid",
+            Self::VerdictTampered => "reader-verdict-tampered",
+            Self::VerdictUnverified => "reader-verdict-unverified",
+            Self::VerdictUntrusted => "reader-verdict-untrusted",
         }
     }
 
@@ -173,5 +239,27 @@ impl ReaderMessage {
         Self::PaperLetter,
         Self::PaperLegal,
         Self::PaperDocument,
+        Self::Settings,
+        Self::Theme,
+        Self::ThemeSystem,
+        Self::ThemeLight,
+        Self::ThemeDark,
+        Self::TextSize,
+        Self::TextSizeNormal,
+        Self::TextSizeLarge,
+        Self::TextSizeLarger,
+        Self::HighContrast,
+        Self::HighContrastHint,
+        Self::PrevPage,
+        Self::NextPage,
+        Self::PrevHit,
+        Self::NextHit,
+        Self::PrevAnnotation,
+        Self::NextAnnotation,
+        Self::CloseHint,
+        Self::VerdictValid,
+        Self::VerdictTampered,
+        Self::VerdictUnverified,
+        Self::VerdictUntrusted,
     ];
 }
