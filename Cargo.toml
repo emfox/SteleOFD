@@ -45,6 +45,9 @@ members = [
 
     # Testing support: fixtures shared by the suites, never released
     "crates/steleofd-testkit",
+
+    # Fuzz targets: nightly only, and the crate wraps cargo-fuzz's own one
+    "crates/steleofd-fuzz",
 ]
 default-members = ["crates/steleofd-core", "crates/steleofd-cli"]
 

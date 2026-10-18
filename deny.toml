@@ -1,0 +1,76 @@
+# Dependency policy for `cargo deny check`.
+# The audit only fails the build on what an attacker can reach here: a crate
+# this project ships, or one it hands outside bytes to. Everything else is
+# recorded rather than ignored, so a decision is visible in review.
+
+[graph]
+# Every target and every feature, because a desktop-only crate still ships in
+# the release archive and a feature-gated one still ships when the feature is on.
+all-features = true
+
+[output]
+feature-depth = 1
+
+[advisories]
+version = 2
+# `deny` rather than `all`: a dependency that is merely old is not a defect,
+# and turning every yanked crate into a blocked build trains people to ignore it.
+db-urls = ["https://github.com/RustSec/advisory-db"]
+ignore = [
+    # rustybuzz is unmaintained (RUSTSEC-2026-0206) and ttf-parser is too
+    # (RUSTSEC-2026-0192). Both are reachable with font bytes a document
+    # supplies, which is why they carry fuzz targets, but neither has a
+    # replacement this build can adopt: harfrust and skrifa are rewrites of the
+    # shaping and parsing APIs the renderer is built on. Tracked as R22.
+    "RUSTSEC-2026-0206",
+    "RUSTSEC-2026-0192",
+    # zbus, zbus_names and zvariant are deprecated by their own authors in
+    # favour of each other. They reach this build only through accesskit_unix,
+    # which winit pulls in for Linux accessibility, so the fix is an eframe
+    # upgrade and not a change this project can make. Tracked as R21.
+    "RUSTSEC-2026-0371",
+    "RUSTSEC-2026-0370",
+    "RUSTSEC-2026-0372",
+]
+
+[bans]
+# Two copies of one crate are how a type ends up incompatible with itself, but
+# a version pin already records every case here, so a duplicate is reported.
+multiple-versions = "warn"
+wildcards = "deny"
+# Our own crates are always path dependencies; naming one from a registry
+# would silently build a different copy than the workspace.
+deny = [
+    { name = "openssl" },
+    { name = "openssl-sys" },
+]
+
+[licenses]
+# Every crate here is Apache-2.0; a dependency under a licence incompatible
+# with redistribution would make the release archive illegal to ship.
+# OFL-1.1 and Ubuntu-font-1.0 come with `epaint_default_fonts`, the faces egui
+# draws its own interface with; both allow redistribution and forbid selling the
+# fonts on their own, which this build does not do. BSL-1.0 is Boost's, a
+# permissive licence that predates SPDX's adoption of it.
+allow = [
+    "Apache-2.0",
+    "MIT",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "BSL-1.0",
+    "ISC",
+    "Unicode-3.0",
+    "Zlib",
+    "MPL-2.0",
+    "CC0-1.0",
+    "0BSD",
+    "Unlicense",
+    "NCSA",
+    "OpenSSL",
+    "OFL-1.1",
+    "Ubuntu-font-1.0",
+]
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"

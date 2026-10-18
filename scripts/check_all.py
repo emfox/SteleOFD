@@ -36,7 +36,7 @@ ROOT = Path(__file__).resolve().parent.parent
 PYTHON = sys.executable
 
 # Cheap checks first, so a policy mistake is reported before a build is spent.
-GROUPS = ("policy", "repo", "schema", "rust", "corpus", "perf", "review")
+GROUPS = ("policy", "repo", "schema", "deps", "rust", "corpus", "perf", "review")
 
 # Groups that need a Rust toolchain, a network fetch or a benchmark run. --quick
 # leaves them out; everything else can finish on a fresh clone.
@@ -186,6 +186,15 @@ CHECKS: tuple[Check, ...] = (
         ),
         needs=("cargo", "git"),
     ),
+    # The dependency policy. It reads the lock file, so it answers a question
+    # about a crate nobody in this repository wrote, and fails on one with a
+    # published advisory rather than on one that is merely old.
+    Check(
+        "advisories",
+        "deps",
+        (("cargo", "deny", "--all-features", "check"),),
+        needs=("cargo", "cargo-deny"),
+    ),
     # The fetched corpora. Each one reports a missing sample, so it is only
     # meaningful once the download has run.
     Check(
@@ -259,9 +268,12 @@ def msrv_toolchain() -> str:
 
 def precondition(name: str) -> tuple[bool, str]:
     """Whether this machine can run the check, and why not when it cannot."""
-    if name in ("cargo", "git"):
+    # A cargo subcommand is a binary in its own right, so `cargo-deny` is asked
+    # for by name rather than assumed to come with cargo.
+    if name in ("cargo", "cargo-deny", "git"):
         if shutil.which(name) is None:
-            return False, f"{name} is not on PATH"
+            hint = " (cargo install cargo-deny --locked)" if name == "cargo-deny" else ""
+            return False, f"{name} is not on PATH{hint}"
         return True, ""
     if name == "lxml":
         if importlib.util.find_spec("lxml") is None:
