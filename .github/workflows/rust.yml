@@ -271,7 +271,7 @@ jobs:
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: fuzz
+          workspaces: crates/steleofd-fuzz/fuzz
           shared-key: fuzz
 
       # Kept as `cargo install` rather than moved to the install action: it is
@@ -280,11 +280,30 @@ jobs:
       - name: Install cargo-fuzz
         run: cargo install cargo-fuzz --locked
 
+      # cargo-fuzz looks for its crate from where it is run, and the crate sits
+      # one directory below the workspace member that wraps it, hence the
+      # working-directory on every run below.
       - name: Fuzz the ZIP reader
+        working-directory: crates/steleofd-fuzz/fuzz
         run: cargo +nightly fuzz run package_open -- -runs=20000 -max_len=4096
 
       - name: Fuzz the XML cursor
+        working-directory: crates/steleofd-fuzz/fuzz
         run: cargo +nightly fuzz run xml_cursor -- -runs=20000 -max_len=4096
+
+      # The three below take bytes the document supplies rather than bytes a
+      # caller passes, which is the difference that makes them worth running.
+      - name: Fuzz the TrueType reader
+        working-directory: crates/steleofd-fuzz/fuzz
+        run: cargo +nightly fuzz run ttf_face -- -runs=20000 -max_len=65536
+
+      - name: Fuzz the certificate reader
+        working-directory: crates/steleofd-fuzz/fuzz
+        run: cargo +nightly fuzz run certificate -- -runs=20000 -max_len=4096
+
+      - name: Fuzz the PDF writer
+        working-directory: crates/steleofd-fuzz/fuzz
+        run: cargo +nightly fuzz run pdf_write -- -runs=20000 -max_len=64
 
   audit:
     runs-on: ubuntu-latest
