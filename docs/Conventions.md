@@ -141,10 +141,10 @@ next to the check that produced it. Grouped by what they need:
 | Group | Checks | Needs |
 | --- | --- | --- |
 | `policy` | `check_language.py`, `check_i18n.py --strict`, `check_commits.py` | `git` |
-| `repo` | the checkers' own unit tests, `release_checksums.py selftest`, `pack_corpus.py --check` | nothing |
-| `schema` | `validate_ofd.py --allow-foreign` over `compliance/corpus` | `lxml` |
+| `repo` | the checkers' own unit tests, `release_checksums.py selftest`, `pack_fixtures.py --check` | nothing |
+| `schema` | `validate_ofd.py --allow-foreign` over `compliance/fixtures` | `lxml` |
 | `rust` | `cargo fmt`, `clippy`, the `msrv` check, `build` and `test`, the golden images, the headless reader window, `check_compliance.py`, and the matrix freshness diff | `cargo`, `git`, and the Rust channel named by `rust-version` for `msrv` |
-| `corpus` | `fetch_ofdrw.py` and `fetch_gb_samples.py`, `--check` then `--parse` | the fetched samples, `cargo` |
+| `samples` | `fetch_ofdrw.py` and `fetch_gb_samples.py`, `--check` then `--parse` | the fetched samples, `cargo` |
 | `perf` | `check_performance.py` against the budget in [Performance.md](Performance.md) | a `cargo bench` run |
 | `review` | `check_commit_scope.py`, which names commits that read as more than one change | `git` |
 | `deps` | `cargo deny --all-features check`: advisories, licences, bans and sources | `cargo-deny` |
@@ -239,9 +239,9 @@ The `format.rs` exemption covers the whole file rather than its string literals
 alone: the CJK in it is three literals and no prose, and a Rust lexer inside the
 checker would cost more than that risk is worth.
 
-The sample exemption covers names as well as contents, and it is why the corpus
-is fetched rather than committed: none of it is source, none of it is built, and
-a sample that cannot be traced upstream is a sample nobody can explain.
+The sample exemption covers names as well as contents, and it is why the
+samples are fetched rather than committed: none of them is source, none is
+built, and one nobody can trace upstream is one nobody can explain.
 
 New exemptions should be added to the allowlists in the script with a one-line
 reason, so that every exception stays self-documenting.

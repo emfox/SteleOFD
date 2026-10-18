@@ -171,19 +171,19 @@ jobs:
           python3 scripts/check_compliance.py
           git diff --exit-code docs/Compliance.md
 
-      - name: Committed corpus archives match their sources
-        run: python3 scripts/pack_corpus.py --check
+      - name: Committed fixture archives match their sources
+        run: python3 scripts/pack_fixtures.py --check
 
-      - name: Corpus validates against annex A schemas
+      - name: Fixtures validate against annex A schemas
         run: |
           python3 -m pip install --quiet lxml
           python3 scripts/validate_ofd.py --allow-foreign \
-            $(find compliance/corpus -name '*.ofd' -o -name '*.xml' | sort)
+            $(find compliance/fixtures -name '*.ofd' -o -name '*.xml' | sort)
 
-  # The second-implementation corpus is fetched, not committed, so CI cannot
-  # assume it is there. This runs the same job locally does, which is the point:
+  # The second-implementation samples are fetched, not committed, so CI cannot
+  # assume they are there. This runs the same job locally does, which is the point:
   # the parse bugs it found were all hard errors that no committed fixture hit.
-  third-party-corpus:
+  third-party-samples:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -197,7 +197,7 @@ jobs:
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
         with:
-          shared-key: corpus
+          shared-key: samples
 
       - name: Fetch the samples
         run: python3 scripts/fetch_ofdrw.py

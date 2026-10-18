@@ -2,7 +2,7 @@
 
 //! The PDF writer takes geometry from the document, so this target fuzzes the
 //! display list: a page's numbers must yield a document or an error. It keeps
-//! no seed corpus, because any eight bytes reach the writer already.
+//! no seed inputs, because any eight bytes reach the writer already.
 
 use libfuzzer_sys::fuzz_target;
 use steleofd_common::Rect;

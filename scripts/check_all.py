@@ -2,7 +2,7 @@
 """Run every check this repository expects, from one command.
 
 CI runs these as separate steps on a Linux runner that already has cargo, lxml
-and the fetched corpus. A working copy rarely does, so this script runs what the
+and the fetched samples. A working copy rarely does, so this script runs what the
 machine can run, says why it skipped the rest, and never reports a skip as a
 pass.
 
@@ -36,17 +36,17 @@ ROOT = Path(__file__).resolve().parent.parent
 PYTHON = sys.executable
 
 # Cheap checks first, so a policy mistake is reported before a build is spent.
-GROUPS = ("policy", "repo", "schema", "deps", "rust", "corpus", "perf", "review")
+GROUPS = ("policy", "repo", "schema", "deps", "rust", "samples", "perf", "review")
 
 # Groups that need a Rust toolchain, a network fetch or a benchmark run. --quick
 # leaves them out; everything else can finish on a fresh clone.
-SLOW_GROUPS = ("rust", "corpus", "perf")
+SLOW_GROUPS = ("rust", "samples", "perf")
 
 # Groups whose findings ask for a second look instead of blocking a merge. A
 # check here reports what it noticed and the run still passes with it.
 ADVISORY_GROUPS = ("review",)
 
-CORPUS_FILES = "compliance/corpus"
+FIXTURE_FILES = "compliance/fixtures"
 
 
 @dataclass(frozen=True)
@@ -73,9 +73,9 @@ def py(*args: str) -> tuple[str, ...]:
     return (PYTHON, *args)
 
 
-def corpus_targets() -> list[str]:
-    """Every corpus archive and XML source, in the order CI passes them."""
-    root = ROOT / CORPUS_FILES
+def fixture_targets() -> list[str]:
+    """Every fixture archive and XML source, in the order CI passes them."""
+    root = ROOT / FIXTURE_FILES
     found = [
         p for p in root.rglob("*")
         if p.is_file() and p.suffix.lower() in (".ofd", ".xml")
@@ -116,13 +116,13 @@ CHECKS: tuple[Check, ...] = (
         (py("-m", "unittest", "discover", "-s", "scripts", "-p", "test_*.py"),),
     ),
     Check("checksums", "repo", (py("scripts/release_checksums.py", "selftest"),)),
-    Check("corpus-pack", "repo", (py("scripts/pack_corpus.py", "--check"),)),
-    # Annex A, over the corpus that ships with the tree.
+    Check("fixture-pack", "repo", (py("scripts/pack_fixtures.py", "--check"),)),
+    # Annex A, over the fixtures that ship with the tree.
     Check(
         "annex-a",
         "schema",
-        (py("scripts/validate_ofd.py", "--allow-foreign", *corpus_targets()),),
-        needs=("lxml", "corpus-sources"),
+        (py("scripts/validate_ofd.py", "--allow-foreign", *fixture_targets()),),
+        needs=("lxml", "fixture-sources"),
     ),
     # The Rust gate, in the order CI runs it.
     Check("fmt", "rust", (("cargo", "fmt", "--all", "--check"),), needs=("cargo",)),
@@ -195,29 +195,29 @@ CHECKS: tuple[Check, ...] = (
         (("cargo", "deny", "--all-features", "check"),),
         needs=("cargo", "cargo-deny"),
     ),
-    # The fetched corpora. Each one reports a missing sample, so it is only
+    # The fetched samples. Each one reports a missing file, so it is only
     # meaningful once the download has run.
     Check(
-        "corpus-check",
-        "corpus",
+        "ofdrw-check",
+        "samples",
         (py("scripts/fetch_ofdrw.py", "--check"),),
         needs=("ofdrw-samples",),
     ),
     Check(
-        "corpus-parse",
-        "corpus",
+        "ofdrw-parse",
+        "samples",
         (py("scripts/fetch_ofdrw.py", "--parse"),),
         needs=("cargo", "ofdrw-samples"),
     ),
     Check(
         "gb-check",
-        "corpus",
+        "samples",
         (py("scripts/fetch_gb_samples.py", "--check"),),
         needs=("gb-samples",),
     ),
     Check(
         "gb-parse",
-        "corpus",
+        "samples",
         (py("scripts/fetch_gb_samples.py", "--parse"),),
         needs=("cargo", "gb-samples"),
     ),
@@ -283,9 +283,9 @@ def precondition(name: str) -> tuple[bool, str]:
         if not (ROOT / "target" / "criterion").is_dir():
             return False, "no target/criterion (run `cargo bench` first)"
         return True, ""
-    if name == "corpus-sources":
-        if not (ROOT / CORPUS_FILES).is_dir():
-            return False, f"{CORPUS_FILES} is missing"
+    if name == "fixture-sources":
+        if not (ROOT / FIXTURE_FILES).is_dir():
+            return False, f"{FIXTURE_FILES} is missing"
         return True, ""
     if name == "msrv":
         if msrv_toolchain():

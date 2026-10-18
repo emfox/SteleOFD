@@ -49,7 +49,7 @@ import zipfile
 FIXTURES = "emfox/OFD-fixtures"
 COMMIT = "627bec98e2d707ddcc0e5668686ad640858e37eb"
 ARCHIVE = "https://codeload.github.com/" + FIXTURES + "/tar.gz/" + COMMIT
-USER_AGENT = "steleofd-corpus"
+USER_AGENT = "steleofd-fixtures"
 
 
 class FixtureError(Exception):

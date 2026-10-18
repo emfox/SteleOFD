@@ -1,10 +1,10 @@
-# The corpus archives are packed from the sources beside them, byte for byte,
-# and `scripts/pack_corpus.py --check` compares the result. A clone that checks
+# The fixture archives are packed from the sources beside them, byte for byte,
+# and `scripts/pack_fixtures.py --check` compares the result. A clone that checks
 # the XML out as CRLF -- the default on Windows, where core.autocrlf is true --
 # therefore reports both archives stale against a repository that is fine.
 # Declaring the sources as LF here makes the packing independent of the clone.
-compliance/corpus/**/*.xml text eol=lf
-compliance/corpus/**/layout.txt text eol=lf
+compliance/fixtures/**/*.xml text eol=lf
+compliance/fixtures/**/layout.txt text eol=lf
 
 # Archives are binary; git must never normalise their bytes.
 *.ofd binary

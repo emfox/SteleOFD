@@ -147,7 +147,7 @@ the checksum is the trust anchor.
 A nine-page golden book is compared against another vendor's reader and a second
 implementation's source, which showed four gaps in the oracle and three in our
 own reading; the evidence is in [`docs/Interop.md`](docs/Interop.md). The
-third-party corpus of 28 documents opens cleanly, and the standard's own clause
+third-party set of 28 documents opens cleanly, and the standard's own clause
 samples are parsed in CI on every push.
 
 ### Known limits

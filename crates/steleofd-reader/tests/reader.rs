@@ -7,14 +7,15 @@ use std::path::PathBuf;
 use steleofd_reader::viewer::{DroppedFile, Layout, MAX_DPI, MIN_DPI, PageCache};
 use steleofd_reader::{App, Canvas};
 
-/// The real minimal document from the conformance corpus.
-fn corpus() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../compliance/corpus/minimal.ofd")
+/// The real minimal document from the conformance fixtures.
+fn minimal() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../compliance/fixtures/minimal.ofd")
 }
 
 fn open() -> App {
     let mut app = App::new();
-    app.open_path(&corpus()).expect("the corpus document opens");
+    app.open_path(&minimal())
+        .expect("the fixture document opens");
     app
 }
 
@@ -55,9 +56,9 @@ fn a_fresh_reader_has_nothing_open() {
 }
 
 #[test]
-fn opening_the_corpus_reports_its_pages() {
+fn opening_the_fixture_reports_its_pages() {
     let app = open();
-    assert!(app.page_count() >= 1, "the corpus has at least one page");
+    assert!(app.page_count() >= 1, "the fixture has at least one page");
     assert!(app.path().is_some());
     assert!(app.error().is_none(), "a clean open leaves no error");
 }
@@ -230,8 +231,8 @@ fn the_open_request_is_handed_out_once() {
 fn opening_another_document_replaces_the_first() {
     let mut app = open();
     let first = app.page_count();
-    app.open_bytes(&std::fs::read(corpus()).unwrap(), Some("again.ofd"))
-        .expect("the corpus opens a second time");
+    app.open_bytes(&std::fs::read(minimal()).unwrap(), Some("again.ofd"))
+        .expect("the fixture opens a second time");
     assert_eq!(app.page_count(), first, "the same document, the same pages");
     assert_eq!(app.current_page(), 0, "reading starts at the first page");
 }
@@ -267,7 +268,7 @@ fn an_open_reader_asks_the_worker_then_paints_its_page() {
     let canvas = app.canvas();
     assert!(
         matches!(canvas, Canvas::Page | Canvas::Blank),
-        "the corpus rasterizes to something paintable, got {canvas:?}"
+        "the fixture rasterizes to something paintable, got {canvas:?}"
     );
     assert!(!app.is_rendering(), "and the worker owes nothing more");
 }
@@ -331,21 +332,21 @@ fn a_failed_open_leaves_the_previous_document_open() {
 #[test]
 fn a_dropped_path_opens_like_a_chosen_one() {
     let mut app = App::new();
-    app.open_dropped(DroppedFile::Path(corpus()))
-        .expect("the corpus opens from a drop");
+    app.open_dropped(DroppedFile::Path(minimal()))
+        .expect("the fixture opens from a drop");
     assert!(app.page_count() >= 1);
     assert_eq!(app.file_name().as_deref(), Some("minimal.ofd"));
 }
 
 #[test]
 fn a_dropped_payload_opens_and_keeps_its_name() {
-    let bytes = std::fs::read(corpus()).unwrap();
+    let bytes = std::fs::read(minimal()).unwrap();
     let mut app = App::new();
     app.open_dropped(DroppedFile::Bytes {
         name: "dropped.ofd".to_string(),
         bytes,
     })
-    .expect("the corpus opens from dropped bytes");
+    .expect("the fixture opens from dropped bytes");
     assert!(app.page_count() >= 1);
     assert_eq!(app.file_name().as_deref(), Some("dropped.ofd"));
 }
@@ -354,7 +355,7 @@ fn a_dropped_payload_opens_and_keeps_its_name() {
 fn the_window_title_names_the_open_document() {
     let mut app = App::new();
     assert_eq!(app.title(), "SteleOFD Reader");
-    app.open_path(&corpus()).unwrap();
+    app.open_path(&minimal()).unwrap();
     assert!(
         app.title().starts_with("minimal.ofd"),
         "got {}",
@@ -366,7 +367,7 @@ fn the_window_title_names_the_open_document() {
 fn the_info_line_is_written_in_the_readers_language() {
     let mut app = App::new();
     assert!(app.info_label().is_empty(), "no document, no line");
-    app.open_path(&corpus()).unwrap();
+    app.open_path(&minimal()).unwrap();
     assert!(
         app.info_label().contains("minimal.ofd"),
         "got {}",
@@ -538,7 +539,7 @@ fn changing_layout_keeps_the_page_the_reader_was_on() {
 fn a_query_finds_the_text_in_the_document() {
     let mut app = open();
     app.set_query("SteleOFD");
-    assert!(!app.hits().is_empty(), "the corpus contains its own name");
+    assert!(!app.hits().is_empty(), "the fixture contains its own name");
     assert_eq!(
         app.hit_index(),
         Some(0),
@@ -667,7 +668,7 @@ fn a_hit_row_names_its_page_counting_from_one() {
 }
 
 /// A reader over the genuinely signed fixture, whose proof verifies against
-/// the bytes the engine reads. The corpus documents declare signatures they
+/// the bytes the engine reads. The fixture documents declare signatures they
 /// cannot prove, so they test the other half.
 fn open_signed() -> App {
     let mut app = App::new();
@@ -752,7 +753,7 @@ fn an_unsigned_document_reports_none_rather_than_failing() {
     // must not put a red message on every ordinary file.
     let mut app = open();
     app.set_signatures_open(true);
-    assert_eq!(app.signature_count(), 0, "the minimal corpus is unsigned");
+    assert_eq!(app.signature_count(), 0, "the minimal fixture is unsigned");
     assert!(
         !app.signature_count_label().is_empty(),
         "and the count is still worded"
@@ -765,13 +766,13 @@ fn an_unsigned_document_reports_none_rather_than_failing() {
 
 #[test]
 fn a_signature_that_cannot_be_proved_is_shown_rather_than_hidden() {
-    // The features corpus declares a signature but carries no certificate, so
+    // The features fixture declares a signature but carries no certificate, so
     // verification fails. A reader deciding whether to trust a document needs
     // to see that, which is the whole reason the panel exists.
     let mut app = App::new();
     let path =
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../compliance/corpus/features.ofd");
-    app.open_path(&path).expect("the features corpus opens");
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../compliance/fixtures/features.ofd");
+    app.open_path(&path).expect("the features fixture opens");
     app.set_signatures_open(true);
     assert_eq!(app.signature_count(), 1, "it declares a signature");
     assert_eq!(

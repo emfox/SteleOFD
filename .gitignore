@@ -67,7 +67,7 @@ logs/
 # ─── Local test data: large, never committed ───
 /tests/fixtures/large/
 /tests/fixtures/private/
-# Third-party samples fetched by scripts/fetch_corpus.py and
+# Third-party samples fetched by scripts/fetch_ofdrw.py and
 # scripts/fetch_gb_samples.py. They are not ours to redistribute and they are
 # large, so they stay out of the tree; the pinned list in each script is what a
 # fresh checkout has.
@@ -78,7 +78,7 @@ logs/
 /tests/fixtures/gb-t-33190/
 !tests/fixtures/**/*.ofd
 !docs/**/*.ofd
-!compliance/corpus/**/*.ofd
+!compliance/fixtures/**/*.ofd
 
 # ─── Secrets: must never be committed ───
 .env

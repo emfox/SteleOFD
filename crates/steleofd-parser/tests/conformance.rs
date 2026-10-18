@@ -159,7 +159,7 @@ fn gb_t_33190_7_7_page_content_may_live_in_base_loc() {
 #[test]
 fn gb_t_33190_7_9_draw_params_resolve_from_the_resource_table() {
     // Clause 7.9 manages the drawing parameters in the resource files, which is
-    // where the annex A schema puts them and where the corpus puts them, so a
+    // where the annex A schema puts them and where the fixtures put them, so a
     // path naming an id a `Res` table declares must be painted with it.
     let res = r##"<?xml version="1.0" encoding="UTF-8"?>
 <Res BaseLoc="Res"><DrawParams>
@@ -286,7 +286,7 @@ fn gb_t_33190_9_3_2_move_starts_a_subpath() {
 #[test]
 fn gb_t_33190_9_3_2_a_subpath_start_operator_opens_the_path() {
     // Table 36 gives `S` its own operator, the point a subpath starts at, and a
-    // producer in the corpus opens every path with it. `M` and `S` differ in
+    // producer in the fixtures opens every path with it. `M` and `S` differ in
     // what they name, not in what they draw, so both must open a subpath.
     let path = parse_path("S 0 0 L 156 0 C").expect("parse");
     assert_eq!(path.len(), 2, "a start and a line");
@@ -1085,7 +1085,7 @@ fn gb_t_33190_8_4_clip_area_narrows_the_drawing_to_a_path() {
 fn gb_t_33190_8_4_several_clips_cover_the_union_of_their_areas() {
     // Clause 8.4: where more than one Clip is present the region is their
     // union, so both outlines reach the clip path rather than the first one
-    // winning. A scanned invoice in the fetched corpus carries two.
+    // winning. A scanned invoice in the fetched samples carries two.
     let ops = page_ops(
         r##"<PathObject ID="10" Boundary="0 0 40 10">
   <AbbreviatedData>M 0 0 L 40 0 L 40 10 L 0 10 Z</AbbreviatedData>
@@ -1858,7 +1858,7 @@ fn gb_t_33190_8_2_3_line_width_and_miter_limit_reach_the_op() {
 fn gb_t_33190_8_3_1_a_colour_value_reads_as_its_three_channels() {
     // Clause 8.3.1: a colour is three channels, and each may carry its own
     // hex marker. Reading them as one six-digit string is the mistake that
-    // hid behind every dark document in the corpus.
+    // hid behind every dark document in the fixtures.
     let ops = page_ops(
         r##"<PathObject ID="10" Boundary="0 0 10 10" Fill="true">
   <FillColor Value="#ee #20 #25"/>
@@ -2168,14 +2168,14 @@ fn gb_t_33190_11_3_delta_y_moves_the_run_across() {
 }
 
 #[test]
-fn gb_t_33190_11_3_the_vertical_corpus_is_placed_by_the_table() {
-    // The corpus's vertical document, at the coordinates it records. Figure 62
-    // puts a vertical line's own `+x` on the page's `+x`, so a line read down
-    // the page advances across it.
+fn gb_t_33190_11_3_the_vertical_fixture_is_placed_by_the_table() {
+    // The vertical fixture, at the coordinates it records. Figure 62 puts a
+    // vertical line's own `+x` on the page's `+x`, so a line read down the page
+    // advances across it.
     let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../compliance/corpus/vertical.ofd");
-    let bytes = std::fs::read(&path).expect("the vertical corpus is committed");
-    let package = Box::new(Package::from_bytes(&bytes).expect("open the corpus package"));
+        .join("../../compliance/fixtures/vertical.ofd");
+    let bytes = std::fs::read(&path).expect("the vertical fixture is committed");
+    let package = Box::new(Package::from_bytes(&bytes).expect("open the fixture package"));
     let mut parser = Parser::new(Box::leak(package));
     let document = parser.open_document().expect("its document parses");
     let page = parser

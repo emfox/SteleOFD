@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Pack the corpus source directories into `.ofd` containers.
+"""Pack the fixture source directories into `.ofd` containers.
 
-`compliance/corpus/<name>/` holds the XML of an OFD package side by side, flat,
+`compliance/fixtures/<name>/` holds the XML of an OFD package side by side, flat,
 because that is the shape a person reads and edits. The archive nests them the
 way the document's own `BaseLoc` references expect, and which entry goes where
 is declared by a `layout.txt` next to the sources: one `archive/path.xml  source.xml`
@@ -13,7 +13,7 @@ which is what CI runs so that an edit to the sources cannot leave the committed
 archive stale.
 
 Usage:
-    python3 scripts/pack_corpus.py [--check] [name...]
+    python3 scripts/pack_fixtures.py [--check] [name...]
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ import sys
 import zipfile
 from pathlib import Path
 
-CORPUS_DIR = Path(__file__).resolve().parent.parent / "compliance" / "corpus"
+FIXTURE_DIR = Path(__file__).resolve().parent.parent / "compliance" / "fixtures"
 
 # A fixed timestamp keeps the bytes stable across runs, so `--check` compares
 # content rather than build time and the archive does not churn in git.
@@ -73,7 +73,7 @@ def read_layout(source: Path) -> list[tuple[str, str]]:
 
 
 def pack(source: Path) -> bytes:
-    """Build the archive bytes for one corpus directory."""
+    """Build the archive bytes for one fixture directory."""
     buffer = bytearray()
     layout = read_layout(source)
     with zipfile.ZipFile(_BytesWriter(buffer), "w", zipfile.ZIP_DEFLATED) as archive:
@@ -90,20 +90,20 @@ def pack(source: Path) -> bytes:
 
 
 def sources(names: list[str]) -> list[Path]:
-    """Corpus directories to pack, in a stable order."""
+    """Fixture directories to pack, in a stable order."""
     if names:
-        chosen = [CORPUS_DIR / name for name in names]
+        chosen = [FIXTURE_DIR / name for name in names]
     else:
-        chosen = sorted(p for p in CORPUS_DIR.iterdir() if p.is_dir())
+        chosen = sorted(p for p in FIXTURE_DIR.iterdir() if p.is_dir())
     missing = [p for p in chosen if not p.is_dir()]
     if missing:
-        raise SystemExit("not a corpus directory: " + ", ".join(str(p) for p in missing))
+        raise SystemExit("not a fixture directory: " + ", ".join(str(p) for p in missing))
     return chosen
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("names", nargs="*", help="corpus directories; every one when omitted")
+    parser.add_argument("names", nargs="*", help="fixture directories; every one when omitted")
     parser.add_argument(
         "--check",
         action="store_true",
@@ -117,11 +117,11 @@ def main() -> int:
         built = pack(source)
         if args.check:
             if not target.exists():
-                print(f"MISSING {target}: run scripts/pack_corpus.py", file=sys.stderr)
+                print(f"MISSING {target}: run scripts/pack_fixtures.py", file=sys.stderr)
                 failures += 1
             elif target.read_bytes() != built:
                 print(
-                    f"STALE   {target}: sources changed; run scripts/pack_corpus.py",
+                    f"STALE   {target}: sources changed; run scripts/pack_fixtures.py",
                     file=sys.stderr,
                 )
                 failures += 1

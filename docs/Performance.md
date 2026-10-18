@@ -22,7 +22,7 @@ with `cargo bench -p steleofd-parser --bench parse`.
 
 ## The document being measured
 
-The benchmarks do not use the corpus. A corpus is fetched rather than
+The benchmarks do not use the fixtures. Samples are fetched rather than
 committed, and a benchmark needs the same bytes on every machine and every
 run. `steleofd_testkit::bench_archive(pages)` builds one instead: a real
 archive with a real embedded face, 120 objects per page, mixed on purpose —

@@ -133,8 +133,8 @@ enum ClipSpec {
 }
 
 /// Place an object into the page. Content space starts at the boundary's
-/// top-left corner and the CTM maps from there into page space; the corpus
-/// agrees on this for every producer sampled.
+/// top-left corner and the CTM maps from there into page space, which every
+/// sampled producer agrees on.
 fn with_object_space(
     base: &ObjectBase,
     params: &HashMap<String, DrawParam>,

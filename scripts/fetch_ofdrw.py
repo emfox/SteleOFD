@@ -1,19 +1,18 @@
 #!/usr/bin/env python3
 """Fetch the third-party OFD samples the parser regression suite runs against.
 
-The corpus under `compliance/corpus/` is written by hand, because it exists to
-exercise one clause each and its sources are meant to be read. That is the wrong
-shape for a regression suite: a hand-written corpus only ever covers what its
-author already thought of. These samples come the other way round, from another
-implementation's test suite, so they carry whatever that implementation happened
-to accept -- malformed paths, odd namespaces, signature envelopes and scanned
-images included.
+The fixtures under `compliance/fixtures/` are written by hand, because they
+exist to exercise one clause each and their sources are meant to be read. That
+is the wrong shape for a regression suite: what someone wrote by hand only ever
+covers what its author already thought of. These samples come the other way
+round, from another implementation's test suite, so they carry whatever that
+implementation happened to accept -- malformed paths, odd namespaces, signature
+envelopes and scanned images included.
 
 `ofdrw` is the reference Java implementation of the format and is Apache-2.0,
-which makes its test material the one corpus worth taking rather than a
-corpus worth asking permission for twice. Nothing is committed here: the
-samples are large, they are not ours, and a vendored copy would rot against
-upstream.
+which makes its test material worth taking rather than worth asking permission
+for twice. Nothing is committed here: the samples are large, they are not ours,
+and a vendored copy would rot against upstream.
 
 They are not fetched from `ofdrw` either. Upstream serves them from a `master`
 branch, and a branch name does not pin bytes: the samples would change under
@@ -86,9 +85,9 @@ SAMPLES: dict[str, str] = {
 }
 
 
-# Samples that do not open yet, and why. A corpus is only useful if a failure in
-# it means something, so the list is short, each entry names a cause, and CI
-# fails when a sample here starts working: that is the signal to remove it.
+# Samples that do not open yet, and why. A sample set is only useful if a
+# failure in it means something, so the list is short, each entry names a cause,
+# and CI fails when a sample here starts working: that is the signal to remove it.
 # Empty for now: the two that used to sit here both open, one after its clip
 # areas were read as a union and one after the drawing parameters a `Res` table
 # declares stopped being ignored.

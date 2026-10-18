@@ -73,8 +73,8 @@ we are on the standard's side.
   (`CT_Path`, `CT_Text`, `CT_Layer`, `CT_Color`).
 - **Not yet** checked attribute by attribute: `Res.xsd`, `Signature.xsd`,
   `CustomTags.xsd`, `Extensions.xsd`, `Attachments.xsd`, `Annotation.xsd`.
-  What the corpus has since exercised against them is recorded under
-  `compliance/corpus/features/`.
+  What they have since been exercised against is recorded under
+  `compliance/fixtures/features/`.
 
 Treat these files as a validation baseline derived from the normative annex.
 They are not third-party certification, and any conformance claim built on
@@ -84,14 +84,14 @@ them should say so.
 
 ```console
 python3 scripts/gbt33190.py --fetch schemas --check compliance/schema/annex-a
-python3 scripts/pack_corpus.py --check                    # archives match sources
+python3 scripts/pack_fixtures.py --check                  # archives match sources
 python3 scripts/validate_ofd.py --allow-foreign \
-    $(find compliance/corpus -name '*.ofd' -o -name '*.xml')
+    $(find compliance/fixtures -name '*.ofd' -o -name '*.xml')
 ```
 
 `scripts/validate_ofd.py` routes every XML entry of a container to the schema
 that declares its root element and validates it. CI runs that over everything
-under `compliance/corpus/`.
+under `compliance/fixtures/`.
 
 Two details are worth knowing:
 
@@ -99,7 +99,7 @@ Two details are worth knowing:
   `CustomTag` points at, for instance. `--allow-foreign` accepts those; without
   it they fail loudly, which is what we want for a genuinely misplaced annex A
   entry.
-- `compliance/corpus/<name>/` is the readable source and `<name>.ofd` is the
-  archive built from it. `scripts/pack_corpus.py` reads the nesting from the
+- `compliance/fixtures/<name>/` is the readable source and `<name>.ofd` is
+  the archive built from it. `scripts/pack_fixtures.py` reads the nesting from the
   `layout.txt` beside each source, and its `--check` mode (run in CI) fails when
   the committed archive no longer matches its sources.

@@ -382,7 +382,7 @@ tests = [
     "gb_t_33190_11_3_read_direction_turns_the_glyphs_with_the_line",
     "gb_t_33190_11_3_char_direction_turns_each_glyph",
     "gb_t_33190_11_3_a_vertical_run_keeps_its_glyphs_upright",
-    "gb_t_33190_11_3_the_vertical_corpus_is_placed_by_the_table",
+    "gb_t_33190_11_3_the_vertical_fixture_is_placed_by_the_table",
 ]
 
 [[item]]

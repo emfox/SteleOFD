@@ -1,6 +1,6 @@
 //! Wiring the drawing parameters a document declares to the objects that name
 //! them. Clause 7.9 keeps the table in the `Res` files beside the fonts and
-//! the media, which is where every producer in the corpus puts it.
+//! the media, which is where every sampled producer puts it.
 
 use std::collections::HashMap;
 

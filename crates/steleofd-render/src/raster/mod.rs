@@ -538,7 +538,7 @@ mod tests {
 
     #[test]
     fn a_radial_gradient_runs_from_its_centre_out_to_its_circle() {
-        // The shape the corpus writes: no StartRadius, so the first stop sits
+        // The shape our fixtures write: no StartRadius, so the first stop sits
         // at the centre and the last on the circle the clause names.
         let manager = FontManager::new();
         let page = page_with(vec![DrawOp::Path {

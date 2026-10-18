@@ -168,7 +168,7 @@ The path is short and every step is a clause:
 4. **The face answers** — `glyph_id` through `cmap` for a code point, or
    `outline` directly for an index. The magic at the front of the file decides
    what kind of face it is; the file name never does, which matters because two
-   of the three raw CFF faces in the corpus carry a `.ttf` name.
+   of the three raw CFF faces among the samples carry a `.ttf` name.
 
 The matrix above covers steps 1 to 4 as an engine. It says nothing about how a
 backend paints the outline: that is the raster and vector exporters, which

@@ -1,5 +1,5 @@
 //! A generated document for the performance baselines. A benchmark needs the
-//! same bytes everywhere, and the corpus is fetched rather than committed, so
+//! same bytes everywhere, and the samples are fetched rather than committed, so
 //! the pages are written here; their shape is mixed on purpose.
 
 use steleofd_package::build_archive;

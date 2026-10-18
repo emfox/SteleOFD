@@ -155,7 +155,7 @@ fn gb_t_33190_20_1_attachment_list_is_optional() {
 #[test]
 fn gb_t_33190_a_1_the_normative_schemas_are_vendored() {
     // Annex A is normative, so the schema set has to be present in the tree for
-    // scripts/validate_ofd.py to hold the corpus against it.
+    // scripts/validate_ofd.py to hold the fixtures against it.
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../..")
         .join("compliance/schema/annex-a");

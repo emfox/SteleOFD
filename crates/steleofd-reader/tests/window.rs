@@ -11,9 +11,9 @@ use steleofd_reader::viewer::Layout;
 use steleofd_reader::window;
 use steleofd_reader::{App, Canvas, Fit, ReaderMessage};
 
-/// The real minimal document from the conformance corpus.
-fn corpus() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../compliance/corpus/minimal.ofd")
+/// The real minimal document from the conformance fixtures.
+fn minimal() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../compliance/fixtures/minimal.ofd")
 }
 
 /// An empty reader behind a harness, sized like a small window.
@@ -112,9 +112,9 @@ fn an_empty_window_offers_the_drop_hint_instead_of_a_page() {
 }
 
 #[test]
-fn opening_the_corpus_draws_its_page_counter() {
+fn opening_the_fixture_draws_its_page_counter() {
     let mut app = App::new();
-    app.open_path(&corpus()).expect("the corpus opens");
+    app.open_path(&minimal()).expect("the fixture opens");
     let harness = harness(app);
 
     // The status bar names the document and counts the pages.
@@ -126,7 +126,7 @@ fn opening_the_corpus_draws_its_page_counter() {
 #[test]
 fn the_next_button_turns_the_page_and_stops_at_the_end() {
     let mut app = App::new();
-    app.open_path(&corpus()).expect("the corpus opens");
+    app.open_path(&minimal()).expect("the fixture opens");
     let mut harness = harness(app);
 
     let next = "▶";
@@ -166,7 +166,7 @@ fn the_close_button_is_disabled_until_a_document_is_open() {
 #[test]
 fn closing_through_the_menu_returns_the_window_to_the_hint() {
     let mut app = App::new();
-    app.open_path(&corpus()).expect("the corpus opens");
+    app.open_path(&minimal()).expect("the fixture opens");
     let mut harness = harness(app);
 
     let close = harness.state().close_label();
@@ -185,7 +185,7 @@ fn closing_through_the_menu_returns_the_window_to_the_hint() {
 #[test]
 fn a_failure_is_drawn_in_the_status_bar() {
     let mut app = App::new();
-    app.open_path(&corpus()).expect("the corpus opens");
+    app.open_path(&minimal()).expect("the fixture opens");
     app.set_error("the page would not render");
     let harness = harness(app);
     harness.get_by_label_contains("the page would not render");
@@ -194,7 +194,7 @@ fn a_failure_is_drawn_in_the_status_bar() {
 #[test]
 fn the_fit_buttons_choose_a_fit_and_it_sticks() {
     let mut app = App::new();
-    app.open_path(&corpus()).expect("the corpus opens");
+    app.open_path(&minimal()).expect("the fixture opens");
     let mut harness = harness(app);
 
     // A fit is a mode, not a one-off resolution: choosing one has to be
@@ -219,7 +219,7 @@ fn the_fit_buttons_choose_a_fit_and_it_sticks() {
 #[test]
 fn a_fit_recomputes_the_resolution_from_the_page_and_the_window() {
     let mut app = App::new();
-    app.open_path(&corpus()).expect("the corpus opens");
+    app.open_path(&minimal()).expect("the fixture opens");
     let mut harness = harness(app);
 
     harness.state_mut().set_fit(Fit::Width);
@@ -308,7 +308,7 @@ fn the_continuous_layout_stacks_more_than_one_page() {
 #[test]
 fn the_search_panel_is_closed_until_it_is_asked_for() {
     let mut app = App::new();
-    app.open_path(&corpus()).expect("the corpus opens");
+    app.open_path(&minimal()).expect("the fixture opens");
     let mut harness = harness(app);
 
     // The toggle exists, because the bar does not reflow; the panel does not,
@@ -329,7 +329,7 @@ fn the_search_panel_is_closed_until_it_is_asked_for() {
 #[test]
 fn typing_a_query_shows_the_hits_and_the_count() {
     let mut app = App::new();
-    app.open_path(&corpus()).expect("the corpus opens");
+    app.open_path(&minimal()).expect("the fixture opens");
     app.set_search_open(true);
     let mut harness = harness(app);
 
@@ -339,7 +339,7 @@ fn typing_a_query_shows_the_hits_and_the_count() {
     harness.run();
     assert!(
         !harness.state().hits().is_empty(),
-        "the corpus has the word"
+        "the fixture has the word"
     );
 
     let count = harness.state().search_count_label();
@@ -349,7 +349,7 @@ fn typing_a_query_shows_the_hits_and_the_count() {
 #[test]
 fn a_query_with_no_match_offers_the_no_match_notice() {
     let mut app = App::new();
-    app.open_path(&corpus()).expect("the corpus opens");
+    app.open_path(&minimal()).expect("the fixture opens");
     app.set_search_open(true);
     app.set_query("zzzz-not-in-this-document");
     let harness = harness(app);
