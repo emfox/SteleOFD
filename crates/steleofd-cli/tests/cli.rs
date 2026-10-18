@@ -203,6 +203,91 @@ fn convert_to_pdf_holds_the_whole_document() {
     assert!(pdf.starts_with(b"%PDF"), "not a PDF");
 }
 
+/// A three-page document whose first page is a short receipt and whose
+/// continuations are A4, written out ready to name on a command line.
+fn mixed_page_path() -> PathBuf {
+    let document = DOCUMENT_XML
+        .replace(
+            r#"<Pages><Page ID="1" BaseLoc="Pages/Page_0/Content.xml"/></Pages>"#,
+            r#"<Pages>
+    <Page ID="1" BaseLoc="Pages/Page_0/Content.xml"/>
+    <Page ID="2" BaseLoc="Pages/Page_1/Content.xml"/>
+    <Page ID="3" BaseLoc="Pages/Page_2/Content.xml"/>
+  </Pages>"#,
+        )
+        .replace(
+            "0 0 210 297</PhysicalBox></PageArea>",
+            "0 0 210 140</PhysicalBox></PageArea>",
+        );
+    let entries = [
+        ("OFD.xml", OFD_XML.as_bytes().to_vec()),
+        ("Doc_0/Document.xml", document.into_bytes()),
+        (
+            "Doc_0/Pages/Page_0/Content.xml",
+            CONTENT_XML.as_bytes().to_vec(),
+        ),
+        (
+            "Doc_0/Pages/Page_1/Content.xml",
+            CONTENT_XML.as_bytes().to_vec(),
+        ),
+        (
+            "Doc_0/Pages/Page_2/Content.xml",
+            CONTENT_XML.as_bytes().to_vec(),
+        ),
+        (
+            "Doc_0/PublicRes.xml",
+            br#"<?xml version="1.0" encoding="UTF-8"?>
+<Res BaseLoc="Res"><Fonts><Font ID="7" FontName="Orbitron"><FontFile>Orbitron-Bold.ttf</FontFile></Font></Fonts></Res>"#
+                .to_vec(),
+        ),
+        ("Doc_0/Res/Orbitron-Bold.ttf", font_bytes()),
+    ];
+    let borrowed: Vec<(&str, &[u8])> = entries
+        .iter()
+        .map(|(path, data)| (*path, data.as_slice()))
+        .collect();
+    let bytes = build_archive(&borrowed).expect("build fixture");
+    let path = scratch("mixed").join("mixed.ofd");
+    std::fs::write(&path, bytes).expect("write fixture");
+    path
+}
+
+#[test]
+fn convert_to_pdf_writes_every_page_at_its_own_size() {
+    // Converting one page at a time and keeping the last writes a single page
+    // under the document's name, which reads as a success. Each page also
+    // keeps its own box, so a short receipt is not padded out to A4.
+    let path = mixed_page_path();
+    let dir = scratch("pdf-multi");
+    let report = report_for(&[
+        "convert",
+        "--locale",
+        "en-US",
+        path.to_str().unwrap(),
+        "-f",
+        "pdf",
+        "-o",
+        dir.to_str().unwrap(),
+    ]);
+    assert!(report.ok, "{}", report.text);
+    assert!(
+        report.text.contains("Converted 3 pages to pdf"),
+        "{}",
+        report.text
+    );
+    let pdf = std::fs::read(dir.join("mixed.pdf")).expect("read pdf");
+    let text = String::from_utf8_lossy(&pdf);
+    assert!(
+        text.contains("/Count 3"),
+        "the page tree does not hold three pages"
+    );
+    assert_eq!(
+        text.matches("/MediaBox").count(),
+        3,
+        "one MediaBox per page"
+    );
+}
+
 #[test]
 fn convert_to_svg_and_png_writes_per_page_files() {
     let path = fixture_path();

@@ -155,6 +155,12 @@ text, with a space and a `g` standing for a glyph that takes no room of its own;
 that is a property of the string, and it is honoured the same way in either
 reading.
 
+Export takes the same route. A PDF is one document holding a list of pages,
+and each page carries its own `PhysicalBox` as a `MediaBox`, because a receipt
+is shorter than the A4 sheets that follow it. The conversion is handed the
+document's font manager so a run is drawn as outlines; without one it falls
+back to live text, which only reads where the same face is installed.
+
 A step back moves no glyph forward, so it ends a row: `flatten::run_shapes`
 cuts the code at each one, and the row below takes its own height from `DeltaY`.
 A single run has one origin and one transform, so a code set in rows cannot be

@@ -659,6 +659,16 @@ pub fn document_to_pdf_pages(
     pages: &[usize],
     options: &PdfOptions<'_>,
 ) -> Result<Vec<u8>> {
+    Ok(document_to_pdf_pages_with_stats(list, pages, options)?.0)
+}
+
+/// The same conversion, with the counts summed over every page.
+pub fn document_to_pdf_pages_with_stats(
+    list: &steleofd_display::DisplayList,
+    pages: &[usize],
+    options: &PdfOptions<'_>,
+) -> Result<(Vec<u8>, ConversionStats)> {
+    let mut stats = ConversionStats::default();
     let mut doc = Document::new();
     let mut page_ids = Vec::with_capacity(pages.len());
     for wanted in pages {
@@ -672,9 +682,10 @@ pub fn document_to_pdf_pages(
         };
         let mut sink = PdfSink::new(page.page_box, options);
         replay(page, &mut sink)?;
+        stats.absorb(&sink.stats);
         page_ids.push(sink.emit_page(&mut doc)?);
     }
-    finish_document(&mut doc, page_ids)
+    Ok((finish_document(&mut doc, page_ids)?, stats))
 }
 
 /// Wire the catalog and page tree, then serialize.

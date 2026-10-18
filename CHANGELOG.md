@@ -31,6 +31,22 @@ section only when a release actually has one.
   drew a vertical heading in the right place with every glyph lying on its
   side; a test now turns a glyph a quarter and checks the ink turns with it.
 
+### Export
+
+- **A PDF export keeps every page.** The CLI converted one page at a time and
+  assigned each result to the same variable, so the file it wrote held the last
+  page only — and under the document's name, reporting success. It now writes
+  the selection as one document, so `-p` picks the page to export instead of
+  being ignored.
+- **Exported glyphs carry the document's own font.** The document-level export
+  built its options from the default, which names no font source, so every run
+  fell back to live text: readable only where the reader's machine had the same
+  face, and wrong everywhere else. The document's font manager now goes with
+  it, and `to_pdf_pages_with_stats` reports what the conversion lost.
+- **Every page keeps its own physical box.** A receipt is 210 by 140 mm and its
+  continuations are A4; one size for the file either cropped a continuation or
+  left a band of white under the first page.
+
 ## [0.2.0] - 2026-10-19
 
 The first release since `0.1.1` that changes what the engine draws and what a

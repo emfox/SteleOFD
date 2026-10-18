@@ -20,8 +20,8 @@ pub use svg::{SvgOptions, SvgSink, page_to_svg, page_to_svg_with_stats, pages_to
 
 #[cfg(feature = "pdf")]
 pub use pdf::{
-    PdfOptions, PdfSink, document_to_pdf, document_to_pdf_pages, page_to_pdf,
-    page_to_pdf_with_stats,
+    PdfOptions, PdfSink, document_to_pdf, document_to_pdf_pages, document_to_pdf_pages_with_stats,
+    page_to_pdf, page_to_pdf_with_stats,
 };
 
 /// How glyph runs become target-format content.

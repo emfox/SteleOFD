@@ -229,10 +229,19 @@ impl Document {
         steleofd_print::render_job(&self.list, &self.fonts, &job)
     }
 
+    /// Convert the whole document to one PDF file, with the conversion's
+    /// counts. The fonts go with it, or a run has no outline to draw and falls
+    /// back to live text that only reads back where the face is installed.
+    #[cfg(feature = "pdf")]
+    pub fn to_pdf_with_stats_list(&self) -> Result<(Vec<u8>, steleofd_convert::ConversionStats)> {
+        let every: Vec<usize> = self.list.pages.iter().map(|page| page.index).collect();
+        self.to_pdf_pages_with_stats(&every)
+    }
+
     /// Convert the whole document to one PDF file.
     #[cfg(feature = "pdf")]
     pub fn to_pdf(&self) -> Result<Vec<u8>> {
-        steleofd_convert::document_to_pdf(&self.list, &steleofd_convert::PdfOptions::default())
+        Ok(self.to_pdf_with_stats_list()?.0)
     }
 
     /// Convert the named pages to one PDF file, in the order given. The
@@ -240,10 +249,23 @@ impl Document {
     /// contiguous: facing mode shows a pair, and a search lands anywhere.
     #[cfg(feature = "pdf")]
     pub fn to_pdf_pages(&self, pages: &[usize]) -> Result<Vec<u8>> {
-        steleofd_convert::document_to_pdf_pages(
+        Ok(self.to_pdf_pages_with_stats(pages)?.0)
+    }
+
+    /// Convert the named pages to one PDF file, with the conversion's counts.
+    /// Each page keeps its own physical box in the one document.
+    #[cfg(feature = "pdf")]
+    pub fn to_pdf_pages_with_stats(
+        &self,
+        pages: &[usize],
+    ) -> Result<(Vec<u8>, steleofd_convert::ConversionStats)> {
+        steleofd_convert::document_to_pdf_pages_with_stats(
             &self.list,
             pages,
-            &steleofd_convert::PdfOptions::default(),
+            &steleofd_convert::PdfOptions {
+                fonts: Some(&self.fonts),
+                ..Default::default()
+            },
         )
     }
 

@@ -5,7 +5,7 @@
 use steleofd_common::Rect;
 use steleofd_convert::{
     ConversionStats, PdfOptions, SvgOptions, TextExport, document_to_pdf, document_to_pdf_pages,
-    page_to_pdf, page_to_svg, pages_to_svg,
+    document_to_pdf_pages_with_stats, page_to_pdf, page_to_svg, pages_to_svg,
 };
 use steleofd_display::ops::{Color, Paint, PaintRule, StrokeStyle};
 use steleofd_display::{DisplayList, DrawOp, PageDisplay};
@@ -130,6 +130,67 @@ fn a_multi_page_pdf_counts_every_page() {
     assert!(
         text.contains("/Count 3"),
         "page tree does not count three pages"
+    );
+}
+
+/// A blank page of a stated size, for the documents that mix them.
+fn page_of(index: usize, w: f64, h: f64) -> PageDisplay {
+    PageDisplay {
+        index,
+        page_box: Rect::new(0.0, 0.0, w, h),
+        ops: Vec::new(),
+        content_bbox: Rect::EMPTY,
+    }
+}
+
+/// The MediaBox of every page in the file, in the order written.
+fn media_boxes(pdf: &[u8]) -> Vec<(f64, f64)> {
+    let text = String::from_utf8_lossy(pdf);
+    let mut boxes = Vec::new();
+    for chunk in text.split("/MediaBox").skip(1) {
+        let Some(open) = chunk.find('[') else {
+            continue;
+        };
+        let Some(close) = chunk.find(']') else {
+            continue;
+        };
+        let nums: Vec<f64> = chunk[open + 1..close]
+            .split_whitespace()
+            .filter_map(|n| n.parse().ok())
+            .collect();
+        if nums.len() == 4 {
+            boxes.push((nums[2], nums[3]));
+        }
+    }
+    boxes
+}
+
+#[test]
+fn every_page_of_a_mixed_document_keeps_its_own_box() {
+    // A receipt's first page is short and its continuations are A4, so one
+    // page size for the whole file would either crop a continuation or leave
+    // a band of white under the first page.
+    let list = display_list(vec![page_of(0, 210.0, 140.0), page_of(1, 210.0, 297.0)]);
+    let pdf = document_to_pdf_pages(&list, &[0, 1], &PdfOptions::default()).expect("convert");
+    let boxes = media_boxes(&pdf);
+    assert_eq!(boxes.len(), 2, "one MediaBox per page: {boxes:?}");
+    let mm = |pt: f64| pt / (72.0 / 25.4);
+    assert!((mm(boxes[0].1) - 140.0).abs() < 0.01, "{:?}", boxes[0]);
+    assert!((mm(boxes[1].1) - 297.0).abs() < 0.01, "{:?}", boxes[1]);
+}
+
+#[test]
+fn the_counts_cover_every_page_the_file_holds() {
+    // The counts are the only sign a conversion lost a glyph, so a multi-page
+    // file reporting one page's worth would hide three quarters of the loss.
+    let list = display_list(vec![one_rect_page(0), one_rect_page(1), one_rect_page(2)]);
+    let (_, stats) = document_to_pdf_pages_with_stats(&list, &[0, 1, 2], &PdfOptions::default())
+        .expect("convert");
+    assert_eq!(stats.images, 0, "these pages hold none");
+    assert_eq!(
+        stats.dropped_runs + stats.live_text_runs + stats.outlined_glyphs,
+        0,
+        "no page has text, so nothing could be converted"
     );
 }
 

@@ -318,9 +318,10 @@ fn convert(
         .map(|s| s.to_string_lossy().into_owned())
         .unwrap_or_else(|| "document".to_string());
     let pages = doc.page_count();
+    let every: Vec<usize> = (0..pages).collect();
     let indices: Vec<usize> = match page {
         Some(index) => vec![index],
-        None => (0..pages).collect(),
+        None => every.clone(),
     };
 
     // A conversion that loses a face or a glyph still writes a file, so the
@@ -329,14 +330,12 @@ fn convert(
     let (count, wrote) = match format {
         FormatArg::Pdf => {
             let out = dir.join(format!("{stem}.pdf"));
-            let mut pdf = Vec::new();
-            for index in &indices {
-                let (bytes, stats) = doc.to_pdf_with_stats(*index)?;
-                missing_glyphs += stats.missing_glyphs;
-                pdf = bytes;
-            }
+            // One document, not one file per page: a page at a time leaves
+            // only the last of them under the document's name.
+            let (pdf, stats) = doc.to_pdf_pages_with_stats(&indices)?;
+            missing_glyphs += stats.missing_glyphs;
             std::fs::write(&out, pdf)?;
-            (pages, Some(out))
+            (indices.len(), Some(out))
         }
         FormatArg::Png => {
             let options = RenderOptions {
