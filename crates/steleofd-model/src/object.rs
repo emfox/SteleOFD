@@ -338,15 +338,16 @@ pub struct TextCode {
     #[serde(rename = "DeltaY", default)]
     pub delta_y: Vec<f64>,
     /// The `X` the previous code in this object stated, which table 46 gives
-    /// to a code that states none of its own.
+    /// to a code that states none of its own. Carried from the file rather
+    /// than written by a caller, so a reader may not set it.
     #[serde(skip)]
-    pub inherited_x: Option<f64>,
+    inherited_x: Option<f64>,
     /// The `Y` that came with `inherited_x`.
     #[serde(skip)]
-    pub inherited_y: Option<f64>,
+    inherited_y: Option<f64>,
     /// Whether `x` and `y` were written on this code rather than inherited.
     #[serde(skip)]
-    pub origin_stated: bool,
+    origin_stated: bool,
     /// Raw text; either glyph ids or Unicode, depending on `CGTransform`.
     #[serde(rename = "$text", default)]
     pub text: String,
@@ -363,6 +364,14 @@ impl TextCode {
             self.inherited_x.unwrap_or(self.x),
             self.inherited_y.unwrap_or(self.y),
         )
+    }
+
+    /// Record the origin table 46 passes on to the next code, which is this
+    /// code's own once it has resolved what it inherited.
+    pub fn carry_origin_to(&mut self) {
+        let (x, y) = self.origin();
+        self.inherited_x = Some(x);
+        self.inherited_y = Some(y);
     }
 }
 
@@ -642,7 +651,7 @@ mod tests {
         let t = TextObject {
             codes: vec![TextCode {
                 text: "hello".to_string(),
-                ..Default::default()
+                ..TextCode::default()
             }],
             ..Default::default()
         };

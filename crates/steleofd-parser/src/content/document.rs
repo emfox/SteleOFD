@@ -597,7 +597,7 @@ fn read_text_clip(cursor: &mut Cursor<'_>, node: &Node) -> Result<TextClip> {
         match cursor.next_event()? {
             Event::Start(n) if n.is("TextCode") => {
                 let mut code = read_text_code(cursor, &n)?;
-                inherit_origin(clip.codes.last(), &mut code);
+                inherit_origin(clip.codes.last_mut(), &mut code);
                 clip.codes.push(code);
             }
             Event::Start(n) if n.is("CGTransform") => {
@@ -1080,7 +1080,7 @@ fn read_text_object(cursor: &mut Cursor<'_>, node: &Node) -> Result<TextObject> 
             match cursor.next_event()? {
                 Event::Start(n) if n.is("TextCode") => {
                     let mut code = read_text_code(cursor, &n)?;
-                    inherit_origin(t.codes.last(), &mut code);
+                    inherit_origin(t.codes.last_mut(), &mut code);
                     t.codes.push(code);
                 }
                 Event::Start(n) if n.is("CGTransform") => {
@@ -1177,24 +1177,21 @@ fn read_text_code(cursor: &mut Cursor<'_>, node: &Node) -> Result<TextCode> {
     let a = node.attributes();
     let x = a.optional_as::<f64>("TextCode", "X")?;
     let y = a.optional_as::<f64>("TextCode", "Y")?;
-    let code = TextCode {
-        x: x.unwrap_or(0.0),
-        y: y.unwrap_or(0.0),
-        origin_stated: x.is_some() || y.is_some(),
-        delta_x: match a.get("DeltaX") {
-            Some(raw) => parse_delta_list("TextCode", "DeltaX", raw)?,
-            None => Vec::new(),
-        },
-        delta_y: match a.get("DeltaY") {
-            Some(raw) => parse_delta_list("TextCode", "DeltaY", raw)?,
-            None => Vec::new(),
-        },
-        text: if node.is_self_closing() {
-            String::new()
-        } else {
-            cursor.read_text()?
-        },
-        ..TextCode::default()
+    let mut code = TextCode::default();
+    code.x = x.unwrap_or(0.0);
+    code.y = y.unwrap_or(0.0);
+    code.delta_x = match a.get("DeltaX") {
+        Some(raw) => parse_delta_list("TextCode", "DeltaX", raw)?,
+        None => Vec::new(),
+    };
+    code.delta_y = match a.get("DeltaY") {
+        Some(raw) => parse_delta_list("TextCode", "DeltaY", raw)?,
+        None => Vec::new(),
+    };
+    code.text = if node.is_self_closing() {
+        String::new()
+    } else {
+        cursor.read_text()?
     };
     Ok(code)
 }
@@ -1217,17 +1214,12 @@ fn angle_of(raw: Option<&str>) -> Option<u16> {
 
 /// Table 46: a `TextCode` that states no `X` or `Y` takes the last one the
 /// object stated, so a run of codes is one line at one origin.
-fn inherit_origin(previous: Option<&TextCode>, code: &mut TextCode) {
+fn inherit_origin(previous: Option<&mut TextCode>, code: &mut TextCode) {
     let Some(previous) = previous else { return };
-    let (x, y) = match previous.origin_stated {
-        true => (previous.x, previous.y),
-        false => (
-            previous.inherited_x.unwrap_or(0.0),
-            previous.inherited_y.unwrap_or(0.0),
-        ),
-    };
-    code.inherited_x = Some(x);
-    code.inherited_y = Some(y);
+    previous.carry_origin_to();
+    let (x, y) = previous.origin();
+    code.x = x;
+    code.y = y;
 }
 
 fn read_image_object(cursor: &mut Cursor<'_>, node: &Node) -> Result<ImageObject> {

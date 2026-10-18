@@ -31,11 +31,10 @@ fn text_object(id: &str, text: &str) -> Object {
             boundary: Rect::new(0.0, 0.0, 50.0, 10.0),
             ..Default::default()
         },
-        codes: vec![TextCode {
-            x: 0.0,
-            y: 0.0,
-            text: text.to_string(),
-            ..Default::default()
+        codes: vec![{
+            let mut code = TextCode::default();
+            code.text = text.to_string();
+            code
         }],
         ..Default::default()
     })

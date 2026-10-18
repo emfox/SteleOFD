@@ -1108,17 +1108,15 @@ mod tests {
             },
             size: steleofd_common::Millimeter::new(3.0),
             codes: vec![
-                TextCode {
-                    x: 0.0,
-                    y: 0.0,
-                    text: "AB".to_string(),
-                    ..Default::default()
+                {
+                    let mut code = TextCode::default();
+                    code.text = "AB".to_string();
+                    code
                 },
-                TextCode {
-                    x: 10.0,
-                    y: 0.0,
-                    text: String::new(),
-                    ..Default::default()
+                {
+                    let mut code = TextCode::default();
+                    code.x = 10.0;
+                    code
                 },
             ],
             ..Default::default()

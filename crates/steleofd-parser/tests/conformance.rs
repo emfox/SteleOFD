@@ -2230,6 +2230,22 @@ fn gb_t_33190_11_3_a_code_without_an_origin_takes_the_one_before_it() {
 }
 
 #[test]
+fn gb_t_33190_11_3_a_chain_of_codes_without_an_origin_keeps_the_first() {
+    // The rule is stated once per code, so a third code inherits from a second
+    // that stated nothing: the origin carried is the one last *written*, not
+    // the one the code before it happens to hold.
+    let runs = glyph_runs(
+        "",
+        r#"<TextCode X="10" Y="20">A</TextCode><TextCode>B</TextCode><TextCode>C</TextCode>"#,
+    );
+    assert_eq!(runs.len(), 3, "all three codes reach the display list");
+    for (index, run) in runs.iter().enumerate().skip(1) {
+        let origin = run.transform.apply(0.0, 0.0);
+        assert!(close(origin, (10.0, 20.0)), "code {index} at {origin:?}");
+    }
+}
+
+#[test]
 fn gb_t_33190_7_9_a_page_resource_table_is_read() {
     // Clause 7.10: a page may carry its own resource table at `PageRes`, and
     // a draw parameter declared there has to be reachable from the page body.
