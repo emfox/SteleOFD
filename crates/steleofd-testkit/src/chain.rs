@@ -1,9 +1,6 @@
 //! A certificate whose subject, issuer, extensions and signature a test sets.
-//!
-//! `sm2_cert_der` builds the smallest certificate a parser accepts: an empty
-//! name, no extensions and an empty signature value. A path check reads the
-//! fields that certificate leaves out, so the tests that exercise one need a
-//! certificate that actually carries them, signed by a key the test holds.
+//! `sm2_cert_der` builds the smallest one a parser accepts, which a path check
+//! cannot use: it reads the fields that certificate leaves out.
 
 use crate::der::{oid, tlv};
 use steleofd_crypto::Sm2KeyPair;
@@ -129,11 +126,9 @@ impl CertSpec {
 pub fn cert_der(spec: &CertSpec, public_key: &[u8], signer: &Sm2KeyPair) -> Vec<u8> {
     let sm2_with_sm3 = oid(&[1, 2, 156, 10197, 1, 501]);
     let algorithm = tlv(0x30, &sm2_with_sm3);
-    // Name ::= SEQUENCE OF RelativeDistinguishedName, and a relative name is
-    // itself a SET OF AttributeTypeAndValue. Encoding the SET where the
-    // SEQUENCE belongs leaves a parser looking for the next TBS field one tag
-    // too early, which surfaces as a complaint about UTCTime rather than about
-    // the name.
+    // Name ::= SEQUENCE OF RelativeDistinguishedName, each one a SET OF
+    // AttributeTypeAndValue. Leaving the SEQUENCE out makes a parser look for the
+    // next TBS field a tag early, which it reports against UTCTime, not the name.
     let name = |value: &str| {
         if value.is_empty() {
             tlv(0x30, &[])
@@ -354,18 +349,24 @@ mod tests {
             Certificate::parse_der(&chain.intermediate_der).expect("intermediate parses");
         let leaf = Certificate::parse_der(&chain.leaf_der).expect("leaf parses");
 
-        assert!(root
-            .verify_signature(&chain.root_key.public_bytes())
-            .expect("SM2 signature"));
-        assert!(intermediate
-            .verify_signature(&chain.root_key.public_bytes())
-            .expect("SM2 signature"));
-        assert!(leaf
-            .verify_signature(&chain.intermediate_key.public_bytes())
-            .expect("SM2 signature"));
-        assert!(!leaf
-            .verify_signature(&chain.root_key.public_bytes())
-            .expect("SM2 signature"));
+        assert!(
+            root.verify_signature(&chain.root_key.public_bytes())
+                .expect("SM2 signature")
+        );
+        assert!(
+            intermediate
+                .verify_signature(&chain.root_key.public_bytes())
+                .expect("SM2 signature")
+        );
+        assert!(
+            leaf.verify_signature(&chain.intermediate_key.public_bytes())
+                .expect("SM2 signature")
+        );
+        assert!(
+            !leaf
+                .verify_signature(&chain.root_key.public_bytes())
+                .expect("SM2 signature")
+        );
     }
 
     #[test]
@@ -442,7 +443,11 @@ mod path_tests {
         let mut leaf = CertSpec::end_entity("Test Signer", "Test Intermediate", 3);
         // The authority key identifier points at the root, not the intermediate.
         leaf.authority_key_id = Some(key_id(&chain.root_key));
-        let der = cert_der(&leaf, &chain.leaf_key.public_bytes(), &chain.intermediate_key);
+        let der = cert_der(
+            &leaf,
+            &chain.leaf_key.public_bytes(),
+            &chain.intermediate_key,
+        );
         let leaf = Certificate::parse_der(&der).expect("leaf parses");
         let intermediate = Certificate::parse_der(&chain.intermediate_der).expect("intermediate");
         let err = validate_path(&leaf, &anchors, &[intermediate]).expect_err("key identifier");
@@ -457,8 +462,8 @@ mod path_tests {
         let mut anchors = TrustAnchors::none();
         // Validity is clause f)'s question, not the path's, so a window that
         // is already closed must not stop the walk.
-        let root = CertSpec::ca("Test Root", "Test Root", 1)
-            .between("200101000000Z", "200201000000Z");
+        let root =
+            CertSpec::ca("Test Root", "Test Root", 1).between("200101000000Z", "200201000000Z");
         let mut root = root;
         root.subject_key_id = Some(key_id(&chain.root_key));
         let root_der = cert_der(&root, &chain.root_key.public_bytes(), &chain.root_key);
@@ -471,9 +476,12 @@ mod path_tests {
         let chain = chain();
         let intermediate = Certificate::parse_der(&chain.intermediate_der).expect("intermediate");
         let leaf = Certificate::parse_der(&chain.leaf_der).expect("leaf parses");
-        let err = validate_path(&leaf, &TrustAnchors::none(), &[intermediate])
-            .expect_err("no anchor");
-        assert!(matches!(err, PathError::NoAnchor | PathError::IssuerMissing { .. }), "{err:?}");
+        let err =
+            validate_path(&leaf, &TrustAnchors::none(), &[intermediate]).expect_err("no anchor");
+        assert!(
+            matches!(err, PathError::NoAnchor | PathError::IssuerMissing { .. }),
+            "{err:?}"
+        );
     }
 
     #[test]
@@ -511,7 +519,11 @@ mod path_tests {
         let mut impostor = CertSpec::end_entity("Test Intermediate", "Test Root", 9);
         impostor.subject_key_id = Some(key_id(&chain.intermediate_key));
         impostor.authority_key_id = Some(key_id(&chain.root_key));
-        let der = cert_der(&impostor, &chain.intermediate_key.public_bytes(), &chain.root_key);
+        let der = cert_der(
+            &impostor,
+            &chain.intermediate_key.public_bytes(),
+            &chain.root_key,
+        );
         let impostor = Certificate::parse_der(&der).expect("impostor parses");
         let mut anchors = TrustAnchors::none();
         anchors.add(&chain.root_der).expect("root");

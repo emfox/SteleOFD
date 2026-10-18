@@ -831,8 +831,8 @@ fn replace_element(xml: &str, element: &str, value: &str) -> String {
 
 use steleofd_crypto::{Certificate, TrustAnchors};
 use steleofd_sign::{TrustPolicy, verify_signature_under};
-use steleofd_testkit::{cert_der, chain, signed_fixture_over, signed_fixture_with};
 use steleofd_testkit::SIGN_FILE as CHAIN_SIG;
+use steleofd_testkit::{cert_der, chain, signed_fixture_over, signed_fixture_with};
 
 fn verify_under_chain(
     der: &[u8],

@@ -1,24 +1,13 @@
-//! Certification path validation, the part of a signature check that asks who
-//! issued the signer's certificate.
-//!
-//! GB/T 38540-2020 7.3 e) 1) requires a verifier to validate the certification
-//! path of the signer certificate, and clause 6.3 c) repeats the requirement for
-//! the seal maker's certificate. Nothing in the OFD standards says where the
-//! trust anchor comes from, so the caller supplies it: a verifier that shipped
-//! its own root list would be deciding who the user may trust.
-//!
-//! The path is built from the document's certificate upwards, each link naming
-//! its issuer by name and, through `authorityKeyIdentifier`, by key. A link is
-//! accepted once it reaches a certificate the caller named as an anchor.
+//! Certification path validation: GB/T 38540-2020 7.3 e) 1) requires it and names
+//! no root, so the caller supplies the anchor. A verifier that shipped its own
+//! root list would be deciding who the user may trust.
 
 use crate::cert::Certificate;
 use steleofd_error::{CryptoError, OfdError};
 
-/// The certificates a verifier is willing to accept as the top of a chain.
-///
-/// An anchor is a certificate rather than a name or a thumbprint: a path is
-/// built by verifying signatures, so the anchor has to carry the key that signs
-/// the link below it.
+/// The certificates a verifier accepts as the top of a chain. An anchor is a
+/// certificate rather than a name or a thumbprint: a path is built by verifying
+/// signatures, so the anchor has to carry the key that signs the link below it.
 #[derive(Debug, Clone, Default)]
 pub struct TrustAnchors {
     anchors: Vec<Certificate>,
@@ -66,12 +55,9 @@ impl TrustAnchors {
     }
 }
 
-/// Why a path was refused.
-///
-/// GB/T 38540-2020 7.3 e) 2) splits the failures it names into two groups: a
-/// broken path or a wrong key usage ends the check, while expiry and revocation
-/// are weighed against the signing time by clause f). The variants keep that
-/// distinction, so a caller can act on it instead of reading a message.
+/// Why a path was refused. 38540 7.3 e) 2) ends the check on a broken path or a
+/// wrong key usage while clause f) weighs expiry against the signing time, so the
+/// variants keep that distinction instead of collapsing into a message.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PathError {
     /// The chain never reached an anchor.
@@ -146,10 +132,8 @@ impl std::fmt::Display for PathError {
 /// a document naming a cycle terminates rather than spins.
 pub const MAX_CHAIN_DEPTH: usize = 10;
 
-/// Walk from `leaf` to one of `anchors`, verifying every link on the way.
-///
-/// A returned path starts with the leaf and ends with the anchor it reached, so
-/// its length is the number of links plus one. The leaf's own key usage is the
+/// Walk from `leaf` to one of `anchors`, verifying every link on the way. The
+/// returned path runs leaf first and anchor last. The leaf's own key usage is the
 /// caller's business: this checks only what every link above it has to be.
 pub fn validate_path(
     leaf: &Certificate,
@@ -186,11 +170,9 @@ pub fn validate_path(
     Err(PathError::TooDeep)
 }
 
-/// Check one link against the certificate above it.
-///
-/// `depth` is 1 for the document's certificate; a `pathLenConstraint` of `n`
-/// permits `n` certificates between the CA and the leaf, which is the count
-/// GB/T 16264.8 gives (a CA's own constraint does not count the leaf).
+/// Check one link against the certificate above it. `depth` is 1 for the leaf; a
+/// `pathLenConstraint` of `n` permits `n` certificates between the CA and the leaf,
+/// the count GB/T 16264.8 gives.
 fn check_link(link: &Certificate, issuer: &Certificate, depth: usize) -> Result<(), PathError> {
     if !issuer.is_ca() {
         return Err(PathError::NotACa {

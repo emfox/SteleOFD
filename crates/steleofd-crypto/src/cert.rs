@@ -1,11 +1,6 @@
-//! X.509 certificate parsing for signature verification support.
-//!
-//! What is kept is what a certification path needs: the name a certificate
-//! presents and the name it was issued under, the key identifiers that tie one
-//! link to the next, the two extensions that decide whether a link may sign
-//! others, and the algorithm its own signature uses. GM/T 0015-2023 5.2.4.1
-//! makes the first of those mandatory reading for a verifying application and
-//! 4) makes the subset below the one that has to be understood.
+//! X.509 certificate parsing for signature verification support: what a
+//! certification path needs, which GM/T 0015-2023 5.2.4 makes mandatory reading
+//! for a verifying application.
 
 use steleofd_error::{CryptoError, OfdError};
 use x509_parser::extensions::ParsedExtension;
@@ -60,13 +55,9 @@ pub struct KeyUsage {
 }
 
 impl KeyUsage {
-    /// Whether the key may sign a document or a certificate.
-    ///
-    /// 0015 5.2.4.4 b) makes `nonRepudiation` the bit for signatures that
-    /// cannot be denied, which is what a signed document is, so a certificate
-    /// carrying either bit may sign one. A certificate carrying neither is an
-    /// encryption certificate: 0015 5.2.4.4 recommends the two appear as a
-    /// pair rather than as one certificate used for both.
+    /// Whether the key may sign a document: 0015 5.2.4.4 b) marks
+    /// `nonRepudiation` for signatures that cannot be denied, and recommends the
+    /// pair appear together rather than as one certificate for both uses.
     pub fn may_sign(&self) -> bool {
         self.digital_signature || self.non_repudiation
     }
@@ -78,12 +69,9 @@ impl KeyUsage {
 }
 
 impl Certificate {
-    /// Parse a DER-encoded certificate.
-    ///
-    /// The signature covers the `tbsCertificate` as it appears in the encoding,
-    /// so its offset and length are recorded here rather than re-encoded: a
-    /// re-encoding round trip is only byte-identical for the subset of DER this
-    /// build happens to produce, not for what a producer sent.
+    /// Parse a DER-encoded certificate, recording where its `tbsCertificate`
+    /// sits: the signature covers those bytes as encoded, and a re-encoding
+    /// round trip is only byte-identical for the DER this build produces.
     pub fn parse_der(der: &[u8]) -> Result<Self, OfdError> {
         let (rest, cert) = X509Certificate::from_der(der).map_err(|e| {
             OfdError::Crypto(CryptoError::Operation(format!(
@@ -91,10 +79,8 @@ impl Certificate {
             )))
         })?;
         let _ = &rest;
-        // `from_der` parses from the front and hands back the tail it did not
-        // read, so the encoding of interest starts at `begin` and the parsed
-        // nodes borrow that same buffer: locating the TBS means counting
-        // forward from its start rather than asking a node for its address.
+        // The parsed nodes borrow `der`, so the TBS is located by counting
+        // forward from the start rather than by asking a node for its address.
         let begin = 0;
         let tbs_range = tbs_range(der, begin).ok_or_else(|| {
             OfdError::Crypto(CryptoError::Operation(
@@ -191,17 +177,14 @@ impl Certificate {
         self.not_after
     }
 
-    /// Whether the certificate is expired at the given Unix timestamp.
+    /// Whether the certificate is outside its window at the given timestamp.
     pub fn is_expired_at(&self, unix_seconds: i64) -> bool {
         unix_seconds < self.not_before || unix_seconds >= self.not_after
     }
 
-    /// The Object Identifier of the algorithm this certificate's own signature
-    /// uses, which is not the algorithm of the key it carries.
-    ///
-    /// A path is walked by verifying each link with the algorithm that link
-    /// names, so the identifier and not an assumption about it is what the
-    /// verifier needs.
+    /// The algorithm this certificate's own signature uses, which is not the
+    /// algorithm of the key it carries: a path is walked by verifying each link
+    /// with the one that link names.
     pub fn signature_algorithm(&self) -> &str {
         &self.signature_algorithm
     }
@@ -217,12 +200,9 @@ impl Certificate {
         self.authority_key_id.as_deref()
     }
 
-    /// Whether `basicConstraints` marks this certificate as a CA.
-    ///
-    /// The extension's `cA` field defaults to false and 0015 5.2.4.12 only
-    /// says a CA certificate *should* carry it, so a certificate without the
-    /// extension is an end entity. That is also the safe reading: trusting an
-    /// absent field would make every leaf a possible issuer.
+    /// Whether `basicConstraints` marks this certificate as a CA. `cA` defaults
+    /// to false and 0015 5.2.4.12 only says a CA *should* carry the extension,
+    /// so an absent one makes an end entity.
     pub fn is_ca(&self) -> bool {
         self.is_ca
     }
@@ -233,39 +213,28 @@ impl Certificate {
         self.path_len
     }
 
-    /// The `keyUsage` extension, or `None` when the certificate omits it.
-    ///
-    /// 0015 5.2.4.4 requires a CA certificate to carry the extension, and
-    /// 7.3 e) of GB/T 38540-2020 makes the key usage part of what a verifier
-    /// checks, so an absent extension is a fact to report rather than a
-    /// default to invent.
+    /// The `keyUsage` extension, or `None` when it is omitted: 38540 7.3 e)
+    /// makes key usage part of the check, so an absent extension is a fact to
+    /// report rather than a default to invent.
     pub fn key_usage(&self) -> Option<KeyUsage> {
         self.key_usage
     }
 
-    /// Whether the certificate was issued by itself.
-    ///
-    /// A name match is not enough on its own: 0015 5.2.3.6 lets the subject be
-    /// empty when the name lives in `subjectAltName` instead, and says an
-    /// empty-subject CA must not repeat the issuer's name there. Two empty
-    /// strings are therefore not evidence that a certificate signed itself.
+    /// Whether the certificate was issued by itself. A name match is not enough:
+    /// 0015 5.2.3.6 lets the subject be empty, so two empty strings are not
+    /// evidence that a certificate signed itself.
     pub fn is_self_signed(&self) -> bool {
         !self.subject.is_empty() && self.subject == self.issuer
     }
 
-    /// Whether `issuer_key` signed this certificate.
-    ///
-    /// GB/T 38540-2020 7.3 e) makes a link's own signature part of what a
-    /// verifier checks, and each link names the algorithm it was signed with:
-    /// for a chain built under GM/T 0015-2023 that is SM2 over SM3. A
-    /// certificate naming any other algorithm is one this build will not
-    /// pretend to check, so it reports an error rather than `false`.
+    /// Whether `issuer_key` signed this certificate. 38540 7.3 e) makes a
+    /// link's own signature part of the check; one naming an algorithm this
+    /// build lacks reports an error rather than `false`.
     pub fn verify_signature(&self, issuer_key: &[u8]) -> Result<bool, OfdError> {
         if self.signature_algorithm != SM2_WITH_SM3 {
-            return Err(OfdError::Crypto(CryptoError::UnsupportedAlgorithm(format!(
-                "certificate signature uses {}",
-                self.signature_algorithm
-            ))));
+            return Err(OfdError::Crypto(CryptoError::UnsupportedAlgorithm(
+                format!("certificate signature uses {}", self.signature_algorithm),
+            )));
         }
         let tbs = &self.raw_der[self.tbs_range.clone()];
         crate::asymmetric::sm2_verify(issuer_key, tbs, &self.signature)
@@ -323,12 +292,9 @@ fn hex_of(bytes: Vec<u8>) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
 
-/// The range of the `tbsCertificate` inside the certificate that starts at
-/// `start` and is `len` bytes long.
-///
-/// A DER TLV is a tag, a length and that many bytes of content, and the first
-/// child of the outer SEQUENCE follows its header directly. Only the definite
-/// lengths DER allows are walked; anything else is not DER.
+/// The range of the `tbsCertificate` whose outer SEQUENCE starts at `start`.
+/// The first child of that SEQUENCE follows its header directly, and only the
+/// definite lengths DER allows are walked.
 fn tbs_range(der: &[u8], start: usize) -> Option<std::ops::Range<usize>> {
     let outer = tlv(der, start)?;
     let tbs = tlv(der, outer.content_at)?;

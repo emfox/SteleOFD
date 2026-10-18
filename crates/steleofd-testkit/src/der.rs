@@ -42,12 +42,9 @@ pub fn tlv(tag: u8, content: &[u8]) -> Vec<u8> {
     out
 }
 
-/// A DER object identifier from its arcs.
-///
-/// The first two arcs share one sub-identifier; every arc after them is
-/// base-128, high bit set on all but the last group. Each arc is a single
-/// number, so arc 501 is the two groups `83 75` — the digits `5`, `0`, `1`
-/// never appear literally in the encoding.
+/// A DER object identifier from its arcs. The first two share one sub-identifier
+/// and every arc after them is base-128, high bit set on all but the last group;
+/// arc 501 is therefore the two groups `83 75`.
 pub fn oid(arcs: &[u64]) -> Vec<u8> {
     let mut content = Vec::new();
     content.extend(base128(arcs[0] * 40 + arcs[1]));
