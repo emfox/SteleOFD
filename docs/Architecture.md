@@ -149,6 +149,11 @@ directly into the text, with a space and a `g` standing for a glyph that takes
 no room of its own; that is a property of the string, and it is honoured the
 same way in either reading.
 
+A step back moves no glyph forward, so it ends a row: `flatten::run_shapes`
+cuts the code at each one, and the row below takes its own height from `DeltaY`.
+A single run has one origin and one transform, so a code set in rows cannot be
+one run without the return becoming an advance that drags the row sideways.
+
 ### 2.6 Safety built in
 
 | Threat | Defense |
