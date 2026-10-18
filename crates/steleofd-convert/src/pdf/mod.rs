@@ -925,7 +925,7 @@ mod tests {
         let doc = Document::load_from(bytes).expect("the pdf we just wrote must parse");
         let pages = doc.get_pages();
         let page_id = *pages.values().next().expect("one page");
-        let content = doc.get_page_content(page_id).expect("page content");
+        let content = doc.get_page_content(page_id);
         String::from_utf8(content).expect("utf8 content")
     }
 

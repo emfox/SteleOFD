@@ -84,7 +84,7 @@ steleofd-core     = { path = "crates/steleofd-core",     version = "0.1.0" }
 steleofd-testkit  = { path = "crates/steleofd-testkit",  version = "0.1.0" }
 
 # External dependencies: versions pinned in one place
-zip        = { version = "4", default-features = false, features = ["deflate", "deflate64"] }
+zip        = { version = "9", default-features = false, features = ["deflate", "deflate64", "time"] }
 quick-xml  = { version = "0.42", features = ["serialize"] }
 serde      = { version = "1", features = ["derive", "rc"] }
 serde_json = "1"
@@ -118,7 +118,7 @@ hayro-jbig2 = { version = "0.3", default-features = false }
 
 # PDF interop
 pdf        = { version = "0.10", default-features = false }
-lopdf      = { version = "0.36", default-features = false }
+lopdf      = { version = "0.45", default-features = false }
 
 # Chinese national cryptography
 cipher     = "0.5"

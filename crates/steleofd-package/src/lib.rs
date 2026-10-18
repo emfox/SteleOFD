@@ -141,7 +141,10 @@ impl Package {
                 Some(p) => p,
                 None => {
                     return Err(PackageError::IllegalPath {
-                        path: file.name().to_string(),
+                        path: file
+                            .name()
+                            .map(|name| name.to_string())
+                            .unwrap_or_else(|_| "<unreadable>".to_string()),
                     }
                     .into());
                 }
@@ -359,8 +362,8 @@ pub fn build_archive(entries: &[(&str, &[u8])]) -> Result<Vec<u8>> {
     let mut cursor = std::io::Cursor::new(Vec::new());
     {
         let mut writer = zip::ZipWriter::new(&mut cursor);
-        let options: zip::write::FileOptions<'_, ()> =
-            zip::write::FileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+        let options = zip::write::SimpleFileOptions::default()
+            .compression_method(zip::CompressionMethod::Deflated);
         for (name, data) in entries {
             writer
                 .start_file(*name, options)
