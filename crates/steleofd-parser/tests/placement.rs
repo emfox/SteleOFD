@@ -63,6 +63,15 @@ fn xs(placed: &[(f64, f64)]) -> Vec<f64> {
     placed.iter().map(|(x, _)| *x).collect()
 }
 
+/// The x of every glyph, to four places: a walk over a list of offsets adds up
+/// rounding the page's own decimal steps do not have.
+fn rounded_xs(placed: &[(f64, f64)]) -> Vec<f64> {
+    xs(placed)
+        .into_iter()
+        .map(|x| (x * 10_000.0).round() / 10_000.0)
+        .collect()
+}
+
 fn ys(placed: &[(f64, f64)]) -> Vec<f64> {
     placed.iter().map(|(_, y)| *y).collect()
 }
@@ -96,13 +105,32 @@ fn a_single_glyph_needs_no_step_and_keeps_its_origin() {
     assert_eq!(placed, vec![(4.0, 3.0)]);
 }
 
-/// A negative offset is a carriage return: it takes the line back to where it
-/// started, which is the width the row before it covered.
+/// A negative offset is a carriage return, and the list that carries one
+/// covers the steps between its glyphs.
+///
+/// `g count value` repeats one offset `count` times. An invoice writes
+/// `DeltaX="g 11 1.5875 -17.4625"` for a line of digits, and a repeat read as
+/// a single offset would end the list a step short, which reads the list as
+/// placing glyphs: every one of them would land on the first.
 #[test]
-fn a_negative_step_takes_the_line_back_to_its_start() {
-    // Six glyphs and five offsets, every step between them, so the list is read
-    // as steps. The two steps of 2 cover 4 and the -4 after them is that width,
-    // so the fourth glyph starts a new row where the first one began.
+fn a_repeated_offset_runs_as_long_as_its_count() {
+    // Twelve glyphs and twelve offsets, a repeat and a return. This long a list
+    // is read as steps, so the glyphs run a column apart; read as places they
+    // would sit 1.5875, then 6.5875 and on.
+    let placed = starts(
+        "",
+        r#"<TextCode X="0" Y="0" DeltaX="g 11 1.5875 -17.4625">050001700111</TextCode>"#,
+    );
+    let columns: Vec<f64> = (0..12)
+        .map(|i| ((i as f64 * 1.5875) * 10_000.0).round() / 10_000.0)
+        .collect();
+    assert_eq!(rounded_xs(&placed), columns);
+}
+
+#[test]
+fn the_last_offset_is_a_step_the_line_does_not_take() {
+    // A list this long is read as steps, and the step past the last glyph is
+    // one the line would take for a glyph that is not there.
     let placed = starts(
         "",
         r#"<TextCode X="0" Y="0" DeltaX="2 2 -4 2 2">abcdef</TextCode>"#,
