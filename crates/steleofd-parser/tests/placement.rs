@@ -14,12 +14,21 @@ const OFD_XML: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
 /// Flatten a page holding one text object with `code` inside it, and return
 /// where each glyph of the only run starts, in object space.
 fn starts(object_attrs: &str, code: &str) -> Vec<(f64, f64)> {
+    runs(object_attrs, code)
+        .into_iter()
+        .next()
+        .expect("a run on the page")
+}
+
+/// Where every run of a page starts, run by run, so a test can tell a code
+/// that was cut into runs from one that was not.
+fn runs(object_attrs: &str, code: &str) -> Vec<Vec<(f64, f64)>> {
     let page = format!(
         r#"<?xml version="1.0" encoding="UTF-8"?>
 <Document>
   <CommonData><PageArea><PhysicalBox>0 0 210 140</PhysicalBox></PageArea></CommonData>
   <Pages><Page ID="1"><Content><Layer>
-    <TextObject ID="10" Boundary="0 0 100 30" Font="3" Size="5" {object_attrs}>
+    <TextObject ID="10" Boundary="0 0 100 30" Font="3" Size="5">{object_attrs}
       {code}
     </TextObject>
   </Layer></Content></Page></Pages>
@@ -38,10 +47,14 @@ fn starts(object_attrs: &str, code: &str) -> Vec<(f64, f64)> {
     for op in &page.ops {
         let DrawOp::Text(run) = op else { continue };
         let mut at = 0.0;
+        let mut placed = Vec::new();
         for i in 0..run.glyphs.len() {
-            out.push(run.transform.apply(at, 0.0));
-            at += run.advances.get(i).copied().unwrap_or(0.0);
+            if i > 0 {
+                at += run.advances.get(i - 1).copied().unwrap_or(0.0);
+            }
+            placed.push(run.transform.apply(at, 0.0));
         }
+        out.push(placed);
     }
     out
 }
@@ -83,16 +96,93 @@ fn a_single_glyph_needs_no_step_and_keeps_its_origin() {
     assert_eq!(placed, vec![(4.0, 3.0)]);
 }
 
+/// A negative offset is a carriage return: it takes the line back to where it
+/// started, which is the width the row before it covered.
 #[test]
-fn a_negative_offset_turns_the_line_back_and_moves_down() {
-    // The offsets place the first glyphs and the negative one starts a new
-    // row, which is the same step whether the list is being read as steps or
-    // as positions.
+fn a_negative_step_takes_the_line_back_to_its_start() {
+    // Six glyphs and five offsets, every step between them, so the list is read
+    // as steps. The two steps of 2 cover 4 and the -4 after them is that width,
+    // so the fourth glyph starts a new row where the first one began.
     let placed = starts(
         "",
-        r#"<TextCode X="0" Y="0" DeltaX="2 2 -20" DeltaY="0 0 5">abcdef</TextCode>"#,
+        r#"<TextCode X="0" Y="0" DeltaX="2 2 -4 2 2">abcdef</TextCode>"#,
     );
-    // The negative entry is a position like any other, so the glyph it reaches
-    // starts at the left edge again, one row on, and the glyphs after it step.
-    assert_eq!(xs(&placed), vec![0.0, 2.0, 4.0, 4.0, 9.0, 14.0]);
+    assert_eq!(xs(&placed), vec![0.0, 2.0, 4.0, 0.0, 2.0, 4.0]);
+}
+
+/// Where a run of a code that was cut into runs draws each of its glyphs.
+#[test]
+fn a_later_run_of_a_stepped_code_starts_where_its_offsets_have_come_to() {
+    // Two glyphs and one offset, exactly the step between them, so this list is
+    // read as steps. Cutting the code says nothing about the offsets, so the
+    // second run picks up the ground the first covered instead of starting over.
+    let object = r#"<CGTransform CodePosition="0" CodeCount="1" GlyphCount="1"><Glyphs>7</Glyphs></CGTransform>"#;
+    let page = runs(object, r#"<TextCode X="0" Y="0" DeltaX="8">ab</TextCode>"#);
+    assert_eq!(page.len(), 2, "the transformed character, then the rest");
+    assert_eq!(xs(&page[0]), vec![0.0], "the first character");
+    assert_eq!(xs(&page[1]), vec![8.0], "the second, one step on");
+}
+
+/// The offsets of a list that places its glyphs are where each glyph sits, so
+/// a glyph that takes no room of its own is still reached at its own offset.
+#[test]
+fn a_glyph_after_a_space_sits_where_its_offset_puts_it() {
+    // Six characters and four offsets, short of the five steps between them, so
+    // the list places them at 6, 9, 15 and 21. The last place the list gives is
+    // 21, so `d` and `e` follow it a size apart.
+    let placed = starts(
+        "",
+        r#"<TextCode X="0" Y="0" DeltaX="6 9 15 21">a bcde</TextCode>"#,
+    );
+    assert_eq!(xs(&placed), vec![6.0, 9.0, 15.0, 21.0, 26.0, 31.0]);
+}
+
+/// A `CGTransform` can cut a stretch out of a placing list and leave it with
+/// no glyph to draw. The offsets have already put what follows, so an empty
+/// stretch must not carry that ground a second time.
+#[test]
+fn a_stretch_left_without_glyphs_does_not_move_the_one_after_it() {
+    // The space at index 1 is cut out into a stretch naming no glyphs; the
+    // placing offsets put `b` and `c` at 15 and 21 whether it is there or not.
+    let object = r#"<CGTransform CodePosition="1" CodeCount="1" GlyphCount="0"></CGTransform>"#;
+    let page = runs(
+        object,
+        r#"<TextCode X="0" Y="0" DeltaX="6 9 15 21">a bcde</TextCode>"#,
+    );
+    assert_eq!(xs(&page[0]), vec![6.0], "the character before the cut");
+    assert_eq!(
+        xs(&page[1]),
+        vec![15.0, 21.0, 26.0, 31.0],
+        "the characters after it, where the offsets put them"
+    );
+}
+
+/// A `CGTransform` cuts a code into one run per stretch. The offset that
+/// reached the second stretch is only in the display list as the first run's
+/// end, so a stretch without its span starts both at the code's X.
+#[test]
+fn a_later_stretch_starts_where_the_one_before_it_ended() {
+    let transform = |position: usize, glyphs: &str| {
+        format!(
+            r#"<CGTransform CodePosition="{position}" CodeCount="2" GlyphCount="2">
+                 <Glyphs>{glyphs}</Glyphs>
+               </CGTransform>"#
+        )
+    };
+    let object = format!("{}{}", transform(0, "65 66"), transform(2, "67 68"));
+    let page = runs(
+        &object,
+        r#"<TextCode X="0" Y="0" DeltaX="5 5 4 4">abcd</TextCode>"#,
+    );
+    assert_eq!(page.len(), 2, "one run per transform");
+    assert_eq!(
+        xs(&page[0]),
+        vec![0.0, 5.0],
+        "the first stretch at the origin"
+    );
+    assert_eq!(
+        xs(&page[1]),
+        vec![10.0, 14.0],
+        "the second stretch after the first, and stepped by its own offsets"
+    );
 }
