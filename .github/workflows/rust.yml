@@ -289,9 +289,8 @@ jobs:
   semver:
     runs-on: ubuntu-latest
     # A breaking public-API change should fail here rather than surprise a
-    # downstream user. Until the first release the crates are unpublished, so
-    # there is no baseline to compare against; the job is a no-op then rather
-    # than a false alarm, and starts checking from the first `v*` tag onwards.
+    # downstream user. The baseline is the latest `v*` tag, and the job is a
+    # no-op before the first one exists rather than a false alarm.
     steps:
       - uses: actions/checkout@v4
         with:
@@ -322,12 +321,33 @@ jobs:
         with:
           tool: cargo-semver-checks
 
+      # Two comparisons, because either one alone leaves a gap.
+      #
+      # Against the tag: the tagged tree carries the version that tag shipped,
+      # so `0.1.1` is held to releasing `0.1.0`'s API without a break.
+      #
+      # Against the parent commit, which `docs/Roadmap.md` R7 makes the one
+      # that matters. A version already on a registry cannot be replaced, so a
+      # break merged without a version bump spends the next version on a fix.
+      # Comparing neighbours is what sees the bump a commit intends: against
+      # the tag both trees carry the same manifest version, which
+      # cargo-semver-checks reads as "no change" and answers with "a patch
+      # would do", while against the parent a `0.1.0` to `0.2.0` bump is a
+      # minor release and a break is allowed in it.
+      #
+      # cargo-semver-checks skips a crate that states `publish = false`, so the
+      # published set in each manifest is what this gate covers: the five
+      # shells, the testkit and i18n never reach a consumer and are skipped.
       - name: Check the public API against the last release
         if: steps.baseline.outputs.tag != ''
-        # cargo-semver-checks skips a crate that states `publish = false`, so
-        # the published set in each manifest is what this gate covers: the five
-        # shells, the testkit and i18n never reach a consumer and are skipped.
         run: cargo semver-checks check-release --baseline-rev ${{ steps.baseline.outputs.tag }}
+
+      # `HEAD^1` is spelled rather than `HEAD^` for clarity, not correctness:
+      # both name the first parent, and a repository with one commit has
+      # neither, so neither spelling can pass by comparing a tree with itself.
+      - name: Check the public API against the parent commit
+        if: steps.baseline.outputs.tag != ''
+        run: cargo semver-checks check-release --baseline-rev HEAD^1
 
   coverage:
     runs-on: ubuntu-latest

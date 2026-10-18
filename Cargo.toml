@@ -154,6 +154,15 @@ proptest   = "1"
 criterion  = { version = "0.5", features = ["html_reports"] }
 pretty_assertions = "1"
 
+# A variant added to an exhaustive enum is a breaking change: downstream
+# matches stop compiling. Raising the requirement to `minor` makes it the one
+# kind of addition this project allows between minor releases, because each
+# enum here names an outcome a reader must be able to distinguish, and growing
+# that set is the normal way an unproven case gets a name of its own. Everything
+# else still needs a major version.
+[workspace.metadata.cargo-semver-checks.lints]
+enum_variant_added = { required-update = "minor" }
+
 [profile.release]
 lto = "thin"
 codegen-units = 1

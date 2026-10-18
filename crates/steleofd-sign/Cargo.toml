@@ -21,3 +21,6 @@ tracing.workspace = true
 
 [dev-dependencies]
 steleofd-testkit.workspace = true
+
+[package.metadata.cargo-semver-checks.lints]
+workspace = true
