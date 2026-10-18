@@ -127,10 +127,11 @@ glyph it moves over.
 
 A list shorter than the steps between the glyphs is read as positions: a glyph
 with no entry of its own sits where its own offset puts it, and a negative
-offset is a carriage return, which is where the next glyph goes read as a step
-as well. `DeltaY` is read for how many offsets a list supplies, but not yet for
-where a row sits, so a run that turns onto a second row keeps its first `y`.
-The rule is one comparison, in `flatten::GlyphAt`:
+offset is a carriage return. How many steps a list supplies matters here, and
+`g count value` states `count` of them, so `DeltaX="g 11 1.5875 -17.4625"` is
+twelve offsets rather than two. `DeltaY` is read for how many offsets a list
+supplies, but not yet for where a row sits, so a run that turns onto a second
+row keeps its first `y`. The rule is one comparison, in `flatten::GlyphAt`:
 
 | Offsets | Glyphs | Read as |
 |---|---|---|
