@@ -14,10 +14,9 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  # The desktop reader is the one artefact a person can actually use, so it is
-  # built once per desktop system. The three do not share a dependency step:
-  # fontconfig arrives through the system package manager on Linux, through
-  # Homebrew on macOS and through MSYS2's pkg-config on Windows.
+  # One desktop build per system. Windows is cross-compiled from Ubuntu with
+  # mingw-w64, the same way it is built and tested locally, so the toolchain
+  # comes from apt rather than a Chocolatey install on a Windows runner.
   desktop:
     strategy:
       fail-fast: false
@@ -26,14 +25,17 @@ jobs:
           - os: ubuntu-latest
             name: linux
             target: ""
-          - os: windows-latest
+            compile: ""
+          - os: ubuntu-latest
             name: windows
             # The GNU target, not MSVC: the result runs without a matching
             # Visual C++ redistributable on the machine that downloads it.
             target: x86_64-pc-windows-gnu
+            compile: mingw
           - os: macos-latest
             name: macos
             target: ""
+            compile: ""
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -43,34 +45,33 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
-      # font-kit needs fontconfig headers to build its sys crate; Linux calls
-      # them fontconfig, macOS and Windows builders use the same headers but the
-      # vcpkg toolchain the Windows one reaches them through.
+      # font-kit needs fontconfig headers to build its sys crate. The Windows
+      # build compiles on Linux too, so it takes the same Linux headers.
       - name: Install system dependencies
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y libfontconfig1-dev pkg-config
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libfontconfig1-dev pkg-config
+          if [ "${{ matrix.compile }}" = mingw ]; then
+            sudo apt-get install -y gcc-mingw-w64-x86-64
+          fi
       - name: Install system dependencies
         if: runner.os == 'macOS'
         run: brew install fontconfig pkg-config
-      # mingw-w64 supplies the GNU linker and runtime the `*-windows-gnu`
-      # target links against; pkg-config finds the fontconfig headers the
-      # MSYS2 environment ships for the GNU toolchain.
-      - name: Install system dependencies
-        if: runner.os == 'Windows'
-        shell: bash
-        run: |
-          choco install -y mingw
-          echo "C:/ProgramData/mingw64/mingw64/bin" >> "$GITHUB_PATH"
 
       # Dependencies only, not the whole `target/`: caching every artefact made
       # a multi-gigabyte blob whose restore cost more than the build it saved.
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
         with:
-          shared-key: release-reader
+          shared-key: release-reader-${{ matrix.name }}
 
+      # The cross build names the linker the `*-windows-gnu` target cannot find
+      # on its own; a native build only states the target it already is.
       - name: Build the reader
         shell: bash
+        env:
+          CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER: x86_64-w64-mingw32-gcc
         run: |
           if [ -n "${{ matrix.target }}" ]; then
             cargo build --release -p steleofd-reader --target "${{ matrix.target }}"
@@ -82,10 +83,10 @@ jobs:
         shell: bash
         run: |
           mkdir -p dist
-          case "${{ matrix.os }}" in
-            ubuntu-latest)  cp target/release/steleofd-reader dist/steleofd-reader-linux ;;
-            windows-latest) cp target/x86_64-pc-windows-gnu/release/steleofd-reader.exe dist/steleofd-reader-windows.exe ;;
-            macos-latest)   cp target/release/steleofd-reader dist/steleofd-reader-macos ;;
+          case "${{ matrix.name }}" in
+            linux)   cp target/release/steleofd-reader dist/steleofd-reader-linux ;;
+            windows) cp target/x86_64-pc-windows-gnu/release/steleofd-reader.exe dist/steleofd-reader-windows.exe ;;
+            macos)   cp target/release/steleofd-reader dist/steleofd-reader-macos ;;
           esac
           ls -la dist
 
@@ -275,16 +276,9 @@ jobs:
       - name: Checksum the artefacts
         run: python3 scripts/release_checksums.py generate dist
 
-      # The tag names the release, and the changelog carries the notes, so the
-      # archive contents and the published notes come from the same commit.
-      # The manifest is not attached: each job above already uploaded one for
-      # the files it built, and an asset of the same name is replaced rather
-      # than merged, which would leave the rest of them unlisted.
-      #
-      # The notes are read out of `CHANGELOG.md` rather than generated from the
-      # commit range: generated notes say what the work was, and on the first
-      # release there is no previous release to compare against, which left
-      # `v0.1.0` published with an empty body.
+      # Notes come from the changelog so the archive and the release page are
+      # one commit. The manifest stays out: each job above uploads its own and
+      # a same-named asset replaces rather than merges.
       - name: Read the release notes from the changelog
         run: python3 scripts/release_notes.py "$GITHUB_REF_NAME" > dist/RELEASE_NOTES.md
 
