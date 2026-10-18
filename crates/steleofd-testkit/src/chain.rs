@@ -347,6 +347,28 @@ mod tests {
     }
 
     #[test]
+    fn a_link_verifies_under_the_key_above_it() {
+        let chain = chain();
+        let root = Certificate::parse_der(&chain.root_der).expect("root parses");
+        let intermediate =
+            Certificate::parse_der(&chain.intermediate_der).expect("intermediate parses");
+        let leaf = Certificate::parse_der(&chain.leaf_der).expect("leaf parses");
+
+        assert!(root
+            .verify_signature(&chain.root_key.public_bytes())
+            .expect("SM2 signature"));
+        assert!(intermediate
+            .verify_signature(&chain.root_key.public_bytes())
+            .expect("SM2 signature"));
+        assert!(leaf
+            .verify_signature(&chain.intermediate_key.public_bytes())
+            .expect("SM2 signature"));
+        assert!(!leaf
+            .verify_signature(&chain.root_key.public_bytes())
+            .expect("SM2 signature"));
+    }
+
+    #[test]
     fn a_validity_window_reaches_the_parsed_certificate() {
         let key = Sm2KeyPair::generate().expect("key");
         let spec = CertSpec::end_entity("A", "A", 7).between("200101000000Z", "200201000000Z");

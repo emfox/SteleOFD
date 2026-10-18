@@ -11,6 +11,11 @@ use steleofd_error::{CryptoError, OfdError};
 use x509_parser::extensions::ParsedExtension;
 use x509_parser::prelude::{FromDer, X509Certificate};
 
+/// The signature algorithm GM/T 0015-2023 certificates carry: SM2 over SM3.
+/// Objects that mean "SM2 with SM3" rather than "SM2" carry it, so a
+/// certificate naming it is the one a path verifier expects to walk.
+pub const SM2_WITH_SM3: &str = "1.2.156.10197.1.501";
+
 /// A parsed X.509 certificate kept together with its raw DER encoding.
 #[derive(Debug, Clone)]
 pub struct Certificate {
@@ -27,6 +32,8 @@ pub struct Certificate {
     is_ca: bool,
     path_len: Option<u32>,
     key_usage: Option<KeyUsage>,
+    tbs_range: std::ops::Range<usize>,
+    signature: Vec<u8>,
 }
 
 /// The bits GM/T 0015-2023 5.2.4.4 names, in the order the ASN.1 gives them.
@@ -72,11 +79,27 @@ impl KeyUsage {
 
 impl Certificate {
     /// Parse a DER-encoded certificate.
+    ///
+    /// The signature covers the `tbsCertificate` as it appears in the encoding,
+    /// so its offset and length are recorded here rather than re-encoded: a
+    /// re-encoding round trip is only byte-identical for the subset of DER this
+    /// build happens to produce, not for what a producer sent.
     pub fn parse_der(der: &[u8]) -> Result<Self, OfdError> {
-        let (_, cert) = X509Certificate::from_der(der).map_err(|e| {
+        let (rest, cert) = X509Certificate::from_der(der).map_err(|e| {
             OfdError::Crypto(CryptoError::Operation(format!(
                 "certificate parse failed: {e}"
             )))
+        })?;
+        let _ = &rest;
+        // `from_der` parses from the front and hands back the tail it did not
+        // read, so the encoding of interest starts at `begin` and the parsed
+        // nodes borrow that same buffer: locating the TBS means counting
+        // forward from its start rather than asking a node for its address.
+        let begin = 0;
+        let tbs_range = tbs_range(der, begin).ok_or_else(|| {
+            OfdError::Crypto(CryptoError::Operation(
+                "certificate TBS offset is not within its encoding".into(),
+            ))
         })?;
         Ok(Self {
             raw_der: der.to_vec(),
@@ -87,6 +110,8 @@ impl Certificate {
             not_after: cert.validity().not_after.timestamp(),
             public_key: cert.public_key().subject_public_key.data.to_vec(),
             signature_algorithm: cert.signature_algorithm.algorithm.to_id_string(),
+            tbs_range,
+            signature: cert.signature_value.data.to_vec(),
             subject_key_id: extension(&cert, |e| match e {
                 ParsedExtension::SubjectKeyIdentifier(id) => Some(id.0.to_vec()),
                 _ => None,
@@ -228,6 +253,23 @@ impl Certificate {
         !self.subject.is_empty() && self.subject == self.issuer
     }
 
+    /// Whether `issuer_key` signed this certificate.
+    ///
+    /// GB/T 38540-2020 7.3 e) makes a link's own signature part of what a
+    /// verifier checks, and each link names the algorithm it was signed with:
+    /// for a chain built under GM/T 0015-2023 that is SM2 over SM3. A
+    /// certificate naming any other algorithm is one this build will not
+    /// pretend to check, so it reports an error rather than `false`.
+    pub fn verify_signature(&self, issuer_key: &[u8]) -> Result<bool, OfdError> {
+        if self.signature_algorithm != SM2_WITH_SM3 {
+            return Err(OfdError::Crypto(CryptoError::UnsupportedAlgorithm(format!(
+                "certificate signature uses {}",
+                self.signature_algorithm
+            ))));
+        }
+        let tbs = &self.raw_der[self.tbs_range.clone()];
+        crate::asymmetric::sm2_verify(issuer_key, tbs, &self.signature)
+    }
 }
 
 /// Read one extension by the value it parses to, or `None` when the
@@ -279,4 +321,66 @@ fn base64_decode(text: &str) -> Result<Vec<u8>, OfdError> {
 
 fn hex_of(bytes: Vec<u8>) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
+}
+
+/// The range of the `tbsCertificate` inside the certificate that starts at
+/// `start` and is `len` bytes long.
+///
+/// A DER TLV is a tag, a length and that many bytes of content, and the first
+/// child of the outer SEQUENCE follows its header directly. Only the definite
+/// lengths DER allows are walked; anything else is not DER.
+fn tbs_range(der: &[u8], start: usize) -> Option<std::ops::Range<usize>> {
+    let outer = tlv(der, start)?;
+    let tbs = tlv(der, outer.content_at)?;
+    let end = tbs.content_at + tbs.content_len;
+    (tbs.total <= outer.content_len).then_some(outer.content_at..end)
+}
+
+/// A TLV's content position and length, and its total encoded length.
+struct Tlv {
+    content_at: usize,
+    content_len: usize,
+    total: usize,
+}
+
+/// Read a TLV header at `at`, checking only that the encoding is definite.
+fn tlv(der: &[u8], at: usize) -> Option<Tlv> {
+    if *der.get(at)? & 0x1F == 0x1F {
+        return None;
+    }
+    let (content_at, content_len) = match *der.get(at + 1)? {
+        l if l < 0x80 => (at + 2, l as usize),
+        0x81 => (at + 3, usize::from(*der.get(at + 2)?)),
+        0x82 => {
+            let hi = usize::from(*der.get(at + 2)?);
+            let lo = usize::from(*der.get(at + 3)?);
+            (at + 4, hi << 8 | lo)
+        }
+        _ => return None,
+    };
+    Some(Tlv {
+        content_at,
+        content_len,
+        total: content_at + content_len - at,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tbs_range_walks_an_outer_sequence() {
+        // SEQUENCE(5) { SEQUENCE(3) { 02 01 00 } }: the inner TLV opens at 2.
+        let der = [0x30, 0x05, 0x30, 0x03, 0x02, 0x01, 0x00];
+        assert_eq!(tbs_range(&der, 0), Some(2..7));
+    }
+
+    #[test]
+    fn tbs_range_follows_a_long_form_length() {
+        // 30 81 83: a 0x83-byte body, whose own first child is 30 81 80.
+        let mut der = vec![0x30, 0x81, 0x83, 0x30, 0x81, 0x80];
+        der.extend(std::iter::repeat_n(0u8, 0x80));
+        assert_eq!(tbs_range(&der, 0), Some(3..der.len()));
+    }
 }
