@@ -28,6 +28,22 @@ section only when a release actually has one.
 - **A name an archive reader would collapse is refused at write time.**
   `build_archive` accepted `A//x.xml`, wrote it, and reported `A/x.xml` on the
   way back, so the writer lost an entry it had just written.
+- **Escaped markup in text survives again.** A `&lt;` written in a value
+  arrived as its own parser event and was dropped, so a tax-control code lost
+  thirteen characters and the reader drew ninety-nine where the document
+  carried a hundred and twelve. Entity references are now resolved as text.
+- **A named monospaced family is read as fixed width.** `Courier New` carries
+  no `FixedWidth` flag, so a fallback picked a proportional face and the glyphs
+  of an equal-width code overlapped. A family whose name says mono now asks for
+  a monospaced substitute whether or not the flag is set.
+- **An advance is measured in a thousandth of an em before shaping.** A face
+  whose units-per-em is not 1000 (2048, say) had its width left in raw units,
+  so its glyphs ran wider than the offsets stepped them. The advance is now
+  normalised to the OFD convention.
+- **A code that returns to the left edge is drawn as rows.** A `DeltaX` step
+  back ends a row and `DeltaY` says how far down the next one sits, but one run
+  carried the return as an advance, so a four-row code came out on a single
+  line. The code is now cut into one run per row.
 
 ## [0.1.1] - 2026-10-18
 
