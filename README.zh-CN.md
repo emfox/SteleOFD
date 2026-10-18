@@ -13,20 +13,71 @@ SteleOFD 是 [GB/T 33190-2016《电子文件存储与交换格式 版式文档�
 的 Rust 实现。从解析到渲染全部自研，仓库里唯一的 C 库是 fontconfig——
 由 reader 在 Linux 上经 `font-kit` 调用。
 
-当前进度：原始规划已全部完成。26 个 crate 全部就位并通过测试，五种交付形态
-（`cli` / `wasm` / `ffi` / `server` / `reader`）共用同一个 `core` 门面，内核有
-可量化的性能预算把关。当前发布版本为 `0.1.1`：尚待完成的事项及其所属版本见
-[`docs/Roadmap.md`](docs/Roadmap.md)，本版本提供了什么见 [`CHANGELOG`](CHANGELOG.md)。
+当前发布版本为 `0.1.1`：本版本提供了什么见 [`CHANGELOG`](CHANGELOG.md)，
+尚待完成的事项及其所属版本见 [`docs/Roadmap.md`](docs/Roadmap.md)。
+
+本文档分两部分：前半部分给使用 SteleOFD 的人，后半部分给参与开发的人。
+
+---
+
+# 第一部分：使用
 
 ## 特性
 
-| 能力 | |
+| 能力 | 覆盖范围 |
 |---|---|
 | 阅读渲染 | GB/T 33190 渲染，无损缩放，超大文档分片加载 |
 | 格式转换 | OFD ↔ PDF / SVG / PNG，支持批量与合并；Office 与 OCR 仅在路线图中，尚未实现 |
 | 电子签章 | 国密 SM2/SM3/SM4 及国际算法验签，符合 GB/T 38540-2020 |
 | 多端交付 | 同一内核编译为 CLI、WASM、C ABI、HTTP 服务与桌面阅读器 |
 | 国际化 | 基于 Fluent 的消息层，内置 en-US / zh-CN |
+
+## 获取构建产物
+
+推送 `v*` 标签会为每个 `egui` 支持的平台构建阅读器，并与 C ABI 库、内核的
+WebAssembly 绑定一同发布：
+
+| 产物 | 平台 | 运行方式 |
+|---|---|---|
+| `steleofd-reader-linux`、`-macos`、`-windows.exe` | 桌面 | 直接运行 |
+| `steleofd-reader-web.zip` | 浏览器 | 解压后用 HTTP 提供；`file://` 页面无法加载该模块 |
+| `steleofd-reader-android.apk` | Android 7.0+（arm64） | 侧载；用一次性调试密钥签名，不能上架应用商店 |
+
+iOS 是唯一被排除的 `egui` 平台：其应用必须经 macOS 签名打包后才能安装，
+而本项目不附带任何密钥。
+
+构建产物**未签名**——项目没有签名密钥——因此每次发布都附带 `SHA256SUMS`
+清单，这是下载内容唯一的校验依据：
+
+```bash
+python3 scripts/release_checksums.py verify .
+sha256sum -c SHA256SUMS          # 或者完全不依赖本项目
+```
+
+crate 目前尚未发布到注册表，各 crate 的去向记录在
+[`docs/Roadmap.md`](docs/Roadmap.md) 的 R7。
+
+## 遵循的规范
+
+| 标准 | 范围 |
+|---|---|
+| [GB/T 33190-2016](https://openstd.samr.gov.cn/bzgk/gb/newGbInfo?hcno=3AF6682D939116B6F5EED53D01A9DB5D) | 电子文件存储与交换格式 版式文档 |
+| [GB/T 33476.1-2016](https://openstd.samr.gov.cn/bzgk/gb/newGbInfo?hcno=419233A04D029066CF032CFACBC8713B) | 党政机关电子公文格式规范 第 1 部分：公文结构 |
+| [GB/T 33476.2-2016](https://openstd.samr.gov.cn/bzgk/gb/newGbInfo?hcno=5B4E730245FF2FAF909435EBE6A659D2) | 同上 第 2 部分：显现 |
+| [GB/T 38540-2020](https://openstd.samr.gov.cn/bzgk/gb/newGbInfo?hcno=EBF1360C272E40E7A8B9B32ED0724AB1) | 安全电子签章密码技术规范 |
+| [GM/T 0099-2020](https://std.samr.gov.cn/hb/search/stdHBDetailed?id=C60C676BC220358AE05397BE0A0AFABB) | 开放版式文档密码应用技术规范：签名、加密、完整性 |
+| [GB/T 39362-2020](https://openstd.samr.gov.cn/bzgk/gb/newGbInfo?hcno=C6B230010286DC79C84CF8EB72DE3F97) | 党政机关电子公文归档规范 |
+
+GB/T 33476 共三部分，本项目遵循的是第 1、2 部分。GM/T 0099-2020 是国家密码管理局
+发布的密码行业标准，因此在行业标准平台而非国家标准平台检索。
+
+条款级覆盖情况见 [`compliance/gb-t-33190.toml`](compliance/gb-t-33190.toml)，
+判定方法见 [`compliance/CLAUSES.md`](compliance/CLAUSES.md)：已登记 56 条，
+全部为 `verified`。条款号由 [`scripts/gbt33190.py`](scripts/gbt33190.py) 从标准的
+转录文本中读取——逐条读取带编号的标题，并与标准印刷的目录页核对，
+因此不可能引用标准中不存在的条款。内核能用哪些字形绘制、不能用哪些，
+逐字体列在 [`docs/Fonts.md`](docs/Fonts.md)；
+与其他阅读器的逐页对比结果见 [`docs/Interop.md`](docs/Interop.md)。
 
 ## 背景
 
@@ -38,213 +89,157 @@ OFD 和 PDF 都是版式文档，区别在于 OFD 是开放的 ZIP + XML 容器�
 运行，零成本抽象让分层架构不必以性能为代价。另外 OFD 文件来源任意，解析器又是处理
 不可信输入的那一环，`#![forbid(unsafe_code)]` 在这里格外重要。
 
-## 项目结构
+---
+
+# 第二部分：开发
+
+## 模块关系
+
+26 个 crate，五个层次。箭头由使用者指向被依赖者；门面之下的方框，
+只有 feature 指名时才会被引入。
 
 ```
-steleofd/
-├── crates/
-│   ├── steleofd-common        值类型、版本、规范常量
-│   ├── steleofd-error         错误体系
-│   ├── steleofd-io            输入输出抽象（文件 / 内存 / 切片）
-│   ├── steleofd-model         OFD 数据模型
-│   ├── steleofd-xml           XML 编解码
-│   ├── steleofd-package       ZIP 容器读写与校验
-│   ├── steleofd-i18n          国际化消息层（Fluent）
-│   ├── steleofd-geometry      路径与仿射变换
-│   ├── steleofd-font          字体注册、度量、整形
-│   ├── steleofd-display       显示列表 IR
-│   ├── steleofd-parser        OFD → 显示列表
-│   ├── steleofd-render        渲染后端
-│   ├── steleofd-crypto        国密算法与 X.509
-│   ├── steleofd-sign          电子签章与验签
-│   ├── steleofd-convert       格式互转
-│   ├── steleofd-edit          文档编辑
-│   ├── steleofd-search        全文检索
-│   ├── steleofd-archive       归档合规校验
-│   ├── steleofd-print         打印
-│   ├── steleofd-core          门面层
-│   ├── steleofd-reader        桌面阅读器（egui/eframe）
-│   ├── steleofd-cli           命令行工具
-│   ├── steleofd-wasm          WASM 绑定
-│   ├── steleofd-ffi           C ABI 动态库
-│   └── steleofd-server        HTTP 服务
-├── locales/                   翻译资源（.ftl，引擎 + 阅读器各一套）
-├── scripts/                   构建与校验脚本
-└── docs/                      架构文档
+  ┌──────────────────────────────────────────────────────────────────────┐
+  │  交付形态，作为应用而非依赖发布                                      │
+  │                                                                      │
+  │    reader          cli          wasm          ffi         server     │
+  │    egui/eframe     二进制       浏览器        C ABI       HTTP       │
+  └──────────────────────────────────────────────────────────────────────┘
+                                  │
+                                  ▼
+  ┌──────────────────────────────────────────────────────────────────────┐
+  │  steleofd-core —— 一个句柄，每个能力对应一个 feature                 │
+  └──────────────────────────────────────────────────────────────────────┘
+                                  │
+  ┌──────────────────────────────────────────────────────────────────────┐
+  │  始终链接：从打开到显示的通路                                        │
+  │                                                                      │
+  │    parser ──► package ──► xml                                        │
+  │      │             │       io                                        │
+  │      ▼             │                                                 │
+  │    model ◄─────────┘                                                 │
+  │      │                                                               │
+  │    display ──► font ──► geometry                                     │
+  │                                                                      │
+  │    以上各层都经由 error ──► common 处理错误                          │
+  └──────────────────────────────────────────────────────────────────────┘
+
+  ┌──────────────────────────────────────────────────────────────────────┐
+  │  由 core 的 feature 引入：每个 feature 一个能力                      │
+  │                                                                      │
+  │    render    display, geometry, font                                 │
+  │    print     render, display                                         │
+  │    convert   render, parser, display                                 │
+  │    sign      crypto, package, model                                  │
+  │    crypto    common, error                                           │
+  │    edit      parser, package, model                                  │
+  │    search    display, geometry                                       │
+  │    archive   package, model                                          │
+  └──────────────────────────────────────────────────────────────────────┘
+
+  steleofd-i18n      供外壳使用的文案；引擎自身从不产生文案
+  steleofd-testkit   测试用的夹具，仅作为 dev-dependency
 ```
 
-## 设计要点
+关键在 `steleofd-display`：所有输出后端读取同一份扁平化后的显示列表，
+导出结果因此不会与预览产生偏差。[`docs/Architecture.md`](docs/Architecture.md)
+第 3 节以表格形式给出同一份清单，逐 crate 列出职责与发布状态。
 
-### 只解析一次，多方消费
+## 一份文档的流向
 
-`Content.xml` 是一棵嵌套模板树。如果每个输出端各自遍历，逻辑会重复 N 份，更麻烦的是
-各端会逐渐走偏 —— 「导出和预览看到的不一样」通常就是这么来的。
+`Content.xml` 是一棵嵌套的模板树。若每个输出后端各自遍历一遍，不仅逻辑重复，
+更糟的是各后端会逐渐走样——这正是导出结果与预览不一致的常见原因。
 
-所以这棵树只拍平一次，产出带绝对变换的指令序列，下游全部消费这一份：
+因此这棵树只扁平化一次，变成一串带绝对变换矩阵的命令，所有下游都读它：
 
 ```
-Content.xml (嵌套模板树)
-       │
-       ▼  仅此处解析一次
-DisplayList (拍平 + 绝对 CTM + 资源已解析)
-       │
-       ├──► render    raster
-       ├──► print
-       ├──► convert   PDF / SVG / PNG
-       └──► search    文本提取
+Content.xml（嵌套模板树）
+       |
+       v  只解析一次
+DisplayList（已扁平化、CTM 已绝对化、资源已解析）
+       |
+       +--> render    光栅
+       +--> print
+       +--> convert   PDF / SVG / PNG
+       +--> search    文本提取
 ```
 
-Office 与 OCR 转换在路线图中，尚未落地。
+Office 与 OCR 转换在路线图中，不在代码里。
 
-### 引擎层不放文案
+## 引擎层不放文案
 
-错误类型是带参数的结构化枚举，不含面向用户的字符串：
+错误是以参数构成的结构化枚举，从不是散文：
 
 ```rust
-// 任意语言都能渲染
+// 任何语言都能渲染
 FormatError::PageOutOfRange { index: 42, total: 100 }
 
-// 硬编码文案会让引擎无法被 C ABI / JS / Python 复用
-"页索引越界: 42 (共 100 页)"
+// 在这里硬编码散文，会让引擎无法被 C ABI、JS 或 Python 使用
+"page index out of range: 42 (document has 100 pages)"
 ```
 
-第二行仅作对照，实际代码中不存在硬编码文案。
+引擎自己的消息目录（`steleofd-i18n`）只装引擎消息。若某个表现层有自己的产品文案
+——reader 就是如此——它把文案放在自己身边，再通过 `I18nBuilder` 合并进来，
+这样引擎就永远不会提到一个不属于它的控件。
 
-### 不可信输入
+## 不可信输入
 
-| 威胁 | 防护 |
+| 威胁 | 防御 |
 |---|---|
 | Zip Slip 路径穿越 | `PackageError::IllegalPath` |
-| Zip Bomb | 条目数上限 + 解压体积上限（512 MB） |
-| 超深嵌套打爆栈 | `DisplayListBuilder::max_depth`（默认 64） |
-| 恶意文档挂死 | `RenderError::BudgetExceeded` 降级为部分渲染 |
-| 编辑破坏签名 | `EditError::WouldInvalidateSignature` 强制确认 |
+| Zip 炸弹 | 条目数量与解压后大小的上限（512 MB） |
+| 深层嵌套导致栈溢出 | `DisplayListBuilder::max_depth`，默认 64 |
+| 恶意文档拖死渲染 | `RenderError::BudgetExceeded`，降级为部分输出 |
+| 编辑操作悄悄破坏签章 | `EditError::WouldInvalidateSignature`，需确认后才执行 |
 
-## 快速开始
+## 构建
 
-需要 Rust 1.92+（Edition 2024），这一版本由工作区清单的 `rust-version` 声明；
-CI 实际使用的版本写在 `.github/workflows/rust.yml` 里。是否可用，跑一次
-`cargo check --workspace` 即可确认。
+需要 Rust 1.92+ 与 Edition 2024，这是 workspace 清单中 `rust-version` 声明的版本；
+`.github/workflows/rust.yml` 写明 CI 使用的版本。
+`cargo check --workspace` 即可确认工具链可用。
 
-构建各 crate 不需要 C 工具链。Linux 上的 reader 是例外：`font-kit` 链接
-fontconfig，机器上没有对应头文件时需安装 `libfontconfig1-dev` 与 `pkg-config`。
+构建这些 crate 不需要 C 工具链。Linux 上的 reader 是例外：
+`font-kit` 链接 fontconfig，缺少头文件的机器需要安装
+`libfontconfig1-dev` 与 `pkg-config`。
 
 ```bash
 git clone https://github.com/emfox/SteleOFD.git
 cd SteleOFD
 
-cargo check --workspace          # 全工作区检查
+cargo check --workspace          # 检查整个 workspace
 cargo build --release            # 发布构建
 cargo test --workspace           # 运行测试
 ```
 
-### crates.io 下载卡住
-
-`static.crates.io` 不可达时，cargo 可能长时间没有输出。配置镜像源即可：
-
-```toml
-# ~/.cargo/config.toml
-[source.crates-io]
-replace-with = "rsproxy-sparse"
-
-[source.rsproxy-sparse]
-registry = "sparse+https://rsproxy.cn/index/"
-```
-
-之后可用 `cargo check --offline` 完全离线构建。
-
-### 校验脚本
+## 校验脚本
 
 ```bash
-python3 scripts/check_i18n.py          # 校验翻译资源一致性
-python3 scripts/check_language.py      # 校验英文规范与注释密度
-python3 scripts/check_i18n.py --strict # 警告也视为失败
+python3 scripts/check_all.py             # 本机能跑的全部检查
+python3 scripts/check_all.py --quick     # 只跑策略类检查
+python3 scripts/check_i18n.py            # 各语言消息键的一致性
+python3 scripts/check_language.py        # 仅英文策略与注释密度
+python3 scripts/check_publish.py --list  # 哪些 crate 会发布到注册表
 ```
 
-国际化校验比对两套资源：文件集合、消息键集合、变量占位符是否一致，以及各自
-Rust 侧键列表与其 FTL 实际键是否匹配。引擎消息（`crates/steleofd-i18n/locales`，
-73 键）与阅读器界面消息（`crates/steleofd-reader/locales`，32 键）分开维护 ——
-界面文案归展示层自己所有，引擎不会命名它不拥有的控件。
-
-### 发布
-
-推送 `v*` 标签会为 `egui` 支持的各个平台构建阅读器，连同 C ABI 动态库与引擎自身的
-WASM 绑定一并发布：
-
-| 产物 | 平台 | 运行方式 |
-|---|---|---|
-| `steleofd-reader-linux`、`-macos`、`-windows.exe` | 桌面 | 直接运行 |
-| `steleofd-reader-web.zip` | 浏览器 | 解压后用 HTTP 提供；`file://` 页面无法加载模块 |
-| `steleofd-reader-android.apk` | Android 7.0+（arm64） | 侧载安装；用一次性调试密钥签名，不是应用商店上传包 |
-
-iOS 是唯一没做的 `egui` 平台：它的应用必须先经过 macOS 上的签名与打包步骤，而本项目
-不附带任何密钥。
-
-构建产物**未签名**（项目中不存在签名密钥），因此每个 release 附带一份 `SHA256SUMS`
-清单，作为下载内容唯一可校验的依据：
-
-```bash
-python3 scripts/release_checksums.py verify .
-sha256sum -c SHA256SUMS          # 也可以完全不依赖本项目
-```
-
-## 规范
-
-| 标准 | 内容 |
-|---|---|
-| [GB/T 33190-2016](https://openstd.samr.gov.cn/bzgk/gb/newGbInfo?hcno=3AF6682D939116B6F5EED53D01A9DB5D) | 电子文件存储与交换格式 版式文档 |
-| [GB/T 33476.1-2016](https://openstd.samr.gov.cn/bzgk/gb/newGbInfo?hcno=419233A04D029066CF032CFACBC8713B) | 党政机关电子公文格式规范 第 1 部分：公文结构 |
-| [GB/T 33476.2-2016](https://openstd.samr.gov.cn/bzgk/gb/newGbInfo?hcno=5B4E730245FF2FAF909435EBE6A659D2) | 党政机关电子公文格式规范 第 2 部分：显现 |
-| [GB/T 38540-2020](https://openstd.samr.gov.cn/bzgk/gb/newGbInfo?hcno=EBF1360C272E40E7A8B9B32ED0724AB1) | 信息安全技术 安全电子签章密码技术规范 |
-| [GM/T 0099-2020](https://std.samr.gov.cn/hb/search/stdHBDetailed?id=C60C676BC220358AE05397BE0A0AFABB) | 开放式版式文档密码应用技术规范（签名 / 加密 / 完整性保护） |
-| [GB/T 39362-2020](https://openstd.samr.gov.cn/bzgk/gb/newGbInfo?hcno=C6B230010286DC79C84CF8EB72DE3F97) | 党政机关电子公文归档规范 |
-
-GB/T 33476 分为三个部分，本项目遵循的是第 1、2 部分。GM/T 0099-2020 由国家密码管理局发布，
-属密码行业标准，因此在行业标准平台而非国家标准公开系统上查阅。
-
-## 开发路线
-
-- [x] **P0** 工程骨架：分层架构、错误体系、显示列表 IR、国际化层
-- [x] **P1** OFD 结构解析（`model` / `xml` / `package` / `parser`）
-- [x] **P2** 光栅渲染后端，打通「打开 → 显示」链路
-- [x] **P3** 格式转换（OFD → PDF / PNG / SVG）
-- [x] **P3b** 打印：任务编排与光栅化（`print`）
-- [x] **P4b** `core` 门面：单一入口，按交付形态开关特性
-- [x] **P4** 国密验签
-- [x] **P5a** `steleofd` 命令行工具
-- [x] **P5b** 面向浏览器的 WASM 绑定
-- [x] **P5c** 面向 OA / ERP 集成的 C ABI 动态库（`ffi`）
-- [x] **P5d** 面向 OA / ERP 后端的 HTTP 服务（`server`）
-- [x] **P6** 文档编辑与撤销栈
-- [x] **P7** 基于显示列表的全文检索（`search`）
-- [x] **P8** 归档就绪度检查（`archive`）
-- [x] **P9** GB/T 33190-2016 合规闭环：从标准正文重建附录 A 的 Schema 并在 CI 强制校验
-
-26 个 crate 已全部就位，五种交付形态（`cli` / `wasm` / `ffi` / `server` /
-`reader`）共用同一个 `core` 门面。后续规划见
-[`docs/Roadmap.md`](docs/Roadmap.md)，每一项标注了已被哪个版本认领，未认领的记为
-`unversioned`。
-条款级覆盖情况见
-[`compliance/gb-t-33190.toml`](compliance/gb-t-33190.toml)：共登记 74 条，其中
-73 条为 `verified`，唯一未覆盖的 `8.1.6`（`PrintQuality`）带 `deviation` 说明 ——
-该元素在附录 A 的 Schema 中并不存在，文档里没有任何可断言的字节。
-字体支持矩阵见 [`docs/Fonts.md`](docs/Fonts.md)，与其他阅读器逐页对照的结果见
-[`docs/Interop.md`](docs/Interop.md)，性能基线与跑法见
-[`docs/Performance.md`](docs/Performance.md)。
+i18n 检查比对各语言目录：文件集合、键集合、占位符一致，且 Rust 中的
+`all_keys()` 列表与 FTL 文件中的键一致。发布检查把 19 个发布、7 个不发布的
+两档清单与整个 workspace 对齐，新增 crate 若未声明去向就会失败。
 
 ## 贡献
 
-欢迎提交 Issue 与 Pull Request。提交前请确保以下全部通过：
+欢迎提交 issue 与 pull request。提交前请确认以下检查通过：
 
 ```bash
 cargo test --workspace
 cargo clippy --workspace -- -D warnings
-python3 scripts/check_i18n.py --strict
-python3 scripts/check_language.py
+python3 scripts/check_all.py
 ```
 
-新增代码需附带测试，且不得引入 `unsafe`（`steleofd-ffi` 因 C ABI 需要豁免）。
-代码、注释、commit message 与 issue 一律使用英文，见 [docs/Conventions.md](docs/Conventions.md)。
+新代码需要测试。不要引入 `unsafe`；`steleofd-ffi` 是唯一有文档记录的例外，
+因为 C ABI 必须用到它。代码、注释、提交信息与 issue 一律使用英文：
+[docs/Conventions.md](docs/Conventions.md)。
+
+性能基线与运行方式见 [`docs/Performance.md`](docs/Performance.md)。
 
 ## 许可证
 
@@ -253,5 +248,5 @@ python3 scripts/check_language.py
 ## 相关资源
 
 - [国家标准全文公开系统](https://openstd.samr.gov.cn/bzgk/gb/index)，可在线预览上述 GB/T 标准
-- [行业标准信息服务平台](https://std.samr.gov.cn/hb/)，可查阅 GM/T 标准
-- [GmSSL](https://github.com/guanzhi/GmSSL)，国密算法开源实现
+- [行业标准信息服务平台](https://std.samr.gov.cn/hb/)，检索 GM/T 标准
+- [GmSSL](https://github.com/guanzhi/GmSSL)，开源的国密算法实现

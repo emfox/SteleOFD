@@ -15,22 +15,79 @@ fixed-layout electronic documents](https://openstd.samr.gov.cn/bzgk/gb/newGbInfo
 Parsing and rendering are written from scratch; the one C library in the tree is
 fontconfig, reached through `font-kit` by the reader on Linux.
 
-Status: the original plan is complete. All 26 crates are built and tested, the
-five delivery forms (`cli`, `wasm`, `ffi`, `server`, `reader`) sit on one `core`
-facade, and the engine holds a documented performance budget. The current
-release is `0.1.1`. What is left to build, and which release has claimed it, is in
-[`docs/Roadmap.md`](docs/Roadmap.md); what this version offers is in the
-[`CHANGELOG`](CHANGELOG.md).
+The current release is `0.1.1`. What it offers is in the
+[`CHANGELOG`](CHANGELOG.md); what is still to build, and which release has
+claimed it, is in [`docs/Roadmap.md`](docs/Roadmap.md).
+
+This document has two halves: the first is for anyone using SteleOFD, the second
+for anyone working on it.
+
+---
+
+# Part 1: Using SteleOFD
 
 ## Features
 
-| Capability | |
+| Capability | What it covers |
 |---|---|
 | Reading and rendering | GB/T 33190 rendering, lossless zoom, sharded loading for large documents |
 | Conversion | OFD to and from PDF, SVG and PNG; batch and merge. Office and OCR are planned, not built |
 | Signatures | SM2/SM3/SM4 and international algorithms, per GB/T 38540-2020 |
-| Delivery | One engine built as a CLI, WebAssembly, a C ABI library and an HTTP service |
+| Delivery | One engine, built as a CLI, WebAssembly, a C ABI library, an HTTP service and a desktop reader |
 | Localization | Fluent message layer, en-US and zh-CN |
+
+## Getting the artefacts
+
+Pushing a `v*` tag builds the reader for every platform `egui` runs on, and
+publishes it beside the C ABI library and the engine's WebAssembly bindings:
+
+| Artefact | Platform | How it runs |
+|---|---|---|
+| `steleofd-reader-linux`, `-macos`, `-windows.exe` | Desktop | run the file directly |
+| `steleofd-reader-web.zip` | Browser | unzip and serve over HTTP; a `file://` page cannot load the module |
+| `steleofd-reader-android.apk` | Android 7.0+ (arm64) | sideload; signed with a throwaway debug key, not a store upload |
+
+iOS is the one `egui` platform left out: an app for it can only be installed
+after a macOS signing and packaging step, and no key ships with this project.
+
+The builds are **unsigned** — there is no signing key — so each release carries
+a `SHA256SUMS` manifest as the only thing a download can be held to:
+
+```bash
+python3 scripts/release_checksums.py verify .
+sha256sum -c SHA256SUMS          # or without this project at all
+```
+
+The crates themselves are not on a registry yet: where each one is headed is
+recorded in [`docs/Roadmap.md`](docs/Roadmap.md) as R7.
+
+## What it reads
+
+| Standard | Scope |
+|---|---|
+| [GB/T 33190-2016](https://openstd.samr.gov.cn/bzgk/gb/newGbInfo?hcno=3AF6682D939116B6F5EED53D01A9DB5D) | Fixed-layout document format for electronic file storage and exchange |
+| [GB/T 33476.1-2016](https://openstd.samr.gov.cn/bzgk/gb/newGbInfo?hcno=419233A04D029066CF032CFACBC8713B) | Electronic official document format for Party and government bodies, part 1: document structure |
+| [GB/T 33476.2-2016](https://openstd.samr.gov.cn/bzgk/gb/newGbInfo?hcno=5B4E730245FF2FAF909435EBE6A659D2) | Same, part 2: presentation |
+| [GB/T 38540-2020](https://openstd.samr.gov.cn/bzgk/gb/newGbInfo?hcno=EBF1360C272E40E7A8B9B32ED0724AB1) | Cryptographic specification for secure electronic seals |
+| [GM/T 0099-2020](https://std.samr.gov.cn/hb/search/stdHBDetailed?id=C60C676BC220358AE05397BE0A0AFABB) | Cryptography application for open fixed-layout documents: signature, encryption, integrity |
+| [GB/T 39362-2020](https://openstd.samr.gov.cn/bzgk/gb/newGbInfo?hcno=C6B230010286DC79C84CF8EB72DE3F97) | Archiving specification for electronic official documents |
+
+GB/T 33476 is published in three parts; parts 1 and 2 are the ones this project
+follows. GM/T 0099-2020 is a cryptography industry standard issued by the State
+Cryptography Administration, so it lives on the industry standards platform
+rather than the national standards one.
+
+Clause-level coverage lives in
+[`compliance/gb-t-33190.toml`](compliance/gb-t-33190.toml) and the method
+behind it in [`compliance/CLAUSES.md`](compliance/CLAUSES.md): 56 clauses are
+registered, every one of them `verified`. The clause numbers are read out of the
+standard's transcribed text by [`scripts/gbt33190.py`](scripts/gbt33190.py),
+which reads each numbered heading and checks the result against the contents
+pages the standard prints, so a row cannot cite a clause the standard does not
+have. What the engine can and cannot draw with is set out face by face in
+[`docs/Fonts.md`](docs/Fonts.md). How it compares to other readers in the field,
+page by page against a second vendor's output, is in
+[`docs/Interop.md`](docs/Interop.md).
 
 ## Background
 
@@ -46,44 +103,65 @@ layering stay clean without a performance penalty. And since OFD files arrive
 from arbitrary sources, `#![forbid(unsafe_code)]` matters more than usual: the
 parser is the part handling untrusted input.
 
-## Project layout
+---
+
+# Part 2: Working on SteleOFD
+
+## Module map
+
+Twenty-six crates in five layers. An arrow points from a crate to what it
+depends on; boxes below the facade are pulled in only when a feature names them.
 
 ```
-steleofd/
-├── crates/
-│   ├── steleofd-common        Value types, versions, standard constants
-│   ├── steleofd-error         Error taxonomy
-│   ├── steleofd-io            I/O abstraction (file, memory, slice)
-│   ├── steleofd-model         OFD data model
-│   ├── steleofd-xml           XML encoding and decoding
-│   ├── steleofd-package       ZIP container I/O and validation
-│   ├── steleofd-i18n          Localization messages (Fluent)
-│   ├── steleofd-geometry      Paths and affine transforms
-│   ├── steleofd-font          Font registry, metrics and shaping
-│   ├── steleofd-display       Display list IR
-│   ├── steleofd-parser        OFD to display list
-│   ├── steleofd-render        Render backends
-│   ├── steleofd-crypto        National cryptography and X.509
-│   ├── steleofd-sign          Seals and verification
-│   ├── steleofd-convert       Format interconversion
-│   ├── steleofd-edit          Document editing
-│   ├── steleofd-search        Full-text search
-│   ├── steleofd-archive       Archival compliance validation
-│   ├── steleofd-print         Printing
-│   ├── steleofd-core          Facade
-│   ├── steleofd-reader        Desktop reader (egui/eframe)
-│   ├── steleofd-cli           Command line tool
-│   ├── steleofd-wasm          WebAssembly bindings
-│   ├── steleofd-ffi           C ABI shared library
-│   └── steleofd-server        HTTP service
-├── locales/                   Translation catalogues (.ftl; engine and reader)
-├── scripts/                   Build and validation scripts
-└── docs/                      Architecture documentation
+  ┌──────────────────────────────────────────────────────────────────────┐
+  │  delivery forms: applications, not dependencies                      │
+  │                                                                      │
+  │    reader        cli        wasm        ffi        server            │
+  │    egui/eframe   binary     browser     C ABI      HTTP              │
+  └──────────────────────────────────────────────────────────────────────┘
+                                  │
+                                  ▼
+  ┌──────────────────────────────────────────────────────────────────────┐
+  │  steleofd-core                                                       │
+  │  one handle, one feature per capability                              │
+  └──────────────────────────────────────────────────────────────────────┘
+                                  │
+  ┌──────────────────────────────────────────────────────────────────────┐
+  │  always linked: the open-to-display path                             │
+  │                                                                      │
+  │    parser ──► package ──► xml                                        │
+  │      │             │       io                                        │
+  │      ▼             │                                                 │
+  │    model ◄─────────┘                                                 │
+  │      │                                                               │
+  │    display ──► font ──► geometry                                     │
+  │                                                                      │
+  │    every crate above resolves errors through error ──► common        │
+  └──────────────────────────────────────────────────────────────────────┘
+
+  ┌──────────────────────────────────────────────────────────────────────┐
+  │  behind a feature of core: one capability each                       │
+  │                                                                      │
+  │          render    display, geometry, font                           │
+  │          print     render, display                                   │
+  │          convert   render, parser, display                           │
+  │          sign      crypto, package, model                            │
+  │          crypto    common, error                                     │
+  │          edit      parser, package, model                            │
+  │          search    display, geometry                                 │
+  │          archive   package, model                                    │
+  └──────────────────────────────────────────────────────────────────────┘
+
+  steleofd-i18n      messages for the shells; the engine emits none
+  steleofd-testkit   fixtures for the test suites, a dev-dependency only
 ```
 
-## Design notes
+The keystone is `steleofd-display`: every output backend reads the same
+flattened list, so an export cannot drift from the preview. Section 3 of
+[`docs/Architecture.md`](docs/Architecture.md) carries the same inventory as a
+table, with the responsibility and registry status of each crate.
 
-### One parse, many consumers
+## Where a document goes
 
 `Content.xml` is a nested tree of templates. Having every output backend walk it
 separately would duplicate the logic and, worse, let the backends drift apart.
@@ -106,7 +184,7 @@ DisplayList (flattened, absolute CTM, resources resolved)
 
 Office and OCR conversion are on the roadmap, not in the code.
 
-### No user-facing text in the engine
+## No user-facing text in the engine
 
 Errors are structured enums with parameters, never prose:
 
@@ -123,7 +201,7 @@ A presentation layer that has product-facing strings of its own — the reader
 does — keeps them beside itself and merges them in with `I18nBuilder`, so the
 engine never names a widget it does not own.
 
-### Untrusted input
+## Untrusted input
 
 | Threat | Defense |
 |---|---|
@@ -133,7 +211,7 @@ engine never names a widget it does not own.
 | Hostile document hanging the renderer | `RenderError::BudgetExceeded`, degrading to partial output |
 | Edits silently breaking signatures | `EditError::WouldInvalidateSignature`, requiring confirmation |
 
-## Getting started
+## Building
 
 Rust 1.92+ with Edition 2024, which is what `rust-version` in the workspace
 manifest states; `.github/workflows/rust.yml` names the version CI builds with.
@@ -152,109 +230,21 @@ cargo build --release            # release build
 cargo test --workspace           # run tests
 ```
 
-### If crates.io downloads stall
-
-When `static.crates.io` is unreachable, cargo can sit with no output for a long
-time. A mirror fixes it:
-
-```toml
-# ~/.cargo/config.toml
-[source.crates-io]
-replace-with = "rsproxy-sparse"
-
-[source.rsproxy-sparse]
-registry = "sparse+https://rsproxy.cn/index/"
-```
-
-`cargo check --offline` then works with no network access at all.
-
-### Checks
+## Checks
 
 ```bash
+python3 scripts/check_all.py             # everything this machine can run
+python3 scripts/check_all.py --quick     # the policy gates only
 python3 scripts/check_i18n.py            # message key consistency across locales
 python3 scripts/check_language.py        # English-only policy and comment density
-python3 scripts/check_i18n.py --strict   # treat warnings as failures
+python3 scripts/check_publish.py --list  # which crates reach a registry
 ```
 
 The i18n check compares the catalogues: same file set, same key set, consistent
 placeholders, and the `all_keys()` list in Rust matching the keys in the FTL
-files.
-
-### Releases
-
-Pushing a `v*` tag builds the reader for every platform `egui` runs on, and
-publishes it beside the C ABI library and the engine's WebAssembly bindings:
-
-| Artefact | Platform | How it runs |
-|---|---|---|
-| `steleofd-reader-linux`, `-macos`, `-windows.exe` | Desktop | run the file directly |
-| `steleofd-reader-web.zip` | Browser | unzip and serve over HTTP; a `file://` page cannot load the module |
-| `steleofd-reader-android.apk` | Android 7.0+ (arm64) | sideload; signed with a throwaway debug key, not a store upload |
-
-iOS is the one `egui` platform left out: an app for it can only be installed
-after a macOS signing and packaging step, and no key ships with this project.
-
-The builds are **unsigned** — there is no signing key — so each release carries
-a `SHA256SUMS` manifest as the only thing a download can be held to:
-
-```bash
-python3 scripts/release_checksums.py verify .
-sha256sum -c SHA256SUMS          # or without this project at all
-```
-
-## Standards
-
-| Standard | Scope |
-|---|---|
-| [GB/T 33190-2016](https://openstd.samr.gov.cn/bzgk/gb/newGbInfo?hcno=3AF6682D939116B6F5EED53D01A9DB5D) | Fixed-layout document format for electronic file storage and exchange |
-| [GB/T 33476.1-2016](https://openstd.samr.gov.cn/bzgk/gb/newGbInfo?hcno=419233A04D029066CF032CFACBC8713B) | Electronic official document format for Party and government bodies, part 1: document structure |
-| [GB/T 33476.2-2016](https://openstd.samr.gov.cn/bzgk/gb/newGbInfo?hcno=5B4E730245FF2FAF909435EBE6A659D2) | Same, part 2: presentation |
-| [GB/T 38540-2020](https://openstd.samr.gov.cn/bzgk/gb/newGbInfo?hcno=EBF1360C272E40E7A8B9B32ED0724AB1) | Cryptographic specification for secure electronic seals |
-| [GM/T 0099-2020](https://std.samr.gov.cn/hb/search/stdHBDetailed?id=C60C676BC220358AE05397BE0A0AFABB) | Cryptography application for open fixed-layout documents: signature, encryption, integrity |
-| [GB/T 39362-2020](https://openstd.samr.gov.cn/bzgk/gb/newGbInfo?hcno=C6B230010286DC79C84CF8EB72DE3F97) | Archiving specification for electronic official documents |
-
-GB/T 33476 is published in three parts; parts 1 and 2 are the ones this project
-follows. GM/T 0099-2020 is a cryptography industry standard issued by the State
-Cryptography Administration, so it lives on the industry standards platform
-rather than the national standards one.
-
-## Roadmap
-
-- [x] **P0** Skeleton: layered architecture, error taxonomy, display list IR, i18n layer
-- [x] **P1** OFD structure parsing (`model`, `xml`, `package`, `parser`)
-- [x] **P2** Raster render backend, completing the open-to-display path
-- [x] **P3** Conversion (OFD to PDF, PNG, SVG)
-- [x] **P3b** Printing: task planning and rasterization (`print`)
-- [x] **P4b** The `core` facade: one handle, features per delivery form
-- [x] **P4** Signature verification with national algorithms
-- [x] **P5a** The `steleofd` command line tool
-- [x] **P5b** WebAssembly bindings for the browser
-- [x] **P5c** C ABI shared library for OA and ERP integration (`ffi`)
-- [x] **P5d** HTTP service delivery for OA and ERP back ends (`server`)
-- [x] **P6** Document editing with an undo stack
-- [x] **P7** Full-text search over the display list (`search`)
-- [x] **P8** Archival readiness auditing (`archive`)
-- [x] **P9** GB/T 33190-2016 conformance harness: annex A schemas rebuilt from the standard, enforced in CI
-
-All 26 crates are in place, and the five delivery forms (`cli`, `wasm`, `ffi`,
-`server`, `reader`) sit on the same `core` facade. Every task in the original
-P0–P9 sequence is closed; what is left is tracked in
-[`docs/Roadmap.md`](docs/Roadmap.md). Clause-level coverage lives in
-[`compliance/gb-t-33190.toml`](compliance/gb-t-33190.toml) and the method
-behind it in [`compliance/CLAUSES.md`](compliance/CLAUSES.md): 56 clauses are
-registered, every one of them `verified`. The clause numbers are read out of
-the standard's transcribed text by
-[`scripts/gbt33190.py`](scripts/gbt33190.py), which reads each numbered
-heading and checks the result against the contents pages the standard prints,
-so a row cannot cite a clause the standard does not have. The same script
-rebuilds the annex A schemas under `compliance/schema/annex-a`.
-What the engine can and cannot draw with is set out face by face in
-[`docs/Fonts.md`](docs/Fonts.md). How it compares to other readers in the
-field, page by page against a second vendor's output, is in
-[`docs/Interop.md`](docs/Interop.md).
-
-Performance baselines, and how to run them, are in
-[`docs/Performance.md`](docs/Performance.md).
+files. The publish check holds the two sets — nineteen crates that publish and
+seven that do not — to the whole workspace, so a new crate cannot slip in
+without saying where it goes.
 
 ## Contributing
 
@@ -263,13 +253,15 @@ Issues and pull requests are welcome. Before submitting, make sure these pass:
 ```bash
 cargo test --workspace
 cargo clippy --workspace -- -D warnings
-python3 scripts/check_i18n.py --strict
-python3 scripts/check_language.py
+python3 scripts/check_all.py
 ```
 
 New code needs tests. Do not introduce `unsafe`; `steleofd-ffi` is the only
 documented exemption, because a C ABI requires it. Code, comments, commit
 messages and issues are English only: [docs/Conventions.md](docs/Conventions.md).
+
+Performance baselines, and how to run them, are in
+[`docs/Performance.md`](docs/Performance.md).
 
 ## License
 
