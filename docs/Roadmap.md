@@ -18,8 +18,8 @@ and putting a number on it today would be a guess dressed as a plan.
 
 | Version | Theme |
 | --- | --- |
-| `0.2` | R1 the document that renders but lays out wrong, R4 what verification leaves unchecked, R5 the gates that are missing, R7 which crates are published |
-| `0.3` | R2 the reader rebuilt on a published application-UI guideline, R18 text placed without its direction, R6 what the budgets do not measure |
+| `0.2` | R4 what verification leaves unchecked, R5 the gates that are missing, R7 which crates are published |
+| `0.3` | R18 text placed without its direction, R2 the reader rebuilt on a published application-UI guideline, R6 what the budgets do not measure |
 | `0.3+` | R3 the Android build that crashes on open |
 | unversioned | R8 packaging, and the rest |
 
@@ -41,10 +41,11 @@ then what a signature is asked to prove, then distribution, then the rest.
    guards.
 5. **Everything else** — smallest first.
 
-The version column is not the ranking read downwards. R1 comes first because
-the output is wrong. R3 is the crash, which by the first rule would rank at the
-top, and it sits third only because diagnosing it needs a device or an emulator
-that no other row does; a `0.3+` promise would be one the project cannot keep.
+The version column is not the ranking read downwards. R4 comes first because a
+verdict of valid is what people act on. R3 is the crash, which by the first rule
+would rank at the top, and it sits last only because diagnosing it needs a
+device or an emulator that no other row does; a `0.3+` promise would be one the
+project cannot keep.
 
 ## Open
 
@@ -52,7 +53,7 @@ that no other row does; a `0.3+` promise would be one the project cannot keep.
 
 | # | Item | Target | Why it ranks here | Done when |
 | --- | --- | --- | --- | --- |
-| R1 | **CJK text lays out wrong.** `ofdrw/999.ofd`, a VAT invoice from a Huhuang SDK producer, came out with its Chinese readable but its lines crooked. The cause was the offsets in table 46: a producer writes one offset per column and leaves `g`, the spaces and the digits to stand for glyphs that take no room of their own, so a list shorter than the text places glyphs rather than stepping over them. Both readings now exist and the page reads as an invoice. What is left is the direction attributes of table 47, and a place to hang the sample: it is fetched, not committed, so the tests that pin the layout skip on a machine that has not fetched it. | `0.2` | Wrong output on a real document, which comes first: a legal document that reads but sits crooked is still one nobody can print. | The layout tests in `crates/steleofd-core/tests` hold the sample's own offsets, and `tests/fixtures/ofdrw` is fetched by every job that runs them, so a change to the flattening fails CI rather than a developer's memory. |
+| R1 | **CJK text lays out wrong.** `ofdrw/999.ofd`, a VAT invoice from a Huhuang SDK producer, came out with its Chinese readable but its lines crooked. The cause was the offsets in table 46: a producer writes one offset per column and leaves `g`, the spaces and the digits to stand for glyphs that take no room of their own, so a list shorter than the text places glyphs rather than stepping over them. Both readings now exist and the page reads as an invoice. What is left is the direction attributes of table 47, which R18 carries. | `0.2` | Wrong output on a real document, which comes first: a legal document that reads but sits crooked is still one nobody can print. | The layout tests in `crates/steleofd-core/tests` hold the sample's own offsets, and `tests/fixtures/ofdrw` is fetched by every job that runs them, so a change to the flattening fails CI rather than a developer's memory. |
 | R4 | **Verification checks the maths and not the certificate.** `verification` proves that a key signed the bytes; nothing proves the key belongs to who the document says, nothing compares the certificate's validity window against the signature time, and `signed_digest` refuses any check method other than SM3 while the README promises international algorithms. An encrypted container is recorded at open and then never mentioned again, so what a caller sees for one is untested. | `0.2` | This is the second rule: a verdict of valid that skipped the trust question is worse than a slow reader, because it is the answer people act on. | A signature with a certificate outside its validity window, a certificate from another issuer, a SHA-256 check value, and an encrypted container each get a verdict of their own, and the README states exactly which of them is checked. |
 | R5 | **The gates that a 686-package tree needs and does not have.** No dependency audit runs in CI; `cargo-fuzz` covers the ZIP and XML readers only, while the TrueType parser, the DER/X.509 reader and the PDF writer all take bytes from outside; and no test opens a document, edits it, writes it, opens the result and compares. | `0.2` | Enforcement ranks fourth, but it is cheap here and it guards exactly the code the first two rows change. | `cargo-audit` (or `cargo-deny`) fails the build on a vulnerable dependency, three fuzz targets exist for the uncovered parsers, and a read-write-read test covers each editing command. |
 | R7 | **The crates are not on a registry yet.** The surface is decided: nineteen crates publish and seven do not, each stating its `publish` field and a `description`. What remains is the act. `cargo package -p steleofd-core` still fails because the crates it depends on are not there, so publishing has to go leaf first through the dependency layers, and a version already on the registry cannot be replaced. | Publishing is how the engine reaches anyone not building an application around it. The decision is now cheap to carry out, but it is irreversible per version, which is why it waits for a release rather than a commit. | `cargo add steleofd-core` builds against crates.io at `0.1.1`, the release notes name the nineteen crates, and a CI job fails when a published crate's metadata stops being complete. |
