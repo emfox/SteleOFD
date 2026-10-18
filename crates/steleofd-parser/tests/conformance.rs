@@ -547,16 +547,16 @@ fn gb_t_33190_11_3_char_space_widens_the_advance() {
 
 #[test]
 fn gb_t_33190_11_3_delta_attributes_place_each_glyph() {
-    // DeltaX[i] offsets glyph i + 1 from glyph i's drawing point, so it
-    // replaces the advance; the list runs one shorter than the text, leaving
-    // the last glyph at the text size.
+    // DeltaX[i] offsets glyph i + 1 from glyph i's drawing point, replacing the
+    // advance; the list runs one short of the text, leaving the last glyph at
+    // the text size. DeltaY places a new row and does not move a glyph along one.
     let run = glyph_run(
         "",
         r#"<TextCode X="0" Y="0" DeltaX="1 2" DeltaY="0.5 0.5">ABC</TextCode>"#,
     );
     assert_eq!(run.advances.len(), 3);
-    assert_eq!(run.advances[0], 1.5);
-    assert_eq!(run.advances[1], 2.5);
+    assert_eq!(run.advances[0], 1.0);
+    assert_eq!(run.advances[1], 2.0);
     assert_eq!(run.advances[2], 5.0, "the last glyph keeps the text size");
 }
 
