@@ -495,6 +495,9 @@ tests = [
     "gb_t_33190_18_2_4_a_timestamp_bound_to_the_signature_verifies",
     "gb_t_33190_18_2_4_a_timestamp_over_other_bytes_is_unbound",
     "gb_t_33190_18_2_4_a_timestamp_whose_proof_is_wrong_is_unverified",
+    "gb_t_33190_18_2_4_a_digest_this_build_cannot_compute_is_unchecked",
+    "gb_t_33190_18_2_4_a_signature_that_does_not_add_up_is_tampered",
+    "gb_t_33190_18_2_4_a_certificate_past_its_window_is_unchecked",
 ]
 
 [[item]]

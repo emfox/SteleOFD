@@ -18,7 +18,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 REGISTER = REPO / "compliance" / "gb-t-33190.toml"
-MATRIX = REPO / "docs" / "COMPLIANCE.md"
+MATRIX = REPO / "docs" / "Compliance.md"
 PREFIX = "gb_t_33190_"
 KNOWN_STATUS = ("verified", "partial", "untested", "deviation")
 NEEDS_TESTS = ("verified", "partial")
