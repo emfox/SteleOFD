@@ -64,6 +64,27 @@ impl FontTraits {
     pub fn search_family<'a>(&'a self, name: &'a str) -> &'a str {
         self.family.as_deref().unwrap_or(name)
     }
+
+    /// Whether a substitute should be monospaced. Clause 11.1 makes
+    /// `FixedWidth` optional, and a producer that names Courier or Mono has
+    /// already said it by name, so the name answers when the flag is absent.
+    pub fn wants_fixed_width(&self) -> bool {
+        if let Some(declared) = self.fixed_width {
+            return declared;
+        }
+        let name = self.family.as_deref().unwrap_or("").to_ascii_lowercase();
+        const MARKERS: [&str; 8] = [
+            "courier",
+            "mono",
+            "consolas",
+            "menlo",
+            "typewriter",
+            "fixed",
+            "code",
+            "coding",
+        ];
+        MARKERS.iter().any(|marker| name.contains(marker))
+    }
 }
 
 /// A registered font.

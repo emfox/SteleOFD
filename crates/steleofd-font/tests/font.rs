@@ -4,7 +4,7 @@
 
 use std::sync::Arc;
 
-use steleofd_font::{FontId, FontManager, FontSource, ShapeOptions, shape_text};
+use steleofd_font::{FontId, FontManager, FontSource, FontTraits, ShapeOptions, shape_text};
 
 /// The shared real face, so outlining and shaping are not degraded paths.
 fn font_bytes() -> Vec<u8> {
@@ -410,4 +410,30 @@ fn a_resolved_glyph_id_is_never_substituted() {
         manager.outline_for_code(&face, 43981, true).is_none(),
         "an id the face cannot draw is not handed to another face"
     );
+}
+
+#[test]
+fn a_named_fixed_width_family_is_read_as_fixed_width_though_the_flag_is_absent() {
+    // Clause 11.1 makes `FixedWidth` optional, so a document that names
+    // Courier and writes nothing else still means a monospaced substitute.
+    let named = |family: &str| FontTraits {
+        family: Some(family.to_string()),
+        ..FontTraits::default()
+    };
+    assert!(named("Courier New").wants_fixed_width());
+    assert!(named("Consolas").wants_fixed_width());
+    assert!(named("DejaVu Sans Mono").wants_fixed_width());
+    assert!(!named("SimSun").wants_fixed_width());
+    assert!(!named("Microsoft YaHei").wants_fixed_width());
+}
+
+#[test]
+fn a_declared_flag_outranks_the_family_name() {
+    let declared = |fixed_width: bool| FontTraits {
+        family: Some("Courier New".to_string()),
+        fixed_width: Some(fixed_width),
+        ..FontTraits::default()
+    };
+    assert!(!declared(false).wants_fixed_width(), "false is an answer");
+    assert!(declared(true).wants_fixed_width());
 }

@@ -273,8 +273,8 @@ impl FontManager {
             // `FixedWidth` ask for. A generic is a shape, not cover coverage,
             // so each is taken only if it carries the caller's code points.
             let mut order = Vec::with_capacity(3);
-            match (traits.fixed_width, traits.serif) {
-                (Some(true), _) => order.extend([
+            match (traits.wants_fixed_width(), traits.serif) {
+                (true, _) => order.extend([
                     font_kit::family_name::FamilyName::Monospace,
                     font_kit::family_name::FamilyName::Serif,
                     font_kit::family_name::FamilyName::SansSerif,
@@ -290,15 +290,20 @@ impl FontManager {
                     font_kit::family_name::FamilyName::Monospace,
                 ]),
             }
-            // The configured family, the generic families and any family that
-            // covered an earlier run are all names a CJK substitute may wear:
-            // Windows and macOS rarely ship the first one.
-            let mut fallback = match pinned_answer(source, &known, &pin, &properties)? {
-                Some(data) if wanted.is_empty() || Self::covers(&data, wanted) => {
-                    self.note_cjk_answered(pin.clone());
-                    return Ok(Some(data));
+            // A CJK family is a substitute by name only, so a line asking for
+            // a monospaced face skips it: its glyphs are proportional and the
+            // columns the offsets build would collide.
+            let monospaced = traits.wants_fixed_width();
+            let mut fallback = if monospaced {
+                None
+            } else {
+                match pinned_answer(source, &known, &pin, &properties)? {
+                    Some(data) if wanted.is_empty() || Self::covers(&data, wanted) => {
+                        self.note_cjk_answered(pin.clone());
+                        return Ok(Some(data));
+                    }
+                    other => other,
                 }
-                other => other,
             };
             for generic in order {
                 let Ok(handle) = source.select_best_match(&[generic], &properties) else {
@@ -311,16 +316,22 @@ impl FontManager {
                 if wanted.is_empty() || Self::covers(&data, wanted) {
                     return Ok(Some(data));
                 }
-                // Coverage often lives in a family beside the generic — a
-                // Latin default for `sans-serif`, `Noto Sans CJK SC` next to
-                // it — so those are asked for by name before the shape alone.
-                if let Some((family, data)) =
-                    covering_family(source, &known, wanted, &properties, &self.cjk_preferred())
+                // Coverage often lives beside the generic — `Noto Sans CJK SC`
+                // next to `sans-serif` — so those are asked for by name. A
+                // monospaced request keeps to its own shape instead.
+                if !monospaced
+                    && let Some((family, covering)) =
+                        covering_family(source, &known, wanted, &properties, &self.cjk_preferred())
                 {
                     self.note_cjk_answered(family);
-                    return Ok(Some(data));
+                    return Ok(Some(covering));
                 }
                 fallback.get_or_insert(data);
+            }
+            // Nothing of the asked-for shape could be had, so the CJK family
+            // is still better than a blank line even with its own widths.
+            if fallback.is_none() && monospaced {
+                fallback = pinned_answer(source, &known, &pin, &properties)?;
             }
             Ok(fallback)
         })
