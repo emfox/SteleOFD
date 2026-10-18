@@ -8,9 +8,11 @@
 pub mod cff;
 pub mod config;
 pub mod face;
+mod guard;
 pub mod manager;
 pub mod metrics;
 pub mod registry;
+mod sfnt;
 pub mod shape;
 pub mod subset;
 

@@ -1,13 +1,16 @@
 //! Font face wrapping the shaping backend with a stable metrics and outline API.
 
+use std::panic::AssertUnwindSafe;
 use std::sync::Arc;
 
 use steleofd_error::{FontError, Result};
 use steleofd_geometry::{Path, PathSegment};
 
 use crate::cff;
+use crate::guard;
 use crate::metrics::{FontMetrics, GlyphOutline};
 use crate::registry::FontId;
+use crate::sfnt;
 
 /// A usable font face.
 /// `ttf_parser::Face` wants a `'static` borrow, so bytes live behind an
@@ -55,7 +58,12 @@ impl FontFace {
         } else {
             (data, false, Vec::new())
         };
-        let (units_per_em, metrics) = {
+        // The directory is read here first: the backend asserts on one that
+        // does not fit, and a panic is a crash where unwinding is compiled out.
+        if !sfnt::directory_fits(data.as_slice()) {
+            return Err(FontError::Parse("the table directory does not fit".to_string()).into());
+        }
+        let (units_per_em, metrics) = guard::guard("the face", || {
             let face = ttf_parser::Face::parse(data.as_slice(), 0)
                 .map_err(|e| FontError::Parse(format!("font parse failed: {e:?}")))?;
 
@@ -73,8 +81,8 @@ impl FontFace {
                 cap_height: face.capital_height().unwrap_or(face.ascender()) as f64 * k,
                 x_height: face.x_height().unwrap_or(0) as f64 * k,
             };
-            (upem, m)
-        };
+            Ok((upem, m))
+        })?;
 
         Ok(Self {
             id,
@@ -141,10 +149,17 @@ impl FontFace {
         self.outline(code)
     }
 
-    /// Build a temporary backend face for one query.
+    /// Build a temporary backend face for one query. A panic in the backend
+    /// answers the query with nothing rather than ending the process.
     fn with_face<T>(&self, f: impl FnOnce(&ttf_parser::Face<'_>) -> T) -> Option<T> {
-        let face = ttf_parser::Face::parse(self.data.as_slice(), 0).ok()?;
-        Some(f(&face))
+        // The closure borrows `f`, which is not required to be unwind safe, so
+        // the call is wrapped rather than the closure asserted safe.
+        let queried = AssertUnwindSafe(|| {
+            let face = ttf_parser::Face::parse(self.data.as_slice(), 0)
+                .map_err(|e| FontError::Parse(format!("font parse failed: {e:?}")))?;
+            Ok(f(&face))
+        });
+        guard::guard("a glyph", queried).ok()
     }
 
     /// Glyph id for a Unicode code point.

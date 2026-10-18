@@ -268,6 +268,11 @@ jobs:
       - name: Install nightly toolchain
         uses: dtolnay/rust-toolchain@nightly
 
+      # The font target builds steleofd-font, whose font-kit dependency needs
+      # the fontconfig headers even though nothing is drawn.
+      - name: Install fontconfig headers
+        run: sudo apt-get update && sudo apt-get install -y libfontconfig1-dev pkg-config
+
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
         with:
