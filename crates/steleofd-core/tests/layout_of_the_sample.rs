@@ -10,21 +10,30 @@ use steleofd_display::text::GlyphRun;
 /// The sample, or nothing when it has not been fetched. CI fetches it, so a
 /// skip there is a fetched file that went missing rather than a quiet pass.
 fn sample() -> Option<PathBuf> {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../tests/fixtures/ofdrw/999.ofd")
-        .canonicalize()
-        .ok()?;
-    if !path.is_file() && std::env::var_os("CI").is_some() {
-        panic!("{} is missing on a CI run", path.display());
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/ofdrw/999.ofd");
+    // The existence test comes first: canonicalising a missing file answers
+    // `None`, which would return above the guard and pass without reading it.
+    if !path.is_file() {
+        if std::env::var_os("CI").is_some() {
+            panic!("{} is missing on a CI run", path.display());
+        }
+        return None;
     }
-    path.is_file().then_some(path)
+    Some(path.canonicalize().unwrap_or(path))
 }
 
 /// The open display list of a page, or nothing when the sample is absent.
 fn page(index: usize) -> Option<steleofd_display::PageDisplay> {
     let data = std::fs::read(sample()?).ok()?;
     let doc = steleofd_core::Document::open_bytes(&data).expect("the sample opens");
-    doc.page(index).cloned()
+    // A fetched sample that stops flattening is the failure these tests exist
+    // to catch, so an unreadable page may not come back as a skip.
+    let displayed = doc.page(index).cloned();
+    assert!(
+        displayed.is_some() || !std::env::var_os("CI").is_some_and(|v| !v.is_empty()),
+        "page {index} of the sample did not flatten"
+    );
+    displayed
 }
 
 /// The run with the most glyphs on a page: the tax control code here.
@@ -67,7 +76,7 @@ fn the_invoice_code_is_one_row_a_column_per_glyph() {
     // `DeltaX="g 11 1.5875 -17.4625"` is eleven steps of 1.5875 and a fall back
     // to the left edge. A step reading that mishandled either half would put
     // the digits on top of each other or scatter them across the page.
-    let Some(page) = page(0) else { return };
+    let page = page(0).expect("the sample is fetched");
     // Twelve glyphs in one run: the code is the only one on the page.
     let run = page
         .ops
@@ -93,7 +102,7 @@ fn a_date_drawn_character_by_character_keeps_its_own_characters() {
     // The date is written with a column of its own between each pair of digits
     // and month character, which is what a producer writes when a character
     // does not take the width of the digits beside it.
-    let Some(page) = page(0) else { return };
+    let page = page(0).expect("the sample is fetched");
     // Several runs hold eleven glyphs; the date is the narrowest of them, since
     // its last column takes the face width rather than a step of its own.
     let run = page
@@ -128,7 +137,7 @@ fn a_tax_control_code_of_a_hundred_and_twelve_characters_runs_off_its_box() {
     // 99 characters of a 4.2333 mm face, stepped 2.5 mm. DeltaX gives 27 steps
     // and a carriage return of -67.5, which is the row's own 27 * 2.5, so four
     // rows of 28 start where the first did; the last one's 14 steps cover 35.
-    let Some(page) = page(0) else { return };
+    let page = page(0).expect("the sample is fetched");
     let run = longest(&page);
     let placed = starts(&run);
     let rows: Vec<f64> = placed.iter().step_by(28).map(|(x, _)| *x).collect();
@@ -145,7 +154,7 @@ fn the_labels_of_the_template_keep_the_kerning_the_producer_wrote() {
     // The document sets one glyph 15.57 mm from the next, an artefact of how
     // the form was drawn. It is placed as written: a layout that tidies a label
     // is no longer a rendering of the file.
-    let Some(page) = page(0) else { return };
+    let page = page(0).expect("the sample is fetched");
     // Two labels are set this way, one in each party's block.
     let wide: Vec<GlyphRun> = page
         .ops
