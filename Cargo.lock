@@ -4649,7 +4649,7 @@ checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 
 [[package]]
 name = "steleofd-archive"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "serde",
  "steleofd-common",
@@ -4662,7 +4662,7 @@ dependencies = [
 
 [[package]]
 name = "steleofd-cli"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -4681,7 +4681,7 @@ dependencies = [
 
 [[package]]
 name = "steleofd-common"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "bitflags 2.13.2",
  "serde",
@@ -4689,7 +4689,7 @@ dependencies = [
 
 [[package]]
 name = "steleofd-convert"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "criterion",
  "image",
@@ -4710,7 +4710,7 @@ dependencies = [
 
 [[package]]
 name = "steleofd-core"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "rayon",
  "steleofd-archive",
@@ -4736,7 +4736,7 @@ dependencies = [
 
 [[package]]
 name = "steleofd-crypto"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "cipher",
  "der",
@@ -4755,7 +4755,7 @@ dependencies = [
 
 [[package]]
 name = "steleofd-display"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -4767,7 +4767,7 @@ dependencies = [
 
 [[package]]
 name = "steleofd-edit"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "steleofd-common",
  "steleofd-core",
@@ -4783,14 +4783,14 @@ dependencies = [
 
 [[package]]
 name = "steleofd-error"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "thiserror 2.0.21",
 ]
 
 [[package]]
 name = "steleofd-ffi"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "cbindgen",
  "steleofd-core",
@@ -4801,7 +4801,7 @@ dependencies = [
 
 [[package]]
 name = "steleofd-font"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "font-kit",
  "rustybuzz",
@@ -4816,11 +4816,11 @@ dependencies = [
 
 [[package]]
 name = "steleofd-fuzz"
-version = "0.1.1"
+version = "0.2.0"
 
 [[package]]
 name = "steleofd-geometry"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "kurbo 0.12.0",
  "serde",
@@ -4830,7 +4830,7 @@ dependencies = [
 
 [[package]]
 name = "steleofd-i18n"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "fluent",
  "fluent-bundle",
@@ -4843,7 +4843,7 @@ dependencies = [
 
 [[package]]
 name = "steleofd-io"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "hayro-jbig2",
  "memmap2",
@@ -4853,7 +4853,7 @@ dependencies = [
 
 [[package]]
 name = "steleofd-model"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "proptest",
  "serde",
@@ -4864,7 +4864,7 @@ dependencies = [
 
 [[package]]
 name = "steleofd-package"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "proptest",
  "steleofd-error",
@@ -4876,7 +4876,7 @@ dependencies = [
 
 [[package]]
 name = "steleofd-parser"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "criterion",
  "image",
@@ -4897,7 +4897,7 @@ dependencies = [
 
 [[package]]
 name = "steleofd-print"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "steleofd-common",
  "steleofd-display",
@@ -4910,7 +4910,7 @@ dependencies = [
 
 [[package]]
 name = "steleofd-reader"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "android-activity",
  "eframe",
@@ -4936,7 +4936,7 @@ dependencies = [
 
 [[package]]
 name = "steleofd-render"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "image",
  "steleofd-common",
@@ -4951,7 +4951,7 @@ dependencies = [
 
 [[package]]
 name = "steleofd-search"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "criterion",
  "steleofd-common",
@@ -4967,7 +4967,7 @@ dependencies = [
 
 [[package]]
 name = "steleofd-server"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "axum",
  "serde",
@@ -4986,7 +4986,7 @@ dependencies = [
 
 [[package]]
 name = "steleofd-sign"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "serde",
  "steleofd-common",
@@ -5002,7 +5002,7 @@ dependencies = [
 
 [[package]]
 name = "steleofd-testkit"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "steleofd-crypto",
  "steleofd-error",
@@ -5012,7 +5012,7 @@ dependencies = [
 
 [[package]]
 name = "steleofd-wasm"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "console_error_panic_hook",
  "serde",
@@ -5027,7 +5027,7 @@ dependencies = [
 
 [[package]]
 name = "steleofd-xml"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "proptest",
  "quick-xml 0.42.0",
