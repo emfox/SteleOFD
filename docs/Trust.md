@@ -67,13 +67,33 @@ network fetch would be unusable in the offline reader, in the C ABI embedded in
 someone's OA system, and in the wasm build running in a browser tab. It is a
 statement that the trust decision belongs to whoever runs the verification.
 
-The gap is filled one level down, in the PKI standards. GM/T 0015-2023, the
-digital certificate format, defines the extensions that make path building
-possible — `basicConstraints` with `cA`, `keyUsage` with `keyCertSign` and
-`cRLSign`, `authorityKeyIdentifier` as the issuer's key identifier — and in the
-same breath says an application must at least recognise the key usage and basic
-constraints. Recognising is not trusting. Nothing in the chain of standards
-nominates a root.
+The gap is filled one level down, in the PKI standards rather than in SM2. The
+SM2 series (GB/T 32918) is about the signature primitive: keys, the curve, the
+signature value. It says nothing about certificates. What a certificate carries
+is GM/T 0015-2023, the digital certificate format, whose clause 2 makes
+GB/T 16262.1 the DER encoding rules, and whose clause 5.2.4.1 states that every
+OID from 5.2.4.2 to 5.2.4.17 is an `id-ce` member and therefore has to follow
+GB/T 16264.8. Three of those extensions are what a path is built from:
+
+| Extension | Clause | The sentence that matters |
+| --- | --- | --- |
+| `authorityKeyIdentifier` | 5.2.4.2 | Lets a certificate name the key that signed it, "so that a certificate chain can be built" — the clause says so and gives the 160-bit SM3 truncation of the subject key as the identifier |
+| `keyUsage` | 5.2.4.4 | `keyCertSign` verifies the signature of a CA certificate, `digitalSignature` and `nonRepudiation` mark a signing certificate |
+| `basicConstraints` | 5.2.4.12 | `cA` marks whether the public key may verify certificates; `pathLenConstraint` limits how many may follow. When `cA` is false, key usage must not carry `keyCertSign` — the two are checked together |
+
+So the three extensions are not an SM2 requirement and not an invention of ours.
+They are `id-ce` extensions defined by GB/T 16264.8, restated for the national
+profile in GM/T 0015-2023, and `pathLenConstraint` in 5.2.4.12 speaks of the
+"certification path" directly, which is the vocabulary 38540 uses.
+
+What 0015 does *not* do is more telling than what it does. Clause 5.2.4.1 says an
+application "should" be able to recognise key usage, basic constraints and
+authority key identifier. Recognising is not trusting, and 0015 is explicit about
+the gap one paragraph earlier: the certificate's `subject` may be empty when the
+name lives in the subject alternative name instead. A certificate whose name is
+empty can still be a CA. Nothing in the chain of standards nominates a root, and
+nothing says how a pathLenConstraint is counted when a link is a self-issued
+certificate; GB/T 16264.8 decides that, and it is the reference 0015 defers to.
 
 ### The Ministry of Finance electronic-credential guidance
 
@@ -169,12 +189,13 @@ run; this is how that sentence stays true.
 
 38540's list, in the order it gives them:
 
-| Check | Standard | Notes |
+| Check | What it reads | Where the reading is defined |
 | --- | --- | --- |
-| Path to an anchor | 38540 7.3 e) 1) | Every link verified with the algorithm its own certificate names, up to a certificate in the set, by issuer name and key identifier |
-| Key usage | 38540 7.3 e) 1) | The leaf must carry `digitalSignature` or `nonRepudiation`; each link must carry `keyCertSign`; a certificate used as an intermediate must not be a leaf |
-| Validity at the signing time | 38540 7.3 e) 3) and f) | Already implemented for the leaf; the same moment applies to every link, which is what makes an archived document verifiable |
-| Revocation | 38540 7.3 e) 3) and f) 2) | Offline by default. A CRL, or the caller's own answer, since the standard does not say where a list comes from |
+| Path to an anchor | `issuer` and serial from the link, matched against `subject` and `authorityKeyIdentifier` of the next | 38540 7.3 e) 1); format in GM/T 0015-2023 5.2.3.6 and 5.2.4.2 |
+| Key usage | `digitalSignature` or `nonRepudiation` on the leaf, `keyCertSign` on every link | 38540 7.3 e) 1); bits in GM/T 0015-2023 5.2.4.4 |
+| Which links may sign others | `cA` true, and `pathLenConstraint` not exceeded | 38540 7.3 e) 1); fields in GM/T 0015-2023 5.2.4.12 |
+| Validity at the signing time | `notBefore` and `notAfter` of every link, against the descriptor's time | 38540 7.3 e) 3) and f) 1); fields in 5.2.3.4 |
+| Revocation | A list supplied by the caller, nothing fetched | 38540 7.3 e) 3) and f) 2); list format in GM/T 0015-2023 5.3, `nextUpdate` in 5.3.3.5 |
 
 Revocation is the part that cannot be decided here. Three shapes are possible:
 
@@ -192,6 +213,27 @@ The recommendation is 1 with 3 as the fallback: a CRL set is data, it crosses
 every boundary the engine already crosses, and a caller with a live OCSP
 endpoint can reduce its CRL to the answer it got. Option 2 is a follow-up for
 the Rust callers, not a first step.
+
+## What the parser has to learn first
+
+`crates/steleofd-crypto/src/cert.rs` reads six fields today — subject, issuer,
+serial, the two validity bounds and the public key — through `x509-parser`, and
+keeps nothing else. None of the three extensions above is among them, so a path
+cannot be built until the parser keeps `basicConstraints`, `keyUsage` and
+`authorityKeyIdentifier`. All three are already decoded by the crate; this is a
+matter of carrying them across rather than implementing DER by hand.
+
+Two traps the standards make easy to fall into:
+
+- **`subject` can be empty.** GM/T 0015-2023 5.2.3.6 allows the name to live in
+  `subjectAltName` instead, and says a CA's empty-named subject must not carry
+  the issuer's name. `Certificate::is_self_signed` compares two strings today,
+  which an empty subject makes a coin flip rather than a test.
+- **`cA` is a default, not a requirement.** `basicConstraints` has
+  `cA BOOLEAN DEFAULT FALSE` and need not appear at all, while 5.2.4.12 says a
+  CA certificate should include it and mark it critical. A certificate with no
+  extension is therefore an end entity by default, which is the safe reading and
+  the one to implement.
 
 ## What this does not cover
 
