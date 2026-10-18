@@ -111,13 +111,17 @@ file-format standard can carry it.
 
 ## The interface that follows
 
-### What is missing today
+### What was missing
 
 `verify_signature` reads the certificate out of the descriptor and checks the
 signature against the key in it. Whatever that certificate says, and whoever
 signed it, the proof either adds up or it does not. A document signed with a
-certificate minted this morning by a party the caller has never heard of reports
+certificate minted this morning by a party the caller has never heard of reported
 `Valid`.
+
+That is now answered by a second entry point, `verify_signature_under`, which
+takes a `TrustPolicy`. `verify_signature` keeps its signature and its meaning,
+so a caller who passed nothing still gets the proof and only the proof.
 
 ### The shape
 
@@ -146,16 +150,26 @@ Verification gains a second entry point rather than changing the first:
 
 ```rust
 /// What the caller asked the engine to settle.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TrustPolicy {
+#[derive(Debug, Clone, Copy)]
+pub enum TrustPolicy<'a> {
     /// The proof, the digest and the certificate's own window. The issuer is
     /// not examined, and the verdict says so.
-    Proof {},
+    Proof,
     /// The proof and a path from the document's certificate to one of the
     /// anchors.
-    Issuer { anchors: &'a TrustAnchors },
+    Issuer {
+        anchors: &'a TrustAnchors,
+        /// Certificates between the signer and an anchor. A descriptor embeds
+        /// only the leaf, so the rest of the chain has to come from the caller
+        /// even though it travels in the same document in practice.
+        intermediates: &'a [Certificate],
+    },
 }
 ```
+
+`TrustPolicy` is deliberately not `PartialEq`: it borrows, and two policies
+compare equal only if they borrow the same set, which is a fact about the caller
+rather than about the policy.
 
 and the verdict grows the distinction it has been missing:
 
@@ -174,6 +188,21 @@ pub enum VerifyStatus {
 tampered document and an untrusted signer call for different actions — the
 first is an incident, the second is a policy question — and folding one into the
 other is the mistake `Unchecked` exists to avoid.
+
+### What the path check reports
+
+`validate_path` returns `Result<Vec<Certificate>, PathError>`, the path from the
+leaf to the anchor or the reason it stopped. The variants follow the split
+38540 7.3 e) 2) makes: `SignatureInvalid`, `NotACa`, `KeyUsageWithheld`,
+`PathTooLong` and `IssuerMissing` end the check, while the caller keeps expiry
+for clause f). `NoAnchor` and `TooDeep` are the two ways a walk ends without
+reaching a certificate the caller named.
+
+`verify_signature_under` does not surface those variants. A caller asking "should
+I act on this document" gets `Valid` or `Untrusted`; the reason is logged at
+debug level. That is deliberate — the standard asks for a verdict, not for a
+diagnosis — but a caller who wants the diagnosis calls `validate_path` directly
+with the same anchors and intermediates.
 
 ### Why not one boolean
 

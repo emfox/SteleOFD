@@ -12,13 +12,13 @@ place.
 ## When
 
 `0.1.1` is gone: it repaired what `0.1.0` said about itself and changed no
-behaviour. Eight items carry a version, and everything else is marked
+behaviour. Seven items carry a version, and everything else is marked
 `unversioned`: it is agreed to be worth doing, but no release has claimed it,
 and putting a number on it today would be a guess dressed as a plan.
 
 | Version | Theme |
 | --- | --- |
-| `0.2` | R4 what verification cannot settle, R5 the gates that are missing, R7 which crates are published |
+| `0.2` | R5 the gates that are missing, R7 which crates are published |
 | `0.3` | R18 text placed without its direction, R2 the reader rebuilt on a published application-UI guideline, R6 what the budgets do not measure |
 | `0.3+` | R3 the Android build that crashes on open |
 | unversioned | R8 packaging, and the rest |
@@ -41,11 +41,10 @@ then what a signature is asked to prove, then distribution, then the rest.
    guards.
 5. **Everything else** — smallest first.
 
-The version column is not the ranking read downwards. R4 comes first because a
-verdict of valid is what people act on. R3 is the crash, which by the first rule
-would rank at the top, and it sits last only because diagnosing it needs a
-device or an emulator that no other row does; a `0.3+` promise would be one the
-project cannot keep.
+The version column is not the ranking read downwards. R3 is the crash, which by
+the first rule ranks at the top, and it sits last only because diagnosing it
+needs a device or an emulator that no other row does; a `0.3+` promise would be
+one the project cannot keep.
 
 ## Open
 
@@ -53,7 +52,6 @@ project cannot keep.
 
 | # | Item | Target | Why it ranks here | Done when |
 | --- | --- | --- | --- | --- |
-| R4 | **Verification proves the proof and not the issuer.** A signature's own certificate is now read against the descriptor's signing time, and a document whose key had already expired is reported as unchecked rather than tampered; a digest this build does not implement is unchecked for the same reason; and an encrypted entry answers a password request instead of reading as corruption. What is still missing is the issuer question: nothing resolves a chain, so a certificate issued by anyone verifies as long as it signs. The standards settle what that step has to do and not how to feed it: GB/T 38540-2020 7.3 e) makes certification path validation mandatory, while GM/T 0099-2020 7.2.7 omits the check entirely and neither says where a root comes from. `docs/Trust.md` records the reading and the interface it forces. | `0.2` | This is the second rule: a verdict of valid that skipped the trust question is worse than a slow reader, because it is the answer people act on. | A signature whose certificate comes from an issuer the caller did not name gets a verdict of its own, the anchor for the path arrives from the caller rather than from a list the engine ships, and the README states exactly which checks run. |
 | R5 | **The gates that a 686-package tree needs and does not have.** No dependency audit runs in CI; `cargo-fuzz` covers the ZIP and XML readers only, while the TrueType parser, the DER/X.509 reader and the PDF writer all take bytes from outside; and no test opens a document, edits it, writes it, opens the result and compares. | `0.2` | Enforcement ranks fourth, but it is cheap here and it guards exactly the code the first two rows change. | `cargo-audit` (or `cargo-deny`) fails the build on a vulnerable dependency, three fuzz targets exist for the uncovered parsers, and a read-write-read test covers each editing command. |
 | R7 | **The crates are not on a registry yet.** The surface is decided: nineteen crates publish and seven do not, each stating its `publish` field and a `description`. What remains is the act. `cargo package -p steleofd-core` still fails because the crates it depends on are not there, so publishing has to go leaf first through the dependency layers, and a version already on the registry cannot be replaced. The semver gate is now set for it: a break needs a minor version and the check compares against the parent commit, so the bump a break costs is decided when it merges rather than when it ships. | Publishing is how the engine reaches anyone not building an application around it. The decision is now cheap to carry out, but it is irreversible per version, which is why it waits for a release rather than a commit. | `cargo add steleofd-core` builds against crates.io at `0.1.1`, the release notes name the nineteen crates, and a CI job fails when a published crate's metadata stops being complete. |
 
@@ -61,7 +59,7 @@ project cannot keep.
 
 | # | Item | Target | Why it ranks here | Done when |
 | --- | --- | --- | --- | --- |
-| R2 | **The reader's interface.** It obeys `Ui-spec.md`, which was written for the window that exists. That spec was built on no published application-UI guideline, and the window has outgrown it: panels, the toolbar, the dialogs, and settings that do not exist yet — a theme, a type scale, high contrast — need a rulebook a new contributor can look up rather than one we invented. | `0.3` | It does not affect output, so it ranks below R4; but it is the surface every other delivery form is judged by. | A chosen guideline is named in `Ui-spec.md` with the clauses the window follows, the reader is rebuilt against it with nothing the old spec required removed without a note, and a theme, a type scale and a contrast setting exist because the guideline asks for them. |
+| R2 | **The reader's interface.** It obeys `Ui-spec.md`, which was written for the window that exists. That spec was built on no published application-UI guideline, and the window has outgrown it: panels, the toolbar, the dialogs, and settings that do not exist yet — a theme, a type scale, high contrast — need a rulebook a new contributor can look up rather than one we invented. | `0.3` | It does not affect output, so it ranks below a wrong verdict; but it is the surface every other delivery form is judged by. | A chosen guideline is named in `Ui-spec.md` with the clauses the window follows, the reader is rebuilt against it with nothing the old spec required removed without a note, and a theme, a type scale and a contrast setting exist because the guideline asks for them. |
 | R18 | **Text direction is not read.** `CharDirection` and `ReadDirection` (table 47) are parsed nowhere: `flatten` places every run along `+x` and reads it left to right, so a vertical heading or a right-to-left line is drawn as if the document had not asked. `DeltaY` is read for how many offsets a list supplies but never for where a row sits, so a run that turns onto a second row keeps the first row's `y`. The conformance test that mentions the attributes only asserts the text stays searchable, which is why the gap survived. | `0.3` | It is what is left of the flattening R1 fixed: the same class of wrong output, but no document in the corpus asks for it. | A run with each of the four values on each attribute is placed at the coordinates table 47 describes, the conformance test asserts the placement rather than the searchability, and the corpus holds one vertical document. |
 | R6 | **What the budgets do not measure.** `Performance.md` carries five timings for one page each, and no memory ceiling at all — while the documents this is for are scanned invoices of tens of pages, where a single A4 at 300 dpi is about 26 MB once decoded. Nothing measures a many-page document, and the render cache is deferred "until measured", which has not been scheduled. | `0.3` | It follows R2 because a memory ceiling defines what the cache may hold, and the cache is the window's business. | `Performance.md` states a peak-memory ceiling per page and per document, `check_performance.py` enforces it, and a benchmark over a twenty-page document exists beside the one-page ones. |
 
@@ -106,7 +104,7 @@ a caller says so rather than in advance.
 - **`0.1.0` and `0.1.1` changed no behaviour.** The first rewrote the release
   notes by capability and renamed the documents to `Conventions.md`; the second
   fixed where the release notes come from and a placeholder `repository`.
-  Layout changes from here on land in `0.2`, with R4.
+  Layout changes from here on land in `0.2`.
 - **Far-term work is not scheduled.** The rows above describe a direction, not
   dates.
 
