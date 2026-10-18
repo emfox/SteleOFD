@@ -150,6 +150,11 @@ jobs:
       - name: Language policy
         run: python3 scripts/check_language.py
 
+      # A crate that never says whether it reaches a registry is one nobody
+      # decided about, and the answer changes what `cargo publish` would do.
+      - name: Registry surface
+        run: python3 scripts/check_publish.py
+
       - name: Release checksums round-trip
         run: python3 scripts/release_checksums.py selftest
 
@@ -319,6 +324,9 @@ jobs:
 
       - name: Check the public API against the last release
         if: steps.baseline.outputs.tag != ''
+        # cargo-semver-checks skips a crate that states `publish = false`, so
+        # the published set in each manifest is what this gate covers: the five
+        # shells, the testkit and i18n never reach a consumer and are skipped.
         run: cargo semver-checks check-release --baseline-rev ${{ steps.baseline.outputs.tag }}
 
   coverage:

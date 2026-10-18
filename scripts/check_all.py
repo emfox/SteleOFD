@@ -87,6 +87,10 @@ CHECKS: tuple[Check, ...] = (
     # Section 4 of docs/Conventions.md: the policy gates.
     Check("language", "policy", (py("scripts/check_language.py"),)),
     Check("i18n", "policy", (py("scripts/check_i18n.py", "--strict"),)),
+    # Whether a crate reaches a registry is a decision, and one made once per
+    # crate. This holds the two sets to the whole workspace and a published
+    # crate to what a registry asks for, so a new crate cannot slip in unnamed.
+    Check("publish", "policy", (py("scripts/check_publish.py"),)),
     Check("android", "package", (py("scripts/android_package.py", "selftest"),)),
     Check(
         "commits",
