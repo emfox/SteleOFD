@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ofd:Page xmlns:ofd="http://www.ofdspec.org/2016">
+  <ofd:Area>
+    <ofd:PhysicalBox>0 0 210 297</ofd:PhysicalBox>
+  </ofd:Area>
+  <ofd:Content>
+    <ofd:Layer ID="2" Type="Body">
+      <!-- Table 47, figure 63: the line reads downwards and each glyph keeps
+           its own upright baseline, so DeltaY is what moves the line on. -->
+      <ofd:TextObject ID="3" Boundary="20 20 20 90" Font="5" Size="8"
+                      ReadDirection="90" CharDirection="0">
+        <ofd:FillColor Value="0 0 0"/>
+        <ofd:TextCode X="30" Y="30" DeltaY="10 10 10 10">ABCDE</ofd:TextCode>
+      </ofd:TextObject>
+      <!-- Table 47, figure 64: the line reads right to left, so its glyphs
+           run back along the page and DeltaX steps them that way. -->
+      <ofd:TextObject ID="4" Boundary="60 20 90 20" Font="5" Size="6"
+                      ReadDirection="180" CharDirection="180">
+        <ofd:FillColor Value="0 0 0"/>
+        <ofd:TextCode X="140" Y="30" DeltaX="8 8 8 8">ABCDE</ofd:TextCode>
+      </ofd:TextObject>
+      <!-- Table 47, figure 65: a rightward line whose glyphs are all turned a
+           quarter, each about its own drawing point. -->
+      <ofd:TextObject ID="5" Boundary="60 60 90 20" Font="5" Size="6"
+                      ReadDirection="0" CharDirection="90">
+        <ofd:FillColor Value="0 0 0"/>
+        <ofd:TextCode X="70" Y="70" DeltaX="8 8 8 8">ABCDE</ofd:TextCode>
+      </ofd:TextObject>
+    </ofd:Layer>
+  </ofd:Content>
+</ofd:Page>

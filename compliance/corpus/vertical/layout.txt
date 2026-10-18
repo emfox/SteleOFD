@@ -1,0 +1,6 @@
+# Archive layout for the vertical corpus.
+# <path inside the .ofd>            <source file>
+OFD.xml                             OFD.xml
+Doc_0/Document.xml                  Document.xml
+Doc_0/Res/Res.xml                   Res.xml
+Doc_0/Pages/Page_0/Content.xml      Content.xml

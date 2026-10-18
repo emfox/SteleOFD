@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ofd:Res xmlns:ofd="http://www.ofdspec.org/2016" BaseLoc="Res">
+  <ofd:Fonts>
+    <ofd:Font ID="5" FontName="SimSun" FamilyName="SimSun"/>
+  </ofd:Fonts>
+</ofd:Res>
