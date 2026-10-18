@@ -62,6 +62,9 @@ pub struct SteleofdSignature {
     pub valid: c_int,
     /// Whether nothing was proved, which `valid` being false does not say.
     pub unchecked: c_int,
+    /// Whether the proof holds but its certificate chains to no root the
+    /// caller named.
+    pub untrusted: c_int,
 }
 
 /// Memory the C side borrows from, rewritten by each call that hands out data.
@@ -334,6 +337,7 @@ pub extern "C" fn steleofd_verify(
                 location,
                 valid: sig.valid as c_int,
                 unchecked: sig.unchecked as c_int,
+                untrusted: sig.untrusted as c_int,
             })
         };
         written += 1;

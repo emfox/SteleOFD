@@ -450,6 +450,7 @@ fn verify_reports_the_valid_signature() {
             location: ptr::null(),
             valid: 0,
             unchecked: 0,
+            untrusted: 0,
         });
         let again = steleofd_verify(
             doc,

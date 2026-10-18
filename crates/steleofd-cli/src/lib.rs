@@ -521,6 +521,7 @@ fn verify_label(status: &VerifyStatus, i18n: &I18n) -> String {
         VerifyStatus::Valid => i18n.text(MessageId::SignValid),
         VerifyStatus::Tampered => i18n.text(MessageId::SignInvalid),
         VerifyStatus::Unchecked => i18n.text(MessageId::SignUnverified),
+        VerifyStatus::Untrusted => i18n.text(MessageId::SignUntrusted),
     }
 }
 

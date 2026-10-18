@@ -363,6 +363,7 @@ pub fn all_keys() -> &'static [&'static str] {
         "sign-valid",
         "sign-invalid",
         "sign-unverified",
+        "sign-untrusted",
         "sign-expired",
         "sign-integrity-ok",
         "sign-tampered",

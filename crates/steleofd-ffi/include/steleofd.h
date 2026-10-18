@@ -84,6 +84,11 @@ typedef struct SteleofdSignature {
      * Whether nothing was proved, which `valid` being false does not say.
      */
     int unchecked;
+    /**
+     * Whether the proof holds but its certificate chains to no root the
+     * caller named.
+     */
+    int untrusted;
 } SteleofdSignature;
 
 /**

@@ -74,6 +74,9 @@ pub struct SignatureStatus {
     /// Whether nothing was proved: a digest this build does not compute, or a
     /// certificate outside its window. False beside `valid` is a real mismatch.
     pub unchecked: bool,
+    /// Whether the proof holds but its certificate chains to no root the
+    /// caller named. False beside `valid` means an untrusted signer.
+    pub untrusted: bool,
 }
 
 /// What the service says about itself on the health route.
@@ -117,6 +120,7 @@ pub fn signature_statuses(doc: &mut Document) -> Result<Vec<SignatureStatus>, Of
             location: sig.base_loc.clone(),
             valid: matches!(status, VerifyStatus::Valid),
             unchecked: matches!(status, VerifyStatus::Unchecked),
+            untrusted: matches!(status, VerifyStatus::Untrusted),
         })
         .collect())
 }

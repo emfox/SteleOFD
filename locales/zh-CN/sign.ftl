@@ -4,6 +4,7 @@
 sign-valid = 有效
 sign-invalid = 无效
 sign-unverified = 无法验证
+sign-untrusted = 签署证书不可信
 sign-expired = 证书已过期
 sign-integrity-ok = 文档未被篡改
 sign-tampered = 文档内容已被修改

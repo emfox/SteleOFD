@@ -133,6 +133,9 @@ pub enum Verdict {
     Tampered,
     /// The signature could not be checked at all, with the reason why.
     Unverified,
+    /// The proof is sound, but its certificate chains to no root the caller
+    /// named, so the signer is not one the reader was told to trust.
+    Untrusted,
 }
 
 impl Verdict {
@@ -143,6 +146,7 @@ impl Verdict {
             VerifyStatus::Valid => Self::Valid,
             VerifyStatus::Tampered => Self::Tampered,
             VerifyStatus::Unchecked => Self::Unverified,
+            VerifyStatus::Untrusted => Self::Untrusted,
         }
     }
 }

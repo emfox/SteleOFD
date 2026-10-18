@@ -421,6 +421,9 @@ fn draw_signatures(ui: &mut Ui, app: &mut App) {
                         Verdict::Tampered => egui::Color32::from_rgb(180, 40, 40),
                         // Amber, not red: unknown is not the same as wrong.
                         Verdict::Unverified => egui::Color32::from_rgb(180, 130, 30),
+                        // Amber too: the proof holds, the issuer is a policy
+                        // question rather than an incident.
+                        Verdict::Untrusted => egui::Color32::from_rgb(180, 130, 30),
                     };
                     ui.colored_label(colour, verdict);
                     for line in [

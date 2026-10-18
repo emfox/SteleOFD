@@ -4,6 +4,7 @@
 sign-valid = Valid
 sign-invalid = Invalid
 sign-unverified = Unverified
+sign-untrusted = Signer certificate not trusted
 sign-expired = Certificate expired
 sign-integrity-ok = Document has not been altered
 sign-tampered = Document content has been modified

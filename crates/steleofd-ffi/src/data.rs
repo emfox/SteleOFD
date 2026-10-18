@@ -63,6 +63,9 @@ pub struct SignatureData {
     pub valid: bool,
     /// Whether nothing was proved, which `valid` being false does not say.
     pub unchecked: bool,
+    /// Whether the proof holds but its certificate chains to no root the
+    /// caller named. False beside `valid` means an untrusted signer.
+    pub untrusted: bool,
 }
 
 /// Search every page, returning the trimmed hits.
@@ -95,6 +98,7 @@ pub fn signature_statuses(doc: &mut Document) -> Result<Vec<SignatureData>, OfdE
             location: sig.base_loc.clone(),
             valid: matches!(status, VerifyStatus::Valid),
             unchecked: matches!(status, VerifyStatus::Unchecked),
+            untrusted: matches!(status, VerifyStatus::Untrusted),
         })
         .collect())
 }

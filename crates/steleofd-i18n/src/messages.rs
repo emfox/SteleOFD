@@ -61,6 +61,8 @@ pub enum MessageId {
     SignInvalid,
     /// Signature could not be verified
     SignUnverified,
+    /// Signer certificate does not chain to a trusted root
+    SignUntrusted,
     /// Certificate has expired
     SignExpired,
     /// Document integrity intact
@@ -213,6 +215,7 @@ impl MessageId {
             Self::SignValid => "sign-valid",
             Self::SignInvalid => "sign-invalid",
             Self::SignUnverified => "sign-unverified",
+            Self::SignUntrusted => "sign-untrusted",
             Self::SignExpired => "sign-expired",
             Self::SignIntegrityOk => "sign-integrity-ok",
             Self::SignTampered => "sign-tampered",
@@ -315,6 +318,7 @@ impl MessageId {
         Self::SignValid,
         Self::SignInvalid,
         Self::SignUnverified,
+        Self::SignUntrusted,
         Self::SignExpired,
         Self::SignIntegrityOk,
         Self::SignTampered,

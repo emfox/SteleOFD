@@ -75,6 +75,7 @@ impl App {
             Verdict::Valid => MessageId::SignValid,
             Verdict::Tampered => MessageId::SignTampered,
             Verdict::Unverified => MessageId::SignUnverified,
+            Verdict::Untrusted => MessageId::SignUntrusted,
         };
         self.i18n.text(key)
     }
