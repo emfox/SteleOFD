@@ -203,6 +203,38 @@ fn the_size_in_millimetres_scales_the_advance() {
 }
 
 #[test]
+fn an_advance_is_measured_in_a_thousandth_of_an_em() {
+    // The shaped width is the advance over a thousand em times the size, so an
+    // advance left in the face's own units would widen every run by its em.
+    let (manager, id) = manager_with_fixture();
+    let face = manager.face(id).expect("face");
+    let glyph = face.glyph_id(u32::from('A')).expect("A");
+    let advance = face.advance_width(glyph);
+    let size_mm = 3.5;
+    let run = shape_text(
+        &manager,
+        id,
+        "A",
+        &ShapeOptions {
+            size_mm,
+            ..Default::default()
+        },
+    )
+    .expect("shape");
+    let expected = advance / 1000.0 * size_mm;
+    assert!(
+        (run.total_advance - expected).abs() < 1e-9,
+        "one letter is {expected} mm wide, got {}",
+        run.total_advance
+    );
+    assert!(
+        run.total_advance < size_mm,
+        "a letter is narrower than its size, got {}",
+        run.total_advance
+    );
+}
+
+#[test]
 fn the_fallback_chain_round_trips_and_is_empty_by_default() {
     let (manager, id) = manager_with_fixture();
     assert!(manager.fallback_chain().is_empty());

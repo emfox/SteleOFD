@@ -194,8 +194,12 @@ impl FontFace {
 
     /// Horizontal advance in 1/1000 em, the OFD convention.
     pub fn advance_width(&self, glyph: u16) -> f64 {
-        self.with_face(|f| f.glyph_hor_advance(ttf_parser::GlyphId(glyph)).unwrap_or(0) as f64)
-            .unwrap_or(0.0)
+        self.with_face(|f| {
+            let upem = f.units_per_em().max(1) as f64;
+            let units = f.glyph_hor_advance(ttf_parser::GlyphId(glyph)).unwrap_or(0) as f64;
+            units * 1000.0 / upem
+        })
+        .unwrap_or(0.0)
     }
 
     /// Glyph outline normalized to the 1/1000 em space.
