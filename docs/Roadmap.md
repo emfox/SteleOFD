@@ -12,16 +12,16 @@ place.
 ## When
 
 `0.1.1` is gone: it repaired what `0.1.0` said about itself and changed no
-behaviour. Seven items carry a version, and everything else is marked
+behaviour. Eight items carry a version, and everything else is marked
 `unversioned`: it is agreed to be worth doing, but no release has claimed it,
 and putting a number on it today would be a guess dressed as a plan.
 
 | Version | Theme |
 | --- | --- |
-| `0.2` | R1 the document that renders but lays out wrong, R4 what verification leaves unchecked, R5 the gates that are missing |
+| `0.2` | R1 the document that renders but lays out wrong, R4 what verification leaves unchecked, R5 the gates that are missing, R7 which crates are published |
 | `0.3` | R2 the reader rebuilt on a published application-UI guideline, R18 text placed without its direction, R6 what the budgets do not measure |
 | `0.3+` | R3 the Android build that crashes on open |
-| unversioned | R7 publishing the crates, R8 packaging, and the rest |
+| unversioned | R8 packaging, and the rest |
 
 ## Ranking
 
@@ -55,6 +55,7 @@ that no other row does; a `0.3+` promise would be one the project cannot keep.
 | R1 | **CJK text lays out wrong.** `ofdrw/999.ofd`, a VAT invoice from a Huhuang SDK producer, came out with its Chinese readable but its lines crooked. The cause was the offsets in table 46: a producer writes one offset per column and leaves `g`, the spaces and the digits to stand for glyphs that take no room of their own, so a list shorter than the text places glyphs rather than stepping over them. Both readings now exist and the page reads as an invoice. What is left is the direction attributes of table 47, and a place to hang the sample: it is fetched, not committed, so the tests that pin the layout skip on a machine that has not fetched it. | `0.2` | Wrong output on a real document, which comes first: a legal document that reads but sits crooked is still one nobody can print. | The layout tests in `crates/steleofd-core/tests` hold the sample's own offsets, and `tests/fixtures/ofdrw` is fetched by every job that runs them, so a change to the flattening fails CI rather than a developer's memory. |
 | R4 | **Verification checks the maths and not the certificate.** `verification` proves that a key signed the bytes; nothing proves the key belongs to who the document says, nothing compares the certificate's validity window against the signature time, and `signed_digest` refuses any check method other than SM3 while the README promises international algorithms. An encrypted container is recorded at open and then never mentioned again, so what a caller sees for one is untested. | `0.2` | This is the second rule: a verdict of valid that skipped the trust question is worse than a slow reader, because it is the answer people act on. | A signature with a certificate outside its validity window, a certificate from another issuer, a SHA-256 check value, and an encrypted container each get a verdict of their own, and the README states exactly which of them is checked. |
 | R5 | **The gates that a 686-package tree needs and does not have.** No dependency audit runs in CI; `cargo-fuzz` covers the ZIP and XML readers only, while the TrueType parser, the DER/X.509 reader and the PDF writer all take bytes from outside; and no test opens a document, edits it, writes it, opens the result and compares. | `0.2` | Enforcement ranks fourth, but it is cheap here and it guards exactly the code the first two rows change. | `cargo-audit` (or `cargo-deny`) fails the build on a vulnerable dependency, three fuzz targets exist for the uncovered parsers, and a read-write-read test covers each editing command. |
+| R7 | **Which crates are published, and the crates cannot be published.** No crate states a `publish` field but `steleofd-testkit`, which sets it to false, and only two carry a `description`; `cargo-semver-checks` therefore compares all 26 crates against the last tag, compiling each twice, which is 13 of its 14 minutes. The registry surface has never been decided: a shell (`reader`, `cli`, `ffi`, `wasm`, `server`) is shipped as an application, and `testkit` is not for consumers at all. | Publishing is how the engine reaches anyone not building an application around it, and the surface has to be settled before the metadata is written, or the metadata is written 26 times. The `semver` gate pays for the undecided list on every push. | Each crate states its `publish` field and a one-line reason, the published set carries `description`, `license`, `repository` and `README`, `cargo-semver-checks` runs only over that set, and `cargo add steleofd-core` builds under `0.1.1`. |
 
 ### 0.3
 
@@ -74,7 +75,6 @@ that no other row does; a `0.3+` promise would be one the project cannot keep.
 
 | # | Item | Why it ranks here | Done when |
 | --- | --- | --- | --- |
-| R7 | **The crates cannot be published.** None carries a `description` or a `README`; three carry a description and none the rest of what a registry wants. `0.1.0` therefore shipped as a tag and a set of artefacts, not as something a project can add as a dependency. | It is how the engine reaches anyone who is not building a whole application around it, and it is a day of metadata rather than a design question — but nobody has asked for it yet. | `steleofd-core` and the crates it re-exports are on crates.io under `0.1.1`, and `cargo add steleofd-core` builds. |
 | R8 | **Packaging, for every form that is deployed.** The release page has loose executables: no `.deb`, `.rpm`, `.dmg` or Windows installer, no container image for `steleofd-server`, and the 77 MB static C archive ships beside the shared one whether or not anyone asked. | Installs and upgrades are how an OA deployment adopts a tool, and the server is the form most likely to be deployed first. It sits below the correctness work because the executable already runs. | At least one Linux package, one macOS bundle, one Windows installer and one container image are published per tag, and each installs without a manual step. |
 | R9 | **A corpus from more than one producer.** `compliance/corpus` carries our own documents plus the standard's fetched samples; the 28-document third-party set is fetched, not committed. | A construct our writer never emits is one we have only ever read through somebody else's file, so this grows what every other row is checked against — but the fetched set already covers the common producers. | The committed corpus holds documents from at least two producers, and CI validates all of them against the annex A schemas. |
 | R10 | **The C ABI's threading contract is unwritten.** The header states what a borrowed pointer survives and what a null handle does; it says nothing about whether two threads may call into one handle, which an OA back end will ask before it adopts the library. | A missing sentence blocks an adoption, which is more than most of the rows below cost — but it is a sentence in a header rather than work in the engine. | The header states the threading and re-entrancy contract, and a test exercises whatever the sentence promises. |
