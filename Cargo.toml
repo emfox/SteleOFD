@@ -131,8 +131,6 @@ sm3        = "0.5"
 sm4        = "0.6"
 x509-parser = "0.18"
 der        = { version = "0.8", features = ["alloc", "oid"] }
-pkcs12     = "0.1"
-rsa        = "0.9"
 
 # Concurrency and runtime, behind the server feature
 tokio      = { version = "1", features = ["full"] }

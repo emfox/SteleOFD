@@ -24,7 +24,6 @@ clap = { version = "4", features = ["derive"] }
 anyhow.workspace = true
 tracing.workspace = true
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-indicatif = "0.17"
 serde_json.workspace = true
 
 [dev-dependencies]
