@@ -689,6 +689,47 @@ mod tests {
     }
 
     #[test]
+    fn a_turned_glyph_is_drawn_turned() {
+        let manager = manager_with_font();
+        let run = steleofd_display::GlyphRun {
+            font: FontId(0),
+            size: steleofd_common::Millimeter::new(6.0),
+            glyphs: vec![65u16],
+            advances: vec![5.0],
+            text: Some("A".to_string()),
+            cluster_map: None,
+            codes_are_glyphs: false,
+            transform: Affine::translate(2.0, 12.0),
+            glyph_angle: 90.0,
+            fill: Some(Paint::Solid(Color::rgba(0, 0, 0, 255))),
+            stroke: None,
+            letter_spacing: 0.0,
+            word_spacing: 0.0,
+            bbox: Rect::new(2.0, 6.0, 5.0, 6.0),
+        };
+        let page = page_with(vec![DrawOp::Text(run)]);
+        let out = render(&page, &manager);
+        // A quarter turn lays the glyph's height along x, so the ink becomes
+        // wider than it is tall where an upright one is the other way round.
+        let (mut min_x, mut max_x, mut min_y, mut max_y) = (u32::MAX, 0u32, u32::MAX, 0u32);
+        for y in 0..out.height {
+            for x in 0..out.width {
+                if pixel_at(&out, x, y)[0] < 128 {
+                    min_x = min_x.min(x);
+                    max_x = max_x.max(x);
+                    min_y = min_y.min(y);
+                    max_y = max_y.max(y);
+                }
+            }
+        }
+        let (wide, tall) = (max_x - min_x, max_y - min_y);
+        assert!(
+            wide > tall,
+            "turned glyph spans {wide}x{tall}, expected it wider than tall"
+        );
+    }
+
+    #[test]
     fn a_run_missing_a_glyph_is_counted_without_failing_the_page() {
         let manager = manager_with_font();
         // 65 is 'A', which Orbitron draws; 60000 is far past any glyph the

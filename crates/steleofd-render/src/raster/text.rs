@@ -71,12 +71,9 @@ pub(crate) fn draw_text_inner(
             missing += 1;
             continue;
         };
-        // Outlines are normalized to 1/1000 em with y pointing up: scale to
-        // millimetres first, then position, or the run origin gets scaled too.
-        let k = run.size.value() / 1000.0;
-        let glyph = Affine::new(k, 0.0, 0.0, -k, 0.0, 0.0)
-            .then(Affine::translate(offset, 0.0))
-            .then(run.transform);
+        // Outlines are normalized to 1/1000 em with y pointing up, and the
+        // run's own matrix scales, turns and places them from there.
+        let glyph = run.glyph_matrix(offset);
         let total = total_transform(state, &page_box, options.dpi);
         let ts_path = to_ts_path(&outline, total.pre_concat(to_ts(glyph)))?;
         if let Some(paint) = &run.fill {
