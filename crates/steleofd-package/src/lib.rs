@@ -325,6 +325,15 @@ fn normalize(path: &Path) -> String {
 
 /// Map a `zip` failure onto the container taxonomy.
 fn map_zip_error(e: zip::result::ZipError) -> OfdError {
+    // An entry the archive encrypted and no password can open is not damage:
+    // the bytes are exactly what the producer wrote. Reporting it as
+    // corruption would invite a caller to retry what will always fail.
+    if matches!(
+        &e,
+        zip::result::ZipError::UnsupportedArchive(zip::result::ZipError::PASSWORD_REQUIRED)
+    ) {
+        return OfdError::PasswordRequired;
+    }
     let reason = match &e {
         zip::result::ZipError::Io(io) => io.to_string(),
         other => other.to_string(),
