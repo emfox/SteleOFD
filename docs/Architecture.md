@@ -171,32 +171,39 @@ exemption, because a C ABI requires it. Two designs were reworked to reach this:
 
 ## 3. Crate inventory
 
-| Layer | Crate | Responsibility |
-|---|---|---|
-| L0 | `steleofd-common` | Value types (`Millimeter`, `Point`, `Rect`), versions, standard constants |
-| L0 | `steleofd-error` | Unified error taxonomy |
-| L0 | `steleofd-io` | `ByteSource` and `ByteSink` abstraction over file, memory, slice and directory |
-| L1 | `steleofd-model` | OFD data model (`CT_*` and `ST_*` type system) |
-| L1 | `steleofd-xml` | XML codec wrapping quick-xml |
-| L1 | `steleofd-package` | ZIP container I/O, safety validation, atomic replacement |
-| L1.5 | `steleofd-i18n` | Fluent localization layer |
-| L2 | `steleofd-geometry` | Backend-independent `Path` and `Affine` |
-| L2 | `steleofd-font` | Font registry, metrics, shaping, system fallback |
-| L2 | `steleofd-display` | **Display list IR**, the architectural keystone |
-| L2 | `steleofd-parser` | `Content.xml` to `DisplayList` |
-| L2 | `steleofd-render` | Raster backend: display list to pixels |
-| L3 | `steleofd-crypto` | SM2, SM3, SM4, X.509, PKCS#12 |
-| L3 | `steleofd-sign` | Electronic seals and verification per GB/T 38540 |
-| L3 | `steleofd-convert` | Format interconversion: PDF, SVG, PNG (Office, OCR planned) |
-| L3 | `steleofd-edit` | Command-pattern editing with an undo stack |
-| L3 | `steleofd-search` | Full-text search and reverse glyph-to-Unicode lookup |
-| L3 | `steleofd-archive` | Archival compliance validation (OFD-A) |
-| L3 | `steleofd-print` | Printing, reusing the display list for fidelity |
-| L4 | `steleofd-core` | Facade, trimming capabilities through features |
-| L5 | `steleofd-cli` | Command line tool `steleofd` |
-| L5 | `steleofd-wasm` | Browser WebAssembly bindings |
-| L5 | `steleofd-ffi` | C ABI shared library for OA and ERP integration |
-| L5 | `steleofd-server` | HTTP service for batch conversion and verification |
+The **Registry** column is what `publish` in each manifest states, and
+`scripts/check_publish.py` holds it to the whole workspace. A published crate is
+one a consumer adds as a dependency; the rest ship as an application, and
+`steleofd-i18n` and `steleofd-testkit` stay in the workspace alone.
+
+| Layer | Crate | Responsibility | Registry |
+|---|---|---|---|
+| L0 | `steleofd-common` | Value types (`Millimeter`, `Point`, `Rect`), versions, standard constants | published |
+| L0 | `steleofd-error` | Unified error taxonomy | published |
+| L0 | `steleofd-io` | `ByteSource` and `ByteSink` abstraction over file, memory, slice and directory | published |
+| L1 | `steleofd-model` | OFD data model (`CT_*` and `ST_*` type system) | published |
+| L1 | `steleofd-xml` | XML codec wrapping quick-xml | published |
+| L1 | `steleofd-package` | ZIP container I/O, safety validation, atomic replacement | published |
+| L1.5 | `steleofd-i18n` | Fluent localization layer | withheld |
+| L2 | `steleofd-geometry` | Backend-independent `Path` and `Affine` | published |
+| L2 | `steleofd-font` | Font registry, metrics, shaping, system fallback | published |
+| L2 | `steleofd-display` | **Display list IR**, the architectural keystone | published |
+| L2 | `steleofd-parser` | `Content.xml` to `DisplayList` | published |
+| L2 | `steleofd-render` | Raster backend: display list to pixels | published |
+| L3 | `steleofd-crypto` | SM2, SM3, SM4, X.509, PKCS#12 | published |
+| L3 | `steleofd-sign` | Electronic seals and verification per GB/T 38540 | published |
+| L3 | `steleofd-convert` | Format interconversion: PDF, SVG, PNG (Office, OCR planned) | published |
+| L3 | `steleofd-edit` | Command-pattern editing with an undo stack | published |
+| L3 | `steleofd-search` | Full-text search and reverse glyph-to-Unicode lookup | published |
+| L3 | `steleofd-archive` | Archival compliance validation (OFD-A) | published |
+| L3 | `steleofd-print` | Printing, reusing the display list for fidelity | published |
+| L4 | `steleofd-core` | Facade, trimming capabilities through features | published |
+| L5 | `steleofd-cli` | Command line tool `steleofd` | withheld |
+| L5 | `steleofd-wasm` | Browser WebAssembly bindings | withheld |
+| L5 | `steleofd-ffi` | C ABI shared library for OA and ERP integration | withheld |
+| L5 | `steleofd-reader` | Desktop reader (egui/eframe) | withheld |
+| L5 | `steleofd-server` | HTTP service for batch conversion and verification | withheld |
+| — | `steleofd-testkit` | Fixtures shared by the test suites, a dev-dependency only | withheld |
 
 ---
 
