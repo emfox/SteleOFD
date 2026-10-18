@@ -32,7 +32,7 @@ for anyone working on it.
 |---|---|
 | Reading and rendering | GB/T 33190 rendering, lossless zoom, sharded loading for large documents |
 | Conversion | OFD to and from PDF, SVG and PNG; batch and merge. Office and OCR are planned, not built |
-| Signatures | SM2/SM3/SM4 and international algorithms, per GB/T 38540-2020 |
+| Signatures | SM2 signatures, SM3 digests, SM4 encryption and GB/T 20520 timestamps. Verification checks the proof and the certificate's window at the signing time; it does not check who issued the certificate. International algorithms are named by GB/T 38540-2020 but not implemented |
 | Delivery | One engine, built as a CLI, WebAssembly, a C ABI library, an HTTP service and a desktop reader |
 | Localization | Fluent message layer, en-US and zh-CN |
 
