@@ -43,19 +43,29 @@ pub fn tlv(tag: u8, content: &[u8]) -> Vec<u8> {
 }
 
 /// A DER object identifier from its arcs.
+///
+/// The first two arcs share one sub-identifier; every arc after them is
+/// base-128, high bit set on all but the last group. Each arc is a single
+/// number, so arc 501 is the two groups `83 75` — the digits `5`, `0`, `1`
+/// never appear literally in the encoding.
 pub fn oid(arcs: &[u64]) -> Vec<u8> {
-    let mut content = vec![(arcs[0] * 40 + arcs[1]) as u8];
+    let mut content = Vec::new();
+    content.extend(base128(arcs[0] * 40 + arcs[1]));
     for &arc in &arcs[2..] {
-        let mut stack = vec![(arc & 0x7f) as u8];
-        let mut rest = arc >> 7;
-        while rest > 0 {
-            stack.push(((rest & 0x7f) as u8) | 0x80);
-            rest >>= 7;
-        }
-        stack.reverse();
-        content.extend(stack);
+        content.extend(base128(arc));
     }
     tlv(0x06, &content)
+}
+
+fn base128(mut value: u64) -> Vec<u8> {
+    let mut groups = vec![(value & 0x7f) as u8];
+    value >>= 7;
+    while value > 0 {
+        groups.push(((value & 0x7f) as u8) | 0x80);
+        value >>= 7;
+    }
+    groups.reverse();
+    groups
 }
 
 /// A minimal X.509 certificate carrying one SM2 public key: just enough

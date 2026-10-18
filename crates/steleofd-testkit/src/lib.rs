@@ -5,6 +5,7 @@
 #![warn(missing_docs)]
 
 mod bench;
+mod chain;
 mod der;
 mod document;
 mod golden;
@@ -12,6 +13,7 @@ mod signed;
 mod timestamp;
 
 pub use bench::{OBJECTS_PER_PAGE, bench_archive};
+pub use chain::{BasicConstraints, CertSpec, KeyUsageBits, TestChain, cert_der, chain, key_id};
 pub use der::{base64_of, oid, sm2_cert_der, sm2_cert_der_over, tlv};
 pub use document::{
     CONTENT_ENTRY, CONTENT_XML, DOCUMENT_ENTRY, DOCUMENT_XML, OFD_XML, OFD_XML_SIGNED, SIGN_FILE,
