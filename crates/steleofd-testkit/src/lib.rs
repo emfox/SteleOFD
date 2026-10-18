@@ -12,7 +12,7 @@ mod signed;
 mod timestamp;
 
 pub use bench::{OBJECTS_PER_PAGE, bench_archive};
-pub use der::{base64_of, oid, sm2_cert_der, tlv};
+pub use der::{base64_of, oid, sm2_cert_der, sm2_cert_der_over, tlv};
 pub use document::{
     CONTENT_ENTRY, CONTENT_XML, DOCUMENT_ENTRY, DOCUMENT_XML, OFD_XML, OFD_XML_SIGNED, SIGN_FILE,
     SIGN_VALUE_FILE, SIGNS_ENTRY, SIGNS_XML, annotated_archive, archive_of, base_entries,

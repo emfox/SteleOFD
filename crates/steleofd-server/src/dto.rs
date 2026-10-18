@@ -71,6 +71,9 @@ pub struct SignatureStatus {
     pub location: String,
     /// Whether the signature still matches the content it covers.
     pub valid: bool,
+    /// Whether nothing was proved: a digest this build does not compute, or a
+    /// certificate outside its window. False beside `valid` is a real mismatch.
+    pub unchecked: bool,
 }
 
 /// What the service says about itself on the health route.
@@ -113,6 +116,7 @@ pub fn signature_statuses(doc: &mut Document) -> Result<Vec<SignatureStatus>, Of
         .map(|(sig, status)| SignatureStatus {
             location: sig.base_loc.clone(),
             valid: matches!(status, VerifyStatus::Valid),
+            unchecked: matches!(status, VerifyStatus::Unchecked),
         })
         .collect())
 }

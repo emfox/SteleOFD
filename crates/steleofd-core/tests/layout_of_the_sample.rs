@@ -30,7 +30,7 @@ fn page(index: usize) -> Option<steleofd_display::PageDisplay> {
     // to catch, so an unreadable page may not come back as a skip.
     let displayed = doc.page(index).cloned();
     assert!(
-        displayed.is_some() || !std::env::var_os("CI").is_some_and(|v| !v.is_empty()),
+        displayed.is_some() || std::env::var_os("CI").is_none_or(|v| v.is_empty()),
         "page {index} of the sample did not flatten"
     );
     displayed

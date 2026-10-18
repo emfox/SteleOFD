@@ -61,13 +61,23 @@ pub fn oid(arcs: &[u64]) -> Vec<u8> {
 /// A minimal X.509 certificate carrying one SM2 public key: just enough
 /// structure for a parser to read the SubjectPublicKeyInfo back out.
 pub fn sm2_cert_der(public_key: &[u8]) -> Vec<u8> {
+    sm2_cert_der_over(public_key, "260101000000Z", "991231235959Z")
+}
+
+/// The same certificate with the validity window a test needs: `not_before`
+/// and `not_after` are UTCTime, so both must fall before 2050.
+pub fn sm2_cert_der_over(public_key: &[u8], not_before: &str, not_after: &str) -> Vec<u8> {
     let ec_public_key = oid(&[1, 2, 840, 10045, 2, 1]);
     let sm2_curve = oid(&[1, 2, 156, 10197, 1, 301]);
     let algorithm = tlv(0x30, &[ec_public_key, sm2_curve].concat());
     let empty_name = tlv(0x30, &[]);
     let validity = tlv(
         0x30,
-        &[tlv(0x17, b"260101000000Z"), tlv(0x17, b"991231235959Z")].concat(),
+        &[
+            tlv(0x17, not_before.as_bytes()),
+            tlv(0x17, not_after.as_bytes()),
+        ]
+        .concat(),
     );
     let mut bit_string = vec![0x00];
     bit_string.extend_from_slice(public_key);

@@ -4,9 +4,11 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
+pub mod time;
 pub mod units;
 pub mod version;
 
+pub use time::{parse_compact_utc, parse_utc};
 pub use units::{Millimeter, Point, Rect, Unit};
 pub use version::{OfdVersion, SpecVersion};
 

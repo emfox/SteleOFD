@@ -61,6 +61,8 @@ pub struct SignatureData {
     pub location: String,
     /// Whether the signature still matches the content it covers.
     pub valid: bool,
+    /// Whether nothing was proved, which `valid` being false does not say.
+    pub unchecked: bool,
 }
 
 /// Search every page, returning the trimmed hits.
@@ -92,6 +94,7 @@ pub fn signature_statuses(doc: &mut Document) -> Result<Vec<SignatureData>, OfdE
         .map(|(sig, status)| SignatureData {
             location: sig.base_loc.clone(),
             valid: matches!(status, VerifyStatus::Valid),
+            unchecked: matches!(status, VerifyStatus::Unchecked),
         })
         .collect())
 }

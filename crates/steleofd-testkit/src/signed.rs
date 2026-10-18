@@ -78,7 +78,9 @@ pub fn signed_descriptor_entries(
     // The proof is the SM2 signature over the digest of the referenced files.
     let mut package = open_package(&entries);
     let sig = read_signature(&mut package, SIGN_FILE).expect("descriptor");
-    let digest = signed_digest(&mut package, &sig).expect("digest");
+    let digest = signed_digest(&mut package, &sig)
+        .expect("digest")
+        .expect("the fixture signs with SM3");
     let proof = base64_of(&pair.sign(&digest));
     let cert = base64_of(&sm2_cert_der(&pair.public_bytes()));
     // The descriptor records each protected file's own digest, so a reader can

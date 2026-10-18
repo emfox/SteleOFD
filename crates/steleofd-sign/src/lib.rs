@@ -10,13 +10,18 @@ use steleofd_error::{OfdError, SignatureError};
 use steleofd_package::Package;
 use steleofd_xml::cursor::{Cursor, Event};
 
-/// Outcome of verifying one signature.
+/// Outcome of verifying one signature. A proof that does not match and one
+/// this build could not check call for different reactions, so the two are
+/// kept apart rather than both reported as a tampered document.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VerifyStatus {
     /// Signature matches the referenced content.
     Valid,
     /// Content no longer matches the signed digest.
     Tampered,
+    /// Nothing was proved either way: the descriptor names a digest this
+    /// build does not implement, or a certificate outside its own window.
+    Unchecked,
 }
 
 /// One entry of the signature list file.
@@ -458,6 +463,34 @@ fn absorb_text(
     }
 }
 
+/// Verify a signature against an externally supplied public key.
+pub fn verify_with_public_key(
+    package: &mut Package,
+    sig: &Signature,
+    public_key: &[u8],
+) -> Result<VerifyStatus, OfdError> {
+    let Some(digest) = signed_digest(package, sig)? else {
+        return Ok(VerifyStatus::Unchecked);
+    };
+    let ok = sm2_verify(public_key, &digest, &sig.check_value)
+        .map_err(|e| OfdError::Signature(SignatureError::UnsupportedFormat(e.to_string())))?;
+    Ok(if ok {
+        VerifyStatus::Valid
+    } else {
+        VerifyStatus::Tampered
+    })
+}
+
+/// Whether the signature's own certificate covers the time the document says
+/// it was signed. A certificate that had already expired is the one case a
+/// reader can settle by itself: the key did not belong to the signer then.
+fn certificate_covers_signing_time(sig: &Signature) -> Option<bool> {
+    let der = sig.certificate.as_ref()?;
+    let at = steleofd_common::parse_utc(sig.sign_time.as_deref()?)?;
+    let cert = Certificate::parse_der(der).ok()?;
+    Some(!cert.is_expired_at(at))
+}
+
 /// Verify a signature: recompute the digest over all referenced files and
 /// check the SM2 check value against the embedded certificate. The proof is
 /// read from the file `SignedValue` points at, since it is not inline.
@@ -474,23 +507,12 @@ pub fn verify_signature(package: &mut Package, sig: &Signature) -> Result<Verify
     })?;
     let mut sig = sig.clone();
     sig.read_check_value(package)?;
+    if certificate_covers_signing_time(&sig) == Some(false) {
+        // The proof may be perfectly good and still prove nothing: a key that
+        // had expired may be used by anyone holding it.
+        return Ok(VerifyStatus::Unchecked);
+    }
     verify_with_public_key(package, &sig, parsed.public_key())
-}
-
-/// Verify a signature against an externally supplied public key.
-pub fn verify_with_public_key(
-    package: &mut Package,
-    sig: &Signature,
-    public_key: &[u8],
-) -> Result<VerifyStatus, OfdError> {
-    let digest = signed_digest(package, sig)?;
-    let ok = sm2_verify(public_key, &digest, &sig.check_value)
-        .map_err(|e| OfdError::Signature(SignatureError::UnsupportedFormat(e.to_string())))?;
-    Ok(if ok {
-        VerifyStatus::Valid
-    } else {
-        VerifyStatus::Tampered
-    })
 }
 
 /// Same as [`verify_with_public_key`], but reads the proof from the file the
@@ -505,16 +527,18 @@ pub fn verify_descriptor(
     verify_with_public_key(package, &sig, public_key)
 }
 
-/// Compute the digest that is signed: the SM3 digest of the concatenated
-/// per-file digests, in reference order. Where a reference carries its own
-/// `CheckValue` that is used, so a mismatch is visible without re-reading.
-pub fn signed_digest(package: &mut Package, sig: &Signature) -> Result<Vec<u8>, OfdError> {
+/// The digest that is signed: SM3 over the concatenated per-file digests, in
+/// reference order, with each `CheckValue` compared as it goes. A reference
+/// naming a digest this build lacks answers `None`, which is not an edit.
+pub fn signed_digest(package: &mut Package, sig: &Signature) -> Result<Option<Vec<u8>>, OfdError> {
     let mut combined = Vec::new();
     for reference in &sig.references {
         if !reference.check_method.eq_ignore_ascii_case("SM3") {
-            return Err(OfdError::Signature(SignatureError::UnsupportedFormat(
-                reference.check_method.clone(),
-            )));
+            tracing::debug!(
+                method = %reference.check_method,
+                "a reference names a digest this build does not compute"
+            );
+            return Ok(None);
         }
         let data = package
             .read_optional(&reference.file_ref)?
@@ -526,7 +550,7 @@ pub fn signed_digest(package: &mut Package, sig: &Signature) -> Result<Vec<u8>, 
         }
         combined.extend_from_slice(&digest);
     }
-    Ok(sm3(&combined).to_vec())
+    Ok(Some(sm3(&combined).to_vec()))
 }
 
 fn base64_decode(text: &str) -> Option<Vec<u8>> {

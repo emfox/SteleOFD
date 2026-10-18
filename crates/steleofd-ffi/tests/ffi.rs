@@ -449,6 +449,7 @@ fn verify_reports_the_valid_signature() {
         let mut sigs: [SteleofdSignature; 2] = std::array::from_fn(|_| SteleofdSignature {
             location: ptr::null(),
             valid: 0,
+            unchecked: 0,
         });
         let again = steleofd_verify(
             doc,
@@ -461,5 +462,6 @@ fn verify_reports_the_valid_signature() {
         let location = unsafe { CStr::from_ptr(sigs[0].location) };
         assert_eq!(location.to_str().unwrap(), SIGN_FILE);
         assert_ne!(sigs[0].valid, 0, "the embedded certificate verifies");
+        assert_eq!(sigs[0].unchecked, 0, "a verdict of valid proves something");
     });
 }

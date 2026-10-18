@@ -60,6 +60,8 @@ pub struct SteleofdSignature {
     pub location: *const c_char,
     /// Whether the signature still matches the content it covers.
     pub valid: c_int,
+    /// Whether nothing was proved, which `valid` being false does not say.
+    pub unchecked: c_int,
 }
 
 /// Memory the C side borrows from, rewritten by each call that hands out data.
@@ -331,6 +333,7 @@ pub extern "C" fn steleofd_verify(
             sigs.add(written).write(SteleofdSignature {
                 location,
                 valid: sig.valid as c_int,
+                unchecked: sig.unchecked as c_int,
             })
         };
         written += 1;

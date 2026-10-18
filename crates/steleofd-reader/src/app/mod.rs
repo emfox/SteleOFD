@@ -136,11 +136,13 @@ pub enum Verdict {
 }
 
 impl Verdict {
-    /// Translate the engine's two-state answer into the reader's three.
+    /// The engine already keeps an unchecked signature apart from a tampered
+    /// one, so this is a rename rather than a judgement.
     fn from_status(status: VerifyStatus) -> Self {
         match status {
             VerifyStatus::Valid => Self::Valid,
             VerifyStatus::Tampered => Self::Tampered,
+            VerifyStatus::Unchecked => Self::Unverified,
         }
     }
 }

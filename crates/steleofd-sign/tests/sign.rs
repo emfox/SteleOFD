@@ -11,7 +11,7 @@ use steleofd_sign::{
 use steleofd_testkit::{
     DOCUMENT_ENTRY, OFD_XML_SIGNED, SIGN_FILE, SIGNS_ENTRY, SIGNS_XML, TimestampSpec, base64_of,
     descriptor, open_package, open_package_bytes, signed_descriptor_entries, signed_fixture,
-    timestamp_token,
+    sm2_cert_der_over, timestamp_token,
 };
 
 const SIG_FILE: &str = "Signs/Sign_0.xml";
@@ -29,7 +29,7 @@ fn make_signature(entries: &[(&str, Vec<u8>)], _refs: &[(&str, &str)]) -> (Signa
     let sig = read_signature(&mut package, SIG_FILE).expect("descriptor");
     let pair = Sm2KeyPair::generate().expect("keygen");
     let mut signed = sig.clone();
-    if let Ok(digest) = signed_digest(&mut package, &sig) {
+    if let Ok(Some(digest)) = signed_digest(&mut package, &sig) {
         signed.check_value = pair.sign(&digest);
     }
     (signed, pair)
@@ -130,27 +130,6 @@ fn missing_reference_is_tampered() {
 }
 
 #[test]
-fn unsupported_check_method_is_rejected() {
-    let entries = vec![
-        ("Signs/Signs.xml", signs_xml()),
-        (
-            SIG_FILE,
-            descriptor("s", &[("SHA256", "Doc_0/Document.xml")]).into_bytes(),
-        ),
-        ("Doc_0/Document.xml", b"x".to_vec()),
-    ];
-    let (sig, pair) = make_signature(&entries, &[("SHA256", "Doc_0/Document.xml")]);
-    let mut package = open(&entries);
-    let out = verify_with_public_key(&mut package, &sig, &pair.public_bytes());
-    match out {
-        Err(OfdError::Signature(e)) => {
-            assert!(e.to_string().contains("unsupported signature format"));
-        }
-        other => panic!("expected unsupported format, got {other:?}"),
-    }
-}
-
-#[test]
 fn verify_without_certificate_fails_cleanly() {
     let entries = vec![
         ("Signs/Signs.xml", signs_xml()),
@@ -178,7 +157,9 @@ fn digest_depends_on_reference_order() {
         ];
         let mut package = open(&entries);
         let sig = read_signature(&mut package, SIG_FILE).expect("descriptor");
-        signed_digest(&mut package, &sig).expect("digest")
+        signed_digest(&mut package, &sig)
+            .expect("digest")
+            .expect("SM3 is implemented")
     };
     let ab = mk(&[("SM3", "a.bin"), ("SM3", "b.bin")]);
     let ba = mk(&[("SM3", "b.bin"), ("SM3", "a.bin")]);
@@ -223,7 +204,9 @@ fn gb_t_33190_18_2_1_digest_covers_every_reference() {
     ];
     let mut package = open(&entries);
     let sig = read_signature(&mut package, SIG_FILE).expect("descriptor");
-    let first = signed_digest(&mut package, &sig).expect("digest");
+    let first = signed_digest(&mut package, &sig)
+        .expect("digest")
+        .expect("SM3 is implemented");
     assert_eq!(first.len(), 32, "the SM3 digest is 32 bytes");
 
     let changed = vec![
@@ -235,7 +218,9 @@ fn gb_t_33190_18_2_1_digest_covers_every_reference() {
         ("Doc_0/Document.xml", b"edited content".to_vec()),
     ];
     let mut package = open(&changed);
-    let second = signed_digest(&mut package, &sig).expect("digest");
+    let second = signed_digest(&mut package, &sig)
+        .expect("digest")
+        .expect("SM3 is implemented");
     assert_ne!(
         first, second,
         "changing a referenced file changes the digest"
@@ -725,4 +710,118 @@ fn gb_t_33190_18_2_4_a_timestamp_whose_proof_is_wrong_is_unverified() {
         TimestampStatus::Bound,
         "a tampered token must not read as bound"
     );
+}
+
+/// Apply `edit` to the fixture's descriptor text, leaving every other entry.
+fn resign_descriptor(bytes: &[u8], edit: impl Fn(&str) -> String) -> String {
+    let mut package = open_package_bytes(bytes);
+    let descriptor = package.read_string(SIGN_FILE).expect("descriptor");
+    edit(&descriptor)
+}
+
+/// Rebuild an archive with one entry's bytes replaced, keeping every other.
+fn swap_entry(bytes: &[u8], path: &str, replacement: &[u8]) -> Vec<u8> {
+    let mut package = open_package_bytes(bytes);
+    let names: Vec<String> = package.entries().to_vec();
+    let mut entries: Vec<(String, Vec<u8>)> = Vec::with_capacity(names.len());
+    for name in &names {
+        let data = package.read(name).expect("entry reads");
+        entries.push((name.clone(), data));
+    }
+    for (name, data) in &mut entries {
+        if name == path {
+            *data = replacement.to_vec();
+        }
+    }
+    let borrowed: Vec<(&str, &[u8])> = entries
+        .iter()
+        .map(|(name, data)| (name.as_str(), data.as_slice()))
+        .collect();
+    steleofd_package::build_archive(&borrowed).expect("archive")
+}
+
+#[test]
+fn gb_t_33190_18_2_4_a_digest_this_build_cannot_compute_is_unchecked() {
+    // The descriptor may name a digest this build does not implement. Nothing
+    // about the content is in doubt, so a verdict of tampered would be a claim
+    // nobody made; the signature is reported as unchecked instead.
+    let entries = vec![
+        ("Signs/Signs.xml", signs_xml()),
+        (
+            SIG_FILE,
+            descriptor("s", &[("SHA256", "Doc_0/Document.xml")]).into_bytes(),
+        ),
+        ("Doc_0/Document.xml", b"x".to_vec()),
+    ];
+    let sig = read_signature(&mut open(&entries), SIG_FILE).expect("descriptor");
+    let pair = Sm2KeyPair::generate().expect("keygen");
+    let mut package = open(&entries);
+    assert_eq!(
+        verify_with_public_key(&mut package, &sig, &pair.public_bytes()).expect("verdict"),
+        VerifyStatus::Unchecked,
+        "an algorithm this build lacks is not evidence of an edit"
+    );
+}
+
+#[test]
+fn gb_t_33190_18_2_4_a_signature_that_does_not_add_up_is_tampered() {
+    // The proof is intact and the digest runs, so a mismatch here is the
+    // content having moved, which is the one thing that is a claim.
+    let (bytes, pair) = signed_fixture();
+    let mut package = open_package_bytes(&bytes);
+    let mut sig = read_signature(&mut package, SIGN_FILE).expect("descriptor");
+    sig.read_check_value(&mut package).expect("proof");
+    sig.check_value[8] ^= 0xff;
+    assert_eq!(
+        verify_with_public_key(&mut package, &sig, &pair.public_bytes()).expect("verdict"),
+        VerifyStatus::Tampered
+    );
+}
+
+#[test]
+fn gb_t_33190_18_2_4_a_certificate_past_its_window_is_unchecked() {
+    // An expired key proves possession and nothing else, since anyone could
+    // have used it. GB/T 38540-2020 clause 7.2 judges it at the signing time,
+    // so the descriptor's SignatureDateTime is what the window is read against.
+    let (bytes, pair) = signed_fixture();
+    let expired = base64_of(&sm2_cert_der_over(
+        &pair.public_bytes(),
+        "180101000000Z",
+        "190101000000Z",
+    ));
+    let dated = |descriptor: &str| {
+        let with_cert = replace_element(descriptor, "Cert", &expired);
+        let with_time = with_cert.replace(
+            "<SignedValue>",
+            "<SignatureDateTime>2026-01-01T00:00:00Z</SignatureDateTime><SignedValue>",
+        );
+        assert!(with_time.contains("2026-01-01"), "the date reaches the XML");
+        with_time
+    };
+    let path = swap_entry(
+        &bytes,
+        SIGN_FILE,
+        resign_descriptor(&bytes, dated).as_bytes(),
+    );
+    let mut package = open_package_bytes(&path);
+    let sig = read_signature(&mut package, SIGN_FILE).expect("descriptor");
+    assert_eq!(
+        verify_signature(&mut package, &sig).expect("verdict"),
+        VerifyStatus::Unchecked,
+        "an expired certificate is not a match and not an edit either"
+    );
+}
+
+/// Replace the text of the first `Cert` element in a descriptor.
+fn replace_element(xml: &str, element: &str, value: &str) -> String {
+    let open = format!("<{element}>");
+    let close = format!("</{element}>");
+    let Some(start) = xml.find(&open) else {
+        return xml.to_string();
+    };
+    let from = start + open.len();
+    let Some(end) = xml[from..].find(&close) else {
+        return xml.to_string();
+    };
+    format!("{}{}{}", &xml[..from], value, &xml[from + end..])
 }

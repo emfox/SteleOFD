@@ -80,6 +80,10 @@ typedef struct SteleofdSignature {
      * Whether the signature still matches the content it covers.
      */
     int valid;
+    /**
+     * Whether nothing was proved, which `valid` being false does not say.
+     */
+    int unchecked;
 } SteleofdSignature;
 
 /**
