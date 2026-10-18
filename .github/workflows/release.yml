@@ -91,17 +91,18 @@ jobs:
           ls -la dist
 
       # The builds are unsigned, so the checksum is the only thing a
-      # downloader can hold a binary to. It is generated here, next to the
-      # bytes, so it can never describe a file the tag did not build.
+      # downloader can hold a binary to. Each job names its own manifest
+      # because a same-named asset replaces rather than merges, and the job
+      # at the foot of this file merges them once every upload has landed.
       - name: Checksum the executable
-        run: python3 scripts/release_checksums.py generate dist
+        run: python3 scripts/release_checksums.py generate dist --sums SHA256SUMS.${{ matrix.name }}
 
       - name: Attach the executable to the release
         uses: softprops/action-gh-release@v2
         with:
           files: |
             dist/steleofd-reader-*
-            dist/SHA256SUMS
+            dist/SHA256SUMS.${{ matrix.name }}
 
   # The same reader, built for the browser. It is a separate job because its
   # output is a page rather than an executable: `wasm-bindgen` writes the module
@@ -157,14 +158,14 @@ jobs:
           ls -la
 
       - name: Checksum the page
-        run: python3 scripts/release_checksums.py generate dist
+        run: python3 scripts/release_checksums.py generate dist --sums SHA256SUMS.web
 
       - name: Attach the page to the release
         uses: softprops/action-gh-release@v2
         with:
           files: |
             dist/steleofd-reader-web.zip
-            dist/SHA256SUMS
+            dist/SHA256SUMS.web
 
   # Android needs a native library the activity can load, and an archive the
   # system can install. The SDK and NDK are fetched here; the archive is put
@@ -215,14 +216,14 @@ jobs:
             --out dist
 
       - name: Checksum the package
-        run: python3 scripts/release_checksums.py generate dist
+        run: python3 scripts/release_checksums.py generate dist --sums SHA256SUMS.android
 
       - name: Attach the package to the release
         uses: softprops/action-gh-release@v2
         with:
           files: |
             dist/steleofd-reader-android.apk
-            dist/SHA256SUMS
+            dist/SHA256SUMS.android
 
   # The libraries other programs link against, and the browser bindings of the
   # engine itself. These are the same on every desktop system, so one build.
@@ -274,11 +275,10 @@ jobs:
       # Same reason as the desktop job: no signing key ships with a release, so
       # every artefact is published beside the digest that identifies it.
       - name: Checksum the artefacts
-        run: python3 scripts/release_checksums.py generate dist
+        run: python3 scripts/release_checksums.py generate dist --sums SHA256SUMS.artefacts
 
       # Notes come from the changelog so the archive and the release page are
-      # one commit. The manifest stays out: each job above uploads its own and
-      # a same-named asset replaces rather than merges.
+      # one commit.
       - name: Read the release notes from the changelog
         run: python3 scripts/release_notes.py "$GITHUB_REF_NAME" > dist/RELEASE_NOTES.md
 
@@ -291,5 +291,54 @@ jobs:
             dist/*.js
             dist/*.wasm
             dist/*.d.ts
+            dist/SHA256SUMS.artefacts
           body_path: dist/RELEASE_NOTES.md
           generate_release_notes: false
+
+  # A release asset is replaced, never merged, by an upload of the same name.
+  # So the jobs above publish one manifest each and this one gathers them into
+  # the `SHA256SUMS` a downloader expects, then removes the parts.
+  checksums:
+    needs: [desktop, web, android, artefacts]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Gather the manifests
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p dist
+          gh release download "$GITHUB_REF_NAME" --dir dist --pattern 'SHA256SUMS.*'
+          # A re-run finds the parts already merged and removed by the last
+          # one, so the manifest that is there is the whole of it.
+          if compgen -G 'dist/SHA256SUMS.*' > /dev/null; then
+            cat dist/SHA256SUMS.* | sort -k2 > dist/SHA256SUMS
+          else
+            gh release download "$GITHUB_REF_NAME" --dir dist --pattern 'SHA256SUMS' --clobber
+          fi
+          wc -l dist/SHA256SUMS
+
+      # The merged file is checked against the assets themselves before it is
+      # published, so a manifest that could not be verified never ships.
+      - name: Check the manifest against the downloads
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          rm -rf assets
+          gh release download "$GITHUB_REF_NAME" --dir assets --clobber \
+            --pattern 'steleofd-*' --pattern 'libsteleofd_ffi.*' \
+            --pattern 'steleofd_*' --pattern 'steleofd.h'
+          cp dist/SHA256SUMS assets/
+          python3 scripts/release_checksums.py verify assets
+
+      - name: Attach the manifest and drop the parts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "$GITHUB_REF_NAME" dist/SHA256SUMS --clobber
+          if compgen -G 'dist/SHA256SUMS.*' > /dev/null; then
+            for part in dist/SHA256SUMS.*; do
+              gh release delete-asset "$GITHUB_REF_NAME" "$(basename "$part")" --yes
+            done
+          fi

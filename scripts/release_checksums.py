@@ -13,8 +13,13 @@ are listed in sorted path order so two runs over the same bytes produce the same
 manifest — a release asset that changes for no reason is a release asset nobody
 can diff.
 
+A release builds in several jobs that upload in parallel, and an asset of the
+same name replaces rather than merges, so each job writes a `SHA256SUMS.<job>`
+of its own and one job merges them into the `SHA256SUMS` that ships.
+
 Usage:
     python3 scripts/release_checksums.py generate dist/
+    python3 scripts/release_checksums.py generate dist/ --sums SHA256SUMS.linux
     python3 scripts/release_checksums.py verify   dist/
     python3 scripts/release_checksums.py verify   dist/ --sums SHA256SUMS
     python3 scripts/release_checksums.py selftest
