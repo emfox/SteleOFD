@@ -12,6 +12,31 @@ section only when a release actually has one.
 
 ## [Unreleased]
 
+### What the build now refuses
+
+- **A dependency with a published advisory fails the build.** `cargo deny`
+  runs over the lock file, so a vulnerable crate is caught even when nobody
+  here named it, and `deny.toml` records a decision rather than a command line.
+  Licences, forbidden crates and unknown registries are checked in the same
+  pass. Six crates this project depended on were upgraded to get there: `zip`
+  4 to 9, `lopdf` 0.36 to 0.45, `zbus_xml` to 5.2, plus `time`.
+- **`rsa` and `pkcs12` are gone.** Neither was reachable from any line of code;
+  `rsa` 0.9 carries the Marvin timing advisory, and dropping an unused
+  dependency removes the advisory along with the compile time. `indicatif` had
+  the same problem on the CLI side.
+- **The font parser, the certificate reader and the PDF writer are fuzzed.**
+  All three take bytes a document supplies. `ttf_face` reads a face and asks it
+  every question the renderer asks, `certificate` reads a DER certificate and
+  walks the accessors a path check calls, and `pdf_write` feeds coordinates a
+  page may hold into the writer.
+- **An archive built and reopened is compared against what it should hold.**
+  The test replaces a page file, empties one, changes a page extent, drops an
+  embedded face and removes the document entry, and asserts on the document
+  reopened from each result rather than on the writer's own bookkeeping.
+- **A name the reader would collapse is refused at write time.** `build_archive`
+  accepted `A//x.xml`, wrote it, and then reported `A/x.xml` on the way back,
+  so the writer lost an entry it had just written.
+
 ## [0.1.1] - 2026-10-18
 
 A repair release for `0.1.0`: no behaviour changed, and the two defects were

@@ -18,7 +18,7 @@ and putting a number on it today would be a guess dressed as a plan.
 
 | Version | Theme |
 | --- | --- |
-| `0.2` | R5 the gates that are missing, R7 which crates are published |
+| `0.2` | R7 which crates are published |
 | `0.3` | R18 text placed without its direction, R2 the reader rebuilt on a published application-UI guideline, R6 what the budgets do not measure |
 | `0.3+` | R3 the Android build that crashes on open |
 | unversioned | R8 packaging, and the rest |
@@ -52,7 +52,6 @@ one the project cannot keep.
 
 | # | Item | Target | Why it ranks here | Done when |
 | --- | --- | --- | --- | --- |
-| R5 | **The gates that a 686-package tree needs and does not have.** No dependency audit runs in CI; `cargo-fuzz` covers the ZIP and XML readers only, while the TrueType parser, the DER/X.509 reader and the PDF writer all take bytes from outside; and no test opens a document, edits it, writes it, opens the result and compares. | `0.2` | Enforcement ranks fourth, but it is cheap here and it guards exactly the code the first two rows change. | `cargo-audit` (or `cargo-deny`) fails the build on a vulnerable dependency, three fuzz targets exist for the uncovered parsers, and a read-write-read test covers each editing command. |
 | R7 | **The crates are not on a registry yet.** The surface is decided: nineteen crates publish and seven do not, each stating its `publish` field and a `description`. What remains is the act. `cargo package -p steleofd-core` still fails because the crates it depends on are not there, so publishing has to go leaf first through the dependency layers, and a version already on the registry cannot be replaced. The semver gate is now set for it: a break needs a minor version and the check compares against the parent commit, so the bump a break costs is decided when it merges rather than when it ships. | Publishing is how the engine reaches anyone not building an application around it. The decision is now cheap to carry out, but it is irreversible per version, which is why it waits for a release rather than a commit. | `cargo add steleofd-core` builds against crates.io at `0.1.1`, the release notes name the nineteen crates, and a CI job fails when a published crate's metadata stops being complete. |
 
 ### 0.3
@@ -79,6 +78,8 @@ one the project cannot keep.
 | R11 | **The last export parity gap.** SVG 1.1 has no mesh gradient, so a Gouraud mesh keeps its mean colour there. | One recorded limit, in one export format, and no SVG construct that removes it. | Either an SVG output that carries the mesh, or the limit documented as final in `docs/Interop.md`. |
 | R12 | **The constructs `office` and `ocr` name.** The two `convert` features are declared placeholders; nothing consumes them. | Chapter-level conversion is absent rather than wrong, and it is a feature nobody has asked for yet. | DOCX or OOXML conversion reads a document without a fidelity loss the changelog has to hedge, or the features are deleted. |
 | R13 | **A worked example per delivery form, compiled in CI.** | The crates are documented; what is missing is a start-to-finish example a third party can copy. It comes after R7, because an example is worth little if nobody can add the crate. | Five examples build in CI, one per delivery form, and each is linked from the README. |
+| R21 | **The accessibility stack is one eframe upgrade behind.** `accesskit_unix` reaches `zbus`, whose own authors have deprecated `zbus_names` and `zvariant` into it; RustSec records the deprecation as unmaintained, and the fix is a newer `eframe`, not a change this project can make. `deny.toml` names the three advisories so the audit stays green in the meantime. | It fails the `deps` gate for a reason that is not this project's to fix, so it sits here rather than above — but an ignore list is a debt, not a settlement. | `cargo deny check advisories` passes with those three IDs removed from the ignore list. |
+| R22 | **The font stack is unmaintained.** `ttf-parser` and `rustybuzz` have both been declared unmaintained by their authors; RustSec's suggested replacements are `skrifa` and `harfrust`. The parsing and shaping APIs the renderer is built on would have to be rewritten, and the font parser is reachable with bytes a document supplies, which is why `ttf_face` fuzzes it. | A security fix to either crate will not come, and the parser takes hostile input — but the exposure today is fuzzed and the replacement is a rewrite, not a bump. | Both crates are replaced, `ttf_face` runs against the replacement, and the three font advisories leave `deny.toml`. |
 | R14 | **A public extension surface** for colour profiles, font providers and render backends. | An organisation cannot plug in its own without forking. It follows the examples because an extension point without a worked example is a guess. | The three provider traits are public, documented, and exercised by the examples above. |
 | R15 | **Other shells.** A Tauri shell and a Qt or GTK binding, each a separate crate over `core`. | Both are alternatives to the shipped `egui` reader, not gaps in it. | A second shell opens a document and draws a page through `core` alone. |
 | R16 | **Track GB/T 33190 revisions** and keep the annex A schemas regenerable from the standard text. | Nothing is pending today; this is the standing task that keeps it that way. | A new revision of the standard regenerates the schemas with the existing scripts and the register stays consistent. |
@@ -104,7 +105,6 @@ a caller says so rather than in advance.
 - **`0.1.0` and `0.1.1` changed no behaviour.** The first rewrote the release
   notes by capability and renamed the documents to `Conventions.md`; the second
   fixed where the release notes come from and a placeholder `repository`.
-  Layout changes from here on land in `0.2`.
 - **Far-term work is not scheduled.** The rows above describe a direction, not
   dates.
 
