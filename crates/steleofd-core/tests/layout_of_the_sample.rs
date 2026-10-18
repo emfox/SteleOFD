@@ -36,16 +36,20 @@ fn page(index: usize) -> Option<steleofd_display::PageDisplay> {
     displayed
 }
 
-/// The run with the most glyphs on a page: the tax control code here.
-fn longest(page: &steleofd_display::PageDisplay) -> GlyphRun {
-    page.ops
+/// The rows of the tax control code, top to bottom. The code is drawn as four
+/// runs now that a row return breaks the line, and it is the only text on the
+/// page that comes in runs of this size.
+fn rows(page: &steleofd_display::PageDisplay) -> Vec<GlyphRun> {
+    let mut found: Vec<GlyphRun> = page
+        .ops
         .iter()
         .filter_map(|op| match op {
-            DrawOp::Text(run) => Some(run.clone()),
+            DrawOp::Text(run) if run.glyphs.len() == 28 => Some(run.clone()),
             _ => None,
         })
-        .max_by_key(|run| run.glyphs.len())
-        .expect("a page with text")
+        .collect();
+    found.sort_by(|a, b| a.transform.f.total_cmp(&b.transform.f));
+    found
 }
 
 fn starts(run: &GlyphRun) -> Vec<(f64, f64)> {
@@ -134,25 +138,32 @@ fn a_date_drawn_character_by_character_keeps_its_own_characters() {
 
 #[test]
 fn a_tax_control_code_of_a_hundred_and_twelve_characters_runs_off_its_box() {
-    // 112 characters of a 4.2333 mm face, stepped 2.5 mm. DeltaX gives 27 steps
-    // and a carriage return of -67.5, the row's own 27 * 2.5, so each row of 28
-    // starts where the first did. Dropping the escaped markup would leave 99.
+    // 112 characters stepped 2.5 mm. DeltaX gives 27 steps and a return of the
+    // row's own 27 * 2.5, so each row starts where the first did, and DeltaY
+    // drops it 4.5. A return is a step no single run carries, so rows.
     let page = page(0).expect("the sample is fetched");
-    let run = longest(&page);
-    assert_eq!(
-        run.glyphs.len(),
-        112,
-        "every character of the code reaches the page"
-    );
-    let placed = starts(&run);
-    let rows: Vec<f64> = placed.iter().step_by(28).map(|(x, _)| *x).collect();
+    let rows = rows(&page);
     assert_eq!(rows.len(), 4, "the code is set in four rows");
-    assert!(
-        rows.iter().all(|x| near(*x, rows[0])),
-        "every row starts where the first did: {rows:?}"
-    );
-    let span = placed.last().expect("glyphs").0 - rows[0];
-    assert!(near(span, 27.0 * 2.5), "a column per character, got {span}");
+    let total: usize = rows.iter().map(|run| run.glyphs.len()).sum();
+    assert_eq!(total, 112, "every character of the code reaches the page");
+    let mut fell = 0.0;
+    for (index, run) in rows.iter().enumerate() {
+        let placed = starts(run);
+        assert_eq!(placed.len(), 28, "row {index} holds the row's characters");
+        assert!(
+            near(placed[0].0, 3.0),
+            "row {index} starts at the left of the code: {:?}",
+            placed[0]
+        );
+        assert!(
+            near(placed[0].1, 4.732 + fell),
+            "row {index} sits below the one above it by 4.5: {:?}",
+            placed[0]
+        );
+        let span = placed.last().expect("glyphs").0 - placed[0].0;
+        assert!(near(span, 27.0 * 2.5), "a column per character, got {span}");
+        fell += 4.5;
+    }
 }
 
 #[test]

@@ -663,7 +663,7 @@ struct GlyphAt<'a> {
     placed: bool,
     /// Offsets of each character, already read the way this list means them.
     advances: Vec<f64>,
-    /// The same offsets along `DeltaY`: where a character sits across the run.
+    /// Where each character sits across the run, accumulated from the steps.
     cross: Vec<f64>,
     /// Text size, which is what an unlisted character advances by.
     size: f64,
@@ -683,6 +683,9 @@ impl<'a> GlyphAt<'a> {
         let advances: Vec<f64> = (0..chars.len())
             .map(|i| advance_of(code, &chars, i, size, placed))
             .collect();
+        // A line placed on both axes names one step per pair of characters, so
+        // DeltaY only says how far the next row sits: a row returning on both
+        // axes lands its first character back at the left edge, a row down.
         let cross = crossings(&code.delta_y, chars.len(), placed);
         debug_assert_eq!(cross.len(), chars.len());
         Self {
@@ -740,9 +743,9 @@ fn advance_of(code: &TextCode, chars: &[char], i: usize, size: f64, placed: bool
     code.delta_x.get(i).copied().unwrap_or(size)
 }
 
-/// Where each character sits across the line. DeltaY measures a step between
-/// glyphs the way DeltaX does, so a stepping list accumulates, and a list that
-/// places glyphs names the spot of each one it reached.
+/// Where each character sits across the line, from the steps that reach it. A
+/// placing list already names the spot of each character it covers, so its
+/// steps are read as the spots themselves.
 fn crossings(delta_y: &[f64], len: usize, placed: bool) -> Vec<f64> {
     if placed {
         return (0..len)
@@ -804,8 +807,9 @@ struct RunShape {
 }
 
 /// Cut a code's characters into the stretches its transforms name, leaving
-/// the characters no transform covers as stretches of their own.
-fn run_shapes(chars: &[char], transforms: &[CGTransform]) -> Vec<RunShape> {
+/// the characters no transform covers as stretches of their own. A step along
+/// that walks the pen back starts a row, and a row is a stretch of its own.
+fn run_shapes(code: &TextCode, chars: &[char], transforms: &[CGTransform]) -> Vec<RunShape> {
     let len = chars.len();
     let mut spans: Vec<(usize, usize, &CGTransform)> = Vec::new();
     for t in transforms {
@@ -820,6 +824,23 @@ fn run_shapes(chars: &[char], transforms: &[CGTransform]) -> Vec<RunShape> {
     }
     spans.sort_by_key(|(start, _, _)| *start);
 
+    // A stretch opens at a transform, at a row, or where the last one ended.
+    let mut cuts: Vec<usize> = vec![0];
+    for (start, _, _) in &spans {
+        cuts.push(*start);
+    }
+    // A step that walks the pen back ends a row, so the next character opens
+    // the one below. The last character has no step after it, and a code whose
+    // offsets are places rather than steps says nothing about rows.
+    for i in 1..len.saturating_sub(1) {
+        if code.delta_x.get(i).is_some_and(|step| *step < 0.0) {
+            cuts.push(i + 1);
+        }
+    }
+    cuts.retain(|at| *at < len);
+    cuts.sort_unstable();
+    cuts.dedup();
+
     let mut out: Vec<RunShape> = Vec::new();
     let mut at = 0usize;
     for (start, end, t) in spans {
@@ -827,17 +848,12 @@ fn run_shapes(chars: &[char], transforms: &[CGTransform]) -> Vec<RunShape> {
         if start < at {
             continue;
         }
+        for row in rows_within(&cuts, at, start) {
+            out.push(plain_shape(chars, at, row));
+            at = row;
+        }
         if start > at {
-            out.push(RunShape {
-                glyphs: chars[at..start]
-                    .iter()
-                    .map(|c| u32::from(*c) as u16)
-                    .collect(),
-                glyph_index: false,
-                cluster_map: None,
-                start: at,
-                end: start,
-            });
+            out.push(plain_shape(chars, at, start));
         }
         // A glyph maps to the first character it replaces, so a one-to-many
         // transform keeps every glyph anchored to the same character.
@@ -853,19 +869,37 @@ fn run_shapes(chars: &[char], transforms: &[CGTransform]) -> Vec<RunShape> {
         });
         at = end;
     }
+    for row in rows_within(&cuts, at, len) {
+        out.push(plain_shape(chars, at, row));
+        at = row;
+    }
     if at < len {
-        out.push(RunShape {
-            glyphs: chars[at..len]
-                .iter()
-                .map(|c| u32::from(*c) as u16)
-                .collect(),
-            glyph_index: false,
-            cluster_map: None,
-            start: at,
-            end: len,
-        });
+        out.push(plain_shape(chars, at, len));
     }
     out
+}
+
+/// The row breaks that fall strictly inside `from..to`, so a break on either
+/// end of a stretch does not cut it twice.
+fn rows_within(cuts: &[usize], from: usize, to: usize) -> Vec<usize> {
+    cuts.iter()
+        .copied()
+        .filter(|cut| *cut > from && *cut < to)
+        .collect()
+}
+
+/// Characters drawn as they are written, from `start` up to `end`.
+fn plain_shape(chars: &[char], start: usize, end: usize) -> RunShape {
+    RunShape {
+        glyphs: chars[start..end]
+            .iter()
+            .map(|c| u32::from(*c) as u16)
+            .collect(),
+        glyph_index: false,
+        cluster_map: None,
+        start,
+        end,
+    }
 }
 
 /// Split a `TextCode` into the stretches a `CGTransform` carves out of it.
@@ -874,7 +908,7 @@ fn run_shapes(chars: &[char], transforms: &[CGTransform]) -> Vec<RunShape> {
 fn segments_of(code: &TextCode, transforms: &[CGTransform], size: f64) -> Vec<RunSegment> {
     let chars: Vec<char> = code.text.chars().collect();
     let at = GlyphAt::new(code, &code.text, size);
-    let shapes = run_shapes(&chars, transforms);
+    let shapes = run_shapes(code, &chars, transforms);
     let mut out: Vec<RunSegment> = Vec::with_capacity(shapes.len());
     for shape in shapes {
         // A stretch that names no glyph took its characters out of the text
@@ -885,7 +919,8 @@ fn segments_of(code: &TextCode, transforms: &[CGTransform], size: f64) -> Vec<Ru
         let start = at.offset(shape.start);
         let across = at.across(shape.start);
         // A run draws the glyphs it lists, so its advances follow its glyphs:
-        // the renderer reaches each glyph by the advance before it.
+        // the renderer reaches each glyph by the advance before it, which
+        // leaves the first of a row to the offset the row already carries.
         let advances: Vec<f64> = (0..shape.glyphs.len())
             .map(|k| at.reach_at(shape.start + k))
             .collect();

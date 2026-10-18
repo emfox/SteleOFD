@@ -20,6 +20,12 @@ fn starts(object_attrs: &str, code: &str) -> Vec<(f64, f64)> {
         .expect("a run on the page")
 }
 
+/// Every glyph of a code, run after run, for a case whose code is cut into
+/// rows rather than drawn as one run.
+fn every_glyph(object_attrs: &str, code: &str) -> Vec<(f64, f64)> {
+    runs(object_attrs, code).into_iter().flatten().collect()
+}
+
 /// Where every run of a page starts, run by run, so a test can tell a code
 /// that was cut into runs from one that was not.
 fn runs(object_attrs: &str, code: &str) -> Vec<Vec<(f64, f64)>> {
@@ -127,7 +133,7 @@ fn a_repeated_offset_runs_as_long_as_its_count() {
 fn the_last_offset_is_a_step_the_line_does_not_take() {
     // A list this long is read as steps, and the step past the last glyph is
     // one the line would take for a glyph that is not there.
-    let placed = starts(
+    let placed = every_glyph(
         "",
         r#"<TextCode X="0" Y="0" DeltaX="2 2 -4 2 2">abcdef</TextCode>"#,
     );
@@ -209,4 +215,30 @@ fn a_later_stretch_starts_where_the_one_before_it_ended() {
         vec![10.0, 14.0],
         "the second stretch after the first, and stepped by its own offsets"
     );
+}
+
+/// A line that returns to the left edge starts the next row, and DeltaY says
+/// how far down it sits. One run cannot carry the return, so the code is drawn
+/// as one run per row.
+#[test]
+fn a_line_that_returns_starts_a_row_below() {
+    let page = runs(
+        "",
+        r#"<TextCode X="3" Y="5" DeltaX="g 2 2 -4 g 2 2 -4 g 2 2"
+                    DeltaY="g 2 0 4.5 g 2 0 4.5 g 2 0">abcdefghi</TextCode>"#,
+    );
+    assert_eq!(page.len(), 3, "three rows of three: {page:?}");
+    for (row, placed) in page.iter().enumerate() {
+        assert_eq!(xs(placed), vec![3.0, 5.0, 7.0], "row {row} columns");
+        let across = ys(placed);
+        assert!(
+            across.windows(2).all(|w| (w[0] - w[1]).abs() < 1e-9),
+            "row {row} keeps its own height: {across:?}"
+        );
+        let first = placed[0].1;
+        assert!(
+            (first - (5.0 + row as f64 * 4.5)).abs() < 1e-9,
+            "row {row} sits below the one above by 4.5, got {first}"
+        );
+    }
 }
