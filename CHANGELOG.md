@@ -12,6 +12,17 @@ section only when a release actually has one.
 
 ## [Unreleased]
 
+### Changed
+
+- **A document that names a font the backend cannot read is refused, not
+  fatal.** `ttf-parser` asserts that a table directory fits inside its file and
+  inside 32 bits, and the directory is the document's to choose, so a crafted
+  file ended the process where the reader expected an error. Such a font is now
+  a parse error like any other.
+- **A name an archive reader would collapse is refused at write time.**
+  `build_archive` accepted `A//x.xml`, wrote it, and reported `A/x.xml` on the
+  way back, so the writer lost an entry it had just written.
+
 ## [0.1.1] - 2026-10-18
 
 A repair release for `0.1.0`: no behaviour changed, and the two defects were

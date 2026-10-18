@@ -162,6 +162,22 @@ ignore list names the advisory with the reason and the roadmap item that
 retires it. Duplicate versions are warnings: two copies of a crate are a smell,
 but a version pin already records where they came from.
 
+Three gate shapes recur, and each exists because the failure it guards against
+is silent:
+
+- **A dependency is upgraded or dropped out of policy, not out of tidiness.**
+  `zip` 9, `lopdf` 0.45 and `zbus_xml` 5.2 are the versions that carry no
+  advisory, and the writer changes each of them asks for ship in the same
+  commit. A crate no line of code reaches is removed rather than upgraded, so
+  the advisory leaves with the compile time.
+- **A parser that reads bytes a document supplies is fuzzed**, not only a parser
+  that reads what a caller passes. `ttf_face`, `certificate` and `pdf_write` sit
+  beside `package_open` and `xml_cursor` for that reason, and `fuzz run` is the
+  check that calls them.
+- **An edit is checked by reopening what it wrote.** A test that asserts on the
+  writer's own bookkeeping passes while the reader loses an entry, so
+  `steleofd-edit` asserts on the document it gets back.
+
 Everything in `review` reports rather than blocks. A script can measure where
 the lines landed; it cannot know why they landed there, and a move, a rename or
 an i18n change that reaches its callers all look like a squash from the outside.
