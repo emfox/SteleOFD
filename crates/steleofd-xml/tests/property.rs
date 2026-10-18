@@ -86,23 +86,18 @@ proptest! {
         prop_assert!(saw_error, "<{name}> left open must be an error");
     }
 
-    /// Text content round-trips: what the cursor reports as a text event must be
-    /// the text that was written, with outer whitespace trimmed and
-    /// whitespace-only runs skipped, both by design.
+    /// Text content round-trips with only its ends trimmed: a blank inside is a
+    /// character of the value, because a `TextCode` opens with one often enough
+    /// and the offsets beside it count characters.
     #[test]
     fn text_content_round_trips(text in "[A-Za-z0-9.,:;_\\-][A-Za-z0-9.,:;_\\- ]{0,39}") {
         let xml = format!("<Root><Leaf>{text}</Leaf></Root>");
         let mut cursor = Cursor::new(&xml);
-        let mut found = None;
-        for _ in 0..16 {
-            match cursor.next_event() {
-                Ok(steleofd_xml::cursor::Event::Text(t)) => { found = Some(t); break; }
-                Ok(steleofd_xml::cursor::Event::Eof) => break,
-                Ok(_) => {}
-                Err(e) => panic!("unexpected error for {xml:?}: {e}"),
-            }
-        }
-        prop_assert_eq!(found.as_deref(), Some(text.trim()));
+        cursor.expect_start("Root").expect("root");
+        let leaf = cursor.expect_start("Leaf").expect("leaf");
+        let _ = leaf;
+        let found = cursor.read_text().expect("text");
+        prop_assert_eq!(found.as_str(), text.trim());
     }
 
     /// A whitespace-only run is never surfaced as document text, so layout

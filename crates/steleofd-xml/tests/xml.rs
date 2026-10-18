@@ -269,3 +269,13 @@ fn text_content_is_trimmed_and_whitespace_only_text_is_skipped() {
     let _root = cursor.expect_start("TextCode").expect("root");
     assert_eq!(cursor.read_text().expect("text"), "hello");
 }
+
+#[test]
+fn escaped_markup_in_text_reaches_the_caller_as_characters() {
+    // A check code is written as `&lt;` because a bare one would close the tag,
+    // and the reader has to see the character rather than lose it to the parser.
+    let xml = r#"<TextCode>00/2-7&lt;054&gt;88</TextCode>"#;
+    let mut cursor = Cursor::new(xml);
+    let _root = cursor.expect_start("TextCode").expect("root");
+    assert_eq!(cursor.read_text().expect("text"), "00/2-7<054>88");
+}

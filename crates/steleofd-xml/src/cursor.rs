@@ -59,7 +59,9 @@ pub enum Event {
     Start(Node),
     /// A closing tag for the named element.
     End(String),
-    /// Character data, already unescaped and trimmed.
+    /// Character data, already unescaped. One entity is one event, so a run
+    /// written around `&lt;` arrives in pieces; `read_text` joins them and
+    /// trims the ends.
     Text(String),
     /// The document ended.
     Eof,
@@ -147,9 +149,10 @@ impl<'a> Cursor<'a> {
     pub fn with_max_depth(xml: &'a str, max_depth: usize) -> Self {
         let mut reader = quick_xml::Reader::from_str(xml);
         let config = reader.config_mut();
-        // OFD writes escaped entities in attributes and text, so unescaping stays
-        // on; prefix stripping is handled here instead so local names are stable.
-        config.trim_text(true);
+        // Blanks are left where the producer put them: a `TextCode` may open
+        // with one and the offsets below count characters, so trimming here
+        // would shift every glyph. `read_text` trims the ends of the value.
+        config.trim_text(false);
         config.expand_empty_elements = false;
         Self {
             reader,
@@ -203,20 +206,31 @@ impl<'a> Cursor<'a> {
                 }
                 quick_xml::events::Event::Text(text) => {
                     let owning = text.xml10_content();
-                    let trimmed = owning.trim();
-                    if trimmed.is_empty() {
+                    if owning.trim().is_empty() {
                         continue;
                     }
-                    return Ok(Event::Text(trimmed.to_string()));
+                    return Ok(Event::Text(owning.to_string()));
+                }
+                quick_xml::events::Event::GeneralRef(reference) => {
+                    // quick-xml hands `&lt;` back as its own event rather than
+                    // folding it into the text around it, so resolving it here
+                    // is what keeps a `<` in a value from vanishing.
+                    let Some(resolved) = resolve_reference(&reference)? else {
+                        continue;
+                    };
+                    if resolved.is_empty() {
+                        continue;
+                    }
+                    return Ok(Event::Text(resolved));
                 }
                 quick_xml::events::Event::CData(cdata) => {
                     // CDATA is taken verbatim by design: it exists precisely so the
                     // author can write characters that would otherwise be markup.
-                    let trimmed = cdata.into_inner().trim().to_string();
-                    if trimmed.is_empty() {
+                    let owned = cdata.into_inner().to_string();
+                    if owned.trim().is_empty() {
                         continue;
                     }
-                    return Ok(Event::Text(trimmed));
+                    return Ok(Event::Text(owned));
                 }
                 quick_xml::events::Event::Eof => {
                     // quick-xml reports a clean EOF for a truncated document, so
@@ -285,22 +299,43 @@ impl<'a> Cursor<'a> {
         }
     }
 
-    /// Collect the character data of the element just opened.
-    /// Used for leaf elements such as `<DocRoot>` whose value is their text.
+    /// Collect the character data of the element just opened. Only the ends of
+    /// the value lose their blanks: the markup around it is indented, while a
+    /// blank inside is a character the caller asked for.
     pub fn read_text(&mut self) -> Result<String> {
         let mut out = String::new();
         loop {
             match self.next_event()? {
                 Event::Text(t) => out.push_str(&t),
-                Event::End(_) => return Ok(out),
+                Event::End(_) => return Ok(out.trim().to_string()),
                 Event::Start(nested) => {
                     // Nested markup is not text; skip it so a stray element cannot
                     // splice its contents into the parent's value.
                     self.skip_element(&nested)?;
                 }
-                Event::Eof => return Ok(out),
+                Event::Eof => return Ok(out.trim().to_string()),
             }
         }
+    }
+}
+
+/// Resolve one entity reference to the text it stands for. A reference the
+/// standard does not define is left as it was written, so a producer's own
+/// entity reaches the caller rather than disappearing.
+fn resolve_reference(reference: &quick_xml::events::BytesRef<'_>) -> Result<Option<String>> {
+    if let Some(ch) = reference.resolve_char_ref().map_err(|e| {
+        OfdError::Xml(steleofd_error::XmlError::Syntax {
+            line: 0,
+            col: 0,
+            msg: format!("undecodable character reference: {e}"),
+        })
+    })? {
+        return Ok(Some(ch.to_string()));
+    }
+    let name = reference.as_ref();
+    match quick_xml::escape::resolve_predefined_entity(name) {
+        Some(value) => Ok(Some(value.to_string())),
+        None => Ok(Some(format!("&{name};"))),
     }
 }
 
