@@ -5,7 +5,7 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
-use steleofd_crypto::{Certificate, TimeStampToken, sm2_verify, sm3};
+use steleofd_crypto::{Certificate, TimeStampToken, TrustAnchors, sm2_verify, sm3, validate_path};
 use steleofd_error::{OfdError, SignatureError};
 use steleofd_package::Package;
 use steleofd_xml::cursor::{Cursor, Event};
@@ -22,6 +22,33 @@ pub enum VerifyStatus {
     /// Nothing was proved either way: the descriptor names a digest this
     /// build does not implement, or a certificate outside its own window.
     Unchecked,
+    /// The proof adds up, but no path from the signer certificate ends at an
+    /// anchor the caller named. Kept apart from [`Self::Tampered`] because a
+    /// document that was edited and a signer outside the caller's trust are
+    /// different incidents, and from [`Self::Unchecked`] because the proof
+    /// itself is sound.
+    Untrusted,
+}
+
+/// What the caller asked the engine to settle.
+///
+/// GB/T 38540-2020 7.3 e) 1) requires a certification path check, and neither
+/// it nor any OFD standard says where the root comes from. The anchor is
+/// therefore an argument, not a default: an engine that shipped roots would be
+/// deciding on the caller's behalf who may sign.
+#[derive(Debug, Clone, Copy)]
+pub enum TrustPolicy<'a> {
+    /// The proof, the digest and the certificate's own validity window. The
+    /// issuer is not examined, which is what [`verify_signature`] answers.
+    Proof,
+    /// The proof and a path from the signer certificate to one of `anchors`,
+    /// walking through `intermediates` when the signature embeds only the leaf.
+    Issuer {
+        /// The certificates the caller accepts as the top of a chain.
+        anchors: &'a TrustAnchors,
+        /// Certificates between the signer and an anchor, in any order.
+        intermediates: &'a [Certificate],
+    },
 }
 
 /// One entry of the signature list file.
@@ -494,7 +521,30 @@ fn certificate_covers_signing_time(sig: &Signature) -> Option<bool> {
 /// Verify a signature: recompute the digest over all referenced files and
 /// check the SM2 check value against the embedded certificate. The proof is
 /// read from the file `SignedValue` points at, since it is not inline.
+///
+/// This answers [`TrustPolicy::Proof`] only. Whether the signer was issued by
+/// anyone the caller trusts is a separate question, and one this function does
+/// not pretend to have asked: see [`verify_signature_under`].
 pub fn verify_signature(package: &mut Package, sig: &Signature) -> Result<VerifyStatus, OfdError> {
+    verify_signature_under(package, sig, &TrustPolicy::Proof)
+}
+
+/// Verify a signature under a stated trust policy.
+///
+/// The digest, the check value and the certificate's own window are checked the
+/// same way whatever the policy. A [`TrustPolicy::Issuer`] adds the
+/// certification path GB/T 38540-2020 7.3 e) 1) requires, and reports
+/// [`VerifyStatus::Untrusted`] instead of [`VerifyStatus::Valid`] when that path
+/// does not reach an anchor.
+///
+/// The order matters. A broken proof is reported as [`VerifyStatus::Tampered`]
+/// whether or not a path could be built, because an edited document is a fact
+/// about the document and not about the signer.
+pub fn verify_signature_under(
+    package: &mut Package,
+    sig: &Signature,
+    policy: &TrustPolicy<'_>,
+) -> Result<VerifyStatus, OfdError> {
     let cert = sig.certificate.as_ref().ok_or_else(|| {
         OfdError::Signature(SignatureError::CertificateChain(
             "signature carries no certificate".into(),
@@ -512,13 +562,47 @@ pub fn verify_signature(package: &mut Package, sig: &Signature) -> Result<Verify
         // had expired may be used by anyone holding it.
         return Ok(VerifyStatus::Unchecked);
     }
-    verify_with_public_key(package, &sig, parsed.public_key())
+    let proof = verify_with_public_key(package, &sig, parsed.public_key())?;
+    if proof != VerifyStatus::Valid {
+        return Ok(proof);
+    }
+    let TrustPolicy::Issuer {
+        anchors,
+        intermediates,
+    } = policy
+    else {
+        return Ok(proof);
+    };
+    if !leaf_may_sign(&parsed) {
+        // 38540 7.3 e) 1) makes the key usage part of the check, and a
+        // certificate issued for encipherment is not one that may sign.
+        return Ok(VerifyStatus::Untrusted);
+    }
+    match validate_path(&parsed, anchors, intermediates) {
+        Ok(_) => Ok(VerifyStatus::Valid),
+        Err(error) => {
+            tracing::debug!(%error, "certification path does not reach an anchor");
+            Ok(VerifyStatus::Untrusted)
+        }
+    }
+}
+
+/// Whether the signer certificate's own key usage permits a document signature.
+///
+/// 0015 5.2.4.4 marks the pair `digitalSignature`/`nonRepudiation` as the
+/// signing certificate's, so a certificate that states its usage and carries
+/// neither bit is one issued for something else. A certificate with no
+/// `keyUsage` at all states nothing and is left to the path check.
+fn leaf_may_sign(cert: &Certificate) -> bool {
+    match cert.key_usage() {
+        Some(usage) => usage.may_sign(),
+        None => true,
+    }
 }
 
 /// Same as [`verify_with_public_key`], but reads the proof from the file the
 /// descriptor points at first, as a caller holding only the descriptor must.
-pub fn verify_descriptor(
-    package: &mut Package,
+pub fn verify_descriptor(    package: &mut Package,
     sig: &Signature,
     public_key: &[u8],
 ) -> Result<VerifyStatus, OfdError> {

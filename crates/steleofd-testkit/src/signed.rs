@@ -98,6 +98,41 @@ pub fn signed_descriptor_entries(
     (entries, pair)
 }
 
+/// The fixture document as `.ofd` bytes, signed with a caller-supplied
+/// certificate and key. A path check reads the extensions `sm2_cert_der` leaves
+/// out, so the tests that walk a chain have to bring their own certificate.
+pub fn signed_fixture_with(cert_der: &[u8], key: &Sm2KeyPair) -> Vec<u8> {
+    signed_fixture_over(cert_der, key, crate::document::DOCUMENT_XML.as_bytes())
+}
+
+/// The same, signed over `document` rather than the fixture's text. A test that
+/// edits the document after signing calls this to get a document whose proof no
+/// longer covers what the entry holds.
+pub fn signed_fixture_over(cert_der: &[u8], key: &Sm2KeyPair, document: &[u8]) -> Vec<u8> {
+    let refs: &[(&str, &str)] = &[("SM3", DOCUMENT_ENTRY)];
+    let mut entries: Vec<(&'static str, Vec<u8>)> = vec![
+        (DOCUMENT_ENTRY, document.to_vec()),
+        (SIGN_FILE, descriptor("sig1", refs).into_bytes()),
+    ];
+    let mut package = open_package(&entries);
+    let sig = read_signature(&mut package, SIGN_FILE).expect("descriptor");
+    let digest = signed_digest(&mut package, &sig)
+        .expect("digest")
+        .expect("the fixture signs with SM3");
+    let proof = base64_of(&key.sign(&digest));
+    let cert = base64_of(cert_der);
+    let file_digests = vec![steleofd_crypto::sm3(document).to_vec()];
+    entries.remove(0);
+    entries[0].1 =
+        descriptor_with_proof("sig1", refs, &file_digests, SIGN_VALUE_FILE, &cert).into_bytes();
+    entries.push((SIGN_VALUE_FILE, proof.into_bytes()));
+
+    let mut all = base_entries(OFD_XML_SIGNED);
+    all.push((SIGNS_ENTRY, SIGNS_XML.as_bytes().to_vec()));
+    all.append(&mut entries);
+    crate::document::archive_of(&all)
+}
+
 /// The same entries before any proof is attached, for tamper tests.
 pub fn unsigned_descriptor_entries(
     id: &str,

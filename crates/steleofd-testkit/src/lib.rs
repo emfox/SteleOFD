@@ -23,7 +23,7 @@ pub use document::{
 pub use golden::{DOCS, GoldenDoc, golden_archive, golden_book};
 pub use signed::{
     descriptor, descriptor_with_proof, fixture_bytes, signed_descriptor_entries, signed_fixture,
-    unsigned_descriptor_entries,
+    signed_fixture_over, signed_fixture_with, unsigned_descriptor_entries,
 };
 pub use timestamp::{
     SM2_SM3_OID, SM3_OID, TST_INFO_OID, TimestampSpec, timestamp_token, tst_info_der,

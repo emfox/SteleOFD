@@ -1,7 +1,7 @@
 //! Tests for signature reading and verification on synthetic packages.
 
 use steleofd_crypto::Sm2KeyPair;
-use steleofd_error::OfdError;
+use steleofd_error::{OfdError, SignatureError};
 use steleofd_package::Package;
 use steleofd_sign::{
     Reference, Signature, SignatureKind, TimestampStatus, VerifyStatus, read_coverage, read_seals,
@@ -824,4 +824,124 @@ fn replace_element(xml: &str, element: &str, value: &str) -> String {
         return xml.to_string();
     };
     format!("{}{}{}", &xml[..from], value, &xml[from + end..])
+}
+
+// The issuer question, GB/T 38540-2020 7.3 e) 1). The anchor is an argument
+// rather than a list the engine ships, so these tests pass one in.
+
+use steleofd_crypto::{Certificate, TrustAnchors};
+use steleofd_sign::{TrustPolicy, verify_signature_under};
+use steleofd_testkit::{cert_der, chain, signed_fixture_over, signed_fixture_with};
+use steleofd_testkit::SIGN_FILE as CHAIN_SIG;
+
+fn verify_under_chain(
+    der: &[u8],
+    anchors: &TrustAnchors,
+    intermediates: &[Certificate],
+) -> VerifyStatus {
+    let mut package = open_package_bytes(der);
+    let sig = read_signature(&mut package, CHAIN_SIG).expect("descriptor");
+    verify_signature_under(
+        &mut package,
+        &sig,
+        &TrustPolicy::Issuer {
+            anchors,
+            intermediates,
+        },
+    )
+    .expect("verification runs")
+}
+
+#[test]
+fn a_signer_that_chains_to_the_anchor_is_valid() {
+    let chain = chain();
+    let mut anchors = TrustAnchors::none();
+    anchors.add(&chain.root_der).expect("root anchor");
+    let intermediate = Certificate::parse_der(&chain.intermediate_der).expect("intermediate");
+    let der = signed_fixture_with(&chain.leaf_der, &chain.leaf_key);
+    assert_eq!(
+        verify_under_chain(&der, &anchors, &[intermediate]),
+        VerifyStatus::Valid
+    );
+}
+
+#[test]
+fn a_signer_outside_the_named_anchors_is_untrusted() {
+    let chain = chain();
+    // The same document, but the caller only trusts some other root.
+    let other = chain_with_other_root();
+    let mut anchors = TrustAnchors::none();
+    anchors.add(&other).expect("other anchor");
+    let intermediate = Certificate::parse_der(&chain.intermediate_der).expect("intermediate");
+    let der = signed_fixture_with(&chain.leaf_der, &chain.leaf_key);
+    assert_eq!(
+        verify_under_chain(&der, &anchors, &[intermediate]),
+        VerifyStatus::Untrusted
+    );
+}
+
+#[test]
+fn an_empty_anchor_set_makes_every_signer_untrusted() {
+    let chain = chain();
+    let intermediate = Certificate::parse_der(&chain.intermediate_der).expect("intermediate");
+    let der = signed_fixture_with(&chain.leaf_der, &chain.leaf_key);
+    assert_eq!(
+        verify_under_chain(&der, &TrustAnchors::none(), &[intermediate]),
+        VerifyStatus::Untrusted
+    );
+}
+
+#[test]
+fn the_proof_policy_does_not_look_at_the_issuer() {
+    let chain = chain();
+    let der = signed_fixture_with(&chain.leaf_der, &chain.leaf_key);
+    let mut package = open_package_bytes(&der);
+    let sig = read_signature(&mut package, CHAIN_SIG).expect("descriptor");
+    assert_eq!(
+        verify_signature_under(&mut package, &sig, &TrustPolicy::Proof).expect("verification"),
+        VerifyStatus::Valid
+    );
+}
+
+#[test]
+fn a_tampered_document_is_tampered_even_when_untrusted() {
+    let chain = chain();
+    // Signed over one text, then rebuilt over another. An incident outranks a
+    // policy question, so the verdict must be tampered and not untrusted.
+    let signed = signed_fixture_with(&chain.leaf_der, &chain.leaf_key);
+    let edited = signed_fixture_over(&chain.leaf_der, &chain.leaf_key, b"the edited document");
+    assert_ne!(signed, edited, "the two documents differ");
+
+    let mut package = open_package_bytes(&edited);
+    let sig = read_signature(&mut package, CHAIN_SIG).expect("descriptor");
+    // An edited document is reported before the path is even built: the stored
+    // per-file digest already disagrees, which is a fact about the document and
+    // not about who signed it.
+    let err = verify_signature_under(
+        &mut package,
+        &sig,
+        &TrustPolicy::Issuer {
+            anchors: &TrustAnchors::none(),
+            intermediates: &[],
+        },
+    )
+    .expect_err("the stored digest no longer matches");
+    assert!(
+        matches!(err, OfdError::Signature(SignatureError::Tampered)),
+        "{err:?}"
+    );
+}
+
+fn chain_with_other_root() -> Vec<u8> {
+    use steleofd_crypto::Sm2KeyPair;
+    use steleofd_testkit::{BasicConstraints, CertSpec, KeyUsageBits};
+    let key = Sm2KeyPair::generate().expect("key");
+    let mut spec = CertSpec::ca("Other Root", "Other Root", 77);
+    spec.subject_key_id = Some(steleofd_testkit::key_id(&key));
+    spec.basic_constraints = Some(BasicConstraints {
+        ca: true,
+        path_len: None,
+    });
+    spec.key_usage = Some(KeyUsageBits::for_ca());
+    cert_der(&spec, &key.public_bytes(), &key)
 }
