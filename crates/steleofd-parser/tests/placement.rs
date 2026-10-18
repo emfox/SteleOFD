@@ -105,18 +105,14 @@ fn a_single_glyph_needs_no_step_and_keeps_its_origin() {
     assert_eq!(placed, vec![(4.0, 3.0)]);
 }
 
-/// A negative offset is a carriage return, and the list that carries one
-/// covers the steps between its glyphs.
-///
-/// `g count value` repeats one offset `count` times. An invoice writes
-/// `DeltaX="g 11 1.5875 -17.4625"` for a line of digits, and a repeat read as
-/// a single offset would end the list a step short, which reads the list as
-/// placing glyphs: every one of them would land on the first.
+/// `g count value` repeats one offset `count` times, so a list that states a
+/// carriage return also covers the steps between its glyphs. An invoice writes
+/// `DeltaX="g 11 1.5875 -17.4625"` for a line of digits.
 #[test]
 fn a_repeated_offset_runs_as_long_as_its_count() {
     // Twelve glyphs and twelve offsets, a repeat and a return. This long a list
-    // is read as steps, so the glyphs run a column apart; read as places they
-    // would sit 1.5875, then 6.5875 and on.
+    // is read as steps, so the glyphs run a column apart; a repeat read as one
+    // offset would end it a step short, which reads it as places.
     let placed = starts(
         "",
         r#"<TextCode X="0" Y="0" DeltaX="g 11 1.5875 -17.4625">050001700111</TextCode>"#,

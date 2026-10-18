@@ -355,6 +355,12 @@ jobs:
         with:
           tool: cargo-llvm-cov
 
+      # The layout tests read a fetched sample and fail without it, so this job
+      # fetches it too: a coverage run that skipped them would report lines the
+      # suite never reached as though nothing had gone wrong.
+      - name: Fetch the samples the tests read
+        run: python3 scripts/fetch_ofdrw.py
+
       - name: Measure line coverage
         run: cargo llvm-cov --workspace --all-features --lcov --output-path lcov.info
 
