@@ -18,3 +18,11 @@ steleofd-package.workspace = true
 steleofd-parser.workspace = true
 steleofd-geometry.workspace = true
 tracing.workspace = true
+
+[dev-dependencies]
+# The round-trip test asserts on what a reader reports, not on the model the
+# command touched, so it opens the archive back through the facade.
+steleofd-core = { workspace = true, features = ["render"] }
+steleofd-display.workspace = true
+# Fixture documents whose page files a test can replace.
+steleofd-testkit.workspace = true
