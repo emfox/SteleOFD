@@ -390,8 +390,10 @@ fn is_safe_entry_name(name: &str) -> bool {
     if bytes.len() >= 2 && bytes[1] == b':' {
         return false;
     }
+    // An empty segment is not traversal, but the reader collapses it when it
+    // normalises, so a writer that kept one would lose its own entry.
     name.split(['/', '\\'])
-        .all(|part| part != ".." && part != ".")
+        .all(|part| !part.is_empty() && part != ".." && part != ".")
 }
 
 /// Whether a path is under the `Doc_*` prefix.
