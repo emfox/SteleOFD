@@ -1993,6 +1993,242 @@ fn gb_t_33190_11_3_reading_direction_and_alignment_are_kept() {
     assert_eq!(runs[0].plain_text(), "AB", "and kept its text for search");
 }
 
+/// Where a run draws its glyphs, in page space: glyph `i` sits at its own
+/// advance along the run, then through the run's transform.
+fn glyph_at(run: &steleofd_display::text::GlyphRun, i: usize) -> (f64, f64) {
+    let along: f64 = run.advances.iter().take(i).sum();
+    run.transform.apply(along, 0.0)
+}
+
+/// One text object with two glyphs, at an origin the assertions can read. The
+/// direction attributes are always stated, so a bare name never passes for a
+/// value the flattening should have read.
+fn directed_run(read: u32, chars: u32) -> steleofd_display::text::GlyphRun {
+    let attrs = format!(r#"ReadDirection="{read}" CharDirection="{chars}""#);
+    glyph_runs(
+        &attrs,
+        r#"<TextCode X="10" Y="20" DeltaX="5 5">AB</TextCode>"#,
+    )
+    .into_iter()
+    .next()
+    .unwrap_or_else(|| panic!("text run for {attrs}"))
+}
+
+fn close(a: (f64, f64), b: (f64, f64)) -> bool {
+    (a.0 - b.0).abs() < 1e-9 && (a.1 - b.1).abs() < 1e-9
+}
+
+#[test]
+fn gb_t_33190_11_3_read_direction_places_each_glyph_on_its_own_angle() {
+    // Table 47, figure 62: the three glyphs of "ABC" run along the read
+    // direction, and DeltaX steps them along it.
+    assert!(
+        close(glyph_at(&directed_run(0, 0), 1), (15.0, 20.0)),
+        "read rightwards, the second glyph follows the first"
+    );
+    let down = directed_run(90, 0);
+    assert!(
+        close(glyph_at(&down, 1), (15.0, 20.0)),
+        "read downwards, the line's own y is the page's x: got {:?}",
+        glyph_at(&down, 1)
+    );
+    let back = directed_run(180, 0);
+    assert!(
+        close(glyph_at(&back, 1), (15.0, 20.0)),
+        "read right to left, the second glyph moves back along the line: got {:?}",
+        glyph_at(&back, 1)
+    );
+    let up = directed_run(270, 0);
+    assert!(
+        close(glyph_at(&up, 1), (15.0, 20.0)),
+        "read upwards, the line's own y is the page's -x: got {:?}",
+        glyph_at(&up, 1)
+    );
+}
+
+/// Where a glyph's own baseline points, in page space: the run's `+x`, which
+/// is the glyph's baseline for one drawn straight along its line.
+fn baseline_of(run: &steleofd_display::text::GlyphRun) -> (f64, f64) {
+    run.transform.apply_vector(1.0, 0.0)
+}
+
+#[test]
+fn gb_t_33190_11_3_char_direction_turns_each_glyph() {
+    // Table 47 and figure 65: CharDirection turns a glyph about its own drawing
+    // point without moving it, so the baseline turns and the point does not.
+    let upright = directed_run(0, 0);
+    let turned = directed_run(0, 90);
+    assert!(
+        close(glyph_at(&upright, 0), (10.0, 20.0)),
+        "the first glyph sits on the code origin"
+    );
+    assert!(
+        close(glyph_at(&turned, 0), (10.0, 20.0)),
+        "turning it leaves it there: got {:?}",
+        glyph_at(&turned, 0)
+    );
+    assert!(close(baseline_of(&upright), (1.0, 0.0)));
+    assert!(
+        close(baseline_of(&turned), (0.0, 1.0)),
+        "a quarter turn clockwise takes +x to +y: got {:?}",
+        baseline_of(&turned)
+    );
+    let upside_down = directed_run(0, 180);
+    assert!(close(baseline_of(&upside_down), (-1.0, 0.0)));
+    let back = directed_run(0, 270);
+    assert!(close(baseline_of(&back), (0.0, -1.0)));
+}
+
+#[test]
+fn gb_t_33190_11_3_a_vertical_run_keeps_its_glyphs_upright() {
+    // Figure 63: the run reads downwards and each glyph stands upright, so a
+    // glyph drawn along its baseline still lies along the page's `+x`.
+    let down = directed_run(90, 0);
+    assert!(
+        close(baseline_of(&down), (1.0, 0.0)),
+        "a downward run does not turn its glyphs with it"
+    );
+    // Figure 65: a glyph that does state an angle turns from that upright one.
+    let down_turned = directed_run(90, 90);
+    assert!(
+        close(baseline_of(&down_turned), (0.0, 1.0)),
+        "a glyph turned a quarter on a downward line points down the page"
+    );
+}
+
+#[test]
+fn gb_t_33190_11_3_read_direction_turns_the_glyphs_with_the_line() {
+    // Figure 64: a run read right to left turns its glyphs with it, so the
+    // glyph stands along the page's `-x` and its neighbour 17 to the left.
+    let back = directed_run(180, 0);
+    assert!(
+        close(baseline_of(&back), (1.0, 0.0)),
+        "the pen is already turned, so a glyph on its own baseline is not: got {:?}",
+        baseline_of(&back)
+    );
+    assert!(
+        close(glyph_at(&back, 1), (15.0, 20.0)),
+        "the line runs backwards: got {:?}",
+        glyph_at(&back, 1)
+    );
+}
+
+#[test]
+fn gb_t_33190_11_3_delta_y_alone_reads_downwards() {
+    // Figure 63: even-width text set downwards states no DeltaX at all, and
+    // its DeltaY says how far the line moves on, so the second glyph sits one
+    // step along it rather than beside the first.
+    let run = glyph_run(
+        r#"ReadDirection="90""#,
+        r#"<TextCode X="10" Y="20" DeltaY="5 5">ABC</TextCode>"#,
+    );
+    assert!(
+        close(glyph_at(&run, 1), (15.0, 20.0)),
+        "DeltaY moved the line on: got {:?}",
+        glyph_at(&run, 1)
+    );
+    // A line that also states a DeltaX keeps it: DeltaY then only says where
+    // the next row sits, which is how a left to right line states two axes.
+    let both = glyph_run(
+        r#"ReadDirection="90""#,
+        r#"<TextCode X="10" Y="20" DeltaX="4" DeltaY="0 5">AB</TextCode>"#,
+    );
+    assert!(
+        close(glyph_at(&both, 1), (14.0, 20.0)),
+        "DeltaX still decides the step along the line: got {:?}",
+        glyph_at(&both, 1)
+    );
+}
+
+#[test]
+fn gb_t_33190_11_3_delta_y_moves_the_run_across() {
+    // Figure 62: a run reads along its line and DeltaY steps a glyph across
+    // it, which is the page's `+y` for a line read rightwards. The steps add
+    // up, so the second of two steps leaves the line on its own.
+    let run = glyph_run(
+        "",
+        r#"<TextCode X="10" Y="20" DeltaX="5 5" DeltaY="3 3">AB</TextCode>"#,
+    );
+    assert!(
+        close(glyph_at(&run, 0), (10.0, 20.0)),
+        "the first glyph is the origin, before any step: got {:?}",
+        glyph_at(&run, 0)
+    );
+    // Read downwards, the same steps run along the page's `+y`, so the pair
+    // lands where a rightward line's DeltaX would have put it.
+    let down = glyph_run(
+        r#"ReadDirection="90""#,
+        r#"<TextCode X="10" Y="20" DeltaY="5">AB</TextCode>"#,
+    );
+    assert!(
+        close(glyph_at(&down, 1), (15.0, 20.0)),
+        "a downward line steps along its own axis: got {:?}",
+        glyph_at(&down, 1)
+    );
+}
+
+#[test]
+fn gb_t_33190_11_3_the_vertical_corpus_is_placed_by_the_table() {
+    // The corpus's vertical document, at the coordinates it records. Figure 62
+    // puts a vertical line's own `+x` on the page's `+x`, so a line read down
+    // the page advances across it.
+    let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../compliance/corpus/vertical.ofd");
+    let bytes = std::fs::read(&path).expect("the vertical corpus is committed");
+    let package = Box::new(Package::from_bytes(&bytes).expect("open the corpus package"));
+    let mut parser = Parser::new(Box::leak(package));
+    let document = parser.open_document().expect("its document parses");
+    let page = parser
+        .page_display(&document, 0)
+        .expect("its page flattens");
+    let runs: Vec<_> = page
+        .ops
+        .iter()
+        .filter_map(|op| match op {
+            DrawOp::Text(run) => Some(run),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(runs.len(), 3, "one run per text object");
+    let at = |i: usize, j: usize| {
+        let along: f64 = runs[i].advances.iter().take(j).sum();
+        runs[i].transform.apply(along, 0.0)
+    };
+    assert!(
+        close(at(0, 2), (50.0, 30.0)),
+        "read downwards, two steps of ten put the third glyph at x 50: got {:?}",
+        at(0, 2)
+    );
+    assert!(
+        close(at(1, 0), (140.0, 30.0)),
+        "the backward line starts where it says: got {:?}",
+        at(1, 0)
+    );
+    assert!(
+        close(at(2, 1), (70.0, 78.0)),
+        "the turned line advances along the page's y: got {:?}",
+        at(2, 1)
+    );
+    assert_eq!(
+        runs.iter().map(|r| r.plain_text()).collect::<String>(),
+        "ABCDEABCDEABCDE",
+        "and every glyph is still there to search"
+    );
+}
+
+#[test]
+fn gb_t_33190_11_3_a_code_without_an_origin_takes_the_one_before_it() {
+    // Table 46: X and Y are optional from the second TextCode on, which
+    // inherits the last one the object stated.
+    let runs = glyph_runs(
+        "",
+        r#"<TextCode X="10" Y="20">A</TextCode><TextCode>B</TextCode>"#,
+    );
+    assert_eq!(runs.len(), 2, "both codes reach the display list");
+    let second = runs[1].transform.apply(0.0, 0.0);
+    assert!(close(second, (10.0, 20.0)), "got {second:?}");
+}
+
 #[test]
 fn gb_t_33190_7_9_a_page_resource_table_is_read() {
     // Clause 7.10: a page may carry its own resource table at `PageRes`, and

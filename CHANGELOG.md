@@ -14,6 +14,12 @@ section only when a release actually has one.
 
 ### Changed
 
+- **`ReadDirection` and `CharDirection` now place text.** A run was laid out
+  along `+x` and read left to right whatever table 47 asked for, so a vertical
+  heading or a right-to-left line was drawn as if the document had said nothing.
+  `DeltaY` was counted and never used for where a row sits; it now steps a run
+  across the line, which is also how a downward line advances when its glyphs
+  stay upright.
 - **A document that names a font the backend cannot read is refused, not
   fatal.** `ttf-parser` asserts that a table directory fits inside its file and
   inside 32 bits, and the directory is the document's to choose, so a crafted

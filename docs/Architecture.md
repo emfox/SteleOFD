@@ -129,21 +129,25 @@ A list shorter than the steps between the glyphs is read as positions: a glyph
 with no entry of its own sits where its own offset puts it, and a negative
 offset is a carriage return. How many steps a list supplies matters here, and
 `g count value` states `count` of them, so `DeltaX="g 11 1.5875 -17.4625"` is
-twelve offsets rather than two. `DeltaY` is read for how many offsets a list
-supplies, but not yet for where a row sits, so a run that turns onto a second
-row keeps its first `y`. The rule is one comparison, in `flatten::GlyphAt`:
+twelve offsets rather than two. `DeltaY` is read the same way, for the step
+across the line, so a run that turns onto a second row lands where the list
+says. The rule is one comparison, in `flatten::GlyphAt`:
 
 | Offsets | Glyphs | Read as |
 |---|---|---|
 | one per step, or more | any | steps |
 | fewer than the steps | two or more | positions |
 
-`CharDirection` and `ReadDirection` (table 47) are not implemented, so a run is
-always placed along `+x` and read left to right; a document that turns its lines
-is drawn as if it had not. A producer can also write offsets directly into the
-text, with a space and a `g` standing for a glyph that takes no room of its own;
-that is a property of the string, and it is honoured the same way in either
-reading.
+`CharDirection` and `ReadDirection` (table 47) each reach `flatten` through one
+transform, `flatten::run_placement`. Figure 62 puts the pen in the line's own
+frame, where `+x` is the read direction, so the read angle carries that frame
+onto the page; figure 65 then turns each glyph by the gap between the two angles
+onto its own baseline, and `HScale` widens it along that baseline. Figure 63's
+downward line needs no `DeltaX` at all, because a glyph turning back to upright
+makes `DeltaY` the step along the line. A producer can also write offsets
+directly into the text, with a space and a `g` standing for a glyph that takes
+no room of its own; that is a property of the string, and it is honoured the
+same way in either reading.
 
 ### 2.6 Safety built in
 

@@ -370,11 +370,19 @@ title = "Text positioning"
 status = "verified"
 tests = [
     "gb_t_33190_11_3_text_code_origin_becomes_the_run_transform",
+    "gb_t_33190_11_3_a_code_without_an_origin_takes_the_one_before_it",
     "gb_t_33190_11_3_char_space_widens_the_advance",
     "gb_t_33190_11_3_delta_attributes_place_each_glyph",
     "gb_t_33190_11_3_a_delta_list_may_cover_every_glyph",
     "gb_t_33190_11_3_no_delta_keeps_the_text_size",
+    "gb_t_33190_11_3_delta_y_moves_the_run_across",
+    "gb_t_33190_11_3_delta_y_alone_reads_downwards",
     "gb_t_33190_11_3_reading_direction_and_alignment_are_kept",
+    "gb_t_33190_11_3_read_direction_places_each_glyph_on_its_own_angle",
+    "gb_t_33190_11_3_read_direction_turns_the_glyphs_with_the_line",
+    "gb_t_33190_11_3_char_direction_turns_each_glyph",
+    "gb_t_33190_11_3_a_vertical_run_keeps_its_glyphs_upright",
+    "gb_t_33190_11_3_the_vertical_corpus_is_placed_by_the_table",
 ]
 
 [[item]]

@@ -12,14 +12,14 @@ place.
 ## When
 
 `0.1.1` is gone: it repaired what `0.1.0` said about itself and changed no
-behaviour. Seven items carry a version, and everything else is marked
+behaviour. Six items carry a version, and everything else is marked
 `unversioned`: it is agreed to be worth doing, but no release has claimed it,
 and putting a number on it today would be a guess dressed as a plan.
 
 | Version | Theme |
 | --- | --- |
 | `0.2` | R7 which crates are published |
-| `0.3` | R18 text placed without its direction, R2 the reader rebuilt on a published application-UI guideline, R6 what the budgets do not measure |
+| `0.3` | R2 the reader rebuilt on a published application-UI guideline, R6 what the budgets do not measure |
 | `0.3+` | R3 the Android build that crashes on open |
 | unversioned | R8 packaging, and the rest |
 
@@ -59,7 +59,6 @@ one the project cannot keep.
 | # | Item | Target | Why it ranks here | Done when |
 | --- | --- | --- | --- | --- |
 | R2 | **The reader's interface.** It obeys `Ui-spec.md`, which was written for the window that exists. That spec was built on no published application-UI guideline, and the window has outgrown it: panels, the toolbar, the dialogs, and settings that do not exist yet — a theme, a type scale, high contrast — need a rulebook a new contributor can look up rather than one we invented. | `0.3` | It does not affect output, so it ranks below a wrong verdict; but it is the surface every other delivery form is judged by. | A chosen guideline is named in `Ui-spec.md` with the clauses the window follows, the reader is rebuilt against it with nothing the old spec required removed without a note, and a theme, a type scale and a contrast setting exist because the guideline asks for them. |
-| R18 | **Text direction is not read.** `CharDirection` and `ReadDirection` (table 47) are parsed nowhere: `flatten` places every run along `+x` and reads it left to right, so a vertical heading or a right-to-left line is drawn as if the document had not asked. `DeltaY` is read for how many offsets a list supplies but never for where a row sits, so a run that turns onto a second row keeps the first row's `y`. The conformance test that mentions the attributes only asserts the text stays searchable, which is why the gap survived. | `0.3` | It is what is left of the flattening R1 fixed: the same class of wrong output, but no document in the corpus asks for it. | A run with each of the four values on each attribute is placed at the coordinates table 47 describes, the conformance test asserts the placement rather than the searchability, and the corpus holds one vertical document. |
 | R6 | **What the budgets do not measure.** `Performance.md` carries five timings for one page each, and no memory ceiling at all — while the documents this is for are scanned invoices of tens of pages, where a single A4 at 300 dpi is about 26 MB once decoded. Nothing measures a many-page document, and the render cache is deferred "until measured", which has not been scheduled. | `0.3` | It follows R2 because a memory ceiling defines what the cache may hold, and the cache is the window's business. | `Performance.md` states a peak-memory ceiling per page and per document, `check_performance.py` enforces it, and a benchmark over a twenty-page document exists beside the one-page ones. |
 
 ### 0.3+

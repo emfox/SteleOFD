@@ -595,7 +595,11 @@ fn read_text_clip(cursor: &mut Cursor<'_>, node: &Node) -> Result<TextClip> {
     }
     loop {
         match cursor.next_event()? {
-            Event::Start(n) if n.is("TextCode") => clip.codes.push(read_text_code(cursor, &n)?),
+            Event::Start(n) if n.is("TextCode") => {
+                let mut code = read_text_code(cursor, &n)?;
+                inherit_origin(clip.codes.last(), &mut code);
+                clip.codes.push(code);
+            }
             Event::Start(n) if n.is("CGTransform") => {
                 clip.cg_transforms.push(read_cg_transform(cursor, &n)?)
             }
@@ -1059,6 +1063,8 @@ fn read_text_object(cursor: &mut Cursor<'_>, node: &Node) -> Result<TextObject> 
         size: Millimeter::new(a.optional_as::<f64>("TextObject", "Size")?.unwrap_or(3.0)),
         char_space: a.optional_as::<f64>("TextObject", "CharSpace")?,
         h_scale: a.optional_as::<f64>("TextObject", "HScale")?,
+        read_direction: angle_of(a.get("ReadDirection")).map(ReadDirection),
+        char_direction: angle_of(a.get("CharDirection")).map(CharDirection),
         stroke: match a.get("Stroke") {
             Some(raw) => Some(parse_bool("TextObject", "Stroke", raw)?),
             None => None,
@@ -1072,7 +1078,11 @@ fn read_text_object(cursor: &mut Cursor<'_>, node: &Node) -> Result<TextObject> 
     if !node.is_self_closing() {
         loop {
             match cursor.next_event()? {
-                Event::Start(n) if n.is("TextCode") => t.codes.push(read_text_code(cursor, &n)?),
+                Event::Start(n) if n.is("TextCode") => {
+                    let mut code = read_text_code(cursor, &n)?;
+                    inherit_origin(t.codes.last(), &mut code);
+                    t.codes.push(code);
+                }
                 Event::Start(n) if n.is("CGTransform") => {
                     t.cg_transforms.push(read_cg_transform(cursor, &n)?)
                 }
@@ -1165,9 +1175,12 @@ fn invalid(element: &str, attr: &str, value: &str) -> OfdError {
 
 fn read_text_code(cursor: &mut Cursor<'_>, node: &Node) -> Result<TextCode> {
     let a = node.attributes();
+    let x = a.optional_as::<f64>("TextCode", "X")?;
+    let y = a.optional_as::<f64>("TextCode", "Y")?;
     let code = TextCode {
-        x: a.optional_as::<f64>("TextCode", "X")?.unwrap_or(0.0),
-        y: a.optional_as::<f64>("TextCode", "Y")?.unwrap_or(0.0),
+        x: x.unwrap_or(0.0),
+        y: y.unwrap_or(0.0),
+        origin_stated: x.is_some() || y.is_some(),
         delta_x: match a.get("DeltaX") {
             Some(raw) => parse_delta_list("TextCode", "DeltaX", raw)?,
             None => Vec::new(),
@@ -1181,8 +1194,40 @@ fn read_text_code(cursor: &mut Cursor<'_>, node: &Node) -> Result<TextCode> {
         } else {
             cursor.read_text()?
         },
+        ..TextCode::default()
     };
     Ok(code)
+}
+
+/// Table 47: an angle turned clockwise from `+x`. A value the table does not
+/// name, or one that is not a number, keeps the default rather than failing
+/// the open: the attribute states a presentation, not a structure.
+fn angle_of(raw: Option<&str>) -> Option<u16> {
+    let raw = raw?;
+    let Ok(degrees) = raw.parse::<i64>() else {
+        return Some(0);
+    };
+    Some(match degrees.rem_euclid(360) {
+        90 => 90,
+        180 => 180,
+        270 => 270,
+        _ => 0,
+    })
+}
+
+/// Table 46: a `TextCode` that states no `X` or `Y` takes the last one the
+/// object stated, so a run of codes is one line at one origin.
+fn inherit_origin(previous: Option<&TextCode>, code: &mut TextCode) {
+    let Some(previous) = previous else { return };
+    let (x, y) = match previous.origin_stated {
+        true => (previous.x, previous.y),
+        false => (
+            previous.inherited_x.unwrap_or(0.0),
+            previous.inherited_y.unwrap_or(0.0),
+        ),
+    };
+    code.inherited_x = Some(x);
+    code.inherited_y = Some(y);
 }
 
 fn read_image_object(cursor: &mut Cursor<'_>, node: &Node) -> Result<ImageObject> {

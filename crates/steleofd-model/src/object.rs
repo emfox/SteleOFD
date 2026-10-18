@@ -337,9 +337,33 @@ pub struct TextCode {
     /// Vertical offset applied after each glyph.
     #[serde(rename = "DeltaY", default)]
     pub delta_y: Vec<f64>,
+    /// The `X` the previous code in this object stated, which table 46 gives
+    /// to a code that states none of its own.
+    #[serde(skip)]
+    pub inherited_x: Option<f64>,
+    /// The `Y` that came with `inherited_x`.
+    #[serde(skip)]
+    pub inherited_y: Option<f64>,
+    /// Whether `x` and `y` were written on this code rather than inherited.
+    #[serde(skip)]
+    pub origin_stated: bool,
     /// Raw text; either glyph ids or Unicode, depending on `CGTransform`.
     #[serde(rename = "$text", default)]
     pub text: String,
+}
+
+impl TextCode {
+    /// Where this code's first glyph sits. Table 46: a `TextCode` without an
+    /// `X` or `Y` takes the one the previous code stated.
+    pub fn origin(&self) -> (f64, f64) {
+        if self.origin_stated {
+            return (self.x, self.y);
+        }
+        (
+            self.inherited_x.unwrap_or(self.x),
+            self.inherited_y.unwrap_or(self.y),
+        )
+    }
 }
 
 /// One mapping from a stretch of character codes to glyph indices.
@@ -366,6 +390,64 @@ fn one() -> usize {
     1
 }
 
+/// Table 47 of GB/T 33190: which way one glyph is drawn, measured clockwise
+/// from `+x` to the glyph's own baseline. A value the table does not define
+/// is read as `Zero`, the default, rather than rejecting the document.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct CharDirection(pub u16);
+
+impl CharDirection {
+    /// The default, and the value an undefined one falls back to.
+    pub const ZERO: Self = Self(0);
+
+    /// The angle clockwise from `+x` to the baseline, in degrees.
+    pub fn degrees(self) -> u16 {
+        self.0
+    }
+
+    /// Whether a glyph is drawn upright.
+    pub fn is_upright(self) -> bool {
+        self.0 == 0
+    }
+}
+
+/// Table 47 of GB/T 33190: which way the glyphs of a run are read, measured
+/// clockwise from `+x` to the direction the run advances. `DeltaX` steps the
+/// run along it and `DeltaY` across it.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct ReadDirection(pub u16);
+
+impl ReadDirection {
+    /// The default, and the value an undefined one falls back to.
+    pub const ZERO: Self = Self(0);
+
+    /// The angle clockwise from `+x` to the direction the run advances.
+    pub fn degrees(self) -> u16 {
+        self.0
+    }
+
+    /// Whether the run is read straight down the page.
+    pub fn is_downwards(self) -> bool {
+        self.0 == 90
+    }
+
+    /// Where a pen moved `along` the line and `across` it puts a glyph. The
+    /// line's `+y` is `+x` turned a quarter clockwise, so it only matches the
+    /// page's `+y` on a run read rightwards, figure 63.
+    pub fn place(self, along: f64, across: f64) -> (f64, f64) {
+        if self.is_downwards() {
+            return (across, along);
+        }
+        match self.0 {
+            180 => (-along, across),
+            270 => (across, -along),
+            _ => (along, across),
+        }
+    }
+}
+
 /// Text laid out as one or more runs.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -382,6 +464,12 @@ pub struct TextObject {
     /// Whether text reads top to bottom.
     #[serde(rename = "Weight", skip_serializing_if = "Option::is_none")]
     pub weight: Option<u32>,
+    /// Which way the glyphs of this object are read, table 47.
+    #[serde(rename = "ReadDirection", skip_serializing_if = "Option::is_none")]
+    pub read_direction: Option<ReadDirection>,
+    /// Which way each glyph's own baseline runs, table 47.
+    #[serde(rename = "CharDirection", skip_serializing_if = "Option::is_none")]
+    pub char_direction: Option<CharDirection>,
     /// Whether the text is reversed for vertical writing.
     #[serde(rename = "Italic", skip_serializing_if = "Option::is_none")]
     pub italic: Option<bool>,

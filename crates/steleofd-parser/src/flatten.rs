@@ -17,8 +17,8 @@ use steleofd_geometry::{Affine, Path};
 use steleofd_model::PageBlock;
 use steleofd_model::color::{ColorRef, MeshPoint, PatternSpec, ReflectMethod, Segment, Shading};
 use steleofd_model::object::{
-    CGTransform, DrawParam, ImageObject, LineCapStyle, LineJoinStyle, Object, ObjectBase,
-    PathObject, TextCode, TextObject,
+    CGTransform, CharDirection, DrawParam, ImageObject, LineCapStyle, LineJoinStyle, Object,
+    ObjectBase, PathObject, ReadDirection, TextCode, TextObject,
 };
 use steleofd_xml::parse_number_list_n;
 
@@ -591,6 +591,8 @@ fn flatten_text(
     let h_scale = t.h_scale.unwrap_or(1.0);
     let letter_spacing = t.char_space.unwrap_or(0.0);
     let font = FontId(t.font.parse::<u32>().unwrap_or(0));
+    let read = t.read_direction.unwrap_or_default();
+    let char_dir = t.char_direction.unwrap_or_default();
     with_object_space(&t.base, params, builder, |b| {
         for code in &t.codes {
             if code.text.is_empty() {
@@ -598,22 +600,17 @@ fn flatten_text(
             }
             // Every stretch knows where its first glyph sits within the code,
             // whatever cut it, so the code's origin is the only thing missing.
-            let mut previous = Point::new(code.x, code.y);
+            let (code_x, code_y) = code.origin();
             for segment in segments_of(code, &t.cg_transforms, size) {
-                let origin = if segment.offset.is_finite() {
-                    Point::new(code.x + segment.offset, code.y)
-                } else {
-                    // A stepping list states no offset for the first glyph of
-                    // a stretch; it sits where the one before it left off.
-                    previous
-                };
-                previous = Point::new(origin.x + segment.span, origin.y);
-                let place = Affine::translate(origin.x, origin.y);
-                let transform = if h_scale == 1.0 {
-                    place
-                } else {
-                    Affine::new(h_scale, 0.0, 0.0, 1.0, 0.0, 0.0).then(place)
-                };
+                // Table 47: the two directions are read in the line's own
+                // frame, so the glyphs reach the page through one transform.
+                let (dx, dy) = read.place(segment.offset, segment.across);
+                let transform = run_placement(
+                    Point::new(code_x + dx, code_y + dy),
+                    read,
+                    char_dir,
+                    h_scale,
+                );
                 b.push(DrawOp::Text(GlyphRun {
                     font,
                     size: t.size,
@@ -637,6 +634,26 @@ fn flatten_text(
     })
 }
 
+/// The transform a run of text is drawn through. Figure 62 puts the pen in the
+/// line's frame, where `+x` is the read direction, so the read angle takes that
+/// frame onto the page and each glyph then turns to its own baseline, figure 65.
+fn run_placement(
+    origin: Point,
+    read: ReadDirection,
+    char_dir: CharDirection,
+    h_scale: f64,
+) -> Affine {
+    // Figure 63: a downward line setting upright glyphs draws them upright, so
+    // the glyph's angle is the gap between the two, not the line's angle. A
+    // glyph laid out along its own `+x` takes the widening with it.
+    let gap = (i64::from(char_dir.degrees()) - i64::from(read.degrees())).rem_euclid(360);
+    let angle = gap as f64;
+    let widened = Affine::new(h_scale, 0.0, 0.0, 1.0, 0.0, 0.0);
+    Affine::rotate_deg(f64::from(read.degrees()))
+        .then(Affine::rotate_deg(angle).then(widened))
+        .then(Affine::translate(origin.x, origin.y))
+}
+
 /// Where a `TextCode` puts each of its glyphs, from the offsets in table 46.
 /// A list shorter than the steps between the glyphs is read as positions and a
 /// longer one as steps; docs/Architecture.md says why a producer needs both.
@@ -646,6 +663,8 @@ struct GlyphAt<'a> {
     placed: bool,
     /// Offsets of each character, already read the way this list means them.
     advances: Vec<f64>,
+    /// The same offsets along `DeltaY`: where a character sits across the run.
+    cross: Vec<f64>,
     /// Text size, which is what an unlisted character advances by.
     size: f64,
 }
@@ -664,17 +683,21 @@ impl<'a> GlyphAt<'a> {
         let advances: Vec<f64> = (0..chars.len())
             .map(|i| advance_of(code, &chars, i, size, placed))
             .collect();
+        let cross = crossings(&code.delta_y, chars.len(), placed);
+        debug_assert_eq!(cross.len(), chars.len());
         Self {
             code,
             placed,
             advances,
+            cross,
             size,
         }
     }
 
-    /// Whether the offsets position glyphs for this code.
-    fn is_placed(&self) -> bool {
-        self.placed
+    /// How far character `i` sits across the run, from DeltaY.
+    fn across(&self, i: usize) -> f64 {
+        let at = i.min(self.cross.len().saturating_sub(1));
+        self.cross[at]
     }
 
     /// How far the line moves on from character `i`: where the next glyph
@@ -708,9 +731,31 @@ fn advance_of(code: &TextCode, chars: &[char], i: usize, size: f64, placed: bool
     if placed {
         return placed_at(code, chars, i, size);
     }
-    // DeltaX alone moves the line on. DeltaY says where the next row sits, and
-    // adding it here would slant every new row away from its own start.
+    // Figure 63: a downward line is set with DeltaY alone, so the step before
+    // the second glyph is the one that moves it. A line that states a DeltaX
+    // keeps it, since DeltaY then only places the next row.
+    if code.delta_x.is_empty() && !code.delta_y.is_empty() {
+        return code.delta_y.get(i).copied().unwrap_or(size);
+    }
     code.delta_x.get(i).copied().unwrap_or(size)
+}
+
+/// Where each character sits across the line. DeltaY measures a step between
+/// glyphs the way DeltaX does, so a stepping list accumulates, and a list that
+/// places glyphs names the spot of each one it reached.
+fn crossings(delta_y: &[f64], len: usize, placed: bool) -> Vec<f64> {
+    if placed {
+        return (0..len)
+            .map(|i| delta_y.get(i).copied().unwrap_or(0.0))
+            .collect();
+    }
+    let mut running = 0.0;
+    let mut out = Vec::with_capacity(len);
+    for i in 0..len {
+        out.push(running);
+        running += delta_y.get(i).copied().unwrap_or(0.0);
+    }
+    out
 }
 
 /// Distance from where character `i` sits to where `i + 1` sits, when the list
@@ -740,59 +785,27 @@ struct RunSegment {
     cluster_map: Option<Vec<u32>>,
     /// Horizontal origin of this stretch within the text code.
     offset: f64,
+    /// How far that origin sits across the line, from `DeltaY`.
+    across: f64,
     /// Per-glyph advances, in the text code's own order.
     advances: Vec<f64>,
     /// The characters this stretch covers.
     text: String,
-    /// How far this stretch reaches past its own glyphs, which is where a
-    /// stretch cut inside the line starts. A stepping run ends after the
-    /// offsets of every glyph; a placing one only reaches the glyph after it.
-    span: f64,
 }
 
-/// A stretch of a code before it knows where it starts: the glyphs it draws,
-/// the advances of the characters it covers, and which of those it draws.
-struct RunShape<'a> {
+/// A stretch of a code before it knows where it starts: the glyphs it draws
+/// and the characters they stand for.
+struct RunShape {
     glyphs: Vec<u16>,
     glyph_index: bool,
     cluster_map: Option<Vec<u32>>,
-    /// One advance per character covered, not per glyph.
-    advances: &'a [f64],
     start: usize,
     end: usize,
 }
 
-/// How far a stretch reaches past its start. A stepping list moves the line on
-/// by every offset covered; a placing one stops at the last drawn glyph, so a
-/// stretch left with none takes no room and the one after starts where it did.
-fn reach_of(shape: &RunShape<'_>, at: &GlyphAt<'_>) -> f64 {
-    let covered: f64 = shape.advances.iter().sum();
-    if !at.is_placed() {
-        return covered;
-    }
-    // Offsets that place a glyph say where it is, not how far the line has
-    // come: the last one only reaches the last glyph, so a stretch ends at the
-    // character after the one it drew.
-    let Some(map) = &shape.cluster_map else {
-        return covered - shape.advances.last().copied().unwrap_or(0.0);
-    };
-    let blank = shape.glyphs.len() == 1 && shape.glyphs[0] == u16::from(b' ');
-    if map.is_empty() || blank {
-        return 0.0;
-    }
-    map[..map.len().saturating_sub(1)]
-        .iter()
-        .map(|&c| at.advances.get(c as usize).copied().unwrap_or(0.0))
-        .sum()
-}
-
 /// Cut a code's characters into the stretches its transforms name, leaving
 /// the characters no transform covers as stretches of their own.
-fn run_shapes<'a>(
-    chars: &[char],
-    transforms: &[CGTransform],
-    advances: &'a [f64],
-) -> Vec<RunShape<'a>> {
+fn run_shapes(chars: &[char], transforms: &[CGTransform]) -> Vec<RunShape> {
     let len = chars.len();
     let mut spans: Vec<(usize, usize, &CGTransform)> = Vec::new();
     for t in transforms {
@@ -807,7 +820,7 @@ fn run_shapes<'a>(
     }
     spans.sort_by_key(|(start, _, _)| *start);
 
-    let mut out: Vec<RunShape<'a>> = Vec::new();
+    let mut out: Vec<RunShape> = Vec::new();
     let mut at = 0usize;
     for (start, end, t) in spans {
         // Overlapping transforms: the first to reach a character wins.
@@ -822,7 +835,6 @@ fn run_shapes<'a>(
                     .collect(),
                 glyph_index: false,
                 cluster_map: None,
-                advances: &advances[at..start],
                 start: at,
                 end: start,
             });
@@ -836,7 +848,6 @@ fn run_shapes<'a>(
             glyphs: t.glyphs.clone(),
             glyph_index: true,
             cluster_map: Some(cluster_map),
-            advances: &advances[start..end],
             start,
             end,
         });
@@ -850,7 +861,6 @@ fn run_shapes<'a>(
                 .collect(),
             glyph_index: false,
             cluster_map: None,
-            advances: &advances[at..len],
             start: at,
             end: len,
         });
@@ -864,7 +874,7 @@ fn run_shapes<'a>(
 fn segments_of(code: &TextCode, transforms: &[CGTransform], size: f64) -> Vec<RunSegment> {
     let chars: Vec<char> = code.text.chars().collect();
     let at = GlyphAt::new(code, &code.text, size);
-    let shapes = run_shapes(&chars, transforms, &at.advances);
+    let shapes = run_shapes(&chars, transforms);
     let mut out: Vec<RunSegment> = Vec::with_capacity(shapes.len());
     for shape in shapes {
         // A stretch that names no glyph took its characters out of the text
@@ -873,20 +883,20 @@ fn segments_of(code: &TextCode, transforms: &[CGTransform], size: f64) -> Vec<Ru
             continue;
         }
         let start = at.offset(shape.start);
+        let across = at.across(shape.start);
         // A run draws the glyphs it lists, so its advances follow its glyphs:
         // the renderer reaches each glyph by the advance before it.
         let advances: Vec<f64> = (0..shape.glyphs.len())
             .map(|k| at.reach_at(shape.start + k))
             .collect();
-        let span = reach_of(&shape, &at);
         out.push(RunSegment {
             glyphs: shape.glyphs,
             glyph_index: shape.glyph_index,
             cluster_map: shape.cluster_map,
             offset: start,
+            across,
             advances,
             text: chars[shape.start..shape.end].iter().collect(),
-            span,
         });
     }
     out
