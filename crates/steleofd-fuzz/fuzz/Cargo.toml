@@ -1,0 +1,74 @@
+[package]
+name = "steleofd-fuzz"
+version = "0.1.0"
+publish = false
+edition = "2021"
+description = "Fuzz targets for the OFD readers"
+license = "Apache-2.0"
+
+[package.metadata]
+cargo-fuzz = true
+
+# cargo-fuzz needs an independent workspace, so this crate is one: the table
+# below is what a fuzzed crate resolves to, and the features are what the
+# targets reach for.
+[workspace]
+
+[workspace.dependencies]
+steleofd-common = { path = "../../steleofd-common" }
+steleofd-convert = { path = "../../steleofd-convert", features = ["pdf"] }
+steleofd-crypto = { path = "../../steleofd-crypto" }
+steleofd-display = { path = "../../steleofd-display" }
+steleofd-font = { path = "../../steleofd-font", default-features = false }
+steleofd-geometry = { path = "../../steleofd-geometry" }
+steleofd-package = { path = "../../steleofd-package" }
+steleofd-xml = { path = "../../steleofd-xml" }
+
+[dependencies]
+libfuzzer-sys = "0.4"
+steleofd-common.workspace = true
+steleofd-convert.workspace = true
+steleofd-crypto.workspace = true
+steleofd-display.workspace = true
+steleofd-font.workspace = true
+steleofd-geometry.workspace = true
+steleofd-package.workspace = true
+steleofd-xml.workspace = true
+
+[profile.release]
+debug = 1
+
+[[bin]]
+name = "package_open"
+path = "fuzz_targets/package_open.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "xml_cursor"
+path = "fuzz_targets/xml_cursor.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "ttf_face"
+path = "fuzz_targets/ttf_face.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "certificate"
+path = "fuzz_targets/certificate.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "pdf_write"
+path = "fuzz_targets/pdf_write.rs"
+test = false
+doc = false
+bench = false
