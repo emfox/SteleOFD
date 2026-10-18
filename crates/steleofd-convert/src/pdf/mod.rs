@@ -283,7 +283,6 @@ impl<'a> PdfSink<'a> {
         let Some(fill) = &run.fill else {
             return false;
         };
-        let k = run.size.value() / 1000.0;
         let mut offset = 0.0;
         let mut drawn = 0usize;
         let mut missing = 0usize;
@@ -299,9 +298,7 @@ impl<'a> PdfSink<'a> {
             };
             // Outlines are normalized to 1/1000 em with y pointing up: scale
             // to millimetres first, then position, or the origin gets scaled.
-            let glyph = Affine::new(k, 0.0, 0.0, -k, 0.0, 0.0)
-                .then(Affine::translate(offset, 0.0))
-                .then(run.transform);
+            let glyph = run.glyph_matrix(offset);
             let total = self.to_pt(glyph);
             self.write_path(&outline, total);
             let mut setup = match crate::replay::text_paint_shape(fill) {
@@ -411,7 +408,6 @@ impl PageSink for PdfSink<'_> {
         // Every glyph outline goes into one path, joined implicitly, so the
         // glyphs intersect the clip as their union rather than one at a time.
         let mut wrote = false;
-        let k = run.size.value() / 1000.0;
         let mut offset = 0.0;
         for (i, &gid) in run.glyphs.iter().enumerate() {
             if i > 0 {
@@ -421,9 +417,7 @@ impl PageSink for PdfSink<'_> {
             let Some(outline) = face.outline_for_run_code(gid, run.codes_are_glyphs) else {
                 continue;
             };
-            let glyph = Affine::new(k, 0.0, 0.0, -k, 0.0, 0.0)
-                .then(Affine::translate(offset, 0.0))
-                .then(run.transform);
+            let glyph = run.glyph_matrix(offset);
             self.write_path(&outline, self.to_pt(glyph));
             wrote = true;
         }
@@ -1355,6 +1349,7 @@ mod tests {
             cluster_map: None,
             codes_are_glyphs: false,
             transform: Affine::translate(20.0, 30.0),
+            glyph_angle: 0.0,
             fill: Some(Paint::Solid(Color::BLACK)),
             stroke: None,
             letter_spacing: 0.0,
@@ -1391,6 +1386,7 @@ mod tests {
             cluster_map: None,
             codes_are_glyphs: false,
             transform: Affine::IDENTITY,
+            glyph_angle: 0.0,
             fill: None,
             stroke: None,
             letter_spacing: 0.0,
@@ -1422,6 +1418,7 @@ mod tests {
             cluster_map: None,
             codes_are_glyphs: false,
             transform: Affine::IDENTITY,
+            glyph_angle: 0.0,
             fill: Some(Paint::Solid(Color::BLACK)),
             stroke: None,
             letter_spacing: 0.0,

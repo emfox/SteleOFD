@@ -149,6 +149,7 @@ mod tests {
             cluster_map: None,
             codes_are_glyphs: false,
             transform: Affine::translate(10.0, 10.0),
+            glyph_angle: 0.0,
             fill: Some(Paint::Solid(Color::BLACK)),
             stroke: None,
             letter_spacing: 0.0,

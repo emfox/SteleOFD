@@ -191,6 +191,7 @@ mod tests {
             cluster_map: None,
             codes_are_glyphs: false,
             transform: Affine::translate(1.0, 2.0),
+            glyph_angle: 0.0,
             fill: None,
             stroke: None,
             letter_spacing: 0.0,

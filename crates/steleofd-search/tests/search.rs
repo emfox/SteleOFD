@@ -17,6 +17,7 @@ fn run(text: &str, bbox: Rect, per_glyph: f64) -> GlyphRun {
         cluster_map: Some((0..text.chars().count() as u32).collect()),
         codes_are_glyphs: false,
         transform: Affine::IDENTITY,
+        glyph_angle: 0.0,
         fill: None,
         stroke: None,
         letter_spacing: 0.0,

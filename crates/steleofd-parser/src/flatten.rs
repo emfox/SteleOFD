@@ -440,6 +440,7 @@ fn text_clip_runs(clip: &steleofd_model::TextClip) -> Vec<GlyphRun> {
                 cluster_map: segment.cluster_map,
                 codes_are_glyphs: segment.glyph_index,
                 transform: Affine::translate(code.x, code.y),
+                glyph_angle: 0.0,
                 fill: None,
                 stroke: None,
                 letter_spacing: 0.0,
@@ -591,8 +592,9 @@ fn flatten_text(
     let h_scale = t.h_scale.unwrap_or(1.0);
     let letter_spacing = t.char_space.unwrap_or(0.0);
     let font = FontId(t.font.parse::<u32>().unwrap_or(0));
-    let read = t.read_direction.unwrap_or_default();
+    let read = t.read_direction.unwrap_or_else(|| read_of(&t.codes));
     let char_dir = t.char_direction.unwrap_or_default();
+    let glyph_angle = glyph_turn(read, char_dir);
     with_object_space(&t.base, params, builder, |b| {
         for code in &t.codes {
             if code.text.is_empty() {
@@ -605,12 +607,7 @@ fn flatten_text(
                 // Table 47: the two directions are read in the line's own
                 // frame, so the glyphs reach the page through one transform.
                 let (dx, dy) = read.place(segment.offset, segment.across);
-                let transform = run_placement(
-                    Point::new(code_x + dx, code_y + dy),
-                    read,
-                    char_dir,
-                    h_scale,
-                );
+                let transform = run_placement(Point::new(code_x + dx, code_y + dy), read, h_scale);
                 b.push(DrawOp::Text(GlyphRun {
                     font,
                     size: t.size,
@@ -620,6 +617,7 @@ fn flatten_text(
                     cluster_map: segment.cluster_map,
                     codes_are_glyphs: segment.glyph_index,
                     transform,
+                    glyph_angle,
                     fill: fill.clone(),
                     stroke: stroke.clone(),
                     letter_spacing,
@@ -634,24 +632,36 @@ fn flatten_text(
     })
 }
 
+/// The direction a run is read when the object does not say. Figure 63 sets a
+/// downward line with DeltaY alone, so a code whose only offsets run down the
+/// page is read that way; without them the default is rightwards.
+fn read_of(codes: &[TextCode]) -> ReadDirection {
+    let downwards = codes
+        .iter()
+        .any(|code| code.delta_x.is_empty() && !code.delta_y.is_empty());
+    if downwards {
+        ReadDirection(90)
+    } else {
+        ReadDirection::ZERO
+    }
+}
+
 /// The transform a run of text is drawn through. Figure 62 puts the pen in the
-/// line's frame, where `+x` is the read direction, so the read angle takes that
-/// frame onto the page and each glyph then turns to its own baseline, figure 65.
-fn run_placement(
-    origin: Point,
-    read: ReadDirection,
-    char_dir: CharDirection,
-    h_scale: f64,
-) -> Affine {
-    // Figure 63: a downward line setting upright glyphs draws them upright, so
-    // the glyph's angle is the gap between the two, not the line's angle. A
-    // glyph laid out along its own `+x` takes the widening with it.
-    let gap = (i64::from(char_dir.degrees()) - i64::from(read.degrees())).rem_euclid(360);
-    let angle = gap as f64;
+/// line's frame, where `+x` is the read direction, so the read angle carries it
+/// onto the page and the advances run along it.
+fn run_placement(origin: Point, read: ReadDirection, h_scale: f64) -> Affine {
     let widened = Affine::new(h_scale, 0.0, 0.0, 1.0, 0.0, 0.0);
     Affine::rotate_deg(f64::from(read.degrees()))
-        .then(Affine::rotate_deg(angle).then(widened))
+        .then(widened)
         .then(Affine::translate(origin.x, origin.y))
+}
+
+/// How far a glyph turns about its own origin, in the line's frame. Table 47
+/// measures `CharDirection` from the page and the glyph is drawn in a frame
+/// already turned by the read angle, so the two are subtracted.
+fn glyph_turn(read: ReadDirection, char_dir: CharDirection) -> f64 {
+    let turn = i64::from(char_dir.degrees()) - i64::from(read.degrees());
+    turn.rem_euclid(360) as f64
 }
 
 /// Where a `TextCode` puts each of its glyphs, from the offsets in table 46.

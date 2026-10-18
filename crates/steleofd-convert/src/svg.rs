@@ -469,7 +469,6 @@ impl SvgSink<'_> {
         let Some(fill) = &run.fill else {
             return false;
         };
-        let k = run.size.value() / 1000.0;
         let mut offset = 0.0;
         let mut drawn = 0usize;
         let mut missing = 0usize;
@@ -483,11 +482,9 @@ impl SvgSink<'_> {
                 missing += 1;
                 continue;
             };
-            // Outlines are normalized to 1/1000 em with y pointing up: scale
-            // to millimetres first, then position, or the origin gets scaled.
-            let glyph = Affine::new(k, 0.0, 0.0, -k, 0.0, 0.0)
-                .then(Affine::translate(offset, 0.0))
-                .then(run.transform);
+            // Outlines are normalized to 1/1000 em with y pointing up, and the
+            // run's own matrix scales, turns and places them from there.
+            let glyph = run.glyph_matrix(offset);
             let path = outline.transformed(&glyph);
             let fill = text_paint_shape(fill);
             let reference = self.paint_ref(fill);
@@ -631,7 +628,6 @@ fn stops_markup(stops: &[steleofd_display::ops::GradientStop]) -> String {
 /// The outline of every glyph in a run, in page space, in draw order. Outlines
 /// are normalized to 1/1000 em with y up, so scale to millimetres then place.
 fn glyph_paths(run: &GlyphRun, face: &steleofd_font::FontFace) -> Vec<Path> {
-    let k = run.size.value() / 1000.0;
     let mut offset = 0.0;
     let mut paths = Vec::new();
     for (i, &gid) in run.glyphs.iter().enumerate() {
@@ -642,9 +638,7 @@ fn glyph_paths(run: &GlyphRun, face: &steleofd_font::FontFace) -> Vec<Path> {
         let Some(outline) = face.outline_for_run_code(gid, run.codes_are_glyphs) else {
             continue;
         };
-        let glyph = Affine::new(k, 0.0, 0.0, -k, 0.0, 0.0)
-            .then(Affine::translate(offset, 0.0))
-            .then(run.transform);
+        let glyph = run.glyph_matrix(offset);
         paths.push(outline.transformed(&glyph));
     }
     paths
@@ -956,6 +950,7 @@ mod tests {
             cluster_map: None,
             codes_are_glyphs: false,
             transform: Affine::IDENTITY,
+            glyph_angle: 0.0,
             fill: None,
             stroke: None,
             letter_spacing: 0.0,
@@ -1176,6 +1171,7 @@ mod tests {
             cluster_map: None,
             codes_are_glyphs: false,
             transform: Affine::translate(12.0, 30.0),
+            glyph_angle: 0.0,
             fill: Some(Paint::Solid(Color::BLACK)),
             stroke: None,
             letter_spacing: 0.0,
@@ -1202,6 +1198,7 @@ mod tests {
             cluster_map: None,
             codes_are_glyphs: false,
             transform: Affine::translate(1.0, 2.0).then(Affine::rotate_deg(90.0)),
+            glyph_angle: 0.0,
             fill: None,
             stroke: None,
             letter_spacing: 0.0,
@@ -1226,6 +1223,7 @@ mod tests {
             cluster_map: None,
             codes_are_glyphs: false,
             transform: Affine::IDENTITY,
+            glyph_angle: 0.0,
             fill: None,
             stroke: None,
             letter_spacing: 0.0,
@@ -1258,6 +1256,7 @@ mod tests {
             cluster_map: None,
             codes_are_glyphs: false,
             transform: Affine::IDENTITY,
+            glyph_angle: 0.0,
             fill: Some(Paint::Solid(Color::BLACK)),
             stroke: None,
             letter_spacing: 0.0,
@@ -1288,6 +1287,7 @@ mod tests {
             cluster_map: None,
             codes_are_glyphs: false,
             transform: Affine::IDENTITY,
+            glyph_angle: 0.0,
             fill: None,
             stroke: None,
             letter_spacing: 0.0,

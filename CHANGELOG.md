@@ -10,6 +10,25 @@ first, `Added` would list everything and `Changed` would list nothing a reader
 can act on. Later versions keep that shape and add a `Changed` or `Removed`
 section only when a release actually has one.
 
+## [Unreleased]
+
+### Rendering
+
+- **A run read downwards keeps its glyphs upright.** Table 47 measures both
+  angles from the page's `+x`, and the old placement turned the glyphs by the
+  gap between them inside a frame that was itself turned by the read angle, so
+  the two turns cancelled: the advances ran along the page instead of down it
+  and a vertical heading read sideways. The line now carries the read angle and
+  each glyph keeps its own, which puts the buyer and password labels of a
+  tax-control code on the vertical bar the document draws for them.
+- **A line set downwards states no `DeltaX`.** Figure 63 says so, and a run
+  whose offsets only run down the page now reads that way instead of being
+  given a horizontal line. `DeltaY` becomes the step along it.
+- **`GlyphRun::glyph_matrix` is the one way a glyph is drawn.** The SVG, PDF
+  and raster backends each built the same scale-turn-place matrix, so a fix in
+  one of them could miss the others; `GlyphRun::glyph_angle` is the new field
+  they read it from.
+
 ## [0.2.0] - 2026-10-19
 
 The first release since `0.1.1` that changes what the engine draws and what a

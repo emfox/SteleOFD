@@ -141,13 +141,19 @@ says. The rule is one comparison, in `flatten::GlyphAt`:
 `CharDirection` and `ReadDirection` (table 47) each reach `flatten` through one
 transform, `flatten::run_placement`. Figure 62 puts the pen in the line's own
 frame, where `+x` is the read direction, so the read angle carries that frame
-onto the page; figure 65 then turns each glyph by the gap between the two angles
-onto its own baseline, and `HScale` widens it along that baseline. Figure 63's
-downward line needs no `DeltaX` at all, because a glyph turning back to upright
-makes `DeltaY` the step along the line. A producer can also write offsets
-directly into the text, with a space and a `g` standing for a glyph that takes
-no room of its own; that is a property of the string, and it is honoured the
-same way in either reading.
+onto the page and `HScale` widens it there. The glyph's own angle stays out of
+that transform, in `GlyphRun::glyph_angle`, because a glyph turns about its
+origin and must not turn the line with it; `GlyphRun::glyph_matrix` applies it,
+so the SVG, PDF and raster backends cannot disagree about the order.
+
+Table 47 measures both angles from the page, so the glyph keeps
+`CharDirection - ReadDirection` inside the line: reading downwards with
+`CharDirection` 0 cancels the line's quarter and stands the glyph upright.
+Figure 63's downward line therefore needs no `DeltaX` at all, and `DeltaY`
+becomes the step along it. A producer can also write offsets directly into the
+text, with a space and a `g` standing for a glyph that takes no room of its own;
+that is a property of the string, and it is honoured the same way in either
+reading.
 
 A step back moves no glyph forward, so it ends a row: `flatten::run_shapes`
 cuts the code at each one, and the row below takes its own height from `DeltaY`.

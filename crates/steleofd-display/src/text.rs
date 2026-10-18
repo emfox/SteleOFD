@@ -30,6 +30,10 @@ pub struct GlyphRun {
     pub cluster_map: Option<Vec<u32>>,
     /// Text transform, combining position, rotation and scale.
     pub transform: Affine,
+    /// Angle each glyph is turned about its own origin, clockwise from the
+    /// run's `+x`. It carries table 47's page angle less the line's own turn.
+    #[serde(default)]
+    pub glyph_angle: f64,
     /// Fill paint.
     pub fill: Option<crate::ops::Paint>,
     /// Stroke paint, used for outlined glyphs.
@@ -56,6 +60,17 @@ impl GlyphRun {
     /// Extracted plain text, or an empty string when unavailable.
     pub fn plain_text(&self) -> &str {
         self.text.as_deref().unwrap_or("")
+    }
+
+    /// The matrix that draws a glyph, normalized to 1/1000 em with `y` up, at
+    /// `offset` along the run. It turns about its origin before the advance
+    /// moves it, so the angle faces the glyph without stepping it.
+    pub fn glyph_matrix(&self, offset: f64) -> Affine {
+        let k = self.size.value() / 1000.0;
+        Affine::new(k, 0.0, 0.0, -k, 0.0, 0.0)
+            .then(Affine::rotate_deg(self.glyph_angle))
+            .then(Affine::translate(offset, 0.0))
+            .then(self.transform)
     }
 }
 
