@@ -24,8 +24,7 @@ promise.
 
 | Version | Theme |
 | --- | --- |
-| `0.3` | R2 the reader rebuilt on a published application-UI guideline, R6 what the budgets do not measure |
-| `0.3+` | R3 the Android build that crashes on open |
+| `0.4+` | R3 the Android build that crashes on open |
 | `0.5+` | R7 which crates are published |
 | unversioned | R8 packaging, and the rest |
 
@@ -48,30 +47,23 @@ then what a signature is asked to prove, then distribution, then the rest.
 5. **Everything else** — smallest first.
 
 The version column is not the ranking read downwards. R3 is the crash, which by
-the first rule ranks at the top, and it sits last only because diagnosing it
-needs a device or an emulator that no other row does; a `0.3+` promise would be
-one the project cannot keep.
+the first rule ranks at the top, and it sits below the publishing work only
+because diagnosing it needs a device or an emulator that no other row does; a
+`0.4` promise would be one the project cannot keep.
 
 ## Open
 
-### 0.3
+### 0.4+
 
 | # | Item | Target | Why it ranks here | Done when |
 | --- | --- | --- | --- | --- |
-| R2 | **The reader's interface.** It obeys `Ui-spec.md`, which was written for the window that exists. That spec was built on no published application-UI guideline, and the window has outgrown it: panels, the toolbar, the dialogs, and settings that do not exist yet — a theme, a type scale, high contrast — need a rulebook a new contributor can look up rather than one we invented. | `0.3` | It does not affect output, so it ranks below a wrong verdict; but it is the surface every other delivery form is judged by. | A chosen guideline is named in `Ui-spec.md` with the clauses the window follows, the reader is rebuilt against it with nothing the old spec required removed without a note, and a theme, a type scale and a contrast setting exist because the guideline asks for them. |
-| R6 | **What the budgets do not measure.** `Performance.md` carries five timings for one page each, and no memory ceiling at all — while the documents this is for are scanned invoices of tens of pages, where a single A4 at 300 dpi is about 26 MB once decoded. Nothing measures a many-page document, and the render cache is deferred "until measured", which has not been scheduled. | `0.3` | It follows R2 because a memory ceiling defines what the cache may hold, and the cache is the window's business. | `Performance.md` states a peak-memory ceiling per page and per document, `check_performance.py` enforces it, and a benchmark over a twenty-page document exists beside the one-page ones. |
+| R3 | **The Android build crashes on open.** The archive installs, then exits before a page is drawn. | `0.4+` | A crash outranks a slow page, so it sits above the packaging work; but it needs a device or an emulator to diagnose, which no other row does, so it is not promised to a version. | The arm64 archive from the release page opens `ofdrw/999.ofd` on a device and on an emulator, and the crash has a regression test that fails without the fix. |
 
 ### 0.5+
 
 | # | Item | Target | Why it ranks here | Done when |
 | --- | --- | --- | --- | --- |
 | R7 | **The crates are not on a registry yet.** The surface is decided: nineteen crates publish and eight do not, each stating its `publish` field and a `description`, and `check_publish.py` enforces both sets in CI. What remains is the act. `cargo package -p steleofd-core` still fails because the crates it depends on are not there, so publishing has to go leaf first through the dependency layers, and a version already on the registry cannot be replaced. The semver gate is now set for it: a break needs a minor version and the check compares against the parent commit, so the bump a break costs is decided when it merges rather than when it ships. | Publishing is how the engine reaches anyone not building an application around it. It is held back by a decision rather than by order: a published API is fixed per version, so it waits until the features and the surface have settled. | `cargo add steleofd-core` builds against crates.io at the version then shipped, the release notes name the nineteen crates, and a CI job fails when a published crate's metadata stops being complete. |
-
-### 0.3+
-
-| # | Item | Target | Why it ranks here | Done when |
-| --- | --- | --- | --- | --- |
-| R3 | **The Android build crashes on open.** The archive installs, then exits before a page is drawn. | `0.3+` | A crash outranks a slow page, so it sits above the packaging work; but it needs a device or an emulator to diagnose, which no other row does, so it is not promised to a version. | The arm64 archive from the release page opens `ofdrw/999.ofd` on a device and on an emulator, and the crash has a regression test that fails without the fix. |
 
 ### Unversioned
 
