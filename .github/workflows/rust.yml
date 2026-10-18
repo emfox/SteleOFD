@@ -286,6 +286,22 @@ jobs:
       - name: Fuzz the XML cursor
         run: cargo +nightly fuzz run xml_cursor -- -runs=20000 -max_len=4096
 
+  audit:
+    runs-on: ubuntu-latest
+    # A dependency with a published advisory is a defect this project ships,
+    # so the build stops on one. The job runs on the lock file rather than the
+    # source, so it also catches a transitive crate nobody here named.
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install cargo-deny
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deny
+
+      - name: Check advisories, licences, bans and sources
+        run: cargo deny --all-features check
+
   semver:
     runs-on: ubuntu-latest
     # A breaking public-API change should fail here rather than surprise a

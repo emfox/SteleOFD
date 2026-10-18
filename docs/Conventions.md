@@ -147,12 +147,20 @@ next to the check that produced it. Grouped by what they need:
 | `corpus` | `fetch_ofdrw.py` and `fetch_gb_samples.py`, `--check` then `--parse` | the fetched samples, `cargo` |
 | `perf` | `check_performance.py` against the budget in [Performance.md](Performance.md) | a `cargo bench` run |
 | `review` | `check_commit_scope.py`, which names commits that read as more than one change | `git` |
+| `deps` | `cargo deny --all-features check`: advisories, licences, bans and sources | `cargo-deny` |
 
 `msrv` is the one check that runs under a toolchain other than the one on
 `PATH`: it reads `rust-version` from the workspace manifest and runs
 `cargo +<that version> check`, so the minimum the project states is a fact
 rather than a claim. It skips, with the reason, on a machine that has not
 installed that channel.
+
+`deps` reads `deny.toml` rather than a command line, so a decision about a
+dependency is a reviewable diff instead of a flag somebody remembered. A
+vulnerability fails the build; an unmaintained crate fails it too unless the
+ignore list names the advisory with the reason and the roadmap item that
+retires it. Duplicate versions are warnings: two copies of a crate are a smell,
+but a version pin already records where they came from.
 
 Everything in `review` reports rather than blocks. A script can measure where
 the lines landed; it cannot know why they landed there, and a move, a rename or
