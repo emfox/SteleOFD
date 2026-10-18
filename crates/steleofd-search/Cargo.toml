@@ -25,3 +25,6 @@ steleofd-testkit.workspace = true
 [[bench]]
 name = "search"
 harness = false
+
+[package.metadata.cargo-semver-checks.lints]
+workspace = true

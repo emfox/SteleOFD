@@ -249,20 +249,27 @@ reason, so that every exception stays self-documenting.
 ## 5. Public API changes
 
 `cargo-semver-checks` compares the public API of every crate that states
-`publish` (nineteen of them; the shells, the testkit and i18n opt out) and fails
+`publish` (nineteen of them; the shells and the testkit opt out) and fails
 when a change needs a larger version bump than the manifests declare. The
-workspace root carries the lint configuration, and each published crate opts
-into it, so a change to the policy is one edit.
+workspace root carries the lint configuration.
 
-The default answer to "may we break this between minor releases" is no. Two
+The tool has no configuration file of its own: a policy reaches it only through
+`[package.metadata.cargo-semver-checks.lints]`, and only for a crate that opts
+in with `workspace = true` there. So the policy is written once in the root
+manifest and each published crate repeats one line to accept it. A crate that
+omits the line is checked against the tool's defaults instead, silently, which
+is why a new published crate has to add it.
+
+The default answer to "may we break this between minor releases" is no. Three
 decisions depart from the crate's defaults:
 
 | Decision | Effect | Why |
 | --- | --- | --- |
-| `enum_variant_added` requires `minor` rather than `major` | Adding a variant to an exhaustive enum is allowed in a minor release | Every such enum names an outcome a caller must tell apart. `VerifyStatus` gained `Unchecked` because reporting an unchecked signature as tampered is worse than reporting nothing, and the alternative — a new enum returned from a new function — leaves the old function answering the question wrongly. A break still needs a version, which the check below enforces |
+| `enum_variant_added` requires `minor` | Adding a variant to an exhaustive enum is allowed in a minor release | Every such enum names an outcome a caller must tell apart. `VerifyStatus` gained `Unchecked` because reporting an unchecked signature as tampered is worse than reporting nothing, and the alternative — a new enum returned from a new function — leaves the old function answering the question wrongly. A break still needs a version, which the check below enforces |
+| `constructible_struct_adds_field` requires `minor` | Adding a public field to a struct a caller can build with a literal is allowed in a minor release | The model is data. `TextObject` gained `ReadDirection` and `CharDirection` because the format has them and ignoring them drew turned text upright, so the field is the feature rather than an accident of it. A caller writing that literal has to add the field, which the compiler reports at the line to change |
 | The check runs twice | Against the latest `v*` tag, and against `HEAD^1` | Against the tag both trees carry the tag's version, so a break answers "a patch would do"; against the parent it reads the bump the commit intends and answers "not a patch" |
 
-The second row is the one that matters, and it is worth stating plainly: the
+The last row is the one that matters, and it is worth stating plainly: the
 baseline tag carries the version it shipped, never the version in the working
 tree, so comparing against the tag alone tells a `0.1.1` API change that a patch
 is enough. Comparing neighbours is what ties a break to the number the next
@@ -270,4 +277,4 @@ release will spend. This matters because a version on a registry cannot be
 replaced: a break merged without a bump turns the next release into a fix.
 
 `cargo semver-checks` skips `publish = false` without being told, which is why
-the seven unpublished crates need no entry in the job.
+the eight unpublished crates need no opt-in line at all.

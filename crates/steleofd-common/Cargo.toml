@@ -11,3 +11,6 @@ description = "Foundational types shared across the OFD stack"
 [dependencies]
 bitflags.workspace = true
 serde.workspace = true
+
+[package.metadata.cargo-semver-checks.lints]
+workspace = true

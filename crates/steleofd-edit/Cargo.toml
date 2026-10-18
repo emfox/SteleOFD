@@ -26,3 +26,6 @@ steleofd-core = { workspace = true, features = ["render"] }
 steleofd-display.workspace = true
 # Fixture documents whose page files a test can replace.
 steleofd-testkit.workspace = true
+
+[package.metadata.cargo-semver-checks.lints]
+workspace = true

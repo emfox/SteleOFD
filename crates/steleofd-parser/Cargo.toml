@@ -30,3 +30,6 @@ steleofd-testkit.workspace = true
 [[bench]]
 name = "parse"
 harness = false
+
+[package.metadata.cargo-semver-checks.lints]
+workspace = true

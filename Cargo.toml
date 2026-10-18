@@ -155,14 +155,14 @@ proptest   = "1"
 criterion  = { version = "0.5", features = ["html_reports"] }
 pretty_assertions = "1"
 
-# A variant added to an exhaustive enum is a breaking change: downstream
-# matches stop compiling. Raising the requirement to `minor` makes it the one
-# kind of addition this project allows between minor releases, because each
-# enum here names an outcome a reader must be able to distinguish, and growing
-# that set is the normal way an unproven case gets a name of its own. Everything
-# else still needs a major version.
+# The semver policy lives here and is read only by a crate that opts in with
+# `[package.metadata.cargo-semver-checks.lints] workspace = true`, because the
+# tool has no file of its own and no default opt-in. A field added to a public
+# struct breaks a literal a caller wrote, so it costs a minor release like a
+# new enum variant; everything else still needs a major one.
 [workspace.metadata.cargo-semver-checks.lints]
 enum_variant_added = { required-update = "minor" }
+constructible_struct_adds_field = { required-update = "minor" }
 
 [profile.release]
 lto = "thin"

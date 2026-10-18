@@ -35,3 +35,6 @@ signature.workspace = true
 getrandom = { version = "0.3", features = ["wasm_js"] }
 getrandom04 = { package = "getrandom", version = "0.4", features = ["wasm_js"] }
 getrandom02 = { package = "getrandom", version = "0.2", features = ["js"] }
+
+[package.metadata.cargo-semver-checks.lints]
+workspace = true

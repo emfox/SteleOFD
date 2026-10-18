@@ -10,3 +10,6 @@ description = "One error type per OFD subsystem, all converting losslessly into 
 
 [dependencies]
 thiserror.workspace = true
+
+[package.metadata.cargo-semver-checks.lints]
+workspace = true

@@ -29,3 +29,6 @@ serde_json.workspace = true
 [features]
 default = ["system-fonts"]
 system-fonts = ["dep:font-kit"]
+
+[package.metadata.cargo-semver-checks.lints]
+workspace = true

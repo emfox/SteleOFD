@@ -13,3 +13,6 @@ steleofd-common.workspace = true
 steleofd-error.workspace = true
 kurbo.workspace = true
 serde.workspace = true
+
+[package.metadata.cargo-semver-checks.lints]
+workspace = true

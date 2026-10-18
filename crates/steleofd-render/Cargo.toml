@@ -24,3 +24,6 @@ default = ["backend-raster"]
 # The raster backend is the one that exists. A command-stream backend for
 # browsers is planned; it lands as its own feature when it lands, not before.
 backend-raster   = []
+
+[package.metadata.cargo-semver-checks.lints]
+workspace = true

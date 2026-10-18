@@ -20,3 +20,6 @@ tracing.workspace = true
 [features]
 default = []
 xsd-validate = []
+
+[package.metadata.cargo-semver-checks.lints]
+workspace = true

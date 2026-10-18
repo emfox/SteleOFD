@@ -17,3 +17,6 @@ hayro-jbig2.workspace = true
 [features]
 default = []
 mmap = ["dep:memmap2"]
+
+[package.metadata.cargo-semver-checks.lints]
+workspace = true

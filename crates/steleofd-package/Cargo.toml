@@ -17,3 +17,6 @@ tracing.workspace = true
 
 [dev-dependencies]
 proptest.workspace = true
+
+[package.metadata.cargo-semver-checks.lints]
+workspace = true

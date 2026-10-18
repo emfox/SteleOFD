@@ -56,3 +56,6 @@ archive  = ["dep:steleofd-archive"]
 # feature only names the capability: it trims nothing at compile time.
 annot    = []
 async    = ["dep:rayon"]
+
+[package.metadata.cargo-semver-checks.lints]
+workspace = true
