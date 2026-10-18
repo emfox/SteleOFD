@@ -1,4 +1,4 @@
-# Archive layout for the minimal corpus.
+# Archive layout for the minimal fixture.
 # <path inside the .ofd>            <source file>
 OFD.xml                             OFD.xml
 Doc_0/Document.xml                  Document.xml

@@ -1,4 +1,4 @@
-# Archive layout for the vertical corpus.
+# Archive layout for the vertical fixture.
 # <path inside the .ofd>            <source file>
 OFD.xml                             OFD.xml
 Doc_0/Document.xml                  Document.xml

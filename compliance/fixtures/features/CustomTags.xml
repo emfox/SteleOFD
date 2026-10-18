@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ofd:CustomTags xmlns:ofd="http://www.ofdspec.org/2016">
-  <ofd:CustomTag NameSpace="urn:steleofd:corpus:tags">
+  <ofd:CustomTag NameSpace="urn:steleofd:fixtures:tags">
     <ofd:FileLoc>Tags/Tag_0.xml</ofd:FileLoc>
   </ofd:CustomTag>
 </ofd:CustomTags>

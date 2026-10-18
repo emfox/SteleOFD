@@ -4,7 +4,7 @@
     <ofd:DocInfo>
       <ofd:DocID>urn:steleofd:vertical:0001</ofd:DocID>
       <ofd:Title>Vertical text set downwards</ofd:Title>
-      <ofd:Author>SteleOFD conformance corpus</ofd:Author>
+      <ofd:Author>SteleOFD conformance fixtures</ofd:Author>
       <ofd:CreationDate>2024-01-01</ofd:CreationDate>
     </ofd:DocInfo>
     <ofd:DocRoot>Doc_0/Document.xml</ofd:DocRoot>

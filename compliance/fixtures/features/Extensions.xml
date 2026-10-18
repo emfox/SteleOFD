@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ofd:Extensions xmlns:ofd="http://www.ofdspec.org/2016">
-  <ofd:Extension AppName="steleofd-corpus" Company="SteleOFD" AppVersion="1.0" RefId="14">
+  <ofd:Extension AppName="steleofd-fixtures" Company="SteleOFD" AppVersion="1.0" RefId="14">
     <ofd:Property Name="Purpose" Type="string">Exercise the extension clause</ofd:Property>
     <ofd:Property Name="Version" Type="number">1</ofd:Property>
   </ofd:Extension>
