@@ -126,10 +126,11 @@ because a digit is about half an em wide and a step has to be wider than the
 glyph it moves over.
 
 A list shorter than the steps between the glyphs is read as positions: a glyph
-with no entry of its own sits where the next offset puts it, and a negative
-offset starts a new row, which is where it would go read as a step as well.
-`DeltaY` always says where the next row is, so a list that says nothing about it
-leaves the glyph on its row. The rule is one comparison, in `flatten::GlyphAt`:
+with no entry of its own sits where its own offset puts it, and a negative
+offset is a carriage return, which is where the next glyph goes read as a step
+as well. `DeltaY` is read for how many offsets a list supplies, but not yet for
+where a row sits, so a run that turns onto a second row keeps its first `y`.
+The rule is one comparison, in `flatten::GlyphAt`:
 
 | Offsets | Glyphs | Read as |
 |---|---|---|
