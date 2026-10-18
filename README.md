@@ -87,7 +87,9 @@ pages the standard prints, so a row cannot cite a clause the standard does not
 have. What the engine can and cannot draw with is set out face by face in
 [`docs/Fonts.md`](docs/Fonts.md). How it compares to other readers in the field,
 page by page against a second vendor's output, is in
-[`docs/Interop.md`](docs/Interop.md).
+[`docs/Interop.md`](docs/Interop.md). What a signature can and cannot settle,
+and why the standards leave the issuer to the caller, is in
+[`docs/Trust.md`](docs/Trust.md).
 
 ## Background
 

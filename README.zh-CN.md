@@ -78,6 +78,8 @@ GB/T 33476 共三部分，本项目遵循的是第 1、2 部分。GM/T 0099-2020
 因此不可能引用标准中不存在的条款。内核能用哪些字形绘制、不能用哪些，
 逐字体列在 [`docs/Fonts.md`](docs/Fonts.md)；
 与其他阅读器的逐页对比结果见 [`docs/Interop.md`](docs/Interop.md)。
+签名能证明什么、不能证明什么，以及标准为何把签发者交给调用方判断，
+见 [`docs/Trust.md`](docs/Trust.md)。
 
 ## 背景
 
