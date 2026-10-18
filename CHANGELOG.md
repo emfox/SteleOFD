@@ -10,7 +10,7 @@ first, `Added` would list everything and `Changed` would list nothing a reader
 can act on. Later versions keep that shape and add a `Changed` or `Removed`
 section only when a release actually has one.
 
-## [Unreleased]
+## [0.2.0] - 2026-10-19
 
 The first release since `0.1.1` that changes what the engine draws and what a
 signature is allowed to say. Both matter more than anything else here: a
@@ -111,6 +111,19 @@ is the reason the format is used at all.
   corpus, and the word also means a body. Every reference follows the rename,
   including the author, provider and tag namespace inside the fixture archives,
   which is the one place a rename has to reach into bytes.
+
+### Known limits
+
+- No crate is published to a registry yet, so this release is a source tag and
+  a set of artefacts rather than a `cargo add steleofd-core`. Publishing waits
+  until the surface settles, because a version on a registry cannot be
+  replaced.
+- Blending is deliberately unsupported: the standard defines no blend mode, and
+  `Alpha` is the whole of its transparency model.
+- Office formats and OCR are planned, not built.
+- iOS is not in the release matrix — it needs signing on macOS, and the project
+  holds no keys.
+- The release artefacts are unsigned, so trust rests on the checksums.
 
 ## [0.1.1] - 2026-10-18
 
@@ -244,7 +257,8 @@ samples are parsed in CI on every push.
   holds no keys.
 - The release artefacts are unsigned, so trust rests on the checksums.
 
-[Unreleased]: https://github.com/emfox/SteleOFD/compare/v0.1.1...main
+[Unreleased]: https://github.com/emfox/SteleOFD/compare/v0.2.0...main
+[0.2.0]: https://github.com/emfox/SteleOFD/releases/tag/v0.2.0
 [0.1.1]: https://github.com/emfox/SteleOFD/releases/tag/v0.1.1
 [0.1.0]: https://github.com/emfox/SteleOFD/releases/tag/v0.1.0
 [0.1.0-rc.1]: https://github.com/emfox/SteleOFD/releases/tag/v0.1.0-rc.1
