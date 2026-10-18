@@ -12,7 +12,36 @@ section only when a release actually has one.
 
 ## [Unreleased]
 
-### Changed
+The first release since `0.1.1` that changes what the engine draws and what a
+signature is allowed to say. Both matter more than anything else here: a
+document set in the wrong place is read wrong, and a signature reported valid
+is the reason the format is used at all.
+
+### Signatures
+
+- **A signer can be checked against an anchor the caller names.**
+  `verify_signature_under` adds a `TrustPolicy`, and
+  `steleofd_crypto::TrustAnchors` carries the roots. GB/T 38540-2020 7.3 e) 1)
+  requires a certification path and names no root, so the caller supplies it;
+  the path check walks each certificate's own signature under its issuer's key
+  up to one of those anchors, reading the key identifiers, `basicConstraints`,
+  `keyUsage` and signature algorithm that GM/T 0015-2023 5.2.4 asks for. A
+  failure at one link stays distinct from an expired certificate, because 7.3
+  e) 2) separates them.
+- **Two outcomes were added, so a verdict says no more than it checked.**
+  `Unchecked` covers a reference naming a digest this build does not compute
+  and a certificate that had already expired when the document says it was
+  signed — proof of nothing either way — which used to come back as `Tampered`
+  and read as an edit of the document. `Untrusted` covers a signer outside the
+  caller's anchors. The C struct, the JSON shape, the wasm shape, the server
+  DTO and the reader's colour each carry both, with one message per locale,
+  because an outcome no shell can express is a verdict only Rust callers see.
+- **`verify_signature` keeps its meaning.** It answers whether the digest and
+  the certificate hold, and nothing about who issued them, which is what
+  `docs/Trust.md` now says instead of the old claim that the issuer is never
+  checked.
+
+### Rendering
 
 - **`ReadDirection` and `CharDirection` now place text.** A run was laid out
   along `+x` and read left to right whatever table 47 asked for, so a vertical
@@ -20,30 +49,68 @@ section only when a release actually has one.
   `DeltaY` was counted and never used for where a row sits; it now steps a run
   across the line, which is also how a downward line advances when its glyphs
   stay upright.
+- **An offset list shorter than the steps places glyphs rather than moving
+  them.** A producer writes one offset per column, so the list is shorter than
+  the number of steps between characters; read as steps it set a line of text
+  as one blob. Such a list now gives where each glyph sits, and `DeltaY` beside
+  it places a new row instead of slanting the one above.
+- **A code that returns to the left edge is drawn as rows.** A `DeltaX` step
+  back ends a row and `DeltaY` says how far down the next one sits, but one run
+  carried the return as an advance, so a four-row code came out on a single
+  line. The code is now cut into one run per row.
+- **Escaped markup in text survives again.** A `&lt;` written in a value
+  arrived as its own parser event and was dropped, so a tax-control code lost
+  thirteen characters and the reader drew ninety-nine where the document
+  carried a hundred and twelve. Entity references are now resolved as text.
+- **A named monospaced family is read as fixed width.** Clause 11.1 leaves
+  `FixedWidth` optional, and a `Courier New` line was answered with the CJK
+  substitute's proportional glyphs, so the columns the offsets build collided.
+  A family whose name says mono now asks for a monospaced substitute whether or
+  not the flag is set.
+- **An advance is measured in a thousandth of an em before shaping.** A face
+  whose units-per-em is not 1000 (2048, say) had its width left in raw units,
+  so its glyphs ran wider than the offsets stepped them.
+
+### Robustness
+
 - **A document that names a font the backend cannot read is refused, not
   fatal.** `ttf-parser` asserts that a table directory fits inside its file and
   inside 32 bits, and the directory is the document's to choose, so a crafted
   file ended the process where the reader expected an error. Such a font is now
   a parse error like any other.
+- **A password-protected entry asks for a password.** The ZIP reader said
+  `PASSWORD_REQUIRED` and the mapping filed it as corruption, so a protected
+  document read as a damaged one. The encrypted state is now recorded at open
+  and tested, rather than recorded and never mentioned again.
 - **A name an archive reader would collapse is refused at write time.**
   `build_archive` accepted `A//x.xml`, wrote it, and reported `A/x.xml` on the
   way back, so the writer lost an entry it had just written.
-- **Escaped markup in text survives again.** A `&lt;` written in a value
-  arrived as its own parser event and was dropped, so a tax-control code lost
-  thirteen characters and the reader drew ninety-nine where the document
-  carried a hundred and twelve. Entity references are now resolved as text.
-- **A named monospaced family is read as fixed width.** `Courier New` carries
-  no `FixedWidth` flag, so a fallback picked a proportional face and the glyphs
-  of an equal-width code overlapped. A family whose name says mono now asks for
-  a monospaced substitute whether or not the flag is set.
-- **An advance is measured in a thousandth of an em before shaping.** A face
-  whose units-per-em is not 1000 (2048, say) had its width left in raw units,
-  so its glyphs ran wider than the offsets stepped them. The advance is now
-  normalised to the OFD convention.
-- **A code that returns to the left edge is drawn as rows.** A `DeltaX` step
-  back ends a row and `DeltaY` says how far down the next one sits, but one run
-  carried the return as an advance, so a four-row code came out on a single
-  line. The code is now cut into one run per row.
+
+### Tooling
+
+- **Gates for the three things a 690-package tree had none of.** An advisory
+  now stops the build, the three parsers a document feeds are fuzzed, and each
+  editing command is checked by reopening what it wrote. Dependency upgrades
+  that clear the known advisories landed with them: `zip` 4 to 9, `lopdf` 0.36
+  to 0.45, `zbus_xml` to 5.2, while `rsa`, `pkcs12` and `indicatif` were
+  dropped as unreachable.
+- **A break now spends a stated version.** The semver job reads its policy from
+  the crates it governs and compares against the parent commit, so the bump a
+  break costs is decided when it merges rather than when it ships.
+- **Every crate states where it goes.** Nineteen publish and eight do not, each
+  carrying the `description` a registry shows, and `check_publish.py` holds the
+  two sets to the whole workspace on every push.
+- **The Windows reader is cross-compiled from Ubuntu** with `mingw-w64`, which
+  matches the target `cargo build` produces locally instead of a Chocolatey
+  install on a Windows runner, and the jobs that read the fetched samples now
+  fetch them before running.
+
+### Naming
+
+- **`corpus` is now `fixtures` and `samples`.** Nothing in the tree is a text
+  corpus, and the word also means a body. Every reference follows the rename,
+  including the author, provider and tag namespace inside the fixture archives,
+  which is the one place a rename has to reach into bytes.
 
 ## [0.1.1] - 2026-10-18
 
