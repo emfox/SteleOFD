@@ -4882,6 +4882,8 @@ dependencies = [
  "image",
  "proptest",
  "steleofd-common",
+ "steleofd-convert",
+ "steleofd-core",
  "steleofd-display",
  "steleofd-error",
  "steleofd-font",

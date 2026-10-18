@@ -670,7 +670,9 @@ fn the_settings_offer_three_themes_and_follow_the_system_by_default() {
         ThemeChoice::System,
         "a reader who told their desktop to go dark has told this window too"
     );
-    harness.get_by_label(&reader_label(ReaderMessage::Settings)).click();
+    harness
+        .get_by_label(&reader_label(ReaderMessage::Settings))
+        .click();
     harness.run();
     for choice in ThemeChoice::ALL {
         harness.get_by_label(&harness.state().theme_name(choice));
@@ -684,7 +686,9 @@ fn the_settings_offer_three_themes_and_follow_the_system_by_default() {
 #[test]
 fn the_settings_offer_three_text_sizes_and_the_scale_moves_every_style() {
     let mut harness = harness(App::new());
-    harness.get_by_label(&reader_label(ReaderMessage::Settings)).click();
+    harness
+        .get_by_label(&reader_label(ReaderMessage::Settings))
+        .click();
     harness.run();
     for size in TextSize::ALL {
         harness.get_by_label(&harness.state().text_size_name(size));
@@ -705,7 +709,9 @@ fn the_settings_offer_three_text_sizes_and_the_scale_moves_every_style() {
 fn high_contrast_is_a_switch_rather_than_a_fourth_theme() {
     let mut harness = harness(App::new());
     let choice = harness.state().theme();
-    harness.get_by_label(&reader_label(ReaderMessage::Settings)).click();
+    harness
+        .get_by_label(&reader_label(ReaderMessage::Settings))
+        .click();
     harness.run();
     let switch = harness.state().high_contrast_label();
     harness.get_by_label(&switch).click();
@@ -725,11 +731,16 @@ fn a_theme_never_moves_the_document() {
     app.go_to(0);
     let before = app.page_count();
     let mut harness = harness(app);
-    harness.get_by_label(&reader_label(ReaderMessage::Settings)).click();
+    harness
+        .get_by_label(&reader_label(ReaderMessage::Settings))
+        .click();
     harness.run();
     let light = harness.state().theme_name(ThemeChoice::Light);
     harness.get_by_label(&light).click();
     harness.run();
     assert_eq!(harness.state().page_count(), before);
-    assert!(harness.state().is_open(), "a setting never closes a document");
+    assert!(
+        harness.state().is_open(),
+        "a setting never closes a document"
+    );
 }

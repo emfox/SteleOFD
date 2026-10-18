@@ -135,7 +135,10 @@ impl App {
     pub fn text_size_name(&self, size: TextSize) -> String {
         self.text_with(
             size.message(),
-            [("points", (BASE_POINTS * size.scale()).round().to_string().into())],
+            [(
+                "points",
+                (BASE_POINTS * size.scale()).round().to_string().into(),
+            )],
         )
     }
 

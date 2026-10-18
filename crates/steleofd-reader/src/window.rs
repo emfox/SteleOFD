@@ -111,7 +111,13 @@ fn colour(ui: &Ui, app: &App, token: Token) -> egui::Color32 {
 /// A label in one of the window's colours and one of its named styles. The
 /// point size is set here rather than looked up in the style table, because a
 /// popup is built before step 3 has registered the named styles in it.
-fn toned(ui: &Ui, app: &App, text: impl Into<String>, token: Token, style: Style) -> egui::RichText {
+fn toned(
+    ui: &Ui,
+    app: &App,
+    text: impl Into<String>,
+    token: Token,
+    style: Style,
+) -> egui::RichText {
     let scale = app.text_size().scale();
     egui::RichText::new(text)
         .color(colour(ui, app, token))
@@ -268,7 +274,10 @@ fn draw_panel_toggles(ui: &mut Ui, app: &mut App) {
     let signatures = app.signatures_heading();
     let showing = app.signatures_open();
     if ui
-        .add_enabled(app.is_open(), egui::Button::selectable(showing, &signatures))
+        .add_enabled(
+            app.is_open(),
+            egui::Button::selectable(showing, &signatures),
+        )
         .on_hover_text(&signatures)
         .clicked()
     {
@@ -277,7 +286,10 @@ fn draw_panel_toggles(ui: &mut Ui, app: &mut App) {
     let annotations = app.annotations_heading();
     let listing = app.annotations_open();
     if ui
-        .add_enabled(app.is_open(), egui::Button::selectable(listing, &annotations))
+        .add_enabled(
+            app.is_open(),
+            egui::Button::selectable(listing, &annotations),
+        )
         .on_hover_text(&annotations)
         .clicked()
     {
@@ -325,7 +337,13 @@ fn draw_settings(ui: &mut Ui, app: &mut App) {
     let mut size = app.text_size();
     let mut sharp = app.high_contrast();
     ui.menu_button(&label, |ui| {
-        ui.label(toned(ui, app, app.theme_label(), Token::Dim, Style::Caption));
+        ui.label(toned(
+            ui,
+            app,
+            app.theme_label(),
+            Token::Dim,
+            Style::Caption,
+        ));
         for choice in ThemeChoice::ALL {
             let name = app.theme_name(choice);
             ui.selectable_value(&mut theme, choice, name);
@@ -753,7 +771,8 @@ fn draw_annotations_on(ui: &Ui, app: &App, page: usize, area: egui::Rect, drawn:
         if !annotation.visible {
             continue;
         }
-        let colour = colour(ui, app, Token::Accent).gamma_multiply(if current { 1.0 } else { 0.55 });
+        let colour =
+            colour(ui, app, Token::Accent).gamma_multiply(if current { 1.0 } else { 0.55 });
         let scaled = scale_hit(boundary, page_box, area, drawn);
         painter.rect_stroke(
             scaled,
@@ -779,7 +798,8 @@ fn draw_highlights(ui: &Ui, app: &App, page: usize, area: egui::Rect, drawn: egu
     for (rect, current) in hits {
         // The current hit is drawn full strength and the rest faded, so
         // "where am I" and "where are the others" both read at a glance.
-        let colour = colour(ui, app, Token::Unverified).gamma_multiply(if current { 1.0 } else { 0.45 });
+        let colour =
+            colour(ui, app, Token::Unverified).gamma_multiply(if current { 1.0 } else { 0.45 });
         let scaled = scale_hit(rect, page_box, area, drawn);
         painter.rect_filled(scaled, 0.0, colour.gamma_multiply(0.35));
         painter.rect_stroke(

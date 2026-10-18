@@ -10,8 +10,8 @@ use steleofd_render::RenderOptions;
 use steleofd_testkit::{OBJECTS_PER_PAGE, bench_archive};
 
 /// Page counts to measure at. One page is a preview, eight is a document
-/// somebody would actually export.
-const PAGES: &[usize] = &[1, 8];
+/// somebody would export, and twenty is the packet the budgets are stated for.
+const PAGES: &[usize] = &[1, 8, 20];
 
 /// A document, opened and flattened with its fonts registered, which is the
 /// state every conversion starts from.

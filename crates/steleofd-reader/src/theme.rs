@@ -225,7 +225,10 @@ fn luminance(colour: Color32) -> f32 {
 /// The contrast ratio between two colours, from 1:1 to 21:1.
 #[cfg(test)]
 fn contrast(a: Color32, b: Color32) -> f32 {
-    let (high, low) = (luminance(a).max(luminance(b)), luminance(a).min(luminance(b)));
+    let (high, low) = (
+        luminance(a).max(luminance(b)),
+        luminance(a).min(luminance(b)),
+    );
     (high + 0.05) / (low + 0.05)
 }
 
@@ -323,7 +326,8 @@ mod tests {
             for token in ALL_TOKENS {
                 let colour = colour_in(scheme, false, token);
                 assert_ne!(
-                    colour, Color32::TRANSPARENT,
+                    colour,
+                    Color32::TRANSPARENT,
                     "{token:?} is undefined in {scheme:?}"
                 );
             }
@@ -335,7 +339,10 @@ mod tests {
         // 4.5:1 is the level ordinary text is expected to reach.
         for scheme in [Scheme::Light, Scheme::Dark] {
             for token in [Token::Text, Token::Accent, Token::Tampered] {
-                let ratio = contrast(colour_in(scheme, false, token), colour_in(scheme, false, Token::Panel));
+                let ratio = contrast(
+                    colour_in(scheme, false, token),
+                    colour_in(scheme, false, Token::Panel),
+                );
                 assert!(ratio >= 4.5, "{token:?} on {scheme:?} is {ratio:.1}:1");
             }
         }
@@ -364,10 +371,7 @@ mod tests {
     fn the_type_scale_never_goes_backwards() {
         let ratios: Vec<f32> = SCALE.iter().map(|(_, ratio)| *ratio).collect();
         for pair in ratios.windows(2) {
-            assert!(
-                pair[0] > pair[1],
-                "the scale is not decreasing: {ratios:?}"
-            );
+            assert!(pair[0] > pair[1], "the scale is not decreasing: {ratios:?}");
         }
     }
 

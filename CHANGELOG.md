@@ -40,6 +40,21 @@ section only when a release actually has one.
   words, so each now has a tooltip; so does every other button in the two header
   rows.
 
+### Performance
+
+- **Time and memory have separate budgets.** `Performance.md` stated five
+  timings and no memory ceiling, while the documents this is for are scanned
+  invoices of tens of pages and a single A4 is about 26 MB once decoded. A page
+  now has a 40 MB ceiling, a twenty-page packet has 512 MB, and both are
+  enforced: a budget nobody measures is a budget nobody has.
+- **A page's memory is counted, not guessed.** A new `memory` benchmark wraps
+  the allocator and prints what a raster holds once it is drawn, which is the
+  number the cache has to size itself against. Criterion measures time, so the
+  reading is a printout; `check_performance.py` reads it beside the timings.
+- **The benchmarks run at twenty pages.** One page is a preview and eight is a
+  chapter; twenty is the packet the per-document ceiling is stated for, and the
+  first count where a cost per page that had stopped being linear would show.
+
 ### Rendering
 
 - **A run read downwards keeps its glyphs upright.** Table 47 measures both

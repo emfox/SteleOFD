@@ -7,10 +7,10 @@ use steleofd_package::Package;
 use steleofd_parser::{ParsedDocument, Parser};
 use steleofd_testkit::{OBJECTS_PER_PAGE, bench_archive};
 
-/// Page counts the baseline is measured at. One page is the floor a reader
-/// notices, eight is a chapter, and the spread is what shows whether a cost
-/// per page is linear.
-const PAGES: &[usize] = &[1, 8];
+/// Page counts the baseline is measured at: one page is the floor a reader
+/// notices, eight is a chapter, and twenty is the packet the memory ceiling is
+/// stated for — the first count where a cost per page that is not linear shows.
+const PAGES: &[usize] = &[1, 8, 20];
 
 /// Run `body` with a parser over `bytes` and the document it opens.
 /// The parser borrows its package, so the package lives on the stack here;

@@ -26,9 +26,17 @@ proptest.workspace = true
 criterion.workspace = true
 steleofd-render.workspace = true
 steleofd-testkit.workspace = true
+# The memory benchmark rasterizes a page, which is where a page's bytes go.
+steleofd-core.workspace = true
+steleofd-convert.workspace = true
 
 [[bench]]
 name = "parse"
+harness = false
+
+# The memory ceiling, measured through a counting allocator rather than timed.
+[[bench]]
+name = "memory"
 harness = false
 
 [package.metadata.cargo-semver-checks.lints]
