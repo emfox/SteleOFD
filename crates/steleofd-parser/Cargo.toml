@@ -25,7 +25,7 @@ tracing.workspace = true
 proptest.workspace = true
 criterion.workspace = true
 steleofd-render.workspace = true
-steleofd-testkit = { path = "../steleofd-testkit" }
+steleofd-testkit.workspace = true
 
 [[bench]]
 name = "parse"

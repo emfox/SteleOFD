@@ -19,8 +19,6 @@ sm4.workspace = true
 cipher.workspace = true
 der.workspace = true
 x509-parser.workspace = true
-pkcs12.workspace = true
-rsa.workspace = true
 tracing.workspace = true
 
 # The identity-hash test signs with a different distinguishing ID on purpose,

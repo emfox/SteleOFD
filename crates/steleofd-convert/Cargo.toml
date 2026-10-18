@@ -35,7 +35,7 @@ ocr     = []
 [dev-dependencies]
 criterion.workspace = true
 steleofd-core.workspace = true
-steleofd-testkit = { path = "../steleofd-testkit" }
+steleofd-testkit.workspace = true
 
 [[bench]]
 name = "convert"
