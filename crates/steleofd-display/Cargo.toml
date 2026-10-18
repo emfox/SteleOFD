@@ -5,6 +5,8 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
+readme.workspace = true
+description = "The display list that the nested OFD template tree flattens into, shared by every consumer"
 
 # The display list is the shared IR for render, print and export.
 # It depends on geometry and fonts, never on a concrete backend.

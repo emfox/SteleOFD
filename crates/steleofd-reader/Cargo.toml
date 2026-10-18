@@ -6,6 +6,8 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
+# Ships as an application, not as a dependency.
+publish = false
 
 [[bin]]
 name = "steleofd-reader"

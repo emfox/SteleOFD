@@ -5,6 +5,8 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
+readme.workspace = true
+description = "SM3, SM4, SM2, X.509 inspection and GB/T 20520 timestamps, for OFD signatures"
 
 [dependencies]
 steleofd-common.workspace = true

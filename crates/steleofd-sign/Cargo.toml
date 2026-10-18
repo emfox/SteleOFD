@@ -5,6 +5,8 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
+readme.workspace = true
+description = "Read and verify OFD electronic signatures (GB/T 33190 clause 18)"
 
 [dependencies]
 steleofd-common.workspace = true

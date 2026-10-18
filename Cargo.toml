@@ -56,6 +56,7 @@ edition = "2024"
 rust-version = "1.92"
 license = "Apache-2.0"
 repository = "https://github.com/emfox/SteleOFD"
+readme = "README.md"
 authors = ["OFD Team"]
 
 [workspace.dependencies]

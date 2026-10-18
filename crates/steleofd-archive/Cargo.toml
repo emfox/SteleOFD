@@ -5,6 +5,8 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
+readme.workspace = true
+description = "Audit an OFD file for archival readiness under GB/T 33190-2016 and GB/T 42133-2022"
 
 [dependencies]
 steleofd-common.workspace = true

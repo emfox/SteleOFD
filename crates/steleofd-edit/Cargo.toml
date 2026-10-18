@@ -5,6 +5,8 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
+readme.workspace = true
+description = "Command-pattern editing of an OFD document with an undo stack"
 
 # Editing applies undoable changes through the command pattern,
 # produces a new package, and persists it through the package layer.

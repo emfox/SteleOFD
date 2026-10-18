@@ -6,6 +6,7 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
+# A dev-dependency only, so nothing outside the workspace needs it.
 publish = false
 
 [dependencies]

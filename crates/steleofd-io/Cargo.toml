@@ -5,6 +5,8 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
+readme.workspace = true
+description = "Byte sources and sinks, so OFD data can come from a file, memory, a stream or a map"
 
 [dependencies]
 steleofd-error.workspace = true

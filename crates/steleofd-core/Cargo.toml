@@ -5,6 +5,8 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
+readme.workspace = true
+description = "Open and use an OFD document: render, convert, print, sign, edit, search and audit behind one facade"
 
 # Facade crate: the only public surface, so internals can be refactored freely.
 [dependencies]

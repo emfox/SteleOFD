@@ -5,6 +5,8 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
+# Messages for the shell, which the engine does not emit.
+publish = false
 description = "SteleOFD localization message layer built on Fluent"
 
 # Layer L1.5: depended on by presentation only (CLI, WASM, FFI, server, GUI).

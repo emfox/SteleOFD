@@ -5,6 +5,8 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
+readme.workspace = true
+description = "Embedded fonts, system-resolved names, CID indices, metrics and shaping for OFD text"
 
 [dependencies]
 steleofd-common.workspace = true
