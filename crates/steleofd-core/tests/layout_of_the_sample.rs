@@ -134,19 +134,25 @@ fn a_date_drawn_character_by_character_keeps_its_own_characters() {
 
 #[test]
 fn a_tax_control_code_of_a_hundred_and_twelve_characters_runs_off_its_box() {
-    // 99 characters of a 4.2333 mm face, stepped 2.5 mm. DeltaX gives 27 steps
-    // and a carriage return of -67.5, which is the row's own 27 * 2.5, so four
-    // rows of 28 start where the first did; the last one's 14 steps cover 35.
+    // 112 characters of a 4.2333 mm face, stepped 2.5 mm. DeltaX gives 27 steps
+    // and a carriage return of -67.5, the row's own 27 * 2.5, so each row of 28
+    // starts where the first did. Dropping the escaped markup would leave 99.
     let page = page(0).expect("the sample is fetched");
     let run = longest(&page);
+    assert_eq!(
+        run.glyphs.len(),
+        112,
+        "every character of the code reaches the page"
+    );
     let placed = starts(&run);
     let rows: Vec<f64> = placed.iter().step_by(28).map(|(x, _)| *x).collect();
+    assert_eq!(rows.len(), 4, "the code is set in four rows");
     assert!(
         rows.iter().all(|x| near(*x, rows[0])),
         "every row starts where the first did: {rows:?}"
     );
     let span = placed.last().expect("glyphs").0 - rows[0];
-    assert!(near(span, 14.0 * 2.5), "a column per character, got {span}");
+    assert!(near(span, 27.0 * 2.5), "a column per character, got {span}");
 }
 
 #[test]
