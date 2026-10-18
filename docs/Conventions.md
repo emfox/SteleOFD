@@ -221,3 +221,29 @@ a sample that cannot be traced upstream is a sample nobody can explain.
 
 New exemptions should be added to the allowlists in the script with a one-line
 reason, so that every exception stays self-documenting.
+
+## 5. Public API changes
+
+`cargo-semver-checks` compares the public API of every crate that states
+`publish` (nineteen of them; the shells, the testkit and i18n opt out) and fails
+when a change needs a larger version bump than the manifests declare. The
+workspace root carries the lint configuration, and each published crate opts
+into it, so a change to the policy is one edit.
+
+The default answer to "may we break this between minor releases" is no. Two
+decisions depart from the crate's defaults:
+
+| Decision | Effect | Why |
+| --- | --- | --- |
+| `enum_variant_added` requires `minor` rather than `major` | Adding a variant to an exhaustive enum is allowed in a minor release | Every such enum names an outcome a caller must tell apart. `VerifyStatus` gained `Unchecked` because reporting an unchecked signature as tampered is worse than reporting nothing, and the alternative — a new enum returned from a new function — leaves the old function answering the question wrongly. A break still needs a version, which the check below enforces |
+| The check runs twice | Against the latest `v*` tag, and against `HEAD^1` | Against the tag both trees carry the tag's version, so a break answers "a patch would do"; against the parent it reads the bump the commit intends and answers "not a patch" |
+
+The second row is the one that matters, and it is worth stating plainly: the
+baseline tag carries the version it shipped, never the version in the working
+tree, so comparing against the tag alone tells a `0.1.1` API change that a patch
+is enough. Comparing neighbours is what ties a break to the number the next
+release will spend. This matters because a version on a registry cannot be
+replaced: a break merged without a bump turns the next release into a fix.
+
+`cargo semver-checks` skips `publish = false` without being told, which is why
+the seven unpublished crates need no entry in the job.
