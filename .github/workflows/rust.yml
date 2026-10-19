@@ -117,6 +117,15 @@ jobs:
       - name: Build every target and feature
         run: cargo build --workspace --all-targets --all-features
 
+      # The Android build is checked here rather than only on a release tag: a
+      # feature its device lacks compiles to a library that loads and exits, so
+      # the gate runs on every push. Device tests cannot, without an emulator.
+      - name: Android target
+        run: |
+          rustup target add aarch64-linux-android
+          cargo clippy -p steleofd-reader --target aarch64-linux-android \
+            --message-format=short -- -D warnings
+
       # The layout of a real invoice is pinned against the producer's own
       # offsets, and that sample is fetched rather than committed. Without it
       # the tests that read it skip, which passes while proving nothing.
