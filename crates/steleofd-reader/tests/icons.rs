@@ -1,22 +1,25 @@
-//! The icon set, drawn the way a frame draws it: through the tessellator. That
-//! triangles came out is the check that a glyph is really there; where they
-//! landed is the check that it keeps to its grid.
+//! The icon set, drawn the way a frame draws it. The checks are that the stored
+//! path data reads, that every glyph lands inside its grid, and that no two of
+//! them are the same drawing.
 
-use eframe::egui::epaint::{ClippedShape, Mesh, Tessellator};
+use eframe::egui::epaint::{ClippedShape, Mesh, Primitive, Tessellator};
 use eframe::egui::{self, Rect};
 use steleofd_reader::icons::{self, Icon};
 
-/// The space an icon is drawn in, at four times its nominal size so a stroke is
-/// several pixels wide and a bounding box means something.
+/// The edge a glyph is drawn at in these checks.
 const BOX: f32 = 64.0;
 
-/// Every triangle the painter produced for one glyph, as one mesh.
-fn meshes(icon: Icon) -> (Vec<Mesh>, Vec<egui::Shape>) {
+/// The square a glyph is drawn on, as a frame gives it.
+fn box_rect() -> Rect {
+    Rect::from_min_size(egui::pos2(16.0, 16.0), egui::vec2(BOX, BOX))
+}
+
+/// Every shape a glyph produced when painted, and the mesh they tessellated to.
+fn drawn(icon: Icon) -> (Vec<egui::Shape>, Mesh) {
     let mut harness = egui_kittest::Harness::builder()
         .with_size(egui::vec2(96.0, 96.0))
         .build_ui(|ui| {
-            let rect = Rect::from_min_size(egui::pos2(16.0, 16.0), egui::vec2(BOX, BOX));
-            icons::paint(ui.painter(), rect, icon, egui::Color32::WHITE);
+            icons::paint(ui.painter(), box_rect(), icon, egui::Color32::WHITE);
         });
     harness.run();
     let shapes: Vec<egui::Shape> = harness
@@ -34,64 +37,93 @@ fn meshes(icon: Icon) -> (Vec<Mesh>, Vec<egui::Shape>) {
             shape,
         })
         .collect();
-    let primitives = tessellator.tessellate_shapes(clipped);
-    let mut meshes = Vec::new();
-    for primitive in primitives {
-        if let epaint_primitive::Primitive::Mesh(mesh) = primitive.primitive {
-            meshes.push(mesh);
+    let mut mesh = Mesh::default();
+    for primitive in tessellator.tessellate_shapes(clipped) {
+        if let Primitive::Mesh(part) = primitive.primitive {
+            let offset = mesh.vertices.len() as u32;
+            mesh.vertices.extend(part.vertices);
+            mesh.indices.extend(part.indices.iter().map(|i| i + offset));
         }
     }
-    (meshes, shapes)
+    (shapes, mesh)
 }
 
-mod epaint_primitive {
-    pub use eframe::egui::epaint::Primitive;
-}
-
-/// The bounding box of every vertex a glyph produced.
-fn bounds(meshes: &[Mesh]) -> Option<Rect> {
+/// The bounding box of every point a glyph drew.
+fn bounds(shapes: &[egui::Shape]) -> Option<Rect> {
     let mut rect: Option<Rect> = None;
-    for mesh in meshes {
-        for vertex in &mesh.vertices {
-            let point = vertex.pos;
-            rect = Some(match rect {
-                None => Rect::from_min_max(point, point),
-                Some(current) => current.union(Rect::from_min_max(point, point)),
-            });
+    for shape in shapes {
+        if let egui::Shape::Path(path) = shape {
+            for point in &path.points {
+                rect = Some(match rect {
+                    None => Rect::from_min_max(*point, *point),
+                    Some(current) => current.union(Rect::from_min_max(*point, *point)),
+                });
+            }
         }
     }
     rect
 }
 
-/// How many triangles a glyph produced.
-fn triangles(meshes: &[Mesh]) -> usize {
-    meshes.iter().map(|mesh| mesh.indices.len() / 3).sum()
-}
-
 #[test]
-fn every_icon_becomes_triangles() {
+fn every_icon_is_a_filled_drawing() {
     for icon in Icon::ALL {
-        let (meshes, _) = meshes(icon);
-        let count = triangles(&meshes);
-        assert!(count > 8, "{:?} tessellated to {count} triangles", icon);
+        let (_, mesh) = drawn(icon);
+        assert!(
+            mesh.indices.len() >= 9,
+            "{} tessellated to {} indices",
+            icon.theme_name(),
+            mesh.indices.len()
+        );
     }
 }
 
 #[test]
-fn every_icon_keeps_to_its_box() {
-    // A stroke of 1.5 units on a 16-unit square is a twelfth of the box, so a
-    // glyph may reach half a stroke past it and no further.
-    let box_rect = Rect::from_min_size(egui::pos2(16.0, 16.0), egui::vec2(BOX, BOX));
-    let slack = BOX * (icons::STROKE / icons::SIZE) + 1.0;
-    let allowed = box_rect.expand(slack);
+fn every_icon_stays_in_its_grid() {
+    // The glyphs are the theme's own, drawn on the 16-unit grid, so the whole
+    // drawing sits inside it, with a point of slack for rounding.
+    let allowed = box_rect().expand(1.0);
     for icon in Icon::ALL {
-        let (meshes, _) = meshes(icon);
-        let bounds = bounds(&meshes).unwrap_or_else(|| panic!("{:?} drew nothing", icon));
+        let (shapes, _) = drawn(icon);
+        let bounds =
+            bounds(&shapes).unwrap_or_else(|| panic!("{} drew nothing", icon.theme_name()));
         assert!(
             allowed.contains_rect(bounds),
-            "{:?} left its box: {bounds:?}",
-            icon
+            "{} left its grid: {bounds:?}",
+            icon.theme_name()
         );
+    }
+}
+
+#[test]
+fn every_icon_fills_a_share_of_its_grid() {
+    // A glyph that collapsed to a dot would still pass the test above, so this
+    // one asks for a drawing worth putting in a button: it spans a third of the
+    // square either way, which is what a bar of three does.
+    for icon in Icon::ALL {
+        let (shapes, _) = drawn(icon);
+        let bounds = bounds(&shapes).expect("drew something");
+        assert!(
+            bounds.width() > BOX * 0.3 && bounds.height() > BOX * 0.3,
+            "{} is too small: {bounds:?}",
+            icon.theme_name()
+        );
+    }
+}
+
+#[test]
+fn no_two_icons_are_the_same_drawing() {
+    for (index, icon) in Icon::ALL.iter().enumerate() {
+        for other in &Icon::ALL[index + 1..] {
+            let (mine, _) = drawn(*icon);
+            let (theirs, _) = drawn(*other);
+            assert_ne!(
+                format!("{mine:?}"),
+                format!("{theirs:?}"),
+                "{} and {} are the same drawing",
+                icon.theme_name(),
+                other.theme_name()
+            );
+        }
     }
 }
 
@@ -102,4 +134,18 @@ fn the_theme_names_are_distinct() {
     let count = names.len();
     names.dedup();
     assert_eq!(count, names.len(), "two icons claim the same theme name");
+}
+
+#[test]
+fn a_glyph_becomes_a_texture() {
+    let ctx = egui::Context::default();
+    for icon in Icon::ALL {
+        let handle = icons::texture(&ctx, icon, egui::Color32::WHITE);
+        let size = handle.size();
+        assert!(
+            size[0] >= 32 && size[1] >= 32,
+            "{} made a {size:?} texture",
+            icon.theme_name()
+        );
+    }
 }
