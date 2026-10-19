@@ -247,6 +247,9 @@ python3 scripts/check_all.py
 
 [Apache-2.0](LICENSE)
 
+阅读器的图标来自 GNOME 项目的 Adwaita symbolic 图标集，按 CC BY-SA 3.0 US 使用，
+详见 [NOTICE.md](NOTICE.md)。
+
 ## 相关资源
 
 - [国家标准全文公开系统](https://openstd.samr.gov.cn/bzgk/gb/index)，可在线预览上述 GB/T 标准

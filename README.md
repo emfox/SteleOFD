@@ -269,6 +269,9 @@ Performance baselines, and how to run them, are in
 
 [Apache-2.0](LICENSE)
 
+The reader's icons are the Adwaita symbolic set, drawn by the GNOME Project and
+used here under CC BY-SA 3.0 US; see [NOTICE.md](NOTICE.md).
+
 ## Related
 
 - [National standards full-text portal](https://openstd.samr.gov.cn/bzgk/gb/index), where the GB/T texts above can be previewed
