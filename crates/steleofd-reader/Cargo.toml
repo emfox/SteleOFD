@@ -69,16 +69,27 @@ wasm-bindgen.workspace = true
 wasm-bindgen-futures.workspace = true
 web-sys = { workspace = true, features = ["Window", "Document", "HtmlCanvasElement"] }
 
+# The desktop features are set per target for one reason: `accesskit` refuses to
+# compile off a desktop unless the activity is a game one, so Android takes both
+# this and the block below without it.
 [target.'cfg(not(target_os = "android"))'.dependencies.eframe]
 workspace = true
 default-features = false
-features = ["accesskit", "default_fonts", "wayland", "web_screen_reader", "wgpu", "x11"]
+features = [
+    "accesskit",
+    "default_fonts",
+    "wayland",
+    "web_screen_reader",
+    "wgpu",
+    "x11",
+]
 
 [target.'cfg(target_os = "android")'.dependencies.eframe]
 workspace = true
 default-features = false
-features = ["android-native-activity", "default_fonts", "wayland", "wgpu", "x11"]
-
+# Android has no Wayland or X session to speak to, and no reader on a device
+# reports through accesskit; asking for either is how a loaded library quits.
+features = ["android-native-activity", "default_fonts", "wgpu"]
 
 # The window decorations winit draws itself when a compositor offers none.
 # `eframe` does not pass this through, so the desktop target names winit too.

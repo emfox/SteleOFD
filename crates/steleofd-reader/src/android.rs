@@ -18,7 +18,7 @@ fn android_main(app: android_activity::AndroidApp) {
             .with_min_inner_size([360.0, 480.0]),
         ..Default::default()
     };
-    let started = eframe::run_native(
+    let still_open = eframe::run_native(
         "SteleOFD Reader",
         options,
         Box::new(|cc| {
@@ -27,9 +27,19 @@ fn android_main(app: android_activity::AndroidApp) {
             Ok(Box::new(Reader::with_app(App::new())))
         }),
     );
-    if let Err(err) = started {
-        log::error!("the reader could not start: {err}");
+    if let Err(err) = still_open {
+        // Logcat is the only place this is seen, so the report says the thread
+        // and the reason rather than leaving a silent exit.
+        log::error!(
+            "android_main on {:?}: the window closed with {err}",
+            thread_name()
+        );
+        return;
     }
+    log::warn!(
+        "android_main on {:?} returned: the event loop ended",
+        thread_name()
+    );
 }
 
 /// The library version the Java VM is told about when the library is loaded;
@@ -39,5 +49,14 @@ pub extern "C" fn JNI_OnLoad(
     _vm: *mut jni::sys::JavaVM,
     _reserved: *mut std::ffi::c_void,
 ) -> jni::sys::jint {
+    log::info!("the library was loaded, on {:?}", thread_name());
     jni::sys::JNI_VERSION_1_6
+}
+
+/// Which thread a line was written on. A panic names a thread only when its
+/// hook prints, and the activity's and the reader's threads are different.
+fn thread_name() -> String {
+    std::thread::current()
+        .name()
+        .map_or_else(|| "unnamed".to_owned(), str::to_owned)
 }
