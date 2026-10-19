@@ -216,9 +216,9 @@ fn take_drops(ui: &mut Ui, app: &mut App) {
     }
 }
 
-/// Z1: the header bar, arranged on the guideline's three alignment points —
-/// actions at the start, the document's name in the centre, menus at the end.
-/// The centre also holds the blank space a header bar needs to be dragged by.
+/// Z1: the header bar — document actions at the start, the view switcher in the
+/// centre, the main menu at the end. A control is placed by what it does, and
+/// state that is only read lives in Z4, so the bar stays narrow enough to drag.
 fn draw_menu(ui: &mut Ui, app: &mut App, requests: &mut WindowRequests) {
     egui::Panel::top("menu").show(ui, |ui| {
         let gap = theme::Space::Small.points();
@@ -227,15 +227,12 @@ fn draw_menu(ui: &mut Ui, app: &mut App, requests: &mut WindowRequests) {
             ui.add_space(gap);
             draw_document_actions(ui, app, requests);
             ui.add_space(groups);
-            draw_panel_toggles(ui, app);
+            draw_view_switcher(ui, app);
+            ui.add_space(groups);
+            ui.add_space(gap);
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 ui.add_space(gap);
-                draw_settings(ui, app);
-                ui.add_space(gap);
-                draw_exports(ui, app);
-                ui.add_space(groups);
-                draw_comparison_toggle(ui, app);
-                draw_locales(ui, app);
+                draw_main_menu(ui, app);
             });
         });
     });
@@ -251,8 +248,9 @@ fn bare(ui: &mut Ui, enabled: bool, label: impl Into<String>) -> egui::Response 
     ui.add_enabled(enabled, button)
 }
 
-/// A header-bar toggle: the same bare frame, drawn filled while it is on, so a
-/// panel that is showing is visible without a second kind of control.
+/// A toggle in a view switcher: the same bare frame as a header button, drawn
+/// with a rounded fill while it is on, which is the shape the pattern gives the
+/// chosen view.
 fn bare_toggle(ui: &mut Ui, enabled: bool, on: bool, label: impl Into<String>) -> egui::Response {
     let fill = if on {
         ui.visuals().selection.bg_fill
@@ -263,7 +261,8 @@ fn bare_toggle(ui: &mut Ui, enabled: bool, on: bool, label: impl Into<String>) -
         enabled,
         egui::Button::new(label.into())
             .fill(fill)
-            .stroke(egui::Stroke::NONE),
+            .stroke(egui::Stroke::NONE)
+            .corner_radius(theme::CORNER_RADIUS),
     )
 }
 
@@ -288,33 +287,153 @@ fn draw_document_actions(ui: &mut Ui, app: &mut App, requests: &mut WindowReques
     }
 }
 
-/// The toggles that show a panel. Each is disabled rather than hidden while no
-/// document is open, so the group keeps its width as documents come and go.
-fn draw_panel_toggles(ui: &mut Ui, app: &mut App) {
-    let search = app.search_heading();
-    let open = app.search_open();
-    if bare_toggle(ui, app.is_open(), open, &search)
-        .on_hover_text(&search)
-        .clicked()
+/// The view switcher at the centre of the header bar: search results, the
+/// signature report, the annotation list. Three is the range the pattern gives,
+/// and they are exclusive — plain toggles would let a reader end up with two.
+fn draw_view_switcher(ui: &mut Ui, app: &mut App) {
+    let views = [
+        app.search_heading(),
+        app.signatures_heading(),
+        app.annotations_heading(),
+    ];
+    let open = app.is_open();
+    for (key, label) in [
+        ReaderMessage::SearchToggle,
+        ReaderMessage::SignaturesToggle,
+        ReaderMessage::AnnotationsToggle,
+    ]
+    .into_iter()
+    .zip(views)
     {
-        app.set_search_open(!open);
+        let chosen = view_showing(app, key);
+        if bare_toggle(ui, open, chosen, &label)
+            .on_hover_text(&label)
+            .clicked()
+        {
+            show_view(app, key);
+        }
     }
-    let signatures = app.signatures_heading();
-    let showing = app.signatures_open();
-    if bare_toggle(ui, app.is_open(), showing, &signatures)
-        .on_hover_text(&signatures)
-        .clicked()
-    {
-        app.set_signatures_open(!showing);
+}
+
+/// Whether the view a switcher label names is the one on screen.
+fn view_showing(app: &App, key: ReaderMessage) -> bool {
+    match key {
+        ReaderMessage::SearchToggle => app.search_open(),
+        ReaderMessage::SignaturesToggle => app.signatures_open(),
+        _ => app.annotations_open(),
     }
-    let annotations = app.annotations_heading();
-    let listing = app.annotations_open();
-    if bare_toggle(ui, app.is_open(), listing, &annotations)
-        .on_hover_text(&annotations)
-        .clicked()
-    {
-        app.set_annotations_open(!listing);
+}
+
+/// Show one view, or none when the reader picks the one already showing. The
+/// three are exclusive, so picking one closes the other two rather than
+/// leaving the reader with panels they did not ask for.
+fn show_view(app: &mut App, key: ReaderMessage) {
+    let (search, signatures, annotations) = match key {
+        ReaderMessage::SearchToggle => (!app.search_open(), false, false),
+        ReaderMessage::SignaturesToggle => (false, !app.signatures_open(), false),
+        _ => (false, false, !app.annotations_open()),
+    };
+    app.set_search_open(search);
+    app.set_signatures_open(signatures);
+    app.set_annotations_open(annotations);
+}
+
+/// The main menu: settings, then the language, then shortcuts and the build's
+/// name — the shape the guideline gives a primary menu — and no close item,
+/// since the header bar's close button is the one that closes a document.
+fn draw_main_menu(ui: &mut Ui, app: &mut App) {
+    let label = app.text(ReaderMessage::MainMenu);
+    let hint = app.text(ReaderMessage::MainMenuHint);
+    ui.menu_button(&label, |ui| {
+        draw_settings_entries(ui, app);
+        ui.add_space(theme::Space::Medium.points());
+        draw_language_entries(ui, app);
+        ui.add_space(theme::Space::Medium.points());
+        // Comparing takes a second revision of the open file, so it belongs
+        // with the document rather than with the interface, and it disables on
+        // the platform whose file dialog Android does not have.
+        let compare = app.i18n().text(MessageId::ComparePanelTitle);
+        if ui
+            .add_enabled(
+                app.is_open() && HAS_FILE_DIALOG,
+                egui::Button::new(&compare),
+            )
+            .clicked()
+        {
+            app.set_comparison_open(true);
+        }
+        ui.add_space(theme::Space::Medium.points());
+        // A menu item is a control, so it is drawn as one, in the text colour
+        // and at the body size. Only the two labels that name a group are dim.
+        let shortcuts = app.text(ReaderMessage::KeyboardShortcuts);
+        ui.add(egui::Button::new(&shortcuts));
+        let version = env!("CARGO_PKG_VERSION");
+        let about = app.text_with(ReaderMessage::About, [("version", version.into())]);
+        ui.add(egui::Button::new(&about));
+    })
+    .response
+    .on_hover_text(&hint);
+}
+
+/// The appearance entries, inside the main menu rather than in a menu of their
+/// own: the guideline gives an app one primary menu, and a second one beside it
+/// would be a second place to look for the same kind of thing.
+fn draw_settings_entries(ui: &mut Ui, app: &mut App) {
+    let mut theme = app.theme();
+    let mut size = app.text_size();
+    let mut sharp = app.high_contrast();
+    ui.label(toned(
+        ui,
+        app,
+        app.theme_label(),
+        Token::Dim,
+        Style::Caption,
+    ));
+    for choice in ThemeChoice::ALL {
+        let name = app.theme_name(choice);
+        ui.selectable_value(&mut theme, choice, name);
     }
+    ui.add_space(theme::Space::Medium.points());
+    let heading = app.text_size_label();
+    ui.label(toned(ui, app, heading, Token::Dim, Style::Caption));
+    for choice in TextSize::ALL {
+        let name = app.text_size_name(choice);
+        ui.selectable_value(&mut size, choice, name);
+    }
+    ui.add_space(theme::Space::Medium.points());
+    let name = app.high_contrast_label();
+    let hint = app.high_contrast_hint();
+    ui.checkbox(&mut sharp, name).on_hover_text(&hint);
+    // Written back after the entries, so a choice the reader made this frame is
+    // the one `App` holds; the state machine is still the only place it lives.
+    app.set_theme(theme);
+    app.set_text_size(size);
+    app.set_high_contrast(sharp);
+}
+
+/// The locales, in their own names, so a reader who cannot read the menu's
+/// current language can still find theirs. Radio buttons rather than a nested
+/// submenu: the guideline asks not to nest menus.
+fn draw_language_entries(ui: &mut Ui, app: &mut App) {
+    let mut current = app.locale();
+    ui.label(toned(
+        ui,
+        app,
+        app.text(ReaderMessage::Language),
+        Token::Dim,
+        Style::Caption,
+    ));
+    for locale in app.locales() {
+        let option = app.locale_name(&locale);
+        ui.radio_value(&mut current, locale, &option);
+    }
+    app.set_locale(current);
+}
+
+/// How the window arranges the pages on screen: one, two facing, or the whole
+/// document scrolling. This is the view switcher's second run of choices, kept
+/// below it because all five are part of one decision about the page.
+fn draw_layout_switcher(ui: &mut Ui, app: &mut App) {
     for (key, layout) in [
         (ReaderMessage::LayoutSingle, Layout::Single),
         (ReaderMessage::LayoutDouble, Layout::Facing),
@@ -331,126 +450,39 @@ fn draw_panel_toggles(ui: &mut Ui, app: &mut App) {
     }
 }
 
-/// Comparing asks for a second file, which is the same dialog Android cannot
-/// offer, so the control is disabled there rather than drawn as a dead button.
-fn draw_comparison_toggle(ui: &mut Ui, app: &mut App) {
-    let comparing = app.comparison_open();
-    let compare = app.i18n().text(MessageId::ComparePanelTitle);
-    if bare_toggle(ui, app.is_open() && HAS_FILE_DIALOG, comparing, &compare)
-        .on_hover_text(&compare)
-        .clicked()
-    {
-        app.set_comparison_open(!comparing);
-    }
-}
-
-/// The appearance settings, as a menu so the three controls are named once and
-/// only the reader who wants them pays for the space.
-fn draw_settings(ui: &mut Ui, app: &mut App) {
-    let label = app.text(ReaderMessage::Settings);
-    let mut theme = app.theme();
-    let mut size = app.text_size();
-    let mut sharp = app.high_contrast();
-    ui.menu_button(&label, |ui| {
-        ui.label(toned(
-            ui,
-            app,
-            app.theme_label(),
-            Token::Dim,
-            Style::Caption,
-        ));
-        for choice in ThemeChoice::ALL {
-            let name = app.theme_name(choice);
-            ui.selectable_value(&mut theme, choice, name);
-        }
-        ui.add_space(theme::Space::Medium.points());
-        let heading = app.text_size_label();
-        ui.label(toned(ui, app, heading, Token::Dim, Style::Caption));
-        for choice in TextSize::ALL {
-            let name = app.text_size_name(choice);
-            ui.selectable_value(&mut size, choice, name);
-        }
-        ui.add_space(theme::Space::Medium.points());
-        let name = app.high_contrast_label();
-        let hint = app.high_contrast_hint();
-        ui.checkbox(&mut sharp, name).on_hover_text(&hint);
-    })
-    .response
-    .on_hover_text(&label);
-    // Written back after the menu, so a choice the reader made this frame is
-    // the one `App` holds; the state machine is still the only place it lives.
-    app.set_theme(theme);
-    app.set_text_size(size);
-    app.set_high_contrast(sharp);
-}
-
-/// The language, as one menu rather than one button per language. Each entry is
-/// written in its own language, so a reader who cannot read the current one can
-/// still find theirs. The guideline puts menus at the end of a header bar.
-fn draw_locales(ui: &mut Ui, app: &mut App) {
-    let current = app.locale();
-    let name = app.locale_name(&current);
-    ui.menu_button(&name, |ui| {
-        for locale in app.locales() {
-            let option = app.locale_name(&locale);
-            if ui
-                .selectable_label(locale == current, &option)
-                .on_hover_text(&option)
-                .clicked()
-            {
-                app.set_locale(locale);
-            }
-        }
-    })
-    .response
-    .on_hover_text(&name);
-}
-
-/// The export actions. Export writes what the reader is looking at, so it
-/// belongs to the document rather than to the page controls in Z2, and it
-/// disables while an export runs so two cannot interleave their files.
+/// The document actions that write something: to a file or to paper. They
+/// belong to Z2 because they act on the pages on screen, which is what the
+/// toolbar is for, and they disable while a job runs so two cannot interleave.
 fn draw_exports(ui: &mut Ui, app: &mut App) {
     let busy = app.is_exporting();
     let printing = app.is_printing();
-    let export = app.text(ReaderMessage::Export);
     let open = app.is_open();
-    ui.menu_button(&export, |ui| {
-        let print = app.print_label_text();
-        // Printing is bounded by the paper the reader has, not by a file, so
-        // the entry hands the job to the host at once rather than holding a
-        // request open while a dialog is up.
-        if ui
-            .add_enabled(open && !printing, egui::Button::new(&print))
-            .clicked()
-        {
-            app.request_print();
-        }
-        let pdf = app.text(ReaderMessage::ExportPdf);
-        if ui
-            .add_enabled(open && !busy, egui::Button::new(&pdf))
-            .clicked()
-        {
-            app.request_export(ExportFormat::Pdf);
-        }
-        let png = app.text(ReaderMessage::ExportPng);
-        if ui
-            .add_enabled(open && !busy, egui::Button::new(&png))
-            .clicked()
-        {
-            app.request_export(ExportFormat::Png);
-        }
-    })
-    .response
-    .on_hover_text(&export);
+    let print = app.print_label_text();
+    if bare(ui, open && !printing, &print)
+        .on_hover_text(&print)
+        .clicked()
+    {
+        app.request_print();
+    }
+    let pdf = app.text(ReaderMessage::ExportPdf);
+    if bare(ui, open && !busy, &pdf).on_hover_text(&pdf).clicked() {
+        app.request_export(ExportFormat::Pdf);
+    }
+    let png = app.text(ReaderMessage::ExportPng);
+    if bare(ui, open && !busy, &png).on_hover_text(&png).clicked() {
+        app.request_export(ExportFormat::Png);
+    }
 }
 
-/// Z2: actions on the page on screen. Page controls at the start, the zoom at
-/// the end, on the same alignment points as the header; groups are separated
-/// by space rather than by a rule, which is how the guideline asks for it.
+/// Z2: the one toolbar — how the pages are arranged, which page, how it is
+/// scaled, and what to write it out as. Groups are separated by space, as the
+/// guideline asks, and the alignment points are the header bar's.
 fn draw_toolbar(ui: &mut Ui, app: &mut App) {
     egui::Panel::top("toolbar").show(ui, |ui| {
         ui.horizontal(|ui| {
             ui.add_space(theme::Space::Small.points());
+            draw_layout_switcher(ui, app);
+            ui.add_space(theme::Space::Medium.points());
             draw_paging(ui, app);
             ui.add_space(theme::Space::Medium.points());
             let fit_width = app.text(ReaderMessage::FitWidth);
@@ -479,6 +511,8 @@ fn draw_toolbar(ui: &mut Ui, app: &mut App) {
                 {
                     app.set_dpi(dpi);
                 }
+                ui.add_space(theme::Space::Medium.points());
+                draw_exports(ui, app);
             });
         });
     });

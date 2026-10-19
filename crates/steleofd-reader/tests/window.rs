@@ -42,6 +42,66 @@ fn reader_label(message: ReaderMessage) -> String {
     steleofd_reader::message::bundle_for(Locale::en_us()).text_key(message.key())
 }
 
+/// Open the main menu at the end of the header bar. Settings, language and the
+/// second revision all live in it, so a test that wants one of them opens it
+/// first — which is also the check that they are where the guideline puts them.
+fn open_main_menu(harness: &mut Harness<'static, App>) {
+    harness
+        .get_by_label(&reader_label(ReaderMessage::MainMenu))
+        .click();
+    harness.run();
+}
+
+#[test]
+fn the_view_switcher_shows_one_panel_at_a_time() {
+    // A switcher rather than three independent toggles: picking one view is
+    // also a statement about the other two, and a reader who ends up with two
+    // panels has been given a window they did not ask for.
+    let mut app = App::new();
+    app.open_path(&minimal()).expect("the fixture opens");
+    let mut harness = harness(app);
+
+    let signatures = harness.state().signatures_heading();
+    harness.get_by_label(&signatures).click();
+    harness.run();
+    assert!(harness.state().signatures_open(), "the view opened");
+
+    let annotations = harness.state().annotations_heading();
+    harness.get_by_label(&annotations).click();
+    harness.run();
+    assert!(harness.state().annotations_open(), "the next view opened");
+    assert!(
+        !harness.state().signatures_open(),
+        "the previous view closed itself, so the switcher stays exclusive"
+    );
+}
+
+#[test]
+fn the_main_menu_carries_the_entries_the_guideline_expects() {
+    // A document, so the bar shows the close button the check below is about.
+    let mut app = App::new();
+    app.open_path(&minimal()).expect("the fixture opens");
+    let mut harness = harness(app);
+    open_main_menu(&mut harness);
+    // Every primary menu is expected to name the shortcuts and the build, and
+    // to keep both in one group at the end where they are easy to reach.
+    for key in [
+        ReaderMessage::KeyboardShortcuts,
+        ReaderMessage::Language,
+        ReaderMessage::Theme,
+    ] {
+        harness.get_by_label_contains(&reader_label(key));
+    }
+    // A close item is not among them, however it is worded: the header bar has
+    // a close button, and the guideline says a menu item would only confuse it.
+    let close = reader_label(ReaderMessage::Close);
+    let offered = harness.get_all_by_label(&close).count();
+    assert_eq!(
+        offered, 1,
+        "the menu offered a second way to close the document: {offered} close entries"
+    );
+}
+
 /// Run frames until the pages are rasterized, since rendering is off the draw
 /// path and a frame is what collects a finished raster.
 fn pump_until_rendered(harness: &mut Harness<'static, App>, pages: &[usize]) {
@@ -422,11 +482,7 @@ fn opening_the_signature_panel_shows_the_count_and_the_verdict() {
 
 #[test]
 fn the_export_buttons_are_disabled_until_a_document_is_open() {
-    let mut harness = harness(App::new());
-    harness
-        .get_by_label(&reader_label(ReaderMessage::Export))
-        .click();
-    harness.run();
+    let harness = harness(App::new());
     for key in [ReaderMessage::ExportPdf, ReaderMessage::ExportPng] {
         let text = reader_label(key);
         let button = harness.get_by_label(&text);
@@ -447,10 +503,6 @@ fn asking_to_export_asks_the_host_where_to_write_it() {
         .expect("the fixture opens");
     let mut harness = harness(app);
 
-    harness
-        .get_by_label(&reader_label(ReaderMessage::Export))
-        .click();
-    harness.run();
     harness
         .get_by_label(&reader_label(ReaderMessage::ExportPdf))
         .click();
@@ -498,10 +550,6 @@ fn asking_to_print_reaches_the_host_without_a_destination() {
     let mut harness = harness(app);
 
     harness
-        .get_by_label(&reader_label(ReaderMessage::Export))
-        .click();
-    harness.run();
-    harness
         .get_by_label(&reader_label(ReaderMessage::Print))
         .click();
     harness.run();
@@ -513,11 +561,7 @@ fn asking_to_print_reaches_the_host_without_a_destination() {
 
 #[test]
 fn the_print_button_is_disabled_until_a_document_is_open() {
-    let mut harness = harness(App::new());
-    harness
-        .get_by_label(&reader_label(ReaderMessage::Export))
-        .click();
-    harness.run();
+    let harness = harness(App::new());
     let text = reader_label(ReaderMessage::Print);
     let button = harness.get_by_label(&text);
     assert!(
@@ -603,8 +647,7 @@ fn the_menu_offers_both_languages_in_their_own_names() {
     // A reader who cannot read the menu's current language still has to be
     // able to find theirs, so the entries are endonyms rather than translations.
     let mut harness = harness(App::new());
-    harness.get_by_label("English").click();
-    harness.run();
+    open_main_menu(&mut harness);
     harness.get_by_label(&label(MessageId::LocaleNameZh));
 }
 
@@ -616,9 +659,8 @@ fn choosing_a_language_redraws_the_window_in_it() {
         .expect("the fixture opens");
     let mut harness = harness(app);
 
-    // The languages are one menu rather than a button each, so it opens first.
-    harness.get_by_label("English").click();
-    harness.run();
+    // The languages are a group inside the main menu, so it opens first.
+    open_main_menu(&mut harness);
     harness
         .get_by_label(&label(MessageId::LocaleNameZh))
         .click();
@@ -674,6 +716,7 @@ fn the_comparison_toggle_opens_the_panel() {
     assert!(!harness.state().comparison_open());
 
     let heading = label(MessageId::ComparePanelTitle);
+    open_main_menu(&mut harness);
     harness.get_by_label(&heading).click();
     harness.run();
     assert!(
@@ -703,10 +746,7 @@ fn the_settings_offer_three_themes_and_follow_the_system_by_default() {
         ThemeChoice::System,
         "a reader who told their desktop to go dark has told this window too"
     );
-    harness
-        .get_by_label(&reader_label(ReaderMessage::Settings))
-        .click();
-    harness.run();
+    open_main_menu(&mut harness);
     for choice in ThemeChoice::ALL {
         harness.get_by_label(&harness.state().theme_name(choice));
     }
@@ -719,10 +759,7 @@ fn the_settings_offer_three_themes_and_follow_the_system_by_default() {
 #[test]
 fn the_settings_offer_three_text_sizes_and_the_scale_moves_every_style() {
     let mut harness = harness(App::new());
-    harness
-        .get_by_label(&reader_label(ReaderMessage::Settings))
-        .click();
-    harness.run();
+    open_main_menu(&mut harness);
     for size in TextSize::ALL {
         harness.get_by_label(&harness.state().text_size_name(size));
     }
@@ -742,10 +779,7 @@ fn the_settings_offer_three_text_sizes_and_the_scale_moves_every_style() {
 fn high_contrast_is_a_switch_rather_than_a_fourth_theme() {
     let mut harness = harness(App::new());
     let choice = harness.state().theme();
-    harness
-        .get_by_label(&reader_label(ReaderMessage::Settings))
-        .click();
-    harness.run();
+    open_main_menu(&mut harness);
     let switch = harness.state().high_contrast_label();
     harness.get_by_label(&switch).click();
     harness.run();
@@ -764,10 +798,7 @@ fn a_theme_never_moves_the_document() {
     app.go_to(0);
     let before = app.page_count();
     let mut harness = harness(app);
-    harness
-        .get_by_label(&reader_label(ReaderMessage::Settings))
-        .click();
-    harness.run();
+    open_main_menu(&mut harness);
     let light = harness.state().theme_name(ThemeChoice::Light);
     harness.get_by_label(&light).click();
     harness.run();

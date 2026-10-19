@@ -54,6 +54,18 @@ section only when a release actually has one.
   export are menus at the end of the bar rather than one button per option, which
   is what makes the bar narrow enough to leave room for dragging and for the
   document itself.
+- **Controls now sit where the guideline says each kind belongs.** The header
+  bar keeps only what changes the document, a view switcher and one main menu;
+  every page action moved to the single toolbar below it, including the export
+  buttons that used to live above them for no better reason than being about the
+  document. Search, signatures and annotations became an exclusive view switcher
+  rather than three independent switches, so picking one cannot leave the reader
+  with two panels and half a page.
+- **One main menu instead of two menu buttons.** The language and the appearance
+  settings were competing for the same corner. Both are now groups inside a
+  single menu, ordered the way the guideline orders a primary menu — settings,
+  language, then shortcuts and the build's name — with no close or quit entry,
+  since the header bar already closes the document.
 
 ### Performance
 

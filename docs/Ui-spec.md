@@ -21,7 +21,15 @@ What the window takes from it, and where each requirement lands:
 
 | Requirement | Guideline source | Where it lives here |
 | --- | --- | --- |
-| Few, grouped controls in a header bar; title left, main action right; disabled rather than hidden | Patterns · Header bars | §2 Z1–Z2 |
+| Few, grouped controls in a header bar, on three alignment points | Patterns · Header bars | §2.1, §2 Z1 |
+| Menus at the end of the header bar, and one primary menu rather than several | Patterns · Header bars, Menus | §2.1, §2 Z1 |
+| An app has one toolbar; actions on the page on screen belong to it | Patterns · Toolbars, Menus | §2.1, §2 Z2 |
+| A primary menu holds preferences, shortcuts and about, and never close or quit | Patterns · Menus | §2 Z1 |
+| Toggles that choose a view are exclusive, so the reader never ends up with two | Patterns · View switchers | §2 Z1, §6 |
+| Three to five items in a view switcher; more than that wants a sidebar | Patterns · View switchers | §2 Z1 |
+| A panel that is toggled is a utility pane, not a sidebar: it does not cross the header bar | Patterns · Utility panes | §2 Z1, Z5–Z8 |
+| Header controls carry no frame, and groups are separated by space rather than by a rule | Patterns · Header bars | §2.1, §5.3 |
+| A button holds an icon or a label, and a header should hold neither of the label-only kind | Patterns · Buttons, Header bars | §2.1 |
 | Widgets keep a stable position as state changes, so a reader's muscle memory holds | Patterns · Header bars | §2, §4 |
 | Three theme choices — follow the system, light, dark — never only two | Guidelines · UI styling | §2 Z9, §5 |
 | A high-contrast mode exists and is tested, because a theme that only adjusts hues fails the readers who need it | Guidelines · UI styling | §2 Z9, §5 |
@@ -34,11 +42,13 @@ What the window takes from it, and where each requirement lands:
 | Every control is reachable from the keyboard and shows what it does on hover | Patterns · Header bars, Reference | §2 Keyboard, §4 |
 
 Two requirements the guideline states for a shell of its own are deliberately
-not taken, and the reason matters: the window has **no header bar and no
-libadwaita**, because it is drawn by `egui` on Windows, macOS, Linux, Android and
-the browser alike, and a GNOME-only widget set would leave four of those five
-with a window glued together from two toolkits. Z1 and Z2 are this window's
-header bar, and the clauses above are applied to them.
+not taken, and the reason matters: the window has **no libadwaita**, because it
+is drawn by `egui` on Windows, macOS, Linux, Android and the browser alike, and a
+GNOME-only widget set would leave four of those five with a window glued
+together from two toolkits. Z1 is this window's header bar and Z2 its toolbar;
+both are drawn to the clauses above, and §2.1 records where each kind of control
+goes. The one requirement still unmet is the symbolic icon set a primary menu
+button is supposed to carry, which is stated there rather than quietly dropped.
 
 ## 1. Layers
 
@@ -61,49 +71,114 @@ drawn. It never touches `egui`, and `App` never waits on it.
 
 ## 2. Layout zones
 
+### 2.1 Where a control goes
+
+The guideline names the containers a desktop window is made of, and each one has
+a job. A control is placed by the question it answers, not by the widget it
+happens to be built from — the same toggle is a header control or a toolbar
+control depending on what it changes.
+
+| Container | Holds | Not for | Here |
+| --- | --- | --- | --- |
+| Header bar | A few controls: the actions that change the document at the start, a view switcher in the centre, menus at the end | Page controls, and anything shown only to save a click | Z1 |
+| Toolbar | Everything that acts on what is on screen | Opening a document | Z2 |
+| Primary menu | Settings, language, shortcuts, about — the entries every app has | Close or quit, and anything the reader does constantly | Z1, and Z9 within it |
+| View switcher | Three to five exclusive views of one document | Many views, which want a sidebar | Z1 |
+| Utility pane | A panel toggled beside the content, not crossing the header bar | A list of places to navigate to, which is a sidebar | Z5–Z8 |
+| Status bar | What the reader only needs to read: the document, the position, the last error | Anything clickable | Z4 |
+
+Two consequences worth stating, because both were the other way round before:
+
+* **Only one toolbar.** Paging, fit, zoom and export now share Z2. When the
+  window had two bars, the second was a toolbar in name only and the reader had
+  to learn which bar held which kind of page control.
+* **Only one menu.** The language and the settings were two menu buttons
+  competing for the same corner. The guideline gives an app one primary menu,
+  and a second one beside it only makes the reader look in both.
+
+Buttons are placed by the same rule. A button in the header bar is a main
+action and carries no frame; a button in a panel is an ordinary button; a
+label-only button is the kind the guideline asks a header bar to avoid, which is
+why the two actions that stay in Z1 are the ones with an unambiguous short name.
+
+
 The window is a stack of fixed zones around one growing canvas. Zones are
 declared in this order every frame; `egui` reserves space top-down, so the order
 is the layout.
 
 ```
-┌────────────────────────────────────────────────────────┐
-│ Z1  header          fixed    open · close · panels      │  Panel::top("menu")
-│                              export · language          │
-├────────────────────────────────────────────────────────┤
-│ Z2  header          fixed    paging · fit · zoom        │  Panel::top("toolbar")
-├────────────────────────────────────────────────────────┤
-│                                                        │
-│ Z3  canvas        growing    the page, or the drop     │  ScrollArea
-│                 hint, or a failure                     │  id_salt("canvas")
-│                                                        │
-├────────────────────────────────────────────────────────┤
-│ Z4  status bar    fixed      document · page · error   │  Panel::bottom("status")
-└────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────┐
+│ Z1  header          fixed    open · close · views · menu   │  Panel::top("menu")
+├────────────────────────────────────────────────────────────┤
+│ Z2  header          fixed    layout · paging · fit         │  Panel::top("toolbar")
+│                              export · zoom                 │
+├────────────────────────────────────────────────────────────┤
+│                                                            │
+│ Z3  canvas        growing    the page, or the drop         │  ScrollArea
+│                 hint, or a failure                         │  id_salt("canvas")
+│                                                            │
+├────────────────────────────────────────────────────────────┤
+│ Z4  status bar    fixed      document · page · error       │  Panel::bottom("status")
+└────────────────────────────────────────────────────────────┘
 
                         Z5  search      fixed width      the query, the hits   Panel::left("search")
                         Z6  signatures  fixed width      the verdict, per sig   Panel::left("signatures")
                         Z7  annotations fixed width      the marks, by page    Panel::left("annotations")
                         Z8  comparison  fixed width      the pages that moved  Panel::left("comparison")
-                        Z9  settings    menu on Z1       theme · type · contrast
+                        Z9  settings    inside the menu  theme · type · contrast
 ```
 
-**Z1 header.** Document-level actions only: open, close, the panel toggles, and
-the export actions. Anything that acts on the current page belongs in Z2. The
-close button is disabled when nothing is open, so the bar never has to explain
-itself.
+**Z1 header.** The window's header bar, and it holds the three things the
+pattern says a header bar holds: the actions that change which document is
+open at the start, a view switcher in the centre, and one main menu at the end.
+That is five controls, which is what keeps the bar readable and the window
+narrowable.
 
-Three groups, as the header-bar pattern asks: the actions that change the
-document on the left, the toggles that change what is shown in the middle, and
-the actions that write a file or change the interface on the right. The order
-inside each group is fixed, so a control the reader learned stays where it was
-as the document comes and goes. A control that cannot act is disabled and keeps
-its width; nothing is hidden and nothing moves.
+Nothing about the page lives here. Paging, fit, zoom and the actions that write
+the page out are all Z2, because the pattern gives an app one toolbar and the
+toolbar is where they belong. Nothing about the file's *state* lives here
+either: the document's name and the page position are Z4, so the reader reads
+them once rather than twice.
 
-**Z2 header.** Actions on what is on screen: previous, next, fit width, fit
-page, zoom. Disabled controls rather than hidden ones, so the bar does not
-reflow as the document changes. The page controls sit on the left and the zoom
-slider on the right, which is the same split Z1 uses and the one place in the
-window a value is dragged rather than clicked.
+The controls are placed by what they do, not by the widget they happen to be.
+An earlier revision had them the other way round — a group of panel toggles and
+a group of menu buttons — which put "search" and "settings" side by side and
+left the reader to guess why. The three groups now answer three questions: which
+document, which view of it, and the rest.
+
+*Views.* Search results, the signature report and the annotation list are
+exclusive: picking one closes the other two. They are three views of one
+document rather than three independent switches, and a reader who ends up with
+two panels open has been given a window they did not ask for. Picking the view
+already showing closes it, which is how the reader gets their window back
+without hunting for a close button.
+
+*Main menu.* The guideline gives the primary menu a fixed shape, and this one
+follows it in order: the appearance settings, then the language, then the
+shortcuts and the build's name. There is no close or quit entry — the header
+bar's own close button is the one place that closes a document, and a second
+way to do it only makes the reader wonder which one they meant.
+
+The second revision sits in this menu too, because it is a fact about the
+document rather than about the page. It is the menu's only item that opens a
+file dialog, so it disables on the platform that has none.
+
+The menu names itself "Main Menu" in words rather than drawing the icon the
+guideline names. A symbolic icon set is not in the build yet, and a text label
+the reader can read beats an icon that means nothing. That is a known gap, not
+a decision to keep.
+
+**Z2 header.** The toolbar: everything that acts on the page on screen, in the
+order a reader asks the questions — how the pages are arranged, which page, how
+it is scaled, and what to write it out as.
+
+Left to right: the layout switcher (single, facing, continuous), the paging
+arrows, fit width and fit page, then the export actions and the zoom slider at
+the end. Disabled controls rather than hidden ones, so the bar does not reflow
+as the document changes.
+
+The zoom slider is the one place in the window a value is dragged rather than
+clicked. Everything else is a click or a switch.
 
 Every control in Z1 and Z2 says what it does in a tooltip. The guideline asks
 it of header-bar buttons; this window asks it of all of them, because the
@@ -170,9 +245,9 @@ signature — asking the engine per signature re-reads the package each time.
 Like Z5, it is drawn before the canvas so the canvas measures the width that is
 actually left for pages.
 
-**Export.** Two actions at the far end of Z1: as one PDF, or as one PNG per
-page. They are document-level rather than page-level, so they sit in Z1 and not
-in Z2. Both write the pages the reader is currently looking at — a spread
+**Export.** Three actions at the end of Z2, beside the zoom: print, one PDF,
+or one PNG per page. They act on the pages on screen, which is what the toolbar
+is for, and they write the pages the reader is currently looking at — a spread
 exports as the two pages shown — because "export what I am looking at" is the
 question a reader in front of a document actually has.
 
@@ -186,8 +261,8 @@ of a long document is written in one go and would otherwise drop frames. Unlike
 a render, an export is never superseded — the reader asked for a file, and the
 file either appears or it does not.
 
-**Z9 settings.** Three choices at the right end of Z1, each a control rather
-than a dialog: the theme, the text size, and high contrast. They are settings
+**Z9 settings.** Three choices inside the main menu, each a control rather than
+a dialog: the theme, the text size, and high contrast. They are settings
 about the window, not about the document, so they survive closing a document and
 are not touched by opening one.
 
@@ -227,8 +302,8 @@ focus first, so one key covers both states and the reader is never trapped in a
 panel they cannot leave. Shortcuts that act on a page do nothing when no
 document is open, which is not a failure worth a message.
 
-**Language.** The two bundled locales are offered in Z1, each written in its own
-language. That is the point of an endonym: a reader who cannot read the menu's
+**Language.** The two bundled locales are offered in the main menu, each written
+in its own language. That is the point of an endonym: a reader who cannot read the menu's
 current language still has to be able to find theirs in it, so translating the
 entries would hide the one they are looking for. The names come from the
 catalogue, because they are text and all of the reader's text lives there.

@@ -100,6 +100,26 @@ pub enum ReaderMessage {
     PaperDocument,
     /// Label on the button that opens the appearance settings
     Settings,
+    /// Label on the far end of the header bar, holding the occasional actions
+    MainMenu,
+    /// What the main menu button opens
+    MainMenuHint,
+    /// Menu entry naming the keyboard shortcuts
+    KeyboardShortcuts,
+    /// Menu entry naming the build
+    About,
+    /// Heading over the locales in the main menu
+    Language,
+    /// The view switcher's own name, spoken rather than drawn
+    Views,
+    /// Label on a workspace panel, and on its toggle in the view switcher
+    PanelToggle,
+    /// Toggle for the search results, named by what it shows
+    SearchToggle,
+    /// Toggle for the signature report
+    SignaturesToggle,
+    /// Toggle for the annotation list
+    AnnotationsToggle,
     /// Heading over the theme choices
     Theme,
     /// Theme that follows the desktop
@@ -181,6 +201,16 @@ impl ReaderMessage {
             Self::PaperLegal => "reader-paper-legal",
             Self::PaperDocument => "reader-paper-document",
             Self::Settings => "reader-settings",
+            Self::MainMenu => "reader-main-menu",
+            Self::MainMenuHint => "reader-main-menu-hint",
+            Self::KeyboardShortcuts => "reader-keyboard-shortcuts",
+            Self::About => "reader-about",
+            Self::Views => "reader-views",
+            Self::PanelToggle => "reader-panel-toggle",
+            Self::SearchToggle => "reader-search-title",
+            Self::SignaturesToggle => "reader-panel-toggle",
+            Self::AnnotationsToggle => "reader-panel-toggle",
+            Self::Language => "reader-language",
             Self::Theme => "reader-theme",
             Self::ThemeSystem => "reader-theme-system",
             Self::ThemeLight => "reader-theme-light",
@@ -240,6 +270,16 @@ impl ReaderMessage {
         Self::PaperLegal,
         Self::PaperDocument,
         Self::Settings,
+        Self::MainMenu,
+        Self::MainMenuHint,
+        Self::KeyboardShortcuts,
+        Self::About,
+        Self::Views,
+        Self::PanelToggle,
+        Self::SearchToggle,
+        Self::SignaturesToggle,
+        Self::AnnotationsToggle,
+        Self::Language,
         Self::Theme,
         Self::ThemeSystem,
         Self::ThemeLight,
