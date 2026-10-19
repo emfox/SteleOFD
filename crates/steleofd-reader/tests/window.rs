@@ -78,7 +78,6 @@ fn the_view_switcher_shows_one_panel_at_a_time() {
 
 #[test]
 fn the_main_menu_carries_the_entries_the_guideline_expects() {
-    // A document, so the bar shows the close button the check below is about.
     let mut app = App::new();
     app.open_path(&minimal()).expect("the fixture opens");
     let mut harness = harness(app);
@@ -92,13 +91,19 @@ fn the_main_menu_carries_the_entries_the_guideline_expects() {
     ] {
         harness.get_by_label_contains(&reader_label(key));
     }
-    // A close item is not among them, however it is worded: the header bar has
-    // a close button, and the guideline says a menu item would only confuse it.
-    let close = reader_label(ReaderMessage::Close);
-    let offered = harness.get_all_by_label(&close).count();
+    // No close item: the header's own button is the one way to close, and its
+    // name is now the tooltip, which must appear exactly once.
+    let hint = reader_label(ReaderMessage::CloseHint);
     assert_eq!(
-        offered, 1,
-        "the menu offered a second way to close the document: {offered} close entries"
+        harness.get_all_by_label(&hint).count(),
+        1,
+        "the header button should be the only way to close"
+    );
+    let close = reader_label(ReaderMessage::Close);
+    let entries = harness.query_all_by_label(&close).count();
+    assert_eq!(
+        entries, 0,
+        "the menu offered a second way to close the document: {entries} entries"
     );
 }
 
@@ -202,10 +207,11 @@ fn the_next_button_turns_the_page_and_stops_at_the_end() {
     app.open_path(&minimal()).expect("the fixture opens");
     let mut harness = harness(app);
 
-    let next = "▶";
+    // The arrow is a drawn glyph, so the button's accessible name is its hint.
+    let next = reader_label(ReaderMessage::NextPage);
     let before = harness.state().current_page();
     if harness.state().has_next() {
-        harness.get_by_label(next).click();
+        harness.get_by_label(&next).click();
         harness.run();
         assert_eq!(
             harness.state().current_page(),
@@ -215,20 +221,20 @@ fn the_next_button_turns_the_page_and_stops_at_the_end() {
     }
     // Walk to the end; the button must be disabled there rather than absent.
     while harness.state().has_next() {
-        harness.get_by_label(next).click();
+        harness.get_by_label(&next).click();
         harness.run();
     }
     assert!(
         !harness.state().has_next(),
         "the reader is at the last page"
     );
-    harness.get_by_label(next);
+    harness.get_by_label(&next);
 }
 
 #[test]
 fn the_close_button_is_disabled_until_a_document_is_open() {
     let harness = harness(App::new());
-    let close = harness.state().close_label();
+    let close = reader_label(ReaderMessage::CloseHint);
     let button = harness.get_by_label(&close);
     assert!(
         button.accesskit_node().is_disabled(),
@@ -237,12 +243,12 @@ fn the_close_button_is_disabled_until_a_document_is_open() {
 }
 
 #[test]
-fn closing_through_the_menu_returns_the_window_to_the_hint() {
+fn closing_through_the_header_button_returns_the_window_to_the_hint() {
     let mut app = App::new();
     app.open_path(&minimal()).expect("the fixture opens");
     let mut harness = harness(app);
 
-    let close = harness.state().close_label();
+    let close = reader_label(ReaderMessage::CloseHint);
     harness.get_by_label(&close).click();
     harness.run();
 

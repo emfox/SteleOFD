@@ -700,11 +700,6 @@ impl App {
     pub fn drop_hint(&self) -> String {
         self.text(ReaderMessage::DropHint)
     }
-
-    /// The label on the button that closes the document.
-    pub fn close_label(&self) -> String {
-        self.text(ReaderMessage::Close)
-    }
 }
 
 /// The four states of the canvas, in the order the window checks them.

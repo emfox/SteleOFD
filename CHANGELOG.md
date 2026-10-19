@@ -34,11 +34,11 @@ section only when a release actually has one.
   test proves each text-on-panel pair clears 4.5:1 and that high contrast clears
   7:1 without losing the hue a reader recognises.
 - **A verdict is never carried by colour alone.** The signature panel writes the
-  verdict out and adds a symbol, so it survives a colour-blind reader, a
+  verdict out and sets a glyph beside it, so it survives a colour-blind reader, a
   monochrome display and a printout.
-- **Every control says what it does.** The paging arrows are symbols rather than
-  words, so each now has a tooltip; so does every other button in the two header
-  rows.
+- **Every control says what it does.** A button that is drawn rather than
+  written, so each of them now has a tooltip; and every other button in the two
+  header rows.
 
 - **The window is drawn on the guideline's grid, not on the toolkit's.** Spacing
   is four multiples of six points rather than whatever `egui` defaults to, and
@@ -66,6 +66,14 @@ section only when a release actually has one.
   single menu, ordered the way the guideline orders a primary menu — settings,
   language, then shortcuts and the build's name — with no close or quit entry,
   since the header bar already closes the document.
+- **The controls are drawn as icons rather than spelled out.** Twenty glyphs on
+  the desktop's 16-unit symbolic grid replace the words and text characters the
+  window had used for the same ideas: `◀` and `▶` in three panels, the `✓` `✗` `?`
+  `!` beside a verdict, and the labelled export, fit and paging buttons. They are
+  geometry, not image files, so a theme switch recolours them and the build
+  carries no rasters to blur on a scaled screen. Each keeps its tooltip, which is
+  also its accessible name — a drawing has no words of its own, and a screen
+  reader reads the drawing's control by that name.
 
 ### Performance
 

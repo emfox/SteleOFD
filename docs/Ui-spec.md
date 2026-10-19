@@ -29,7 +29,8 @@ What the window takes from it, and where each requirement lands:
 | Three to five items in a view switcher; more than that wants a sidebar | Patterns · View switchers | §2 Z1 |
 | A panel that is toggled is a utility pane, not a sidebar: it does not cross the header bar | Patterns · Utility panes | §2 Z1, Z5–Z8 |
 | Header controls carry no frame, and groups are separated by space rather than by a rule | Patterns · Header bars | §2.1, §5.3 |
-| A button holds an icon or a label, and a header should hold neither of the label-only kind | Patterns · Buttons, Header bars | §2.1 |
+| A button holds an icon or a label, and a header should hold neither of the label-only kind | Patterns · Buttons, Header bars | §2.1, §5.4 |
+| Icons are symbolic line drawings on the 16-unit grid, recoloured with the theme | Guidelines · Icons and artwork | §5.4 |
 | Widgets keep a stable position as state changes, so a reader's muscle memory holds | Patterns · Header bars | §2, §4 |
 | Three theme choices — follow the system, light, dark — never only two | Guidelines · UI styling | §2 Z9, §5 |
 | A high-contrast mode exists and is tested, because a theme that only adjusts hues fails the readers who need it | Guidelines · UI styling | §2 Z9, §5 |
@@ -47,8 +48,9 @@ is drawn by `egui` on Windows, macOS, Linux, Android and the browser alike, and 
 GNOME-only widget set would leave four of those five with a window glued
 together from two toolkits. Z1 is this window's header bar and Z2 its toolbar;
 both are drawn to the clauses above, and §2.1 records where each kind of control
-goes. The one requirement still unmet is the symbolic icon set a primary menu
-button is supposed to carry, which is stated there rather than quietly dropped.
+goes. The symbolic icon set a primary menu button is supposed to carry is drawn
+in the window's own toolkit rather than borrowed from an icon theme, and §5.4
+says why.
 
 ## 1. Layers
 
@@ -97,9 +99,10 @@ Two consequences worth stating, because both were the other way round before:
   and a second one beside it only makes the reader look in both.
 
 Buttons are placed by the same rule. A button in the header bar is a main
-action and carries no frame; a button in a panel is an ordinary button; a
-label-only button is the kind the guideline asks a header bar to avoid, which is
-why the two actions that stay in Z1 are the ones with an unambiguous short name.
+action and carries no frame; a button in a panel is an ordinary button; and a
+control whose action is understood from its picture is drawn as an icon rather
+than spelled out (§5.4). That is what lets Z1 hold five controls and Z2 hold
+fourteen without either bar overflowing.
 
 
 The window is a stack of fixed zones around one growing canvas. Zones are
@@ -163,10 +166,10 @@ The second revision sits in this menu too, because it is a fact about the
 document rather than about the page. It is the menu's only item that opens a
 file dialog, so it disables on the platform that has none.
 
-The menu names itself "Main Menu" in words rather than drawing the icon the
-guideline names. A symbolic icon set is not in the build yet, and a text label
-the reader can read beats an icon that means nothing. That is a known gap, not
-a decision to keep.
+The menu's button is the three-bar glyph the guideline names for a primary menu,
+drawn on the same grid as the rest of the set (§5.4). A glyph carries no words,
+so its tooltip is the accessible name and the button reads "Main Menu" to a
+screen reader.
 
 **Z2 header.** The toolbar: everything that acts on the page on screen, in the
 order a reader asks the questions — how the pages are arranged, which page, how
@@ -182,8 +185,8 @@ clicked. Everything else is a click or a switch.
 
 Every control in Z1 and Z2 says what it does in a tooltip. The guideline asks
 it of header-bar buttons; this window asks it of all of them, because the
-symbols it draws (`◀`, `▶`) are not words and a reader meeting them for the
-first time has nothing else to go on.
+symbols it draws are not words and a reader meeting them for the first time has
+nothing else to go on.
 
 **Z3 canvas.** Exactly one of five states, decided in this order:
 
@@ -489,19 +492,52 @@ like one window:
 | Control height | 34 |
 | Corner radius | 6 |
 | Gap between two items in a row | 6 |
+| Icon box | 20 |
 
-All three multiply by the reader's text size. A window whose spacing ignored
+All of them multiply by the reader's text size. A window whose spacing ignored
 the text size would crowd exactly the reader who asked for larger text.
 
-The header bar holds two groups on the start edge — which document is open, and
-what is shown of it — and four menus on the end edge: the language, the
-comparison, the export and the settings. That is where the guideline puts menus.
-What is *not* there is one button per option: a language is a menu rather than
-three buttons, and an export is a menu rather than three buttons, because the
-guideline asks for a small number of controls so that the bar can be dragged and
-the window can be narrowed without the controls colliding.
+The header bar holds one group on the start edge — which document is open — the
+view switcher in the centre, and the main menu on the end edge. That is where
+the guideline puts each of them.
 
-### 5.4 Using them
+### 5.4 Icons
+
+A control that names itself is a label; a control that stands for an action is an
+icon. The window has one set, in `crates/steleofd-reader/src/icons.rs`, and every
+icon-only control is drawn from it rather than from a text character.
+
+The grid is the one the desktop's symbolic icons use, so a glyph here and a glyph
+in the icon theme read as the same drawing:
+
+| Property | Value |
+| --- | --- |
+| Square | 16 units |
+| Stroke | 1.5 units, round caps and joins |
+| Fill | none — symbolic icons are outlines |
+| Colour | the window's own token, so a glyph follows the theme and high contrast |
+
+They are **geometry rather than image files**. Three reasons, in the order they
+mattered: a theme switch recolours a glyph with no second asset, the build
+carries no rasters that a scaled screen would have to blur, and a maintainer sees
+what a glyph is in the source instead of opening a binary. The alternative —
+vendoring the icon theme's SVGs — was rejected because this window is drawn by
+`egui` on five platforms and has no GTK resource pipeline to load them through;
+the set is small and fixed, so drawing it costs less than a dependency.
+
+`Icon` names what a glyph *does* (`Icon::Next`, not `Icon::ArrowRight`), and
+`Icon::theme_name` records the name the icon theme gives the same idea
+(`go-next-symbolic`), so a maintainer adding a glyph looks the standard one up
+first. `tests/icons.rs` draws every variant and asserts that each becomes
+triangles, that none escapes its 16-unit box, and that the theme names stay
+distinct.
+
+A glyph carries no words, and a control needs a name, so `Glyph` — the struct
+that pairs an `Icon` with its wording — sets the accessible name from the same
+tooltip a sighted reader sees. That is the one place the two cannot drift apart,
+and `tests/window.rs` queries the buttons by it.
+
+### 5.5 Using them
 
 `theme.rs` is the one module that knows these numbers. A zone asks it for a
 colour (`theme::colour(ctx, sharp, Token::Dim)`) or for a size
@@ -546,6 +582,13 @@ theme column defines every token, that high contrast raises the contrast of each
 text-on-panel pair rather than only changing its hue, and that the type scale is
 monotonic — a `title-1` is never smaller than a `title-2`. A theme table is a
 small thing to test and a large thing to get wrong quietly.
+
+**`tests/icons.rs` proves the icon set draws itself.** Each glyph is built in a
+real `egui` context, its shapes are tessellated, and the vertices are checked:
+every icon becomes triangles, none reaches outside its 16-unit box beyond its own
+stroke, and no two glyphs claim the same theme name. An icon that stops drawing
+is a control a reader cannot find, and this is the only way to catch it without
+a screen.
 
 ## 7. Adding a zone
 

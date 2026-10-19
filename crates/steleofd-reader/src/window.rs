@@ -8,6 +8,7 @@ use steleofd_i18n::MessageId;
 
 use crate::app::{App, Canvas, Fit, TextSize, ThemeChoice, Verdict};
 use crate::export_worker::ExportFormat;
+use crate::icons::{self, Icon};
 use crate::shortcuts;
 use crate::theme::{self, Style, Token};
 use crate::viewer::{DroppedFile, Layout, MAX_DPI, MIN_DPI};
@@ -225,11 +226,10 @@ fn draw_menu(ui: &mut Ui, app: &mut App, requests: &mut WindowRequests) {
         let groups = theme::Space::Medium.points();
         ui.horizontal(|ui| {
             ui.add_space(gap);
-            draw_document_actions(ui, app, requests);
+            pair(ui, |ui| draw_document_actions(ui, app, requests));
             ui.add_space(groups);
             draw_view_switcher(ui, app);
             ui.add_space(groups);
-            ui.add_space(gap);
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 ui.add_space(gap);
                 draw_main_menu(ui, app);
@@ -238,50 +238,114 @@ fn draw_menu(ui: &mut Ui, app: &mut App, requests: &mut WindowRequests) {
     });
 }
 
-/// A header-bar button: no background and no border, which is the toolbar
-/// style the guideline gives header controls. The frame appears on hover, so
-/// the control stays discoverable and key focus still shows where it is.
-fn bare(ui: &mut Ui, enabled: bool, label: impl Into<String>) -> egui::Response {
-    let button = egui::Button::new(label.into())
-        .fill(egui::Color32::TRANSPARENT)
-        .stroke(egui::Stroke::NONE);
-    ui.add_enabled(enabled, button)
+/// Draw a run of controls whose glyphs belong together: a linked group, drawn
+/// as one rounded plate behind them rather than as a border round each, and a
+/// step of space inside so the glyphs are not touching the plate's edge.
+fn pair(ui: &mut Ui, contents: impl FnOnce(&mut Ui)) {
+    egui::Frame::new()
+        .fill(ui.visuals().faint_bg_color)
+        .corner_radius(theme::CORNER_RADIUS)
+        .inner_margin(egui::Margin::symmetric(
+            theme::Space::Small.points() as i8,
+            0,
+        ))
+        .show(ui, |ui| {
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = theme::ITEM_GAP;
+                contents(ui);
+            });
+        });
 }
 
-/// A toggle in a view switcher: the same bare frame as a header button, drawn
-/// with a rounded fill while it is on, which is the shape the pattern gives the
-/// chosen view.
-fn bare_toggle(ui: &mut Ui, enabled: bool, on: bool, label: impl Into<String>) -> egui::Response {
-    let fill = if on {
-        ui.visuals().selection.bg_fill
-    } else {
-        egui::Color32::TRANSPARENT
-    };
-    ui.add_enabled(
-        enabled,
-        egui::Button::new(label.into())
-            .fill(fill)
-            .stroke(egui::Stroke::NONE)
-            .corner_radius(theme::CORNER_RADIUS),
-    )
+/// An icon button: a header control with no frame, no background and no label.
+/// The glyph is the whole control, which is the form the guideline gives a
+/// header button, and its tooltip is the word it would otherwise show.
+fn icon_button(ui: &mut Ui, enabled: bool, sharp: bool, glyph: Glyph<'_>) -> egui::Response {
+    glyph.button(ui, enabled, sharp, false)
 }
 
-/// The two actions that change which document is open. Both carry a tooltip:
-/// "close" on a document is not obviously "close this one".
+/// An icon toggle in a view switcher: the same glyph, on a rounded plate while
+/// it is the one showing, which is the shape the pattern gives a chosen view.
+fn icon_toggle(
+    ui: &mut Ui,
+    enabled: bool,
+    sharp: bool,
+    on: bool,
+    glyph: Glyph<'_>,
+) -> egui::Response {
+    glyph.button(ui, enabled, sharp, on)
+}
+
+/// A glyph and the words it stands for. The words are the tooltip and the
+/// accessible name, because a drawing has neither and a control needs both.
+struct Glyph<'a> {
+    icon: Icon,
+    hint: &'a str,
+}
+
+impl Glyph<'_> {
+    /// A real `Button` whose picture is the glyph, so the toolkit draws the
+    /// hover plate and answers the accessibility tree. The picture is a texture
+    /// because a button lays out its contents before it knows where they land.
+    fn button(self, ui: &mut Ui, enabled: bool, sharp: bool, on: bool) -> egui::Response {
+        let ink = if enabled {
+            theme::colour(ui.ctx(), sharp, Token::Text)
+        } else {
+            ui.visuals().weak_text_color()
+        };
+        let side = icons::box_size(1.0);
+        let handle = icons::texture(ui.ctx(), self.icon, ink);
+        let image = egui::Image::from_texture(egui::load::SizedTexture::new(handle.id(), side))
+            .fit_to_exact_size(side);
+        let mut button = egui::Button::image_and_text(image, "")
+            .frame_when_inactive(on)
+            .min_size(side);
+        if on {
+            button = button.selected(true);
+        }
+        let response = ui.add_enabled(enabled, button).on_hover_text(self.hint);
+        response.widget_info(|| {
+            egui::WidgetInfo::labeled(egui::WidgetType::Button, enabled, self.hint)
+        });
+        if enabled {
+            response
+        } else {
+            response.on_disabled_hover_text(self.hint)
+        }
+    }
+}
+
+/// The two actions that change which document is open. Both carry a tooltip,
+/// because the glyph alone has to be recognised: "close" on a document is not
+/// obviously "close this one".
 fn draw_document_actions(ui: &mut Ui, app: &mut App, requests: &mut WindowRequests) {
+    let sharp = app.high_contrast();
     let open = app.text(ReaderMessage::Open);
-    if bare(ui, HAS_FILE_DIALOG, &open)
-        .on_hover_text(&open)
-        .clicked()
+    if icon_button(
+        ui,
+        HAS_FILE_DIALOG,
+        sharp,
+        Glyph {
+            icon: Icon::Open,
+            hint: &open,
+        },
+    )
+    .clicked()
     {
         app.request_open();
         requests.open_dialog = true;
     }
-    let close = app.close_label();
     let hint = app.text(ReaderMessage::CloseHint);
-    if bare(ui, app.is_open(), &close)
-        .on_hover_text(&hint)
-        .clicked()
+    if icon_button(
+        ui,
+        app.is_open(),
+        sharp,
+        Glyph {
+            icon: Icon::Close,
+            hint: &hint,
+        },
+    )
+    .clicked()
     {
         app.close();
     }
@@ -291,28 +355,35 @@ fn draw_document_actions(ui: &mut Ui, app: &mut App, requests: &mut WindowReques
 /// signature report, the annotation list. Three is the range the pattern gives,
 /// and they are exclusive — plain toggles would let a reader end up with two.
 fn draw_view_switcher(ui: &mut Ui, app: &mut App) {
-    let views = [
-        app.search_heading(),
-        app.signatures_heading(),
-        app.annotations_heading(),
-    ];
+    let sharp = app.high_contrast();
     let open = app.is_open();
-    for (key, label) in [
-        ReaderMessage::SearchToggle,
-        ReaderMessage::SignaturesToggle,
-        ReaderMessage::AnnotationsToggle,
-    ]
-    .into_iter()
-    .zip(views)
-    {
-        let chosen = view_showing(app, key);
-        if bare_toggle(ui, open, chosen, &label)
-            .on_hover_text(&label)
-            .clicked()
-        {
-            show_view(app, key);
+    let views = [
+        (
+            ReaderMessage::SearchToggle,
+            Icon::Search,
+            app.search_heading(),
+        ),
+        (
+            ReaderMessage::SignaturesToggle,
+            Icon::Signatures,
+            app.signatures_heading(),
+        ),
+        (
+            ReaderMessage::AnnotationsToggle,
+            Icon::Annotations,
+            app.annotations_heading(),
+        ),
+    ];
+    // The three are one control, so they sit on one plate: a switcher reads as
+    // a set of choices rather than as three buttons that happen to be adjacent.
+    pair(ui, |ui| {
+        for (key, icon, hint) in views {
+            let chosen = view_showing(app, key);
+            if icon_toggle(ui, open, sharp, chosen, Glyph { icon, hint: &hint }).clicked() {
+                show_view(app, key);
+            }
         }
-    }
+    });
 }
 
 /// Whether the view a switcher label names is the one on screen.
@@ -344,35 +415,49 @@ fn show_view(app: &mut App, key: ReaderMessage) {
 fn draw_main_menu(ui: &mut Ui, app: &mut App) {
     let label = app.text(ReaderMessage::MainMenu);
     let hint = app.text(ReaderMessage::MainMenuHint);
-    ui.menu_button(&label, |ui| {
-        draw_settings_entries(ui, app);
-        ui.add_space(theme::Space::Medium.points());
-        draw_language_entries(ui, app);
-        ui.add_space(theme::Space::Medium.points());
-        // Comparing takes a second revision of the open file, so it belongs
-        // with the document rather than with the interface, and it disables on
-        // the platform whose file dialog Android does not have.
-        let compare = app.i18n().text(MessageId::ComparePanelTitle);
-        if ui
-            .add_enabled(
-                app.is_open() && HAS_FILE_DIALOG,
-                egui::Button::new(&compare),
-            )
-            .clicked()
-        {
-            app.set_comparison_open(true);
-        }
-        ui.add_space(theme::Space::Medium.points());
-        // A menu item is a control, so it is drawn as one, in the text colour
-        // and at the body size. Only the two labels that name a group are dim.
-        let shortcuts = app.text(ReaderMessage::KeyboardShortcuts);
-        ui.add(egui::Button::new(&shortcuts));
-        let version = env!("CARGO_PKG_VERSION");
-        let about = app.text_with(ReaderMessage::About, [("version", version.into())]);
-        ui.add(egui::Button::new(&about));
-    })
-    .response
-    .on_hover_text(&hint);
+    let sharp = app.high_contrast();
+    // A menu button always draws its label, so the glyph goes in as a picture
+    // and the name lives in the tooltip, which is what a screen reader reads.
+    let ink = theme::colour(ui.ctx(), sharp, Token::Text);
+    let side = icons::box_size(1.0);
+    let handle = icons::texture(ui.ctx(), Icon::Menu, ink);
+    let image = egui::Image::from_texture(egui::load::SizedTexture::new(handle.id(), side))
+        .fit_to_exact_size(side);
+    let button = egui::Button::image(image).frame(false).min_size(side);
+    let response = egui::containers::menu::MenuButton::from_button(button).ui(ui, |ui| {
+        draw_menu_entries(ui, app);
+    });
+    let response = response.0.on_hover_text(&hint);
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &label));
+}
+
+/// What the main menu holds, in the guideline's order.
+fn draw_menu_entries(ui: &mut Ui, app: &mut App) {
+    draw_settings_entries(ui, app);
+    ui.add_space(theme::Space::Medium.points());
+    draw_language_entries(ui, app);
+    ui.add_space(theme::Space::Medium.points());
+    // Comparing takes a second revision of the open file, so it belongs with
+    // the document rather than with the interface, and it disables on the
+    // platform whose file dialog Android does not have.
+    let compare = app.i18n().text(MessageId::ComparePanelTitle);
+    if ui
+        .add_enabled(
+            app.is_open() && HAS_FILE_DIALOG,
+            egui::Button::new(&compare),
+        )
+        .clicked()
+    {
+        app.set_comparison_open(true);
+    }
+    ui.add_space(theme::Space::Medium.points());
+    // A menu item is a control, so it is drawn as one, in the text colour and
+    // at the body size. Only the two labels that name a group are dim.
+    let shortcuts = app.text(ReaderMessage::KeyboardShortcuts);
+    ui.add(egui::Button::new(&shortcuts));
+    let version = env!("CARGO_PKG_VERSION");
+    let about = app.text_with(ReaderMessage::About, [("version", version.into())]);
+    ui.add(egui::Button::new(&about));
 }
 
 /// The appearance entries, inside the main menu rather than in a menu of their
@@ -431,20 +516,30 @@ fn draw_language_entries(ui: &mut Ui, app: &mut App) {
 }
 
 /// How the window arranges the pages on screen: one, two facing, or the whole
-/// document scrolling. This is the view switcher's second run of choices, kept
-/// below it because all five are part of one decision about the page.
+/// document scrolling. All three are one decision about the page, so they are
+/// one group of three glyphs rather than three labelled buttons.
 fn draw_layout_switcher(ui: &mut Ui, app: &mut App) {
-    for (key, layout) in [
-        (ReaderMessage::LayoutSingle, Layout::Single),
-        (ReaderMessage::LayoutDouble, Layout::Facing),
-        (ReaderMessage::LayoutContinuous, Layout::Continuous),
+    let sharp = app.high_contrast();
+    for (key, icon, layout) in [
+        (
+            ReaderMessage::LayoutSingle,
+            Icon::SinglePage,
+            Layout::Single,
+        ),
+        (
+            ReaderMessage::LayoutDouble,
+            Icon::FacingPages,
+            Layout::Facing,
+        ),
+        (
+            ReaderMessage::LayoutContinuous,
+            Icon::Continuous,
+            Layout::Continuous,
+        ),
     ] {
-        let label = app.text(key);
+        let hint = app.text(key);
         let chosen = app.layout() == layout;
-        if bare_toggle(ui, true, chosen, &label)
-            .on_hover_text(&label)
-            .clicked()
-        {
+        if icon_toggle(ui, true, sharp, chosen, Glyph { icon, hint: &hint }).clicked() {
             app.set_layout(layout);
         }
     }
@@ -457,19 +552,47 @@ fn draw_exports(ui: &mut Ui, app: &mut App) {
     let busy = app.is_exporting();
     let printing = app.is_printing();
     let open = app.is_open();
+    let sharp = app.high_contrast();
     let print = app.print_label_text();
-    if bare(ui, open && !printing, &print)
-        .on_hover_text(&print)
-        .clicked()
+    if icon_button(
+        ui,
+        open && !printing,
+        sharp,
+        Glyph {
+            icon: Icon::Print,
+            hint: &print,
+        },
+    )
+    .clicked()
     {
         app.request_print();
     }
     let pdf = app.text(ReaderMessage::ExportPdf);
-    if bare(ui, open && !busy, &pdf).on_hover_text(&pdf).clicked() {
+    if icon_button(
+        ui,
+        open && !busy,
+        sharp,
+        Glyph {
+            icon: Icon::ExportPdf,
+            hint: &pdf,
+        },
+    )
+    .clicked()
+    {
         app.request_export(ExportFormat::Pdf);
     }
     let png = app.text(ReaderMessage::ExportPng);
-    if bare(ui, open && !busy, &png).on_hover_text(&png).clicked() {
+    if icon_button(
+        ui,
+        open && !busy,
+        sharp,
+        Glyph {
+            icon: Icon::ExportPng,
+            hint: &png,
+        },
+    )
+    .clicked()
+    {
         app.request_export(ExportFormat::Png);
     }
 }
@@ -485,17 +608,36 @@ fn draw_toolbar(ui: &mut Ui, app: &mut App) {
             ui.add_space(theme::Space::Medium.points());
             draw_paging(ui, app);
             ui.add_space(theme::Space::Medium.points());
+            let sharp = app.high_contrast();
             let fit_width = app.text(ReaderMessage::FitWidth);
-            if bare_toggle(ui, true, app.fit() == Some(Fit::Width), &fit_width)
-                .on_hover_text(&fit_width)
-                .clicked()
+            let width_on = app.fit() == Some(Fit::Width);
+            if icon_toggle(
+                ui,
+                true,
+                sharp,
+                width_on,
+                Glyph {
+                    icon: Icon::FitWidth,
+                    hint: &fit_width,
+                },
+            )
+            .clicked()
             {
                 app.set_fit(Fit::Width);
             }
             let fit_page = app.text(ReaderMessage::FitPage);
-            if bare_toggle(ui, true, app.fit() == Some(Fit::Page), &fit_page)
-                .on_hover_text(&fit_page)
-                .clicked()
+            let page_on = app.fit() == Some(Fit::Page);
+            if icon_toggle(
+                ui,
+                true,
+                sharp,
+                page_on,
+                Glyph {
+                    icon: Icon::FitPage,
+                    hint: &fit_page,
+                },
+            )
+            .clicked()
             {
                 app.set_fit(Fit::Page);
             }
@@ -518,18 +660,37 @@ fn draw_toolbar(ui: &mut Ui, app: &mut App) {
     });
 }
 
-/// The two paging arrows. Their symbols are not language, so they are written
-/// inline; their tooltips are words, so a first-time reader has something.
+/// The two paging arrows, as glyphs rather than as the inline triangles they
+/// used to be. A reader meeting an arrow needs no label; the tooltip says which
+/// way in words, for the reader who wants it.
 fn draw_paging(ui: &mut Ui, app: &mut App) {
+    let sharp = app.high_contrast();
     let previous = app.text(ReaderMessage::PrevPage);
-    if bare(ui, app.has_previous(), "◀")
-        .on_hover_text(&previous)
-        .clicked()
+    if icon_button(
+        ui,
+        app.has_previous(),
+        sharp,
+        Glyph {
+            icon: Icon::Previous,
+            hint: &previous,
+        },
+    )
+    .clicked()
     {
         app.previous_page();
     }
     let next = app.text(ReaderMessage::NextPage);
-    if bare(ui, app.has_next(), "▶").on_hover_text(&next).clicked() {
+    if icon_button(
+        ui,
+        app.has_next(),
+        sharp,
+        Glyph {
+            icon: Icon::Next,
+            hint: &next,
+        },
+    )
+    .clicked()
+    {
         app.next_page();
     }
 }
@@ -557,12 +718,21 @@ fn draw_search(ui: &mut Ui, app: &mut App) {
         }
         ui.add_enabled_ui(!app.hits().is_empty(), |ui| {
             ui.horizontal(|ui| {
+                let sharp = app.high_contrast();
                 let previous = app.text(ReaderMessage::PrevHit);
-                if ui.button("◀").on_hover_text(&previous).clicked() {
+                let glyph = Glyph {
+                    icon: Icon::Previous,
+                    hint: &previous,
+                };
+                if icon_button(ui, true, sharp, glyph).clicked() {
                     app.previous_hit();
                 }
                 let next = app.text(ReaderMessage::NextHit);
-                if ui.button("▶").on_hover_text(&next).clicked() {
+                let glyph = Glyph {
+                    icon: Icon::Next,
+                    hint: &next,
+                };
+                if icon_button(ui, true, sharp, glyph).clicked() {
                     app.next_hit();
                 }
                 let count = app.search_count_label();
@@ -615,18 +785,20 @@ fn draw_signatures(ui: &mut Ui, app: &mut App) {
                 }
                 for report in &reports {
                     let verdict = app.signature_status_label(report);
-                    // The word is the verdict and the colour only repeats it,
-                    // which is what keeps the panel readable without colour.
-                    let (token, symbol) = match report.verdict {
-                        Verdict::Valid => (Token::Valid, "✓"),
-                        Verdict::Tampered => (Token::Tampered, "✗"),
+                    // The glyph and the word say the same thing, in the colour
+                    // that carries the reading without a second sentence.
+                    let (token, icon) = match report.verdict {
+                        Verdict::Valid => (Token::Valid, Icon::Valid),
+                        Verdict::Tampered => (Token::Tampered, Icon::Tampered),
                         // Amber, not red: unknown is not the same as wrong.
-                        Verdict::Unverified => (Token::Unverified, "?"),
+                        Verdict::Unverified => (Token::Unverified, Icon::Unverified),
                         // The proof holds; the issuer is a policy question.
-                        Verdict::Untrusted => (Token::Unverified, "!"),
+                        Verdict::Untrusted => (Token::Unverified, Icon::Untrusted),
                     };
-                    let text = format!("{symbol} {verdict}");
-                    ui.label(toned(ui, app, text, token, Style::Title4));
+                    ui.horizontal(|ui| {
+                        icons::show_toned(ui, icon, colour(ui, app, token));
+                        ui.label(toned(ui, app, verdict, token, Style::Title4));
+                    });
                     let details = [
                         app.signature_signer_label(report),
                         app.signature_time_label(report),
@@ -655,12 +827,21 @@ fn draw_annotations(ui: &mut Ui, app: &mut App) {
         ui.label(toned(ui, app, count, Token::Dim, Style::Caption));
         if app.annotation_count() > 0 {
             ui.horizontal(|ui| {
+                let sharp = app.high_contrast();
                 let previous = app.text(ReaderMessage::PrevAnnotation);
-                if ui.button("◀").on_hover_text(&previous).clicked() {
+                let glyph = Glyph {
+                    icon: Icon::Previous,
+                    hint: &previous,
+                };
+                if icon_button(ui, true, sharp, glyph).clicked() {
                     app.previous_annotation();
                 }
                 let next = app.text(ReaderMessage::NextAnnotation);
-                if ui.button("▶").on_hover_text(&next).clicked() {
+                let glyph = Glyph {
+                    icon: Icon::Next,
+                    hint: &next,
+                };
+                if icon_button(ui, true, sharp, glyph).clicked() {
                     app.next_annotation();
                 }
             });
@@ -697,7 +878,11 @@ fn draw_comparison(ui: &mut Ui, app: &mut App, requests: &mut WindowRequests) {
         let heading = app.comparison_heading();
         ui.label(toned(ui, app, heading, Token::Text, Style::Title1));
         let pick = app.i18n().text(MessageId::CompareOpenSecond);
-        if ui.button(&pick).on_hover_text(&pick).clicked() {
+        let glyph = Glyph {
+            icon: Icon::Open,
+            hint: &pick,
+        };
+        if icon_button(ui, true, app.high_contrast(), glyph).clicked() {
             requests.compare = true;
         }
         let Some(comparison) = app.comparison() else {

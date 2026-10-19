@@ -7,6 +7,7 @@
 pub mod app;
 pub mod export_worker;
 pub mod fonts;
+pub mod icons;
 pub mod message;
 pub mod print_worker;
 pub mod render_worker;
