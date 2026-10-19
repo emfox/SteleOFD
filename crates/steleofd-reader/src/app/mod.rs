@@ -33,6 +33,9 @@ pub struct App {
     path: Option<PathBuf>,
     cache: PageCache,
     current: usize,
+    /// How large the page is drawn, as a share of its size at 72 points to the
+    /// inch. This is the reader's zoom; `dpi` is what it costs to draw it.
+    zoom: f32,
     dpi: f32,
     fit: Option<Fit>,
     layout: Layout,
@@ -205,6 +208,7 @@ impl App {
             path: None,
             cache: PageCache::new(12),
             current: 0,
+            zoom: viewer::DEFAULT_ZOOM,
             dpi: viewer::DEFAULT_DPI,
             fit: None,
             layout: Layout::Single,
@@ -261,11 +265,6 @@ impl App {
     /// How many pages the open document has.
     pub fn page_count(&self) -> usize {
         self.doc.as_ref().map_or(0, Document::page_count)
-    }
-
-    /// The resolution pages are rasterized at.
-    pub fn dpi(&self) -> f32 {
-        self.dpi
     }
 
     /// How pages are laid out.
@@ -430,16 +429,21 @@ impl App {
         self.current >= self.layout.stride()
     }
 
-    /// Set the resolution, clamped to the range a reader can use.
-    pub fn set_dpi(&mut self, dpi: f32) {
-        let dpi = dpi.clamp(viewer::MIN_DPI, viewer::MAX_DPI);
-        if dpi != self.dpi {
-            self.dpi = dpi;
-            if let Some(queue) = self.queue.as_mut() {
-                queue.rezoom();
-            }
+    /// Set the zoom, clamped to the range a reader can use, and re-rasterize
+    /// at the resolution that zoom needs. The page is drawn at this size, so
+    /// the reader sees it grow; the raster only keeps it sharp.
+    pub fn set_zoom(&mut self, zoom: f32) {
+        let zoom = zoom.clamp(viewer::MIN_ZOOM, viewer::MAX_ZOOM);
+        if zoom != self.zoom {
+            self.zoom = zoom;
+            self.resize();
         }
         self.fit = None;
+    }
+
+    /// The zoom the page is drawn at, as a share of its 72 dpi size.
+    pub fn zoom(&self) -> f32 {
+        self.zoom
     }
 
     /// Keep the page fitted to the space it is drawn in.
@@ -452,8 +456,8 @@ impl App {
         self.fit
     }
 
-    /// Recompute the resolution for the fit in force, given the space the
-    /// canvas has. Called by the window each frame, so a resize re-fits.
+    /// Recompute the zoom for the fit in force, given the space the canvas
+    /// has. Called by the window each frame, so a resize re-fits.
     pub fn apply_fit(&mut self, available: (f32, f32)) {
         let Some(fit) = self.fit else {
             return;
@@ -461,12 +465,25 @@ impl App {
         let Some(size_mm) = self.page_size_mm(self.current) else {
             return;
         };
-        let dpi = viewer::fit_dpi(fit, size_mm, available);
-        if dpi != self.dpi {
-            self.dpi = dpi;
-            if let Some(queue) = self.queue.as_mut() {
-                queue.rezoom();
-            }
+        let zoom = viewer::fit_zoom(fit, size_mm, available);
+        if zoom != self.zoom {
+            self.zoom = zoom;
+            self.resize();
+        }
+    }
+
+    /// The resolution this zoom needs, had the reader the screen to show it.
+    pub fn dpi(&self) -> f32 {
+        (self.zoom * 72.0).clamp(viewer::MIN_DPI, viewer::MAX_DPI)
+    }
+
+    /// Bring the raster in line with the zoom. A page past the texture limit is
+    /// not cut short here: the raster takes the part on screen at full
+    /// resolution, so the reader's zoom is what decides the size.
+    fn resize(&mut self) {
+        self.dpi = self.dpi();
+        if let Some(queue) = self.queue.as_mut() {
+            queue.rezoom();
         }
     }
 
@@ -562,6 +579,24 @@ impl App {
         self.cache.get(page, self.dpi)
     }
 
+    /// The part of a page a reader can see, in millimetres, when it is drawn
+    /// larger than the texture limit allows. `None` means the whole page fits.
+    fn window_mm(&self, page: usize) -> Option<steleofd_common::Rect> {
+        let size_mm = self.page_size_mm(page)?;
+        let dpi = self.dpi.min(viewer::dpi_that_fits(size_mm));
+        if dpi >= self.dpi {
+            return None;
+        }
+        // What the raster may span, from the same limit `dpi_that_fits` obeys.
+        let span = viewer::MAX_TEXTURE_SIDE as f32 / (dpi / viewer::PIXELS_PER_MM as f32);
+        Some(steleofd_common::Rect::new(
+            0.0,
+            0.0,
+            f64::from(size_mm.0).min(f64::from(span)),
+            f64::from(size_mm.1).min(f64::from(span)),
+        ))
+    }
+
     /// Rasterize a page, or return the cached one.
     /// Rendering happens off the draw path, so this asks the worker and does
     /// not wait; the page arrives through `poll` on a later frame.
@@ -572,8 +607,9 @@ impl App {
         if self.doc.is_none() {
             return Ok(());
         }
+        let window = self.window_mm(page);
         if let Some(queue) = self.queue.as_mut() {
-            queue.request(page, self.dpi);
+            queue.request(page, self.dpi, window);
         }
         Ok(())
     }
@@ -588,6 +624,9 @@ impl App {
             return;
         };
         for result in queue.drain() {
+            // A raster of a resolution the reader has already left is stale:
+            // it goes into the cache under its own resolution, where a reader
+            // who comes back to that zoom will find it, but it is not drawn.
             match result.outcome {
                 Ok(rendered) => self.cache.insert(result.page, result.dpi, rendered),
                 Err(message) => self.set_error(message),
@@ -623,7 +662,7 @@ impl App {
             Action::LastPage => self.go_to(self.page_count().saturating_sub(1)),
             Action::ZoomIn => self.step_zoom(ZOOM_STEP),
             Action::ZoomOut => self.step_zoom(-ZOOM_STEP),
-            Action::ZoomReset => self.set_dpi(viewer::DEFAULT_DPI),
+            Action::ZoomReset => self.set_zoom(viewer::DEFAULT_ZOOM),
             Action::NextHit => self.next_hit(),
             Action::PreviousHit => self.previous_hit(),
             Action::ToggleSearch => self.set_search_open(!self.search_open),
@@ -649,16 +688,19 @@ impl App {
         }
     }
 
-    /// Move the resolution by `delta`, staying inside the permitted range.
+    /// Move the zoom by `delta` percent, staying inside the permitted range.
     fn step_zoom(&mut self, delta: f32) {
-        self.set_dpi(self.dpi + delta);
+        self.set_zoom(self.zoom + delta / 100.0);
     }
 
     /// The zoom label shown in the toolbar.
     pub fn zoom_label(&self) -> String {
         self.text_with(
             ReaderMessage::Zoom,
-            [("percent", (self.dpi as i32).to_string().into())],
+            [(
+                "percent",
+                ((self.zoom * 100.0).round() as i32).to_string().into(),
+            )],
         )
     }
 

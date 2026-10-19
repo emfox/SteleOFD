@@ -26,6 +26,7 @@ const RENDER_OPTIONS: RenderOptions = RenderOptions {
     dpi: 96.0,
     background: None,
     max_pixels: 64 * 1024 * 1024,
+    window: None,
 };
 
 /// Render one golden document to PNG bytes, through the same path a caller uses.

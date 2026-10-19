@@ -181,7 +181,16 @@ the end. Disabled controls rather than hidden ones, so the bar does not reflow
 as the document changes.
 
 The zoom slider is the one place in the window a value is dragged rather than
-clicked. Everything else is a click or a switch.
+clicked. Everything else is a click or a switch. It shows a percentage of the
+page's own size: 100% draws A4 595 points wide, the size it would be printed
+for a screen at one pixel per point. The number is the size the page is drawn
+at, not the resolution it is rasterized at, which follows from it; a reader
+dragging the handle sees the page grow rather than merely sharpen.
+
+A page drawn past the texture limit is rasterized in part rather than capped:
+the visible corner is rasterized at the full resolution and the rest is
+scrolled to. Capping the zoom instead would leave a reader who zoomed in on a
+paragraph unable to read it.
 
 Every control in Z1 and Z2 says what it does in a tooltip. The guideline asks
 it of header-bar buttons; this window asks it of all of them, because the
@@ -321,7 +330,7 @@ the previous produced.
 
 ```
 1  resolve intent   consume the open request, then dropped files
-2  apply state      App mutates: document, page, dpi, layout, error
+2  apply state      App mutates: document, page, zoom, layout, error
 3  apply appearance push App's theme, text size and contrast into egui
 4  sync window      push the document name into the title bar
 5  draw Z1          header  — menu, panels, export, settings (reads state)
@@ -373,8 +382,8 @@ raced by a stray drag.
   with a broken one loses the reader's place for no reason.
 - **Every `id_salt` is a literal.** Widget identity must be stable across
   builds; an interpolated salt silently resets scroll position and focus.
-- **One texture per page and resolution.** The name carries both so the
-  texture and the cache cannot disagree.
+- **One texture per page, resolution and window.** The name carries the page,
+  so a zoomed-in part and a whole page cannot overwrite one another.
 - **Blocking work stays off the draw path.** `rfd` and `std::fs` run in step 1
   or in the intent handler, never inside Z3, and rasterizing runs on the worker.
 - **Two controls never wear the same word.** A toggle and the panel it opens

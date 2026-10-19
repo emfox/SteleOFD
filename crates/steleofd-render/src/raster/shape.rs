@@ -60,12 +60,12 @@ pub(crate) fn to_color(c: &Color) -> tiny_skia::Color {
     tiny_skia::Color::from_rgba8(c.r, c.g, c.b, c.a)
 }
 
-/// Page-space millimetres to pixmap pixels, page box origin included.
+/// Page-space millimetres to pixmap pixels, the raster's origin included.
 /// `then` applies `self` first, so the CTM acts in millimetres and the
 /// pixel scale maps the result onto the bitmap.
-pub(crate) fn total_transform(state: &State, page_box: &Rect, dpi: f64) -> Transform {
+pub(crate) fn total_transform(state: &State, origin: &Rect, dpi: f64) -> Transform {
     let s = dpi / 25.4;
-    let mm_to_px = Affine::translate(-page_box.x * s, -page_box.y * s).then(Affine::scale(s, s));
+    let mm_to_px = Affine::translate(-origin.x * s, -origin.y * s).then(Affine::scale(s, s));
     to_ts(state.ctm.then(mm_to_px))
 }
 

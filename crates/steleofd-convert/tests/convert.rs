@@ -267,6 +267,7 @@ fn png_output_is_a_png_of_the_requested_size() {
         dpi: 72.0,
         background: Some(Color::WHITE),
         max_pixels: 64 * 1024 * 1024,
+        window: None,
     };
     let png = steleofd_convert::png::page_to_png(&page, &fonts, &options).expect("convert");
     // The PNG signature is the contract a downstream decoder checks first.
@@ -282,6 +283,7 @@ fn the_pixel_budget_is_enforced_before_any_raster_is_allocated() {
         background: Some(Color::WHITE),
         // Smaller than a single A4 page at 96 DPI, so this must fail fast.
         max_pixels: 1024,
+        window: None,
     };
     let err = steleofd_convert::png::page_to_png(&page, &fonts, &options).expect_err("budget");
     assert!(err.to_string().contains("budget"), "{err}");

@@ -10,6 +10,14 @@ pub const MIN_DPI: f32 = 24.0;
 pub const MAX_DPI: f32 = 300.0;
 /// The resolution a freshly opened document is shown at.
 pub const DEFAULT_DPI: f32 = 96.0;
+/// The zoom bounds, as the share of a page's 72 dpi size it is drawn at. A
+/// point is 1/72 inch, so this is also the page's size in points times up to
+/// three, which is a sheet of A4 at 887 points wide.
+pub const MIN_ZOOM: f32 = MIN_DPI / 72.0;
+/// The upper zoom, matching `MAX_DPI`.
+pub const MAX_ZOOM: f32 = MAX_DPI / 72.0;
+/// The zoom a document is opened at.
+pub const DEFAULT_ZOOM: f32 = DEFAULT_DPI / 72.0;
 /// The pixels per millimetre at a given resolution, used to size a page.
 pub const PIXELS_PER_MM: f64 = 25.4;
 
@@ -192,13 +200,13 @@ pub fn dpi_that_fits(size_mm: (f32, f32)) -> f32 {
     (fit as f32).clamp(MIN_DPI, MAX_DPI)
 }
 
-/// The resolution that fits a page into an area, for a fit mode.
+/// The zoom that fits a page into an area, for a fit mode.
 /// `available` is the area in points and `size_mm` the page's physical size; a
 /// fit is clamped to the reader's range, so it is still only ever a request.
-pub fn fit_dpi(fit: crate::app::Fit, size_mm: (f32, f32), available: (f32, f32)) -> f32 {
+pub fn fit_zoom(fit: crate::app::Fit, size_mm: (f32, f32), available: (f32, f32)) -> f32 {
     use crate::app::Fit;
     // A point is 1/72 inch, so the page's millimetres at 72 dpi are its size in
-    // points; the area divided by that gives the resolution that fills it.
+    // points; the area divided by that gives the zoom that fills it.
     let points_per_mm = 72.0 / PIXELS_PER_MM as f32;
     let page_points = (
         size_mm.0.max(1.0) * points_per_mm,
@@ -209,20 +217,37 @@ pub fn fit_dpi(fit: crate::app::Fit, size_mm: (f32, f32), available: (f32, f32))
         Fit::Width => area.0 / page_points.0,
         Fit::Page => (area.0 / page_points.0).min(area.1 / page_points.1),
     };
-    (by_side * 72.0)
-        .clamp(MIN_DPI, MAX_DPI)
-        .min(dpi_that_fits(size_mm))
+    by_side
+        .clamp(MIN_ZOOM, MAX_ZOOM)
+        .min(fit_zoom_that_fits(size_mm))
 }
 
-/// Rasterize one page, within what the texture limit can hold.
-///
-/// The asked-for resolution is honoured only as far as the page size allows.
+/// The zoom a page can be drawn at and still be rasterized sharply, which is
+/// what `dpi_that_fits` permits, expressed as the zoom it implies.
+pub fn fit_zoom_that_fits(size_mm: (f32, f32)) -> f32 {
+    dpi_that_fits(size_mm) / 72.0
+}
+
+/// Rasterize one page, within what the texture limit can hold. Past the limit
+/// a whole page will not fit, so a reader zoomed in further asks for a part.
 pub fn render_page(
     doc: &Document,
     page: usize,
     dpi: f32,
 ) -> Result<RenderedPage, steleofd_error::OfdError> {
-    render_page_with_seals(doc, page, dpi, &[])
+    render_page_at(doc, page, dpi, None)
+}
+
+/// Rasterize the part of one page a reader can see, at the resolution its zoom
+/// asks for. `window` is the visible area in millimetres; a page small enough
+/// to fit the texture limit is rasterized whole, whatever the window says.
+pub fn render_page_at(
+    doc: &Document,
+    page: usize,
+    dpi: f32,
+    window: Option<steleofd_common::Rect>,
+) -> Result<RenderedPage, steleofd_error::OfdError> {
+    render_page_with_seals(doc, page, dpi, &[], window)
 }
 
 /// Rasterize one page and stamp any seals whose page it is onto the raster.
@@ -233,14 +258,24 @@ pub fn render_page_with_seals(
     page: usize,
     dpi: f32,
     seals: &[steleofd_core::Seal],
+    window: Option<steleofd_common::Rect>,
 ) -> Result<RenderedPage, steleofd_error::OfdError> {
     let size_mm = doc
         .page(page)
         .map(|p| (p.page_box.w as f32, p.page_box.h as f32))
         .unwrap_or((210.0, 297.0));
-    let effective = dpi.clamp(MIN_DPI, MAX_DPI).min(dpi_that_fits(size_mm));
+    let wanted = dpi.clamp(MIN_DPI, MAX_DPI);
+    // Past the limit a whole page cannot be held, but the part on screen can,
+    // so the zoom is kept and the window narrowed rather than the zoom cut.
+    let whole = wanted.min(dpi_that_fits(size_mm));
+    let (effective, window) = if whole < wanted {
+        (wanted, window.map(|w| narrow(w, wanted)))
+    } else {
+        (whole, None)
+    };
     let options = RenderOptions {
         dpi: f64::from(effective),
+        window,
         ..RenderOptions::default()
     };
     let png = doc.to_png(page, &options)?;
@@ -253,7 +288,7 @@ pub fn render_page_with_seals(
         })?;
     let mut rgba = decoded.to_rgba8();
     for seal in seals.iter().filter(|s| s.page == page) {
-        stamp_seal(&mut rgba, seal, f64::from(effective));
+        stamp_seal(&mut rgba, seal, f64::from(effective), options.window);
     }
     let image = egui::ColorImage::from_rgba_unmultiplied(
         [rgba.width() as usize, rgba.height() as usize],
@@ -262,10 +297,22 @@ pub fn render_page_with_seals(
     Ok(RenderedPage { image, size_mm })
 }
 
+/// Shrink a visible area until its raster fits the texture limit, keeping its
+/// top left corner: a reader scrolled to a corner keeps that corner.
+fn narrow(window: steleofd_common::Rect, dpi: f32) -> steleofd_common::Rect {
+    let most = f64::from(MAX_TEXTURE_SIDE) / (f64::from(dpi) / PIXELS_PER_MM);
+    steleofd_common::Rect::new(window.x, window.y, window.w.min(most), window.h.min(most))
+}
+
 /// Composite one seal onto the page raster, scaled to its boundary. A seal
 /// with no bytes, or one whose image will not decode, is skipped rather than
 /// failing the page, exactly as a missing image resource is.
-fn stamp_seal(raster: &mut image::RgbaImage, seal: &steleofd_core::Seal, dpi: f64) {
+fn stamp_seal(
+    raster: &mut image::RgbaImage,
+    seal: &steleofd_core::Seal,
+    dpi: f64,
+    window: Option<steleofd_common::Rect>,
+) {
     if seal.image.is_empty() {
         return;
     }
@@ -273,8 +320,14 @@ fn stamp_seal(raster: &mut image::RgbaImage, seal: &steleofd_core::Seal, dpi: f6
         return;
     };
     let mm = dpi / PIXELS_PER_MM;
+    // A window starts the raster at its own corner, so the seal moves back by
+    // as much as the window did.
+    let origin = window.map_or((0.0, 0.0), |w| (w.x, w.y));
     let box_ = seal.boundary;
-    let (dx, dy) = ((box_.x * mm).round() as i64, (box_.y * mm).round() as i64);
+    let (dx, dy) = (
+        ((box_.x - origin.0) * mm).round() as i64,
+        ((box_.y - origin.1) * mm).round() as i64,
+    );
     let (dw, dh) = ((box_.w * mm).round() as i64, (box_.h * mm).round() as i64);
     if dw <= 0 || dh <= 0 {
         return;

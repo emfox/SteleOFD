@@ -22,7 +22,7 @@ pub(crate) fn draw_text(
     pixmap: &mut Pixmap,
     run: &GlyphRun,
     state: &State,
-    page_box: Rect,
+    view: Rect,
     fonts: &FontManager,
     options: &RenderOptions,
 ) -> Result<TextOutcome> {
@@ -36,7 +36,7 @@ pub(crate) fn draw_text(
     let Some(face) = steleofd_display::run_face_for(fonts, run, &wanted) else {
         return Ok(TextOutcome::NoFace);
     };
-    draw_text_inner(pixmap, run, state, page_box, fonts, face, options)
+    draw_text_inner(pixmap, run, state, view, fonts, face, options)
 }
 
 /// The code points a run will draw, or nothing when its codes are glyph
@@ -52,7 +52,7 @@ pub(crate) fn draw_text_inner(
     pixmap: &mut Pixmap,
     run: &GlyphRun,
     state: &State,
-    page_box: Rect,
+    view: Rect,
     fonts: &FontManager,
     face: Arc<steleofd_font::FontFace>,
     options: &RenderOptions,
@@ -74,7 +74,7 @@ pub(crate) fn draw_text_inner(
         // Outlines are normalized to 1/1000 em with y pointing up, and the
         // run's own matrix scales, turns and places them from there.
         let glyph = run.glyph_matrix(offset);
-        let total = total_transform(state, &page_box, options.dpi);
+        let total = total_transform(state, &view, options.dpi);
         let ts_path = to_ts_path(&outline, total.pre_concat(to_ts(glyph)))?;
         if let Some(paint) = &run.fill {
             let p = solid_paint(paint);
@@ -104,7 +104,7 @@ pub(crate) fn draw_image(
     dst: Rect,
     transform: Affine,
     state: &State,
-    page_box: Rect,
+    view: Rect,
     options: &RenderOptions,
 ) -> Result<ImageOutcome> {
     if image.data.is_empty() {
@@ -133,11 +133,8 @@ pub(crate) fn draw_image(
     // `pre_concat` multiplies on the right, which would apply the placement
     // before the millimetre-to-pixel step and scale the rect's offset by it
     // twice; composing left to right keeps the offset in page units.
-    let total = to_ts(transform.then(pixel_to_page)).pre_concat(total_transform(
-        state,
-        &page_box,
-        options.dpi,
-    ));
+    let total =
+        to_ts(transform.then(pixel_to_page)).pre_concat(total_transform(state, &view, options.dpi));
     pixmap.draw_pixmap(
         0,
         0,

@@ -153,19 +153,19 @@ fn the_cache_keys_on_the_resolution_too() {
     wait_for_page(&mut app, page);
     let wide = app.cached(page).map(|p| p.image.size).unwrap();
 
-    app.set_dpi(200.0);
+    app.set_zoom(200.0 / 72.0);
     wait_for_page(&mut app, page);
     let larger = app.cached(page).map(|p| p.image.size).unwrap();
 
-    assert_ne!(wide, larger, "a different dpi is a different picture");
+    assert_ne!(wide, larger, "a different zoom is a different picture");
 }
 
 #[test]
 fn the_resolution_is_clamped_to_a_sane_range() {
     let mut app = App::new();
-    app.set_dpi(1.0);
+    app.set_zoom(0.001);
     assert_eq!(app.dpi(), MIN_DPI, "below the floor is clamped up");
-    app.set_dpi(100_000.0);
+    app.set_zoom(1000.0);
     assert_eq!(app.dpi(), MAX_DPI, "above the ceiling is clamped down");
 }
 
@@ -395,7 +395,7 @@ fn a_page_never_rasterizes_past_the_texture_limit() {
 #[test]
 fn a_rendered_page_is_small_enough_to_upload() {
     let mut app = open();
-    app.set_dpi(MAX_DPI);
+    app.set_zoom(MAX_DPI / 72.0);
     wait_for_page(&mut app, 0);
     let rendered = app.cached(0).expect("and lands in the cache");
     let (w, h) = (rendered.image.width(), rendered.image.height());

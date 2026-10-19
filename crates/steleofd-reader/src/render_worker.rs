@@ -6,6 +6,10 @@ use std::sync::mpsc::{Receiver, Sender};
 
 use crate::viewer::{self, RenderedPage};
 
+/// What has been asked for on a page: the resolution, and the visible area in
+/// whole millimetres, which is what makes two requests the same request.
+type Asked = (f32, Option<(i64, i64, i64, i64)>);
+
 /// One unit of work: rasterize `page` at `dpi`, as generation `generation`.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct RenderRequest {
@@ -15,6 +19,8 @@ pub struct RenderRequest {
     pub page: usize,
     /// Resolution to rasterize at, before the texture limit is applied.
     pub dpi: f32,
+    /// The part of the page on screen, in millimetres; `None` asks for it all.
+    pub window: Option<steleofd_common::Rect>,
 }
 
 /// A finished raster, carrying the generation it was requested under.
@@ -35,12 +41,10 @@ pub struct RenderQueue {
     from_worker: Receiver<RenderResult>,
     /// The newest generation handed out.
     newest: u64,
-    /// The newest generation handed out for each page, so a stale raster for one
-    /// page can be told apart from a wanted raster for another.
-    newest_for: std::collections::HashMap<usize, u64>,
     /// What has been asked for and not yet answered, so an identical repeat
-    /// request can be recognised instead of restamped.
-    in_flight: std::collections::HashMap<usize, f32>,
+    /// request can be recognised instead of restamped. The window is part of
+    /// the key: scrolling a zoomed page asks for different millimetres.
+    in_flight: std::collections::HashMap<usize, Asked>,
     /// The newest generation the worker has answered, if any.
     answered: Option<u64>,
 }
@@ -64,7 +68,6 @@ impl RenderQueue {
             to_worker,
             from_worker,
             newest: 0,
-            newest_for: std::collections::HashMap::new(),
             in_flight: std::collections::HashMap::new(),
             answered: None,
         }
@@ -81,8 +84,8 @@ impl RenderQueue {
     }
 
     /// Forget what is in flight, because the resolution changed.
-    /// A raster of the old resolution that lands now is stale and discarded;
-    /// `newest_for` is left alone so that stays true.
+    /// A raster of the old resolution that lands now is still kept, under its
+    /// own resolution; it is simply not the one on screen.
     pub fn rezoom(&mut self) {
         self.in_flight.clear();
         self.newest += 1;
@@ -92,17 +95,31 @@ impl RenderQueue {
     /// Ask for a page. Returns the generation the request was stamped with.
     /// Asking twice for the same page at the same resolution is not new
     /// information, and honouring every repeat would starve the worker.
-    pub fn request(&mut self, page: usize, dpi: f32) -> u64 {
-        if self.in_flight.get(&page).is_some_and(|asked| *asked == dpi) {
+    pub fn request(&mut self, page: usize, dpi: f32, window: Option<steleofd_common::Rect>) -> u64 {
+        // Rounded to whole millimetres, so a scroll of a tenth of one does not
+        // restamp a request the worker is already answering.
+        let key = window.map(|w| {
+            (
+                w.x.round() as i64,
+                w.y.round() as i64,
+                w.w.round() as i64,
+                w.h.round() as i64,
+            )
+        });
+        if self
+            .in_flight
+            .get(&page)
+            .is_some_and(|asked| *asked == (dpi, key))
+        {
             return self.newest;
         }
         self.newest += 1;
-        self.newest_for.insert(page, self.newest);
-        self.in_flight.insert(page, dpi);
+        self.in_flight.insert(page, (dpi, key));
         let request = RenderRequest {
             generation: self.newest,
             page,
             dpi,
+            window,
         };
         // A closed worker means the thread is gone; the caller then simply
         // never sees a result, which reads as "still pending" and is safe.
@@ -110,9 +127,9 @@ impl RenderQueue {
         self.newest
     }
 
-    /// Everything the worker has finished since the last call.
-    /// A result is dropped only when a newer request exists for the same page,
-    /// so the other pages the reader asked for still arrive.
+    /// Everything the worker has finished since the last call. A stale raster
+    /// is handed back too: it is cached under its own resolution and window,
+    /// so discarding it would leave the page blank at that zoom.
     pub fn drain(&mut self) -> Vec<RenderResult> {
         let mut done = Vec::new();
         while let Ok(result) = self.from_worker.try_recv() {
@@ -120,16 +137,8 @@ impl RenderQueue {
                 Some(seen) => seen.max(result.generation),
                 None => result.generation,
             });
-            let superseded = self
-                .newest_for
-                .get(&result.page)
-                .is_some_and(|newest| result.generation < *newest);
-            // Whatever came back, that page is no longer outstanding, so the
-            // next identical request is a real one again.
             self.in_flight.remove(&result.page);
-            if !superseded {
-                done.push(result);
-            }
+            done.push(result);
         }
         done
     }
@@ -213,8 +222,9 @@ fn run_worker(
         }
         let doc = document.as_ref().expect("opened just above");
         let stamps = seals.as_deref().unwrap_or(&[]);
-        let outcome = viewer::render_page_with_seals(doc, request.page, request.dpi, stamps)
-            .map_err(|e| e.to_string());
+        let outcome =
+            viewer::render_page_with_seals(doc, request.page, request.dpi, stamps, request.window)
+                .map_err(|e| e.to_string());
         let _ = finish.send(RenderResult {
             generation: request.generation,
             page: request.page,

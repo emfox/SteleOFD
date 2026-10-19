@@ -147,7 +147,9 @@ fn the_toolbar_labels_every_control() {
         node.role() == egui::accesskit::Role::Slider
             && node.label().unwrap_or_default().starts_with("Zoom")
     });
-    assert_eq!(zoom.accesskit_node().numeric_value(), Some(96.0));
+    // The slider's number is the percent it shows, not a resolution: a reader
+    // dragging 100 expects the page at its own size.
+    assert_eq!(zoom.accesskit_node().numeric_value(), Some(133.0));
 }
 
 #[test]
@@ -325,6 +327,39 @@ fn a_fit_recomputes_the_resolution_from_the_page_and_the_window() {
 }
 
 #[test]
+fn zooming_changes_how_large_the_page_is_drawn() {
+    // The zoom is a size, not a resolution. A page that only sharpened would
+    // leave the rectangle it occupies the same on every setting, which is what
+    // the reader reported: "it only gets clearer, never bigger".
+    let mut app = App::new();
+    app.open_path(&minimal()).expect("the fixture opens");
+    let mut harness = harness(app);
+    harness.state_mut().set_layout(Layout::Single);
+
+    let page_width = |harness: &Harness<'static, App>| {
+        harness
+            .query_all_by(|node| node.role() == egui::accesskit::Role::Image)
+            .next()
+            .map(|node| node.rect().width())
+    };
+
+    harness.state_mut().set_zoom(1.0);
+    let _ = harness.state_mut().page_image(0);
+    pump_until_rendered(&mut harness, &[0]);
+    let actual = page_width(&harness).expect("the page is drawn");
+
+    harness.state_mut().set_zoom(2.0);
+    let _ = harness.state_mut().page_image(0);
+    pump_until_rendered(&mut harness, &[0]);
+    let doubled = page_width(&harness).expect("the page is still drawn");
+
+    assert!(
+        doubled > actual * 1.9,
+        "twice the zoom must be twice the size: {actual} then {doubled}"
+    );
+}
+
+#[test]
 fn facing_layout_draws_both_pages_of_the_spread() {
     // Two pages on screen means two images; single layout means one. Counting
     // image nodes is what proves the layout reaches the canvas, since the
@@ -347,7 +382,7 @@ fn facing_layout_draws_both_pages_of_the_spread() {
     assert_eq!(images(&harness), 1, "single layout shows one page");
 
     harness.state_mut().set_layout(Layout::Facing);
-    harness.state_mut().set_dpi(96.0);
+    harness.state_mut().set_zoom(96.0 / 72.0);
     for page in [0, 1] {
         harness
             .state_mut()

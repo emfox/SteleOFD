@@ -25,6 +25,10 @@ pub struct RenderOptions {
     pub background: Option<Color>,
     /// Hard ceiling on total pixels, guarding against hostile page boxes.
     pub max_pixels: usize,
+    /// The part of the page to rasterize, in millimetres. A zoomed-in view
+    /// only needs the part on screen, which keeps a large page inside the
+    /// texture limit instead of capping the zoom.
+    pub window: Option<Rect>,
 }
 
 impl Default for RenderOptions {
@@ -33,6 +37,7 @@ impl Default for RenderOptions {
             dpi: 96.0,
             background: Some(Color::WHITE),
             max_pixels: 64 * 1024 * 1024,
+            window: None,
         }
     }
 }
@@ -110,7 +115,21 @@ pub fn render_page(
     fonts: &FontManager,
     options: &RenderOptions,
 ) -> Result<RasterOutput> {
-    let (width, height) = page.page_box.size_px(options.dpi);
+    // A window is clipped to the page, so a view past the edge rasterizes to
+    // nothing rather than to a negative size.
+    let view = match options.window {
+        Some(w) => {
+            let x1 =
+                w.x.clamp(page.page_box.x, page.page_box.x + page.page_box.w);
+            let y1 =
+                w.y.clamp(page.page_box.y, page.page_box.y + page.page_box.h);
+            let x2 = (w.x + w.w).clamp(x1, page.page_box.x + page.page_box.w);
+            let y2 = (w.y + w.h).clamp(y1, page.page_box.y + page.page_box.h);
+            Rect::new(x1, y1, x2 - x1, y2 - y1)
+        }
+        None => page.page_box,
+    };
+    let (width, height) = view.size_px(options.dpi);
     if (width as usize).saturating_mul(height as usize) > options.max_pixels {
         return Err(OfdError::Render(RenderError::BudgetExceeded(format!(
             "page raster {width}x{height} exceeds {} pixels",
@@ -148,7 +167,7 @@ pub fn render_page(
             }
             DrawOp::Transform(t) => state.ctm = state.ctm.then(*t),
             DrawOp::ClipPath { path, rule } => {
-                let total = total_transform(&state, &page.page_box, options.dpi);
+                let total = total_transform(&state, &view, options.dpi);
                 let ts_path = to_ts_path(path, total)?;
                 let mut mask = clip_mask(&state, width, height)?;
                 mask.intersect_path(&ts_path, fill_rule(*rule), true, Transform::identity());
@@ -159,7 +178,7 @@ pub fn render_page(
                 // way drawn text is. Without its face there is nothing to
                 // intersect, so the clip is left as it was.
                 if let Some(face) = steleofd_display::run_face(fonts, run) {
-                    let total = total_transform(&state, &page.page_box, options.dpi);
+                    let total = total_transform(&state, &view, options.dpi);
                     let mut mask = clip_mask(&state, width, height)?;
                     for ts_path in glyph_outlines(fonts, run, face, total)? {
                         mask.intersect_path(
@@ -179,7 +198,7 @@ pub fn render_page(
                 stroke_style,
                 rule,
             } => {
-                let total = total_transform(&state, &page.page_box, options.dpi);
+                let total = total_transform(&state, &view, options.dpi);
                 let ts_path = to_ts_path(path, total)?;
                 if let Some(paint) = fill {
                     match paint {
@@ -227,7 +246,7 @@ pub fn render_page(
                 }
             }
             DrawOp::Text(run) => {
-                match draw_text(&mut pixmap, run, &state, page.page_box, fonts, options)? {
+                match draw_text(&mut pixmap, run, &state, view, fonts, options)? {
                     TextOutcome::Drawn => {}
                     TextOutcome::ShortGlyphs { glyphs } => {
                         missing_glyph_runs += 1;
@@ -245,20 +264,10 @@ pub fn render_page(
                 image,
                 dst,
                 transform,
-            } => {
-                match draw_image(
-                    &mut pixmap,
-                    image,
-                    *dst,
-                    *transform,
-                    &state,
-                    page.page_box,
-                    options,
-                )? {
-                    ImageOutcome::Drawn => {}
-                    ImageOutcome::Failed => skipped_image_ops += 1,
-                }
-            }
+            } => match draw_image(&mut pixmap, image, *dst, *transform, &state, view, options)? {
+                ImageOutcome::Drawn => {}
+                ImageOutcome::Failed => skipped_image_ops += 1,
+            },
         }
     }
 

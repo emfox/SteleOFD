@@ -11,10 +11,11 @@ use crate::export_worker::ExportFormat;
 use crate::icons::{self, Icon};
 use crate::shortcuts;
 use crate::theme::{self, Style, Token};
-use crate::viewer::{DroppedFile, Layout, MAX_DPI, MIN_DPI};
+use crate::viewer::{DroppedFile, Layout, MAX_ZOOM, MIN_ZOOM};
 
-/// The widest a page is drawn, so a large window does not blur a small page.
-pub const MAX_PAGE_WIDTH: f32 = 900.0;
+/// The zoom range the slider offers, in percent.
+const MIN_PERCENT: f32 = MIN_ZOOM * 100.0;
+const MAX_PERCENT: f32 = MAX_ZOOM * 100.0;
 
 /// What the window wants the host to do after a frame, if anything.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -612,11 +613,14 @@ fn draw_toolbar(ui: &mut Ui, app: &mut App) {
             draw_paging(ui, app);
             ui.add_space(theme::Space::Medium.points());
             let sharp = app.high_contrast();
+            // A fit needs a page to fit; the button disables rather than
+            // vanishes, as the guideline asks of every control in this bar.
+            let open = app.is_open();
             let fit_width = app.text(ReaderMessage::FitWidth);
             let width_on = app.fit() == Some(Fit::Width);
             if icon_toggle(
                 ui,
-                true,
+                open,
                 sharp,
                 width_on,
                 Glyph {
@@ -632,7 +636,7 @@ fn draw_toolbar(ui: &mut Ui, app: &mut App) {
             let page_on = app.fit() == Some(Fit::Page);
             if icon_toggle(
                 ui,
-                true,
+                open,
                 sharp,
                 page_on,
                 Glyph {
@@ -646,7 +650,9 @@ fn draw_toolbar(ui: &mut Ui, app: &mut App) {
             }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 ui.add_space(theme::Space::Medium.points());
-                let mut dpi = app.dpi();
+                // Whole percent, the same number the label shows: a slider
+                // claiming 133.3 beside a label reading 133 is two answers.
+                let mut percent = (app.zoom() * 100.0).round();
                 // The catalogue entry carries a percent placeholder, so the
                 // slider is labelled with the value already substituted.
                 let text = app.zoom_label();
@@ -658,7 +664,7 @@ fn draw_toolbar(ui: &mut Ui, app: &mut App) {
                     .scope(|ui| {
                         ui.visuals_mut().widgets.inactive.bg_fill = grip;
                         ui.add(
-                            egui::Slider::new(&mut dpi, MIN_DPI..=MAX_DPI)
+                            egui::Slider::new(&mut percent, MIN_PERCENT..=MAX_PERCENT)
                                 .text(text)
                                 .handle_shape(egui::style::HandleShape::Circle),
                         )
@@ -666,7 +672,7 @@ fn draw_toolbar(ui: &mut Ui, app: &mut App) {
                     })
                     .inner;
                 if changed {
-                    app.set_dpi(dpi);
+                    app.set_zoom(percent.round() / 100.0);
                 }
                 ui.add_space(theme::Space::Medium.points());
                 draw_exports(ui, app);
@@ -975,7 +981,7 @@ fn draw_pages(ui: &mut Ui, app: &mut App) {
             };
             ui.with_layout(layout, |ui| {
                 for page in pages {
-                    draw_one_page(ui, app, page, horizontal);
+                    draw_one_page(ui, app, page);
                 }
             });
         });
@@ -985,32 +991,34 @@ fn draw_pages(ui: &mut Ui, app: &mut App) {
     }
 }
 
-/// Paint a single cached page, sized to the space a spread leaves for it.
-fn draw_one_page(ui: &mut Ui, app: &mut App, page: usize, horizontal: bool) {
+/// Paint a single cached page, at the size the zoom asks for.
+fn draw_one_page(ui: &mut Ui, app: &mut App, page: usize) {
     let Some(rendered) = app.cached(page) else {
         return;
     };
     let image = rendered.image.clone();
     let aspect = image.height() as f32 / image.width().max(1) as f32;
-    let available = if horizontal {
-        // Two pages share the row, minus the item spacing between them.
-        (ui.available_width() - ui.spacing().item_spacing.x) / 2.0
-    } else {
-        ui.available_width()
-    };
-    let width = available.clamp(1.0, MAX_PAGE_WIDTH);
+    // The page is drawn at its own size times the zoom, not at the room beside
+    // it: taking the room would make the zoom a no-op, which is what it was.
+    let width = rendered.size_mm.0 * app.zoom();
     let size = egui::vec2(width, width * aspect);
-    // One texture per page and resolution; the name carries both so the cache
-    // and the texture cannot disagree.
-    let name = format!("page-{page}");
-    let texture = ui.ctx().load_texture(name, image, TextureOptions::LINEAR);
-    let source = egui::load::SizedTexture::new(texture.id(), size);
-    let response = ui.image(source);
-    // Highlights are painted over the page, in the rectangle the page occupies
-    // on screen. They are between the image and the next page, so a spread
-    // draws its highlights on the correct page rather than the last one.
-    draw_highlights(ui, app, page, response.rect, size);
-    draw_annotations_on(ui, app, page, response.rect, size);
+    // A page wider than the canvas has to reach the scroll area, which sizes
+    // itself from what its children claim. A label this wide, with the page
+    // drawn over it, claims the width without adding anything to look at.
+    let claimed = egui::vec2(width, 0.0);
+    ui.allocate_ui_with_layout(claimed, egui::Layout::top_down(egui::Align::Center), |ui| {
+        ui.set_min_width(width);
+        // One texture per page and resolution; the name carries both, so
+        // the cache and the texture cannot disagree.
+        let name = format!("page-{page}");
+        let texture = ui.ctx().load_texture(name, image, TextureOptions::LINEAR);
+        let source = egui::load::SizedTexture::new(texture.id(), size);
+        let response = ui.image(source);
+        // Highlights are painted over the page, in the rectangle it
+        // occupies on screen, so a spread marks the right page.
+        draw_highlights(ui, app, page, response.rect, size);
+        draw_annotations_on(ui, app, page, response.rect, size);
+    });
 }
 
 /// Outline the annotation boundary on one page, in the space it was drawn.
