@@ -333,7 +333,7 @@ fn rasterize(icon: Icon, colour: Color32) -> egui::ColorImage {
     let vertices = triangles(icon, colour);
     let size = [RASTER as usize, RASTER as usize];
     let mut pixels = vec![Color32::TRANSPARENT; size[0] * size[1]];
-    for triangle in vertices.chunks_exact(3) {
+    for triangle in vertices.as_chunks::<3>().0 {
         let points = [
             (triangle[0].x, triangle[0].y),
             (triangle[1].x, triangle[1].y),
@@ -400,12 +400,12 @@ fn triangles(icon: Icon, colour: Color32) -> Vec<Pos2> {
             _ => None,
         })
         .flat_map(|mesh| {
+            let at = |index: u32| mesh.vertices[index as usize].pos;
             mesh.indices
-                .chunks_exact(3)
-                .map(|turn| {
-                    let at = |index: u32| mesh.vertices[index as usize].pos;
-                    [at(turn[0]), at(turn[1]), at(turn[2])]
-                })
+                .as_chunks::<3>()
+                .0
+                .iter()
+                .map(|turn| [at(turn[0]), at(turn[1]), at(turn[2])])
                 .collect::<Vec<[Pos2; 3]>>()
         })
         .flatten()

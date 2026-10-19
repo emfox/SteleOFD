@@ -27,6 +27,10 @@ pub enum Token {
     Unverified,
     /// Behind the page itself.
     Canvas,
+    /// A search hit drawn on the page, and the one the reader is on.
+    Hit,
+    /// An annotation's boundary drawn on the page.
+    Mark,
 }
 
 /// A scheme is light or dark; it is the column of the table, not a comparison.
@@ -37,7 +41,7 @@ pub(crate) enum Scheme {
 }
 
 /// The light column of section 5.1, indexed by [`Token`].
-const LIGHT: [Color32; 10] = [
+const LIGHT: [Color32; 12] = [
     Color32::from_rgb(0xfa, 0xfa, 0xfa),
     Color32::from_rgb(0xff, 0xff, 0xff),
     Color32::from_rgb(0x1a, 0x1a, 0x1a),
@@ -48,10 +52,12 @@ const LIGHT: [Color32; 10] = [
     Color32::from_rgb(0xb4, 0x2a, 0x2a),
     Color32::from_rgb(0x8a, 0x61, 0x00),
     Color32::from_rgb(0xee, 0xee, 0xee),
+    Color32::from_rgb(0x8a, 0x61, 0x00),
+    Color32::from_rgb(0x15, 0x59, 0xb0),
 ];
 
 /// The dark column of section 5.1, indexed by [`Token`].
-const DARK: [Color32; 10] = [
+const DARK: [Color32; 12] = [
     Color32::from_rgb(0x24, 0x24, 0x24),
     Color32::from_rgb(0x30, 0x30, 0x30),
     Color32::from_rgb(0xf2, 0xf2, 0xf2),
@@ -62,6 +68,8 @@ const DARK: [Color32; 10] = [
     Color32::from_rgb(0xf0, 0x73, 0x6a),
     Color32::from_rgb(0xe0, 0xb3, 0x41),
     Color32::from_rgb(0x1a, 0x1a, 0x1a),
+    Color32::from_rgb(0x8a, 0x61, 0x00),
+    Color32::from_rgb(0x15, 0x59, 0xb0),
 ];
 
 /// The high-contrast substitution of section 5.1: pure black or white text and
@@ -379,7 +387,17 @@ mod tests {
     use super::*;
 
     /// Every token, so a new one is covered by the contrast checks below.
-    const ALL_TOKENS: [Token; 10] = [
+    /// Every token a word can be drawn in. `Accent` and `Mark` are not among
+    /// them: one is a selection fill and a link colour, the other an outline.
+    const FOREGROUNDS: [Token; 5] = [
+        Token::Text,
+        Token::Dim,
+        Token::Valid,
+        Token::Tampered,
+        Token::Unverified,
+    ];
+
+    const ALL_TOKENS: [Token; 12] = [
         Token::Surface,
         Token::Panel,
         Token::Text,
@@ -390,6 +408,8 @@ mod tests {
         Token::Tampered,
         Token::Unverified,
         Token::Canvas,
+        Token::Hit,
+        Token::Mark,
     ];
 
     #[test]
@@ -408,14 +428,50 @@ mod tests {
 
     #[test]
     fn body_text_clears_the_readable_contrast() {
-        // 4.5:1 is the level ordinary text is expected to reach.
+        // 4.5:1 is the level ordinary text is expected to reach. Every colour
+        // that carries words is checked on every surface words land on, since
+        // a token that passed on a panel is not thereby readable on the well.
         for scheme in [Scheme::Light, Scheme::Dark] {
-            for token in [Token::Text, Token::Accent, Token::Tampered] {
-                let ratio = contrast(
-                    colour_in(scheme, false, token),
-                    colour_in(scheme, false, Token::Panel),
+            for token in FOREGROUNDS {
+                for surface in [Token::Panel, Token::Surface, Token::Canvas] {
+                    let ratio = contrast(
+                        colour_in(scheme, false, token),
+                        colour_in(scheme, false, surface),
+                    );
+                    assert!(
+                        ratio >= 4.5,
+                        "{token:?} on {surface:?} in {scheme:?} is {ratio:.1}:1"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_shape_on_a_page_clears_the_visible_contrast() {
+        // A hit and an annotation boundary are drawn over the page, and the
+        // page is white in every theme. 3:1 is what a shape must reach.
+        for scheme in [Scheme::Light, Scheme::Dark] {
+            for token in [Token::Hit, Token::Mark] {
+                let ratio = contrast(colour_in(scheme, false, token), Color32::WHITE);
+                assert!(
+                    ratio >= 3.0,
+                    "{token:?} on a page in {scheme:?} is {ratio:.1}:1"
                 );
-                assert!(ratio >= 4.5, "{token:?} on {scheme:?} is {ratio:.1}:1");
+            }
+        }
+    }
+
+    #[test]
+    fn a_high_contrast_shape_clears_the_same_floor() {
+        // A theme switch must not make a hit harder to find than it found it.
+        for scheme in [Scheme::Light, Scheme::Dark] {
+            for token in [Token::Hit, Token::Mark] {
+                let ratio = contrast(colour_in(scheme, true, token), Color32::WHITE);
+                assert!(
+                    ratio >= 4.5,
+                    "{token:?} on a page in high contrast {scheme:?} is {ratio:.1}:1"
+                );
             }
         }
     }

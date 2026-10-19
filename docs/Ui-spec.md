@@ -411,10 +411,24 @@ the zones.
 | `tampered` | `#b42a2a` | `#f0736a` | A signature that does not |
 | `unverified` | `#8a6100` | `#e0b341` | A signature nothing can confirm |
 | `canvas` | `#eeeeee` | `#1a1a1a` | Behind the page itself |
+| `hit` | `#8a6100` | `#8a6100` | A search hit drawn on the page |
+| `mark` | `#1559b0` | `#1559b0` | An annotation boundary on the page |
 
 The light and dark values are different colours rather than one colour at two
 opacities: a red that reads as "wrong" on white turns muddy on black, and the
 dark column exists so it does not.
+
+`hit` and `mark` are the exception, and the reason is worth stating: they are
+drawn **on the page**, and a rendered page is white in every theme, because a
+document's own background is what it is rather than what the reader prefers. A
+colour chosen for a dark canvas would be invisible on that paper, so both
+columns carry the same dark value — the one thing on screen that must not follow
+the theme.
+
+Neither is used for text, so neither appears in the contrast checks for words.
+They are held to 3:1 on white instead, which is the level a shape has to reach;
+the earlier revision reached it by fading the colour for a hit the reader was
+not on, and that fade is gone.
 
 High contrast does not add entries to this table. It replaces `text` with pure
 black or white, `dim` with the same, and the three verdict colours with a darker

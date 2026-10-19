@@ -1022,8 +1022,9 @@ fn draw_annotations_on(ui: &Ui, app: &App, page: usize, area: egui::Rect, drawn:
         if !annotation.visible {
             continue;
         }
-        let colour =
-            colour(ui, app, Token::Accent).gamma_multiply(if current { 1.0 } else { 0.55 });
+        // A boundary is a shape rather than text, so it is held to 3:1 on the
+        // paper it is drawn over; weight separates the one being visited.
+        let colour = colour(ui, app, Token::Mark);
         let scaled = scale_hit(boundary, page_box, area, drawn);
         painter.rect_stroke(
             scaled,
@@ -1047,16 +1048,20 @@ fn draw_highlights(ui: &Ui, app: &App, page: usize, area: egui::Rect, drawn: egu
     };
     let painter = ui.painter();
     for (rect, current) in hits {
-        // The current hit is drawn full strength and the rest faded, so
-        // "where am I" and "where are the others" both read at a glance.
-        let colour =
-            colour(ui, app, Token::Unverified).gamma_multiply(if current { 1.0 } else { 0.45 });
+        // Presence of a hit and the reader's place among them are told apart by
+        // weight rather than by fading to invisibility: a faded outline over
+        // paper disagrees with whichever page it lands on.
+        let colour = colour(ui, app, Token::Hit);
         let scaled = scale_hit(rect, page_box, area, drawn);
-        painter.rect_filled(scaled, 0.0, colour.gamma_multiply(0.35));
+        painter.rect_filled(
+            scaled,
+            0.0,
+            colour.gamma_multiply(if current { 0.20 } else { 0.10 }),
+        );
         painter.rect_stroke(
             scaled,
             0.0,
-            egui::Stroke::new(1.0, colour),
+            egui::Stroke::new(if current { 2.0 } else { 1.0 }, colour),
             egui::StrokeKind::Inside,
         );
     }
