@@ -30,7 +30,7 @@ What the window takes from it, and where each requirement lands:
 | A panel that is toggled is a utility pane, not a sidebar: it does not cross the header bar | Patterns · Utility panes | §2 Z1, Z5–Z8 |
 | Header controls carry no frame, and groups are separated by space rather than by a rule | Patterns · Header bars | §2.1, §5.3 |
 | A button holds an icon or a label, and a header should hold neither of the label-only kind | Patterns · Buttons, Header bars | §2.1, §5.4 |
-| Icons are symbolic line drawings on the 16-unit grid, recoloured with the theme | Guidelines · Icons and artwork | §5.4 |
+| Icons are the Adwaita symbolic set on its 16-unit grid, filled in the window's current colour | Guidelines · Icons and artwork | §5.4 |
 | Widgets keep a stable position as state changes, so a reader's muscle memory holds | Patterns · Header bars | §2, §4 |
 | Three theme choices — follow the system, light, dark — never only two | Guidelines · UI styling | §2 Z9, §5 |
 | A high-contrast mode exists and is tested, because a theme that only adjusts hues fails the readers who need it | Guidelines · UI styling | §2 Z9, §5 |
@@ -48,9 +48,9 @@ is drawn by `egui` on Windows, macOS, Linux, Android and the browser alike, and 
 GNOME-only widget set would leave four of those five with a window glued
 together from two toolkits. Z1 is this window's header bar and Z2 its toolbar;
 both are drawn to the clauses above, and §2.1 records where each kind of control
-goes. The symbolic icon set a primary menu button is supposed to carry is drawn
-in the window's own toolkit rather than borrowed from an icon theme, and §5.4
-says why.
+goes. The symbolic icon set a primary menu button is supposed to carry is the
+desktop's own artwork, filled by the window's toolkit rather than by a GTK
+resource pipeline, and §5.4 says how.
 
 ## 1. Layers
 
@@ -518,33 +518,59 @@ the guideline puts each of them.
 ### 5.4 Icons
 
 A control that names itself is a label; a control that stands for an action is an
-icon. The window has one set, in `crates/steleofd-reader/src/icons.rs`, and every
-icon-only control is drawn from it rather than from a text character.
+icon. The window has one set, in `crates/steleofd-reader/src/icons/`.
 
-The grid is the one the desktop's symbolic icons use, so a glyph here and a glyph
-in the icon theme read as the same drawing:
+The set is **the desktop's own drawing**, not a redrawing of it. Every glyph is
+the Adwaita symbolic icon of the same name, stored as that file's `d` attributes
+and filled by the reader at draw time:
 
 | Property | Value |
 | --- | --- |
-| Square | 16 units |
-| Stroke | 1.5 units, round caps and joins |
-| Fill | none — symbolic icons are outlines |
+| Source | `adwaita-icon-theme` 44.0, `symbolic/<context>/<name>.svg` |
+| Square | 16 units, `fill` paths, no strokes |
 | Colour | the window's own token, so a glyph follows the theme and high contrast |
+| Fill rule | nonzero winding, as an SVG path fills by default |
+| Licence | CC BY-SA 3.0 US, drawn by the GNOME Project; see [NOTICE.md](../NOTICE.md) |
 
-They are **geometry rather than image files**. Three reasons, in the order they
-mattered: a theme switch recolours a glyph with no second asset, the build
-carries no rasters that a scaled screen would have to blur, and a maintainer sees
-what a glyph is in the source instead of opening a binary. The alternative —
-vendoring the icon theme's SVGs — was rejected because this window is drawn by
-`egui` on five platforms and has no GTK resource pipeline to load them through;
-the set is small and fixed, so drawing it costs less than a dependency.
+An earlier version of this set drew each glyph by hand on the 16-unit grid, on
+the reasoning that a shape drawn from the same numbers would read the same. It
+did not. A hand-drawn approximation of `document-open-symbolic` came out as two
+offset rectangles, which is a printer, not an open folder — a reviewer looking at
+the button could not tell what it did. A drawing that stands for something has
+one correct shape and it is the one people already recognise, so the theme's
+outline is carried verbatim and nothing is improvised.
+
+Three details follow from carrying the file rather than redrawing it:
+
+- **The paths are re-encoded, not rewritten.** The theme writes circles and
+  rounded corners with `s`, the shorthand that repeats the previous control
+  point; this project reads `M`, `L`, `H`, `V`, `C` and `Z`, so each `s` appears
+  here as the equivalent `c` with the mirrored control point written out. The
+  curve is the same curve, and no control point is moved.
+- **The fill is computed here.** `egui` fills a polygon as a fan over the points
+  it is given, which turns an outlined glyph into a solid one — half these icons
+  are an outline with a hole in it. So the fill is done by casting a scan line
+  per slice of the grid and keeping the runs where the winding number is not
+  zero. That is the same rule an SVG renderer applies, and it is why the close
+  button shows two crossing bars rather than a filled square.
+- **Two tones are one fill.** Where the theme fades a path (`fill-opacity="0.349"`,
+  the page behind the page), the run is drawn at that share of the token's alpha
+  instead of a second colour, so a theme switch still recolours all of it.
 
 `Icon` names what a glyph *does* (`Icon::Next`, not `Icon::ArrowRight`), and
-`Icon::theme_name` records the name the icon theme gives the same idea
-(`go-next-symbolic`), so a maintainer adding a glyph looks the standard one up
-first. `tests/icons.rs` draws every variant and asserts that each becomes
-triangles, that none escapes its 16-unit box, and that the theme names stay
-distinct.
+`Icon::theme_name` is the theme's name for it (`go-next-symbolic`) — the same
+string as the file the path came from, which is how a reviewer checks one. It
+also gives `texture` the name it registers the picture under, so the glyph cache
+holds one entry per icon and colour.
+
+`zoom-fit-page-symbolic` is the one name the theme does not publish. `FitPage`
+keeps the name because it says what the control does, and carries the theme's
+`zoom-fit-best-symbolic` outline.
+
+`tests/icons.rs` draws every variant and asserts that each becomes a filled
+drawing, that none escapes its 16-unit box, that every one is large enough to be
+a control, and that no two are the same drawing — the last is what catches a
+glyph that was pasted into the wrong arm of the table.
 
 A glyph carries no words, and a control needs a name, so `Glyph` — the struct
 that pairs an `Icon` with its wording — sets the accessible name from the same
