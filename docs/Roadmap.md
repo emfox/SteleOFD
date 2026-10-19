@@ -57,7 +57,7 @@ because diagnosing it needs a device or an emulator that no other row does; a
 
 | # | Item | Target | Why it ranks here | Done when |
 | --- | --- | --- | --- | --- |
-| R3 | **The Android build crashes on open.** The archive installs, then exits before a page is drawn. | `0.4+` | A crash outranks a slow page, so it sits above the packaging work; but it needs a device or an emulator to diagnose, which no other row does, so it is not promised to a version. | The arm64 archive from the release page opens `ofdrw/999.ofd` on a device and on an emulator, and the crash has a regression test that fails without the fix. |
+| R3 | **The Android build crashes on open.** The archive installs, then exits before a page is drawn. One cause is found and fixed: the Android `eframe` features asked for Wayland and X11, which no device has, so the loaded library quit. The build now proves that target compiles on every push, and the entry point reports on logcat. What remains is that no run on a device has confirmed it. | `0.4+` | A crash outranks a slow page, so it sits above the packaging work; but the last step needs a device or an emulator, which no other row does, so it is not promised to a version. | The arm64 archive from the release page opens `ofdrw/999.ofd` on a device and on an emulator, and the crash has a regression test that fails without the fix. |
 
 ### 0.5+
 
