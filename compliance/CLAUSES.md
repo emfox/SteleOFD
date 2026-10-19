@@ -27,7 +27,7 @@ beside it, `GBT33190-2016.zh_CN.md`, which the pinned fixtures repository
 holds next to the issued document:
 
 - The transcription was produced mechanically from the PDF by
-  `gb-t-33190-text/scripts/pdf_to_markdown.py`, which is kept with the text
+  `gbt33190-standard/scripts/pdf_to_markdown.py`, which is kept with the text
   because its only output is the text. Assembling a heading there means
   knowing that `8.3.3` is printed as three runs on three baselines and that a
   deep number is split across four, so that knowledge stays with the

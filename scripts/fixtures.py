@@ -47,7 +47,7 @@ import zipfile
 
 # The fixtures repository, pinned by commit: see the module docstring.
 FIXTURES = "emfox/OFD-fixtures"
-COMMIT = "627bec98e2d707ddcc0e5668686ad640858e37eb"
+COMMIT = "1ad683e"
 ARCHIVE = "https://codeload.github.com/" + FIXTURES + "/tar.gz/" + COMMIT
 USER_AGENT = "steleofd-fixtures"
 

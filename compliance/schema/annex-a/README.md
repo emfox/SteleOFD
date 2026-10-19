@@ -18,7 +18,7 @@ drawn with a bounding box about 3.6pt taller than the letters, so turning the
 page into text means clustering words by the centre of their bounding box,
 restoring the spaces the extractor drops inside long runs, and splitting
 `elementname=` back into two tokens. That work belongs to the transcription,
-and is done by `gb-t-33190-text/scripts/pdf_to_markdown.py` alongside the text
+and is done by `gbt33190-standard/scripts/pdf_to_markdown.py` alongside the text
 it produces.
 
 ```

@@ -41,7 +41,7 @@ from pathlib import Path
 
 from fixtures import FixtureError, Fixtures
 
-SET = "gb-t-33190"
+SET = "gbt33190-samples"
 
 # The published archive, and the archive it contains. Both are ZIPs.
 ARCHIVE = "Desktop.zip"
@@ -196,7 +196,7 @@ def main() -> int:
     parser.add_argument(
         "--out",
         type=Path,
-        default=Path(__file__).resolve().parent.parent / "tests" / "fixtures" / "gb-t-33190",
+        default=Path(__file__).resolve().parent.parent / "tests" / "fixtures" / "gbt33190-samples",
         help="where the samples land",
     )
     parser.add_argument("--timeout", type=float, default=180.0)

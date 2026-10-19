@@ -75,7 +75,7 @@ logs/
 # Fetched samples stay out even though fixtures generally do not: the rule
 # below would otherwise re-include them.
 /tests/fixtures/ofdrw/
-/tests/fixtures/gb-t-33190/
+/tests/fixtures/gbt33190-samples/
 !tests/fixtures/**/*.ofd
 !docs/**/*.ofd
 !compliance/fixtures/**/*.ofd

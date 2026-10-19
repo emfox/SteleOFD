@@ -232,7 +232,7 @@ CHECKS: tuple[Check, ...] = (
 
 SAMPLE_DIRS = {
     "ofdrw-samples": ("tests/fixtures/ofdrw", "scripts/fetch_ofdrw.py"),
-    "gb-samples": ("tests/fixtures/gb-t-33190", "scripts/fetch_gb_samples.py"),
+    "gb-samples": ("tests/fixtures/gbt33190-samples", "scripts/fetch_gb_samples.py"),
 }
 
 
