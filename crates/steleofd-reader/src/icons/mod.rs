@@ -283,16 +283,16 @@ pub fn paint(painter: &egui::Painter, rect: Rect, icon: Icon, colour: Color32) {
                 Color32::from_rgba_unmultiplied(colour.r(), colour.g(), colour.b(), alpha)
             }
         };
-        // A band is a run on one scanline, so it lands as a thin rectangle. Its
-        // corners are exact and it tiles with its neighbours, so no seam shows.
-        // Rows snap to the pixel grid and overlap, so neighbours cannot seam.
+        // Both edges snap to the pixel grid, so a row's bottom edge is the
+        // next row's top edge exactly: neighbours meet without a seam, and
+        // without an overlap, which would darken the join.
         let y0 = ((rect.min.y + band.top * span / SIZE) * pp).round() / pp;
         let y1 = ((rect.min.y + (band.top + band.height) * span / SIZE) * pp).round() / pp;
         let points = [
             Pos2::new(rect.min.x + band.from * span / SIZE, y0),
             Pos2::new(rect.min.x + band.to * span / SIZE, y0),
-            Pos2::new(rect.min.x + band.to * span / SIZE, y1 + 1.0 / pp),
-            Pos2::new(rect.min.x + band.from * span / SIZE, y1 + 1.0 / pp),
+            Pos2::new(rect.min.x + band.to * span / SIZE, y1),
+            Pos2::new(rect.min.x + band.from * span / SIZE, y1),
         ];
         shapes.push(Shape::convex_polygon(
             points.to_vec(),
