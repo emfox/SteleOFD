@@ -8,18 +8,21 @@ use steleofd_core::{Document, RenderOptions};
 pub const MIN_DPI: f32 = 24.0;
 /// The upper bound the reader asks for; the page size may cap it lower.
 pub const MAX_DPI: f32 = 300.0;
-/// The resolution a freshly opened document is shown at.
+/// The resolution a freshly opened document is shown at, which is the one a
+/// desktop screen is assumed to have and the one Acrobat and browsers use.
 pub const DEFAULT_DPI: f32 = 96.0;
+/// Millimetres in an inch, the constant every conversion below divides by.
+pub const MM_PER_INCH: f64 = 25.4;
+/// Points in a millimetre: a point is 1/72 inch, so A4 is 595 by 842 points.
+pub const POINTS_PER_MM: f32 = 72.0 / MM_PER_INCH as f32;
 /// The zoom bounds, as the share of a page's 72 dpi size it is drawn at. A
-/// point is 1/72 inch, so this is also the page's size in points times up to
-/// three, which is a sheet of A4 at 887 points wide.
+/// point is 1/72 inch, so this is the page's size in points times up to three.
 pub const MIN_ZOOM: f32 = MIN_DPI / 72.0;
 /// The upper zoom, matching `MAX_DPI`.
 pub const MAX_ZOOM: f32 = MAX_DPI / 72.0;
-/// The zoom a document is opened at.
+/// The zoom a document is opened at: its size at `DEFAULT_DPI`, so A4 opens
+/// 794 points wide, which is what a 96 dpi screen shows an inch as.
 pub const DEFAULT_ZOOM: f32 = DEFAULT_DPI / 72.0;
-/// The pixels per millimetre at a given resolution, used to size a page.
-pub const PIXELS_PER_MM: f64 = 25.4;
 
 /// A rasterized page, decoded and ready to paint.
 pub struct RenderedPage {
@@ -196,7 +199,7 @@ pub const MAX_TEXTURE_SIDE: u32 = 2048;
 /// here is arithmetic rather than preference.
 pub fn dpi_that_fits(size_mm: (f32, f32)) -> f32 {
     let longest = size_mm.0.max(size_mm.1).max(1.0);
-    let fit = f64::from(MAX_TEXTURE_SIDE) * PIXELS_PER_MM / f64::from(longest);
+    let fit = f64::from(MAX_TEXTURE_SIDE) * MM_PER_INCH / f64::from(longest);
     (fit as f32).clamp(MIN_DPI, MAX_DPI)
 }
 
@@ -205,12 +208,11 @@ pub fn dpi_that_fits(size_mm: (f32, f32)) -> f32 {
 /// fit is clamped to the reader's range, so it is still only ever a request.
 pub fn fit_zoom(fit: crate::app::Fit, size_mm: (f32, f32), available: (f32, f32)) -> f32 {
     use crate::app::Fit;
-    // A point is 1/72 inch, so the page's millimetres at 72 dpi are its size in
-    // points; the area divided by that gives the zoom that fills it.
-    let points_per_mm = 72.0 / PIXELS_PER_MM as f32;
+    // The page's size in points is what a zoom of one draws it at, so the
+    // area divided by that is the zoom that fills it.
     let page_points = (
-        size_mm.0.max(1.0) * points_per_mm,
-        size_mm.1.max(1.0) * points_per_mm,
+        size_mm.0.max(1.0) * POINTS_PER_MM,
+        size_mm.1.max(1.0) * POINTS_PER_MM,
     );
     let area = (available.0.max(1.0), available.1.max(1.0));
     let by_side = match fit {
@@ -300,7 +302,7 @@ pub fn render_page_with_seals(
 /// Shrink a visible area until its raster fits the texture limit, keeping its
 /// top left corner: a reader scrolled to a corner keeps that corner.
 fn narrow(window: steleofd_common::Rect, dpi: f32) -> steleofd_common::Rect {
-    let most = f64::from(MAX_TEXTURE_SIDE) / (f64::from(dpi) / PIXELS_PER_MM);
+    let most = f64::from(MAX_TEXTURE_SIDE) / (f64::from(dpi) / MM_PER_INCH);
     steleofd_common::Rect::new(window.x, window.y, window.w.min(most), window.h.min(most))
 }
 
@@ -319,7 +321,7 @@ fn stamp_seal(
     let Ok(seal_image) = image::load_from_memory(&seal.image) else {
         return;
     };
-    let mm = dpi / PIXELS_PER_MM;
+    let mm = dpi / MM_PER_INCH;
     // A window starts the raster at its own corner, so the seal moves back by
     // as much as the window did.
     let origin = window.map_or((0.0, 0.0), |w| (w.x, w.y));

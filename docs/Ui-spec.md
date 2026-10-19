@@ -182,10 +182,14 @@ as the document changes.
 
 The zoom slider is the one place in the window a value is dragged rather than
 clicked. Everything else is a click or a switch. It shows a percentage of the
-page's own size: 100% draws A4 595 points wide, the size it would be printed
-for a screen at one pixel per point. The number is the size the page is drawn
-at, not the resolution it is rasterized at, which follows from it; a reader
-dragging the handle sees the page grow rather than merely sharpen.
+page's size at 72 dpi, where a point is 1/72 inch: A4 opens at 100%, which is
+595 by 842 points, the same figure Acrobat and a browser give it. The window's
+point is the screen pixel at a scale of one, so a reader on a 2x display sees
+the sheet twice as large in pixels and the same size in millimetres.
+
+The number is the size the page is drawn at, not the resolution it is
+rasterized at, which follows from it; a reader dragging the handle sees the
+page grow rather than merely sharpen.
 
 A page drawn past the texture limit is rasterized in part rather than capped:
 the visible corner is rasterized at the full resolution and the rest is

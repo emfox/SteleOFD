@@ -360,6 +360,64 @@ fn zooming_changes_how_large_the_page_is_drawn() {
 }
 
 #[test]
+fn a_page_at_one_hundred_percent_is_its_size_at_ninety_six_dpi() {
+    // 100% means what it means in Acrobat and in a browser: an inch of paper on
+    // a 96 dpi screen, so A4 is 794 points wide. Skipping the millimetre step
+    // drew 280, a sheet a third of the width it should be.
+    let mut app = App::new();
+    app.open_path(&minimal()).expect("the fixture opens");
+    let mut harness = harness(app);
+    harness.state_mut().set_layout(Layout::Single);
+    harness.state_mut().set_zoom(1.0);
+    let _ = harness.state_mut().page_image(0);
+    pump_until_rendered(&mut harness, &[0]);
+
+    let drawn = harness
+        .query_all_by(|node| node.role() == egui::accesskit::Role::Image)
+        .next()
+        .map(|node| node.rect().width())
+        .expect("the page is drawn");
+    let expected = 210.0 * steleofd_reader::viewer::POINTS_PER_MM;
+    assert!(
+        (drawn - expected).abs() < 1.0,
+        "A4 at 100% is {expected:.1} points wide, drawn {drawn:.1}"
+    );
+}
+
+#[test]
+fn the_zoom_label_and_the_drawn_width_agree() {
+    // The percentage and the paper have to be the same story: 50% is half the
+    // width 100% draws, which a reader can check with a ruler.
+    let mut app = App::new();
+    app.open_path(&minimal()).expect("the fixture opens");
+    let mut harness = harness(app);
+    harness.state_mut().set_layout(Layout::Single);
+
+    harness.state_mut().set_zoom(1.0);
+    let _ = harness.state_mut().page_image(0);
+    pump_until_rendered(&mut harness, &[0]);
+    let full = harness
+        .query_all_by(|node| node.role() == egui::accesskit::Role::Image)
+        .next()
+        .map(|node| node.rect().width())
+        .expect("the page is drawn");
+
+    harness.state_mut().set_zoom(0.5);
+    let _ = harness.state_mut().page_image(0);
+    pump_until_rendered(&mut harness, &[0]);
+    let half = harness
+        .query_all_by(|node| node.role() == egui::accesskit::Role::Image)
+        .next()
+        .map(|node| node.rect().width())
+        .expect("the page is drawn");
+
+    assert!(
+        (half - full / 2.0).abs() < 1.5,
+        "half the zoom is half the width: {full:.1} then {half:.1}"
+    );
+}
+
+#[test]
 fn facing_layout_draws_both_pages_of_the_spread() {
     // Two pages on screen means two images; single layout means one. Counting
     // image nodes is what proves the layout reaches the canvas, since the

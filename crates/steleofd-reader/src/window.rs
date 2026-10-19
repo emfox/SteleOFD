@@ -11,7 +11,7 @@ use crate::export_worker::ExportFormat;
 use crate::icons::{self, Icon};
 use crate::shortcuts;
 use crate::theme::{self, Style, Token};
-use crate::viewer::{DroppedFile, Layout, MAX_ZOOM, MIN_ZOOM};
+use crate::viewer::{DroppedFile, Layout, MAX_ZOOM, MIN_ZOOM, POINTS_PER_MM};
 
 /// The zoom range the slider offers, in percent.
 const MIN_PERCENT: f32 = MIN_ZOOM * 100.0;
@@ -998,9 +998,11 @@ fn draw_one_page(ui: &mut Ui, app: &mut App, page: usize) {
     };
     let image = rendered.image.clone();
     let aspect = image.height() as f32 / image.width().max(1) as f32;
-    // The page is drawn at its own size times the zoom, not at the room beside
-    // it: taking the room would make the zoom a no-op, which is what it was.
-    let width = rendered.size_mm.0 * app.zoom();
+    // The page's millimetres become points first, because a zoom of one draws
+    // a page at its size in points; skipping that step drew A4 280 wide, as if
+    // the sheet were 99 mm across, which is what made 100% look wrong.
+    let points = rendered.size_mm.0 * POINTS_PER_MM;
+    let width = points * app.zoom();
     let size = egui::vec2(width, width * aspect);
     // A page wider than the canvas has to reach the scroll area, which sizes
     // itself from what its children claim. A label this wide, with the page

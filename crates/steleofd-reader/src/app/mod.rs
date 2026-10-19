@@ -588,7 +588,7 @@ impl App {
             return None;
         }
         // What the raster may span, from the same limit `dpi_that_fits` obeys.
-        let span = viewer::MAX_TEXTURE_SIDE as f32 / (dpi / viewer::PIXELS_PER_MM as f32);
+        let span = viewer::MAX_TEXTURE_SIDE as f32 / (dpi / viewer::MM_PER_INCH as f32);
         Some(steleofd_common::Rect::new(
             0.0,
             0.0,
