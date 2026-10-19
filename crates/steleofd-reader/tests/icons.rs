@@ -136,6 +136,153 @@ fn the_theme_names_are_distinct() {
     assert_eq!(count, names.len(), "two icons claim the same theme name");
 }
 
+/// An SVG path as drawing commands, so one spelling can be compared with
+/// another: a shorthand counts as the long form it stands for.
+fn commands(d: &str) -> Vec<(char, Vec<f64>)> {
+    let mut out: Vec<(char, Vec<f64>)> = Vec::new();
+    let mut letter = ' ';
+    let mut number = String::new();
+    let flush = |letter: char, number: &mut String, out: &mut Vec<(char, Vec<f64>)>| {
+        if let Ok(value) = number.parse::<f64>() {
+            if let Some(last) = out.last_mut().filter(|(l, _)| *l == letter) {
+                last.1.push(value);
+            } else {
+                out.push((letter, vec![value]));
+            }
+        }
+        number.clear();
+    };
+    for c in d.chars() {
+        if c.is_ascii_alphabetic() {
+            // A letter ends the number before it, but the first number may run
+            // straight on from it: `m3.99 1c-1.66 0` leaves no room to spare.
+            flush(letter, &mut number, &mut out);
+            letter = c;
+        } else if c == ',' || c.is_whitespace() {
+            flush(letter, &mut number, &mut out);
+        } else if c == '-' && !number.is_empty() && !number.ends_with('e') {
+            // A minus that follows a number starts the next one: no separator
+            // is needed, and the theme leans on that to keep its files small.
+            flush(letter, &mut number, &mut out);
+            number.push(c);
+        } else {
+            number.push(c);
+        }
+    }
+    flush(letter, &mut number, &mut out);
+    out
+}
+
+/// The points a path walks through, whatever letters it spells them with, as
+/// the fill would see them: every curve is cut into the points it passes close
+/// to, so a `c` and the `s` that stands for it walk the same way.
+fn points(d: &str) -> Vec<f64> {
+    let mut out = Vec::new();
+    let mut at = (0.0_f64, 0.0_f64);
+    let mut start = at;
+    for (letter, values) in commands(d) {
+        let step = match letter.to_ascii_uppercase() {
+            'M' | 'L' | 'T' => 2,
+            'H' | 'V' => 1,
+            'C' => 6,
+            'S' | 'Q' => 4,
+            'Z' => 0,
+            _ => 0,
+        };
+        if step == 0 {
+            if letter == 'z' || letter == 'Z' {
+                at = start;
+            }
+            continue;
+        }
+        for (index, chunk) in values.chunks(step).enumerate() {
+            if chunk.len() < step {
+                break;
+            }
+            // A second pair after `m` is a line, the same as `l`.
+            let run = match (index, letter) {
+                (0, _) => letter,
+                (_, 'M') => 'L',
+                (_, 'm') => 'l',
+                _ => letter,
+            };
+            let absolute = run.is_ascii_uppercase();
+            let place = |x: f64, y: f64| {
+                if absolute {
+                    (x, y)
+                } else {
+                    (at.0 + x, at.1 + y)
+                }
+            };
+            let taken = match run.to_ascii_uppercase() {
+                // A curve and its shorthands only agree on where they land, and
+                // that is the point the path is on afterwards.
+                'C' => place(chunk[4], chunk[5]),
+                'S' | 'Q' => place(chunk[2], chunk[3]),
+                'T' => place(chunk[0], chunk[1]),
+                'H' => (if absolute { chunk[0] } else { at.0 + chunk[0] }, at.1),
+                'V' => (at.0, if absolute { chunk[0] } else { at.1 + chunk[0] }),
+                'M' => {
+                    start = place(chunk[0], chunk[1]);
+                    start
+                }
+                _ => place(chunk[0], chunk[1]),
+            };
+            at = taken;
+            out.push(at.0);
+            out.push(at.1);
+        }
+    }
+    out
+}
+
+/// Whether `whole` walks the same points as `part`, as far as `part` goes.
+fn starts_with(whole: &[f64], part: &[f64]) -> bool {
+    whole.len() >= part.len() && part.iter().zip(whole).all(|(a, b)| (a - b).abs() < 0.02)
+}
+
+#[test]
+fn every_glyph_matches_the_icon_it_is_named_for() {
+    // The path data is copied from the installed theme, so where the theme is
+    // here the copy is checked against it: a name it does not ship reads as
+    // absent, and so does a drawing borrowed from the file next door.
+    let dir = std::path::Path::new("/usr/share/icons/Adwaita/symbolic");
+    if !dir.is_dir() {
+        eprintln!("no theme installed; the copy cannot be checked here");
+        return;
+    }
+    for icon in Icon::ALL {
+        let name = icon.theme_name();
+        // The theme keeps a name in one of several contexts, and the file with
+        // that name is the drawing whichever context it sits in.
+        let found = std::fs::read_dir(dir)
+            .expect("the theme reads")
+            .filter_map(|part| part.ok())
+            .map(|part| part.path().join(format!("{name}.svg")))
+            .find(|path| path.is_file());
+        let path = found.unwrap_or_else(|| panic!("{name} is not a file the theme ships"));
+        let source = std::fs::read_to_string(&path).expect("the icon file reads");
+        let in_file: Vec<Vec<f64>> = source
+            .split("d=\"")
+            .skip(1)
+            .map(|part| points(part.split('"').next().unwrap_or("")))
+            .filter(|path| !path.is_empty())
+            .collect();
+        // A shorthand is spelled out in full here, so compare the points a
+        // path walks through rather than the letters it uses. The theme also
+        // closes by repeating the start, which the reader leaves off.
+        for (index, d) in icons::path_data(icon).iter().enumerate() {
+            let mine = points(d);
+            let mine = &mine[..mine.len().saturating_sub(2)];
+            assert!(
+                in_file.iter().any(|path| starts_with(path, mine)),
+                "{name}: path {index} is not in {}",
+                path.display()
+            );
+        }
+    }
+}
+
 #[test]
 fn a_glyph_becomes_a_texture() {
     let ctx = egui::Context::default();
