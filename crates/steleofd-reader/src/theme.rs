@@ -88,6 +88,54 @@ const HIGH_CONTRAST_DARK: [(Token, Color32); 6] = [
 /// The body size at 100% text size, in points.
 pub const BASE_POINTS: f32 = 14.0;
 
+/// The spacing scale of section 5.4, in points. The guideline asks for
+/// increments of six, growing with the distance between two things, so this is
+/// one base and four multiples of it rather than four unrelated numbers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Space {
+    /// Between a control and its label, and between two controls in a group.
+    Small,
+    /// Between the window edge and its contents, and between groups.
+    Medium,
+    /// Between a header and the content it heads.
+    Large,
+    /// Between a zone and sections that belong to different things.
+    ExtraLarge,
+}
+
+impl Space {
+    /// Every value, so a test can walk the scale.
+    pub const ALL: [Self; 4] = [Self::Small, Self::Medium, Self::Large, Self::ExtraLarge];
+
+    /// The step this spacing is in the guideline's six-point scale.
+    pub(crate) const fn steps(self) -> f32 {
+        match self {
+            Self::Small => 1.0,
+            Self::Medium => 2.0,
+            Self::Large => 3.0,
+            Self::ExtraLarge => 4.0,
+        }
+    }
+
+    /// The gap in points at 100% text size. The reader's scale multiplies it,
+    /// because a window's spacing that ignored the text size would crowd a
+    /// reader who asked for larger text.
+    pub fn points(self) -> f32 {
+        BASE_SPACING * self.steps()
+    }
+}
+
+/// The step the spacing scale is built on, in points.
+pub const BASE_SPACING: f32 = 6.0;
+
+/// The sizes section 5.5 states for a control, in points before the reader's
+/// scale. They are what makes a row of buttons look like one set.
+pub const CONTROL_HEIGHT: f32 = 34.0;
+/// The corner radius the guideline gives every control.
+pub const CORNER_RADIUS: u8 = 6;
+/// The gap between two icons or two words, as the guideline's smallest step.
+pub const ITEM_GAP: f32 = 6.0;
+
 /// The type scale of section 5.2 as (name, ratio). It is strictly increasing,
 /// which a test asserts: a scale with one ratio out of order stops being one.
 pub(crate) const SCALE: [(&str, f32); 8] = [
@@ -299,7 +347,31 @@ pub(crate) fn apply(ctx: &egui::Context, theme: Theme, text_scale: f32, high_con
             .insert(TextStyle::Heading, font(Style::Heading, text_scale));
         let code = FontId::new(Style::Body.points(text_scale), FontFamily::Monospace);
         style.text_styles.insert(TextStyle::Monospace, code);
+        dress_spacing(style, text_scale);
     });
+}
+
+/// The spacing scale and control sizes of sections 5.4 and 5.5, at the
+/// reader's text size. `egui` spaces every row from `item_spacing`, so setting
+/// it here is what puts the whole window on one six-point grid.
+fn dress_spacing(style: &mut egui::Style, text_scale: f32) {
+    let step = |space: Space| (space.points() * text_scale).round();
+    let mut spacing = style.spacing.clone();
+    spacing.item_spacing = egui::vec2(step(Space::Small), step(Space::Small));
+    spacing.button_padding = egui::vec2(step(Space::Medium), step(Space::Small));
+    spacing.interact_size.y = (CONTROL_HEIGHT * text_scale).round();
+    spacing.menu_margin = egui::Margin::same(step(Space::Small) as i8);
+    spacing.window_margin = egui::Margin::same(step(Space::Medium) as i8);
+    style.spacing = spacing;
+    for visuals in [
+        &mut style.visuals.widgets.noninteractive,
+        &mut style.visuals.widgets.inactive,
+        &mut style.visuals.widgets.hovered,
+        &mut style.visuals.widgets.active,
+        &mut style.visuals.widgets.open,
+    ] {
+        visuals.corner_radius = egui::CornerRadius::same(CORNER_RADIUS);
+    }
 }
 
 #[cfg(test)]
@@ -372,6 +444,25 @@ mod tests {
         let ratios: Vec<f32> = SCALE.iter().map(|(_, ratio)| *ratio).collect();
         for pair in ratios.windows(2) {
             assert!(pair[0] > pair[1], "the scale is not decreasing: {ratios:?}");
+        }
+    }
+
+    #[test]
+    fn the_spacing_scale_is_a_multiple_of_six() {
+        for space in Space::ALL {
+            let points = space.points();
+            assert!(
+                (points % BASE_SPACING).abs() < f32::EPSILON,
+                "{space:?} is {points} pt, which is not a step of {BASE_SPACING}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_spacing_scale_only_grows() {
+        let steps: Vec<f32> = Space::ALL.iter().map(|space| space.steps()).collect();
+        for pair in steps.windows(2) {
+            assert!(pair[0] < pair[1], "the scale is not increasing: {steps:?}");
         }
     }
 

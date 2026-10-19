@@ -29,10 +29,10 @@ const CANDIDATES: &[&str] = &[
     "Droid Sans Fallback",
 ];
 
-/// Read a CJK-capable system font's bytes, or `None` when the host has none.
-/// Face zero of every candidate family is a CJK one.
+/// Read a CJK-capable system font's bytes and the face inside it, or `None`
+/// when the host has none.
 #[cfg(not(any(target_arch = "wasm32", target_os = "android")))]
-fn load_cjk_font() -> Option<Vec<u8>> {
+fn load_cjk_font() -> Option<(Vec<u8>, u32)> {
     use font_kit::family_name::FamilyName;
     use font_kit::handle::Handle;
     use font_kit::properties::Properties;
@@ -44,13 +44,17 @@ fn load_cjk_font() -> Option<Vec<u8>> {
         let Ok(handle) = source.select_best_match(&[name], &Properties::new()) else {
             continue;
         };
-        let bytes = match handle {
-            Handle::Path { path, .. } => std::fs::read(path).ok(),
-            Handle::Memory { bytes, .. } => Some((*bytes).clone()),
+        let found = match handle {
+            Handle::Path {
+                path, font_index, ..
+            } => std::fs::read(path).ok().map(|bytes| (bytes, font_index)),
+            Handle::Memory {
+                bytes, font_index, ..
+            } => Some(((*bytes).clone(), font_index)),
         };
-        if let Some(bytes) = bytes {
+        if let Some(found) = found {
             tracing::debug!(family, "using a system font for CJK labels");
-            return Some(bytes);
+            return Some(found);
         }
     }
     tracing::debug!("no CJK system font found; labels stay latin-only");
@@ -60,23 +64,26 @@ fn load_cjk_font() -> Option<Vec<u8>> {
 /// The browser and Android resolve their own fonts, so there is nothing to
 /// read here; both would need a face shipped with the app instead.
 #[cfg(any(target_arch = "wasm32", target_os = "android"))]
-fn load_cjk_font() -> Option<Vec<u8>> {
+fn load_cjk_font() -> Option<(Vec<u8>, u32)> {
     None
 }
 
 /// Append a host CJK face to the default families as a fallback. The default
 /// faces stay first, so latin text is unchanged; returns whether one landed.
 pub fn install_cjk_fallback(ctx: &egui::Context) -> bool {
-    let Some(bytes) = load_cjk_font() else {
+    let Some((bytes, face)) = load_cjk_font() else {
         return false;
     };
 
     let mut definitions = egui::FontDefinitions::default();
     let name = "cjk-fallback".to_owned();
-    definitions.font_data.insert(
-        name.clone(),
-        std::sync::Arc::new(egui::FontData::from_owned(bytes)),
-    );
+    let mut data = egui::FontData::from_owned(bytes);
+    // A `.ttc` holds several faces under one path, and egui draws face zero
+    // unless told otherwise; the CJK one is rarely index 0.
+    data.index = face;
+    definitions
+        .font_data
+        .insert(name.clone(), std::sync::Arc::new(data));
     for family in [FontFamily::Proportional, FontFamily::Monospace] {
         definitions
             .families

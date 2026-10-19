@@ -40,6 +40,21 @@ section only when a release actually has one.
   words, so each now has a tooltip; so does every other button in the two header
   rows.
 
+- **The window is drawn on the guideline's grid, not on the toolkit's.** Spacing
+  is four multiples of six points rather than whatever `egui` defaults to, and
+  controls are one height with one corner radius. A reader who raises the text
+  size gets the spacing raised with it, because a window that kept its gaps
+  while the words grew would crowd them.
+- **Groups are separated by space, not by rules.** Thirteen separator lines drew
+  boxes around parts of panels; the guideline asks for blank space and a heading
+  instead, and there are now none.
+- **The header bar is a header bar.** Its controls are drawn without a frame —
+  the toolbar style the guideline gives header controls — so the bar reads as one
+  surface, with the frame appearing under the pointer. The language and the
+  export are menus at the end of the bar rather than one button per option, which
+  is what makes the bar narrow enough to leave room for dragging and for the
+  document itself.
+
 ### Performance
 
 - **Time and memory have separate budgets.** `Performance.md` stated five

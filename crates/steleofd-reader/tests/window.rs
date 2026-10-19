@@ -117,10 +117,23 @@ fn opening_the_fixture_draws_its_page_counter() {
     app.open_path(&minimal()).expect("the fixture opens");
     let harness = harness(app);
 
-    // The status bar names the document and counts the pages.
-    harness.get_by_label_contains("minimal.ofd");
+    // The status bar counts the pages; the header bar repeats the name, so
+    // this asks for the count rather than for the only place the name appears.
     harness.get_by_label_contains("1 of");
     assert!(harness.state().page_count() >= 1);
+}
+
+/// The header bar names the open document in its centre, which is where a
+/// reader looks to see what they have, beside the window title.
+#[test]
+fn the_open_document_is_named_in_the_window() {
+    let mut app = App::new();
+    app.open_path(&minimal()).expect("the fixture opens");
+    let harness = harness(app);
+    // The name is on screen rather than only in the title bar, so two windows
+    // are told apart without reading the page counter.
+    let named = harness.get_all_by_label_contains("minimal.ofd").count();
+    assert!(named >= 1, "the name is nowhere in the window");
 }
 
 #[test]
@@ -409,7 +422,11 @@ fn opening_the_signature_panel_shows_the_count_and_the_verdict() {
 
 #[test]
 fn the_export_buttons_are_disabled_until_a_document_is_open() {
-    let harness = harness(App::new());
+    let mut harness = harness(App::new());
+    harness
+        .get_by_label(&reader_label(ReaderMessage::Export))
+        .click();
+    harness.run();
     for key in [ReaderMessage::ExportPdf, ReaderMessage::ExportPng] {
         let text = reader_label(key);
         let button = harness.get_by_label(&text);
@@ -430,6 +447,10 @@ fn asking_to_export_asks_the_host_where_to_write_it() {
         .expect("the fixture opens");
     let mut harness = harness(app);
 
+    harness
+        .get_by_label(&reader_label(ReaderMessage::Export))
+        .click();
+    harness.run();
     harness
         .get_by_label(&reader_label(ReaderMessage::ExportPdf))
         .click();
@@ -477,6 +498,10 @@ fn asking_to_print_reaches_the_host_without_a_destination() {
     let mut harness = harness(app);
 
     harness
+        .get_by_label(&reader_label(ReaderMessage::Export))
+        .click();
+    harness.run();
+    harness
         .get_by_label(&reader_label(ReaderMessage::Print))
         .click();
     harness.run();
@@ -488,7 +513,11 @@ fn asking_to_print_reaches_the_host_without_a_destination() {
 
 #[test]
 fn the_print_button_is_disabled_until_a_document_is_open() {
-    let harness = harness(App::new());
+    let mut harness = harness(App::new());
+    harness
+        .get_by_label(&reader_label(ReaderMessage::Export))
+        .click();
+    harness.run();
     let text = reader_label(ReaderMessage::Print);
     let button = harness.get_by_label(&text);
     assert!(
@@ -573,8 +602,9 @@ fn a_document_with_no_marks_says_so_in_the_panel() {
 fn the_menu_offers_both_languages_in_their_own_names() {
     // A reader who cannot read the menu's current language still has to be
     // able to find theirs, so the entries are endonyms rather than translations.
-    let harness = harness(App::new());
-    harness.get_by_label("English");
+    let mut harness = harness(App::new());
+    harness.get_by_label("English").click();
+    harness.run();
     harness.get_by_label(&label(MessageId::LocaleNameZh));
 }
 
@@ -586,6 +616,9 @@ fn choosing_a_language_redraws_the_window_in_it() {
         .expect("the fixture opens");
     let mut harness = harness(app);
 
+    // The languages are one menu rather than a button each, so it opens first.
+    harness.get_by_label("English").click();
+    harness.run();
     harness
         .get_by_label(&label(MessageId::LocaleNameZh))
         .click();

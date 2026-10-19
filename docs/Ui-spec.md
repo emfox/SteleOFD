@@ -384,7 +384,49 @@ rather than a real face. There is no all-caps style for the same reason the
 guideline gives: caps are a property of the words, and a translated string is not
 this window's to shout.
 
-### 5.3 Using them
+### 5.3 Spacing and control size
+
+The guideline asks for spacing in steps of six, growing with the distance
+between two things, so the window has one base and four multiples of it rather
+than four unrelated numbers.
+
+| Token | Step | Where it goes |
+| --- | --- | --- |
+| `small` | 1 × 6 | A control and its label; two controls in one group |
+| `medium` | 2 × 6 | The window edge and its contents; two groups |
+| `large` | 3 × 6 | A heading and the thing it heads |
+| `extra-large` | 4 × 6 | Zones that belong to different things |
+
+Two rules come with the scale, and they are the ones that make a window look
+like one window:
+
+- **A group is separated by space, not by a rule.** The guideline says frames
+  and separators are the wrong tool for grouping and that blank space with a
+  bold heading is the right one. The window drew thirteen `separator` calls
+  before this section existed; it draws none now.
+- **A header-bar control has no frame.** Controls in a header bar are drawn in
+  the toolbar style — no background, no border — and the frame appears only
+  under the pointer, so the header stays quiet while every control stays
+  discoverable and keyboard focus still shows.
+
+| Size | Points before the reader's scale |
+| --- | --- |
+| Control height | 34 |
+| Corner radius | 6 |
+| Gap between two items in a row | 6 |
+
+All three multiply by the reader's text size. A window whose spacing ignored
+the text size would crowd exactly the reader who asked for larger text.
+
+The header bar holds two groups on the start edge — which document is open, and
+what is shown of it — and four menus on the end edge: the language, the
+comparison, the export and the settings. That is where the guideline puts menus.
+What is *not* there is one button per option: a language is a menu rather than
+three buttons, and an export is a menu rather than three buttons, because the
+guideline asks for a small number of controls so that the bar can be dragged and
+the window can be narrowed without the controls colliding.
+
+### 5.4 Using them
 
 `theme.rs` is the one module that knows these numbers. A zone asks it for a
 colour (`theme::colour(ctx, sharp, Token::Dim)`) or for a size

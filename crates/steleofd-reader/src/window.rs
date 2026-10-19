@@ -216,19 +216,24 @@ fn take_drops(ui: &mut Ui, app: &mut App) {
     }
 }
 
-/// Z1: document-level actions, in the three groups the header-bar pattern asks
-/// for: what changes the document, what changes what is shown, and what writes
-/// a file or changes the interface. A control's place never moves.
+/// Z1: the header bar, arranged on the guideline's three alignment points —
+/// actions at the start, the document's name in the centre, menus at the end.
+/// The centre also holds the blank space a header bar needs to be dragged by.
 fn draw_menu(ui: &mut Ui, app: &mut App, requests: &mut WindowRequests) {
     egui::Panel::top("menu").show(ui, |ui| {
+        let gap = theme::Space::Small.points();
+        let groups = theme::Space::Medium.points();
         ui.horizontal(|ui| {
+            ui.add_space(gap);
             draw_document_actions(ui, app, requests);
-            ui.separator();
+            ui.add_space(groups);
             draw_panel_toggles(ui, app);
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                ui.add_space(gap);
                 draw_settings(ui, app);
+                ui.add_space(gap);
                 draw_exports(ui, app);
-                ui.separator();
+                ui.add_space(groups);
                 draw_comparison_toggle(ui, app);
                 draw_locales(ui, app);
             });
@@ -236,12 +241,37 @@ fn draw_menu(ui: &mut Ui, app: &mut App, requests: &mut WindowRequests) {
     });
 }
 
+/// A header-bar button: no background and no border, which is the toolbar
+/// style the guideline gives header controls. The frame appears on hover, so
+/// the control stays discoverable and key focus still shows where it is.
+fn bare(ui: &mut Ui, enabled: bool, label: impl Into<String>) -> egui::Response {
+    let button = egui::Button::new(label.into())
+        .fill(egui::Color32::TRANSPARENT)
+        .stroke(egui::Stroke::NONE);
+    ui.add_enabled(enabled, button)
+}
+
+/// A header-bar toggle: the same bare frame, drawn filled while it is on, so a
+/// panel that is showing is visible without a second kind of control.
+fn bare_toggle(ui: &mut Ui, enabled: bool, on: bool, label: impl Into<String>) -> egui::Response {
+    let fill = if on {
+        ui.visuals().selection.bg_fill
+    } else {
+        egui::Color32::TRANSPARENT
+    };
+    ui.add_enabled(
+        enabled,
+        egui::Button::new(label.into())
+            .fill(fill)
+            .stroke(egui::Stroke::NONE),
+    )
+}
+
 /// The two actions that change which document is open. Both carry a tooltip:
 /// "close" on a document is not obviously "close this one".
 fn draw_document_actions(ui: &mut Ui, app: &mut App, requests: &mut WindowRequests) {
     let open = app.text(ReaderMessage::Open);
-    if ui
-        .add_enabled(HAS_FILE_DIALOG, egui::Button::new(&open))
+    if bare(ui, HAS_FILE_DIALOG, &open)
         .on_hover_text(&open)
         .clicked()
     {
@@ -250,8 +280,7 @@ fn draw_document_actions(ui: &mut Ui, app: &mut App, requests: &mut WindowReques
     }
     let close = app.close_label();
     let hint = app.text(ReaderMessage::CloseHint);
-    if ui
-        .add_enabled(app.is_open(), egui::Button::new(&close))
+    if bare(ui, app.is_open(), &close)
         .on_hover_text(&hint)
         .clicked()
     {
@@ -264,8 +293,7 @@ fn draw_document_actions(ui: &mut Ui, app: &mut App, requests: &mut WindowReques
 fn draw_panel_toggles(ui: &mut Ui, app: &mut App) {
     let search = app.search_heading();
     let open = app.search_open();
-    if ui
-        .add_enabled(app.is_open(), egui::Button::selectable(open, &search))
+    if bare_toggle(ui, app.is_open(), open, &search)
         .on_hover_text(&search)
         .clicked()
     {
@@ -273,11 +301,7 @@ fn draw_panel_toggles(ui: &mut Ui, app: &mut App) {
     }
     let signatures = app.signatures_heading();
     let showing = app.signatures_open();
-    if ui
-        .add_enabled(
-            app.is_open(),
-            egui::Button::selectable(showing, &signatures),
-        )
+    if bare_toggle(ui, app.is_open(), showing, &signatures)
         .on_hover_text(&signatures)
         .clicked()
     {
@@ -285,11 +309,7 @@ fn draw_panel_toggles(ui: &mut Ui, app: &mut App) {
     }
     let annotations = app.annotations_heading();
     let listing = app.annotations_open();
-    if ui
-        .add_enabled(
-            app.is_open(),
-            egui::Button::selectable(listing, &annotations),
-        )
+    if bare_toggle(ui, app.is_open(), listing, &annotations)
         .on_hover_text(&annotations)
         .clicked()
     {
@@ -302,8 +322,7 @@ fn draw_panel_toggles(ui: &mut Ui, app: &mut App) {
     ] {
         let label = app.text(key);
         let chosen = app.layout() == layout;
-        if ui
-            .selectable_label(chosen, &label)
+        if bare_toggle(ui, true, chosen, &label)
             .on_hover_text(&label)
             .clicked()
         {
@@ -317,11 +336,7 @@ fn draw_panel_toggles(ui: &mut Ui, app: &mut App) {
 fn draw_comparison_toggle(ui: &mut Ui, app: &mut App) {
     let comparing = app.comparison_open();
     let compare = app.i18n().text(MessageId::ComparePanelTitle);
-    if ui
-        .add_enabled(
-            app.is_open() && HAS_FILE_DIALOG,
-            egui::Button::selectable(comparing, &compare),
-        )
+    if bare_toggle(ui, app.is_open() && HAS_FILE_DIALOG, comparing, &compare)
         .on_hover_text(&compare)
         .clicked()
     {
@@ -348,14 +363,14 @@ fn draw_settings(ui: &mut Ui, app: &mut App) {
             let name = app.theme_name(choice);
             ui.selectable_value(&mut theme, choice, name);
         }
-        ui.separator();
+        ui.add_space(theme::Space::Medium.points());
         let heading = app.text_size_label();
         ui.label(toned(ui, app, heading, Token::Dim, Style::Caption));
         for choice in TextSize::ALL {
             let name = app.text_size_name(choice);
             ui.selectable_value(&mut size, choice, name);
         }
-        ui.separator();
+        ui.add_space(theme::Space::Medium.points());
         let name = app.high_contrast_label();
         let hint = app.high_contrast_hint();
         ui.checkbox(&mut sharp, name).on_hover_text(&hint);
@@ -369,17 +384,26 @@ fn draw_settings(ui: &mut Ui, app: &mut App) {
     app.set_high_contrast(sharp);
 }
 
-/// The language choices, each written in its own language so a reader who
-/// cannot read the menu's current one can still find theirs. A language is a
-/// state rather than a command, so only the one in force is marked selected.
+/// The language, as one menu rather than one button per language. Each entry is
+/// written in its own language, so a reader who cannot read the current one can
+/// still find theirs. The guideline puts menus at the end of a header bar.
 fn draw_locales(ui: &mut Ui, app: &mut App) {
     let current = app.locale();
-    for locale in app.locales() {
-        let name = app.locale_name(&locale);
-        if ui.selectable_label(locale == current, name).clicked() {
-            app.set_locale(locale);
+    let name = app.locale_name(&current);
+    ui.menu_button(&name, |ui| {
+        for locale in app.locales() {
+            let option = app.locale_name(&locale);
+            if ui
+                .selectable_label(locale == current, &option)
+                .on_hover_text(&option)
+                .clicked()
+            {
+                app.set_locale(locale);
+            }
         }
-    }
+    })
+    .response
+    .on_hover_text(&name);
 }
 
 /// The export actions. Export writes what the reader is looking at, so it
@@ -389,60 +413,62 @@ fn draw_exports(ui: &mut Ui, app: &mut App) {
     let busy = app.is_exporting();
     let printing = app.is_printing();
     let export = app.text(ReaderMessage::Export);
-    ui.label(toned(ui, app, export, Token::Dim, Style::Caption));
-    let print = app.print_label_text();
-    // Printing is bounded by the paper the reader has, not by a file, so the
-    // button hands the job to the host at once rather than holding a request
-    // open while a dialog is up.
-    if ui
-        .add_enabled(app.is_open() && !printing, egui::Button::new(&print))
-        .on_hover_text(&print)
-        .clicked()
-    {
-        app.request_print();
-    }
-    let pdf = app.text(ReaderMessage::ExportPdf);
-    if ui
-        .add_enabled(app.is_open() && !busy, egui::Button::new(&pdf))
-        .on_hover_text(&pdf)
-        .clicked()
-    {
-        app.request_export(ExportFormat::Pdf);
-    }
-    let png = app.text(ReaderMessage::ExportPng);
-    if ui
-        .add_enabled(app.is_open() && !busy, egui::Button::new(&png))
-        .on_hover_text(&png)
-        .clicked()
-    {
-        app.request_export(ExportFormat::Png);
-    }
+    let open = app.is_open();
+    ui.menu_button(&export, |ui| {
+        let print = app.print_label_text();
+        // Printing is bounded by the paper the reader has, not by a file, so
+        // the entry hands the job to the host at once rather than holding a
+        // request open while a dialog is up.
+        if ui
+            .add_enabled(open && !printing, egui::Button::new(&print))
+            .clicked()
+        {
+            app.request_print();
+        }
+        let pdf = app.text(ReaderMessage::ExportPdf);
+        if ui
+            .add_enabled(open && !busy, egui::Button::new(&pdf))
+            .clicked()
+        {
+            app.request_export(ExportFormat::Pdf);
+        }
+        let png = app.text(ReaderMessage::ExportPng);
+        if ui
+            .add_enabled(open && !busy, egui::Button::new(&png))
+            .clicked()
+        {
+            app.request_export(ExportFormat::Png);
+        }
+    })
+    .response
+    .on_hover_text(&export);
 }
 
-/// Z2: actions on the page on screen. Page controls on the left, the zoom on
-/// the right, which is the split Z1 uses. Controls disable rather than hide.
+/// Z2: actions on the page on screen. Page controls at the start, the zoom at
+/// the end, on the same alignment points as the header; groups are separated
+/// by space rather than by a rule, which is how the guideline asks for it.
 fn draw_toolbar(ui: &mut Ui, app: &mut App) {
     egui::Panel::top("toolbar").show(ui, |ui| {
         ui.horizontal(|ui| {
+            ui.add_space(theme::Space::Small.points());
             draw_paging(ui, app);
-            ui.separator();
+            ui.add_space(theme::Space::Medium.points());
             let fit_width = app.text(ReaderMessage::FitWidth);
-            if ui
-                .selectable_label(app.fit() == Some(Fit::Width), &fit_width)
+            if bare_toggle(ui, true, app.fit() == Some(Fit::Width), &fit_width)
                 .on_hover_text(&fit_width)
                 .clicked()
             {
                 app.set_fit(Fit::Width);
             }
             let fit_page = app.text(ReaderMessage::FitPage);
-            if ui
-                .selectable_label(app.fit() == Some(Fit::Page), &fit_page)
+            if bare_toggle(ui, true, app.fit() == Some(Fit::Page), &fit_page)
                 .on_hover_text(&fit_page)
                 .clicked()
             {
                 app.set_fit(Fit::Page);
             }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                ui.add_space(theme::Space::Medium.points());
                 let mut dpi = app.dpi();
                 // The catalogue entry carries a percent placeholder, so the
                 // slider is labelled with the value already substituted.
@@ -462,19 +488,14 @@ fn draw_toolbar(ui: &mut Ui, app: &mut App) {
 /// inline; their tooltips are words, so a first-time reader has something.
 fn draw_paging(ui: &mut Ui, app: &mut App) {
     let previous = app.text(ReaderMessage::PrevPage);
-    if ui
-        .add_enabled(app.has_previous(), egui::Button::new("◀"))
+    if bare(ui, app.has_previous(), "◀")
         .on_hover_text(&previous)
         .clicked()
     {
         app.previous_page();
     }
     let next = app.text(ReaderMessage::NextPage);
-    if ui
-        .add_enabled(app.has_next(), egui::Button::new("▶"))
-        .on_hover_text(&next)
-        .clicked()
-    {
+    if bare(ui, app.has_next(), "▶").on_hover_text(&next).clicked() {
         app.next_page();
     }
 }
@@ -518,7 +539,7 @@ fn draw_search(ui: &mut Ui, app: &mut App) {
             let notice = app.no_match_label();
             ui.label(toned(ui, app, notice, Token::Dim, Style::Body));
         }
-        ui.separator();
+        ui.add_space(theme::Space::Medium.points());
         // The hit list, so a reader can see where they all are rather than
         // stepping blind. The selected one is the one the canvas outlines.
         egui::ScrollArea::vertical()
@@ -548,7 +569,7 @@ fn draw_signatures(ui: &mut Ui, app: &mut App) {
         ui.label(toned(ui, app, heading, Token::Text, Style::Title1));
         let count = app.signature_count_label();
         ui.label(toned(ui, app, count, Token::Dim, Style::Caption));
-        ui.separator();
+        ui.add_space(theme::Space::Medium.points());
         egui::ScrollArea::vertical()
             .id_salt("signature-list")
             .show(ui, |ui| {
@@ -580,7 +601,7 @@ fn draw_signatures(ui: &mut Ui, app: &mut App) {
                     for line in details.into_iter().flatten() {
                         ui.label(toned(ui, app, line, Token::Dim, Style::Caption));
                     }
-                    ui.separator();
+                    ui.add_space(theme::Space::Medium.points());
                 }
             });
     });
@@ -610,7 +631,7 @@ fn draw_annotations(ui: &mut Ui, app: &mut App) {
                 }
             });
         }
-        ui.separator();
+        ui.add_space(theme::Space::Medium.points());
         egui::ScrollArea::vertical()
             .id_salt("annotation-list")
             .show(ui, |ui| {
@@ -648,7 +669,7 @@ fn draw_comparison(ui: &mut Ui, app: &mut App, requests: &mut WindowRequests) {
         let Some(comparison) = app.comparison() else {
             return;
         };
-        ui.separator();
+        ui.add_space(theme::Space::Medium.points());
         let summary = app.comparison_summary();
         ui.label(toned(ui, app, summary, Token::Dim, Style::Body));
         if comparison.is_identical() {
@@ -847,16 +868,16 @@ fn draw_status(ui: &mut Ui, app: &mut App) {
 fn draw_status_facts(ui: &mut Ui, app: &mut App) {
     if let Some(label) = app.export_label() {
         ui.label(toned(ui, app, label, Token::Dim, Style::Caption));
-        ui.separator();
+        ui.add_space(theme::Space::Medium.points());
     }
     if let Some(label) = app.print_label() {
         ui.label(toned(ui, app, label, Token::Dim, Style::Caption));
-        ui.separator();
+        ui.add_space(theme::Space::Medium.points());
     }
     let info = app.info_label();
     if !info.is_empty() {
         ui.label(toned(ui, app, info, Token::Dim, Style::Caption));
-        ui.separator();
+        ui.add_space(theme::Space::Medium.points());
     }
     let page = app.page_label();
     ui.label(toned(ui, app, page, Token::Text, Style::Body));
