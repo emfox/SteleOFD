@@ -650,10 +650,22 @@ fn draw_toolbar(ui: &mut Ui, app: &mut App) {
                 // The catalogue entry carries a percent placeholder, so the
                 // slider is labelled with the value already substituted.
                 let text = app.zoom_label();
-                if ui
-                    .add(egui::Slider::new(&mut dpi, MIN_DPI..=MAX_DPI).text(text))
-                    .changed()
-                {
+                // The handle is filled from the widget background, which the
+                // window sets to the panel, so it drew as an outline around
+                // nothing: a dim fill, for this widget only, gives it a body.
+                let grip = theme::colour(ui.ctx(), sharp, Token::Dim);
+                let changed = ui
+                    .scope(|ui| {
+                        ui.visuals_mut().widgets.inactive.bg_fill = grip;
+                        ui.add(
+                            egui::Slider::new(&mut dpi, MIN_DPI..=MAX_DPI)
+                                .text(text)
+                                .handle_shape(egui::style::HandleShape::Circle),
+                        )
+                        .changed()
+                    })
+                    .inner;
+                if changed {
                     app.set_dpi(dpi);
                 }
                 ui.add_space(theme::Space::Medium.points());

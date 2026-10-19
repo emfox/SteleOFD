@@ -29,8 +29,9 @@ The following files carry that licence in full:
   at draw time so the glyph takes the window's current colour. The outline is
   not redrawn, and no control point is moved.
 - `zoom-fit-page-symbolic` is not a name the theme publishes. `Icon::FitPage`
-  keeps the name and carries the theme's `zoom-fit-best-symbolic` path, which
-  needs no separate attribution.
+  keeps its name because it says what the control does, and carries the theme's
+  `zoom-in-symbolic` path: a frame with a plus inside, beside the corner
+  brackets `FitWidth` takes from `zoom-fit-best-symbolic`.
 
 Copies of both licences:
 

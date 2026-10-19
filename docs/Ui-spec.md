@@ -565,12 +565,16 @@ holds one entry per icon and colour.
 
 `zoom-fit-page-symbolic` is the one name the theme does not publish. `FitPage`
 keeps the name because it says what the control does, and carries the theme's
-`zoom-fit-best-symbolic` outline.
+`zoom-in-symbolic` outline. `zoom-fit-best-symbolic` would not do: its outer and
+inner frames nearly touch at twenty points, so the button drew as an empty box.
 
 `tests/icons.rs` draws every variant and asserts that each becomes a filled
 drawing, that none escapes its 16-unit box, that every one is large enough to be
 a control, and that no two are the same drawing — the last is what catches a
-glyph that was pasted into the wrong arm of the table.
+glyph that was pasted into the wrong arm of the table. Where the theme is
+installed, a further check reads it and compares each path with the file it
+claims to come from, which is what catches a hand-copied path that is subtly
+wrong rather than missing.
 
 A glyph carries no words, and a control needs a name, so `Glyph` — the struct
 that pairs an `Icon` with its wording — sets the accessible name from the same
