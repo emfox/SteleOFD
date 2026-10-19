@@ -814,3 +814,35 @@ fn a_theme_never_moves_the_document() {
         "a setting never closes a document"
     );
 }
+
+#[test]
+fn the_canvas_is_drawn_in_its_own_colour() {
+    // The well behind the pages tells a reader that a page is a sheet lying on
+    // a surface. It had gone missing: the margin around a page was the panel.
+    let mut app = App::new();
+    app.set_theme(ThemeChoice::Light);
+    let mut harness = harness(app);
+    harness.run();
+    let output = harness.output();
+    let shapes: Vec<egui::epaint::ClippedShape> = output
+        .shapes
+        .iter()
+        .map(|clipped| egui::epaint::ClippedShape {
+            clip_rect: clipped.clip_rect,
+            shape: clipped.shape.clone(),
+        })
+        .collect();
+    let mut tessellator =
+        egui::epaint::Tessellator::new(1.0, Default::default(), [16, 16], Vec::new());
+    let painted = tessellator.tessellate_shapes(shapes).iter().any(|clipped| {
+        match &clipped.primitive {
+            // #eeeeee is the light column's canvas; the panels are #fafafa.
+            egui::epaint::Primitive::Mesh(mesh) => mesh
+                .vertices
+                .iter()
+                .any(|v| v.color == egui::Color32::from_rgb(0xee, 0xee, 0xee)),
+            _ => false,
+        }
+    });
+    assert!(painted, "the canvas well was never painted");
+}

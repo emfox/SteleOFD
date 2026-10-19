@@ -94,6 +94,9 @@ fn apply_appearance(ui: &mut Ui, app: &App) {
         .data(|data| data.get_temp::<(egui::Theme, TextSize, bool)>(appearance_id()));
     if applied != Some(stamp) {
         theme::apply(ui.ctx(), theme, scale, sharp);
+        // Dressing fills that scheme's table; which table gets read is the
+        // active theme. Without this, picking Light drew from the dark one.
+        ui.ctx().set_theme(theme);
         ui.ctx()
             .data_mut(|data| data.insert_temp(appearance_id(), stamp));
     }
@@ -913,6 +916,14 @@ fn draw_canvas(ui: &mut Ui, app: &mut App) {
     // is resolved here and the worker asked for the resolution it produces.
     let available = ui.available_size();
     app.apply_fit((available.x, available.y));
+    // The toolkit fills the window with the panel colour, so the well behind
+    // the pages is painted here, on the background layer: a panel draws its
+    // own fill after its contents.
+    let well = ui.available_rect_before_wrap();
+    let layer = egui::LayerId::background();
+    ui.ctx()
+        .layer_painter(layer)
+        .rect_filled(well, 0, colour(ui, app, Token::Canvas));
     match app.canvas() {
         Canvas::Empty => {
             let hint = app.drop_hint();
