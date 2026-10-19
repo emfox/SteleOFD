@@ -47,8 +47,10 @@ MEMORY_BUDGETS = [
     ("page_raster/20", 512.0),
 ]
 
-# What the memory benchmark prints for one reading.
-MEMORY_LINE = re.compile(r"^memory-held: (\S+) ([0-9.]+) MB\b", re.MULTILINE)
+# What the memory benchmark prints for one reading, and the file it keeps it in.
+MEMORY_PREFIX = "memory-held:"
+READINGS = "memory-readings.log"
+MEMORY_LINE = re.compile(rf"^{MEMORY_PREFIX} (\S+) ([0-9.]+) MB\b", re.MULTILINE)
 
 
 def estimate_us(path: Path) -> float | None:
@@ -65,27 +67,65 @@ def estimate_us(path: Path) -> float | None:
     return data["mean"]["point_estimate"] / 1000.0
 
 
-def memory_readings(paths: list[Path]) -> dict[str, float]:
+def memory_readings(
+    paths: list[Path], criterion_dir: Path
+) -> tuple[dict[str, float], str]:
     """Every memory reading a benchmark printed, in mebibytes.
 
     A reading is a printout rather than an estimate, so it is captured from the
     benchmark's own output: each path is read in full if it is a file, and
-    searched for `*.log` if it is a directory.
+    searched for everything criterion logged if it is a directory. The second
+    value explains an empty result, and is empty when there is nothing to say.
     """
     readings: dict[str, float] = {}
-    logs = []
+    gap = ""
+    logs: list[Path] = []
     for path in paths:
         if path.is_file():
             logs.append(path)
         elif path.is_dir():
             logs.extend(path.rglob("*.log"))
+    # `cargo bench` tees its output but keeps it nowhere criterion reads back;
+    # the benchmark writes each reading to this file so a local run still has
+    # one, and without it the report says what would supply it.
+    kept = criterion_dir / READINGS
+    if kept.is_file():
+        logs.append(kept)
+    elif criterion_dir.is_dir():
+        logs.extend(inferred_logs(criterion_dir))
     for log in logs:
         text = log.read_text(encoding="utf-8", errors="replace")
+        if not MEMORY_LINE.search(text):
+            gap = text.strip()
         for name, value in MEMORY_LINE.findall(text):
             # A reading repeats across samples; the largest is the one that
             # matters, because a ceiling is about the worst case.
             readings[name] = max(readings.get(name, 0.0), float(value))
-    return readings
+    return readings, gap if not readings else ""
+
+
+def inferred_logs(criterion_dir: Path) -> list[Path]:
+    """A note in place of each reading criterion kept no text for.
+
+    Criterion keeps a benchmark's `benchmark.json` and discards its stdout, so
+    the reading itself is not recoverable after the run. Writing the gap down
+    gives the report a line to name, which turns a bare "NO DATA" into the one
+    command that would supply it.
+    """
+    logs: list[Path] = []
+    for name, _ in MEMORY_BUDGETS:
+        # Criterion names the directory `<group>/<function>/<value>`, so the
+        # budget name is the path under it.
+        if not (criterion_dir / "memory" / name / "new").is_dir():
+            continue
+        log = criterion_dir / f"{name.replace('/', '-')}-readings.log"
+        log.write_text(
+            "no reading was kept for this run; "
+            "run `cargo bench -p steleofd-parser --bench memory`\n",
+            encoding="utf-8",
+        )
+        logs.append(log)
+    return logs
 
 
 def main() -> int:
@@ -129,7 +169,8 @@ def main() -> int:
             f"{name:<28} {measured:>10.1f}µs {budget_us:>10.1f}µs  {verdict}"
         )
 
-    readings = memory_readings(args.logs if args.logs else args.criterion_dir)
+    paths = list(args.logs) if args.logs else [args.criterion_dir]
+    readings, gap = memory_readings(paths, args.criterion_dir)
 
     print()
     print(f"{'memory':<28} {'held':>12} {'budget':>12}  result")
@@ -148,9 +189,14 @@ def main() -> int:
         print(f"{name:<28} {held:>9.1f} MB {budget_mb:>9.1f} MB  {verdict}")
 
     if missing:
-        print(f"\nFAILED: {len(missing)} budgeted benchmark(s) produced no output")
+        print(f"\nFAILED: {len(missing)} budgeted line(s) produced no output")
         for name in missing:
-            print(f"  {name}: no target/criterion/{name}/new/estimates.json")
+            # A timing leaves an estimate; a memory reading leaves a printout,
+            # so the hint names the run each kind needs.
+            hint = gap or f"no {MEMORY_PREFIX} line in the saved output"
+            if not name.startswith("memory/"):
+                hint = f"no target/criterion/{name}/new/estimates.json"
+            print(f"  {name}: {hint}")
         return 1
     if over:
         print(f"\nFAILED: {len(over)} benchmark(s) over budget")

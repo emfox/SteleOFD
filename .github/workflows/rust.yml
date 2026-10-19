@@ -248,16 +248,16 @@ jobs:
           shared-key: perf
 
       # Only the budgeted targets: running every benchmark would spend a
-      # runner's afternoon on numbers nothing gates on. The memory run is
-      # teed because its reading is a printout rather than an estimate.
+      # runner's afternoon on numbers nothing gates on. The memory run keeps
+      # its reading in a file beside criterion's, which the gate reads back.
       - name: Run the budgeted benchmarks
         run: |
           cargo bench -p steleofd-parser --bench parse
-          cargo bench -p steleofd-parser --bench memory | tee memory.log
+          cargo bench -p steleofd-parser --bench memory
           cargo bench -p steleofd-convert --bench convert
 
       - name: Every benchmarked stage is within budget
-        run: python3 scripts/check_performance.py --logs memory.log
+        run: python3 scripts/check_performance.py
 
   fuzz:
     runs-on: ubuntu-latest

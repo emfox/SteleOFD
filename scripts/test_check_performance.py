@@ -8,11 +8,13 @@ and one case runs the gate against a log that is over its ceiling.
 """
 
 import pathlib
+import subprocess
 import sys
 import tempfile
 import unittest
 
-sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+GATE = pathlib.Path(__file__).resolve().parent / "check_performance.py"
+sys.path.insert(0, str(GATE.parent))
 
 import check_performance as gate  # noqa: E402
 
@@ -22,7 +24,7 @@ class MemoryReadingTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             log = pathlib.Path(directory) / "bench.log"
             log.write_text(text, encoding="utf-8")
-            return gate.memory_readings([log])
+            return gate.memory_readings([log], pathlib.Path(directory) / "none")[0]
 
     def test_a_reading_is_recovered_with_its_name(self):
         got = self.readings("memory-held: page_raster/1 18.8 MB (95496 byte png)\n")
@@ -42,6 +44,66 @@ class MemoryReadingTest(unittest.TestCase):
 
     def test_text_that_mentions_a_reading_mid_line_is_ignored(self):
         self.assertEqual(self.readings("  memory-held: page_raster/1 18.8 MB\n"), {})
+
+
+class DirectoryTest(unittest.TestCase):
+    """The gate with no `--logs`, which is how a local run invokes it.
+
+    A reading only exists in a benchmark's stdout, and criterion discards that
+    after the run. The default path must still report rather than trace back.
+    """
+
+    def run_gate(self, directory: pathlib.Path) -> tuple[int, str]:
+        result = subprocess.run(
+            [sys.executable, str(GATE), "--criterion-dir", str(directory)],
+            capture_output=True,
+            text=True,
+            cwd=GATE.parent.parent,
+        )
+        return result.returncode, result.stdout + result.stderr
+
+    def test_a_directory_with_no_readings_fails_instead_of_raising(self):
+        # A directory is one path, not a list of them, which is what used to
+        # raise `TypeError: 'PosixPath' object is not iterable`.
+        with tempfile.TemporaryDirectory() as directory:
+            code, output = self.run_gate(pathlib.Path(directory))
+        self.assertEqual(code, 1, output)
+        self.assertNotIn("Traceback", output)
+        self.assertIn("NO DATA", output)
+
+    def test_a_reading_saved_in_a_directory_is_found(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            (root / "memory").mkdir()
+            (root / "memory" / "run.log").write_text(
+                "memory-held: page_raster/1 18.8 MB (1 byte png)\n", encoding="utf-8"
+            )
+            got = gate.memory_readings([root], root)[0]
+        self.assertEqual(got["page_raster/1"], 18.8)
+
+    def test_a_run_without_saved_output_names_the_command_that_would_help(self):
+        # Criterion keeps an estimate but not the stdout the reading was
+        # printed to, so the gate has to say what would supply it.
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            (root / "memory" / "page_raster" / "1" / "new").mkdir(parents=True)
+            code, output = self.run_gate(root)
+        self.assertEqual(code, 1, output)
+        self.assertNotIn("Traceback", output)
+        self.assertIn("--bench memory", output)
+
+    def test_the_readings_the_benchmark_kept_are_read_with_no_arguments(self):
+        # The benchmark appends each reading to this file precisely because
+        # criterion discards the stdout it printed them to.
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            (root / "memory" / "page_raster" / "1" / "new").mkdir(parents=True)
+            (root / gate.READINGS).write_text(
+                "memory-held: page_raster/1 18.8 MB (1 byte png)\n", encoding="utf-8"
+            )
+            code, output = self.run_gate(root)
+        self.assertIn("page_raster/1", output)
+        self.assertIn("18.8 MB", output)
 
 
 class BudgetTest(unittest.TestCase):

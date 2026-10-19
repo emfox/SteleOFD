@@ -4,6 +4,8 @@
 
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use std::alloc::{GlobalAlloc, Layout, System};
+use std::io::Write;
+use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use steleofd_convert::png::page_to_png;
 use steleofd_core::Document;
@@ -62,6 +64,9 @@ fn held_since_reset() -> usize {
         .saturating_sub(FLOOR.load(Ordering::Relaxed))
 }
 
+/// The file a reading is kept in, beside criterion's own output.
+const READINGS: &str = "memory-readings.log";
+
 /// Page counts the peak is measured at: one page is the budget's unit, twenty
 /// is the packet the per-document ceiling is stated for.
 const PAGES: &[usize] = &[1, 20];
@@ -91,14 +96,24 @@ fn memory(c: &mut Criterion) {
     group.finish();
 }
 
-/// Publish one reading under a stable name. It has a decimal point and a unit
-/// on purpose: criterion reports whatever `println!` emits as a raw benchmark
-/// value, and a bare integer would be accepted as one more timing.
+/// Publish one reading under a stable name, in the log and to stdout. The
+/// decimal point and unit are deliberate: criterion reads every printed number
+/// as a benchmark value, and a bare integer would become one more timing.
 fn report(pages: usize, held: usize, png: usize) {
-    println!(
+    let line = format!(
         "memory-held: page_raster/{pages} {:.1} MB ({png} byte png)",
         mb(held)
     );
+    println!("{line}");
+    let keep = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/criterion");
+    if keep.is_dir() {
+        let mut file = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(keep.join(READINGS))
+            .expect("readings file");
+        writeln!(file, "{line}").expect("append a reading");
+    }
 }
 
 /// Bytes as mebibytes, the unit the budget is stated in.
