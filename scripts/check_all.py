@@ -202,28 +202,30 @@ CHECKS: tuple[Check, ...] = (
     ),
     # The fetched samples. Each one reports a missing file, so it is only
     # meaningful once the download has run.
+    # `--check` fetches only what the record cannot account for, so a working
+    # copy that already has the samples runs it with no network at all.
     Check(
         "ofdrw-check",
         "samples",
-        (py("scripts/fetch_ofdrw.py", "--check"),),
+        (py("scripts/sample_fetch.py", "ofdrw", "--check"),),
         needs=("ofdrw-samples",),
     ),
     Check(
         "ofdrw-parse",
         "samples",
-        (py("scripts/fetch_ofdrw.py", "--parse"),),
+        (py("scripts/sample_fetch.py", "ofdrw", "--parse"),),
         needs=("cargo", "ofdrw-samples"),
     ),
     Check(
         "gb-check",
         "samples",
-        (py("scripts/fetch_gb_samples.py", "--check"),),
+        (py("scripts/sample_fetch.py", "gbt33190-samples", "--check"),),
         needs=("gb-samples",),
     ),
     Check(
         "gb-parse",
         "samples",
-        (py("scripts/fetch_gb_samples.py", "--parse"),),
+        (py("scripts/sample_fetch.py", "gbt33190-samples", "--parse"),),
         needs=("cargo", "gb-samples"),
     ),
     # The budget in docs/Performance.md, read from a benchmark run's output.
@@ -236,8 +238,8 @@ CHECKS: tuple[Check, ...] = (
 )
 
 SAMPLE_DIRS = {
-    "ofdrw-samples": ("tests/fixtures/ofdrw", "scripts/fetch_ofdrw.py"),
-    "gb-samples": ("tests/fixtures/gbt33190-samples", "scripts/fetch_gb_samples.py"),
+    "ofdrw-samples": ("tests/fixtures/ofdrw", "scripts/sample_fetch.py ofdrw"),
+    "gb-samples": ("tests/fixtures/gbt33190-samples", "scripts/sample_fetch.py"),
 }
 
 

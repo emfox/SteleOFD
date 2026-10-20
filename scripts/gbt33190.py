@@ -43,7 +43,8 @@ from pathlib import Path
 
 from fixtures import FixtureError, Fixtures
 
-# The set and file `--fetch` reads: see `fixtures.py` for the pinned commit.
+# The set and file `--fetch` reads: see `fixtures.py` for the pinned commit and
+# `sample_fetch.py` for how that set is otherwise handled.
 FIXTURE_SET = "gbt33190-standard"
 FIXTURE_FILE = "GBT33190-2016.zh_CN.md"
 # The annex that holds the schemas, and the directory they are kept in.

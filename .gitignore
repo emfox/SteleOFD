@@ -67,10 +67,10 @@ logs/
 # ─── Local test data: large, never committed ───
 /tests/fixtures/large/
 /tests/fixtures/private/
-# Third-party samples fetched by scripts/fetch_ofdrw.py and
-# scripts/fetch_gb_samples.py. They are not ours to redistribute and they are
-# large, so they stay out of the tree; the pinned list in each script is what a
-# fresh checkout has.
+# Third-party samples fetched by scripts/sample_fetch.py. They are not ours to
+# redistribute and they are large, so they stay out of the tree; the pinned list
+# in that script is what a fresh checkout has, and the `.fetched.json` written
+# beside them records the hashes of what this working copy already holds.
 *.ofd
 # Fetched samples stay out even though fixtures generally do not: the rule
 # below would otherwise re-include them.

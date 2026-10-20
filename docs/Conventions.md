@@ -144,7 +144,7 @@ next to the check that produced it. Grouped by what they need:
 | `repo` | the checkers' own unit tests, `release_checksums.py selftest`, `pack_fixtures.py --check` | nothing |
 | `schema` | `validate_ofd.py --allow-foreign` over `compliance/fixtures` | `lxml` |
 | `rust` | `cargo fmt`, `clippy`, the `msrv` check, `build` and `test`, the golden images, the headless reader window, `check_compliance.py`, and the matrix freshness diff | `cargo`, `git`, and the Rust channel named by `rust-version` for `msrv` |
-| `samples` | `fetch_ofdrw.py` and `fetch_gb_samples.py`, `--check` then `--parse` | the fetched samples, `cargo` |
+| `samples` | `sample_fetch.py`, `--check` then `--parse`, once per set | the fetched samples, `cargo` |
 | `perf` | `check_performance.py` against the budget in [Performance.md](Performance.md) | a `cargo bench` run |
 | `review` | `check_commit_scope.py`, which names commits that read as more than one change | `git` |
 | `deps` | `cargo deny --all-features check`: advisories, licences, bans and sources | `cargo-deny` |
@@ -231,7 +231,7 @@ Seven exemptions exist, each deliberately narrow:
 | Whole file | anything under `locales/` | Locale catalogues are the translation data |
 | Whole file and name | fetched test samples under `tests/fixtures/` | A sample is named by the producer that wrote it, and renaming one severs the only link back to where it came from |
 | Whole file | `docs/Conventions.md`, `scripts/check_language.py`, `scripts/check_i18n.py` | They exist to hold, quote or match Chinese |
-| Whole file | `scripts/fetch_ofdrw.py`, `scripts/fetch_gb_samples.py` | Their pin lists spell out the producer's own file names, exactly like the samples they fetch |
+| Whole file | `scripts/sample_fetch.py` | Its pin lists spell out the producer's own file names, exactly like the samples they fetch |
 | Whole file | `crates/steleofd-i18n/src/format.rs` | Holds the locale day-period literals, which are Chinese and Japanese |
 | Single line | the `README.md` language switcher | The bilingual pair must cross-link by the other language's own name |
 

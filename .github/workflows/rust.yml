@@ -130,7 +130,7 @@ jobs:
       # offsets, and that sample is fetched rather than committed. Without it
       # the tests that read it skip, which passes while proving nothing.
       - name: Fetch the samples the tests read
-        run: python3 scripts/fetch_ofdrw.py
+        run: python3 scripts/sample_fetch.py ofdrw
 
       - name: Test
         run: cargo test --workspace
@@ -209,27 +209,27 @@ jobs:
           shared-key: samples
 
       - name: Fetch the samples
-        run: python3 scripts/fetch_ofdrw.py
+        run: python3 scripts/sample_fetch.py ofdrw
 
       - name: Every pinned sample is present
-        run: python3 scripts/fetch_ofdrw.py --check
+        run: python3 scripts/sample_fetch.py ofdrw --check
 
-      # Not every sample opens: two of them do not, and the reason each does not
-      # is recorded in the script. What CI holds is the set, so a sample that
-      # breaks for a new reason fails here and one that starts working says so.
+      # Not every sample opens: the two that do not are recorded with a cause
+      # in the script. What CI holds is the set, so a sample that breaks for a
+      # new reason fails here and one that starts working says so.
       - name: The samples that do not open are still the known ones
-        run: python3 scripts/fetch_ofdrw.py --parse
+        run: python3 scripts/sample_fetch.py ofdrw --parse
 
       # The standard's own conformance set, one document per clause. It shares
       # this job because it is fetched the same way and needs the same build.
       - name: Fetch the clause samples
-        run: python3 scripts/fetch_gb_samples.py
+        run: python3 scripts/sample_fetch.py gbt33190-samples
 
       - name: Every clause sample is present
-        run: python3 scripts/fetch_gb_samples.py --check
+        run: python3 scripts/sample_fetch.py gbt33190-samples --check
 
       - name: Every clause sample still opens
-        run: python3 scripts/fetch_gb_samples.py --parse
+        run: python3 scripts/sample_fetch.py gbt33190-samples --parse
 
   # The budget in docs/Performance.md, enforced. It runs the benchmarks and
   # checks each one-page figure against its ceiling, which is set well above
@@ -430,7 +430,7 @@ jobs:
       # fetches it too: a coverage run that skipped them would report lines the
       # suite never reached as though nothing had gone wrong.
       - name: Fetch the samples the tests read
-        run: python3 scripts/fetch_ofdrw.py
+        run: python3 scripts/sample_fetch.py ofdrw
 
       - name: Measure line coverage
         run: cargo llvm-cov --workspace --all-features --lcov --output-path lcov.info
