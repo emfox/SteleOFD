@@ -6,18 +6,17 @@ use crate::content::shared::{
     read_layers_strict,
 };
 
-/// The `BaseLoc` a `Res` table declares, defaulting to `Res` itself.
-/// A scanner, not a full parse: a resource table may be written in Chinese,
-/// so the head is taken by character boundary rather than by byte count.
-pub fn res_base_loc(xml: &str) -> &str {
+/// The `BaseLoc` a `Res` table declares, empty when absent: clause 7.8 makes it
+/// optional and an absent one means the table's own directory, so assuming
+/// `Res` would double the prefix on samples that spell paths in full.
+pub fn res_base_loc(xml: &str) -> String {
     let head = xml.get(..xml.len().min(4096)).unwrap_or(xml);
     let Some(at) = head.find("BaseLoc=\"") else {
-        return "Res";
+        return String::new();
     };
     let rest = &head[at + 9..];
     let end = rest.find('"').unwrap_or(rest.len());
-    let value = rest[..end].trim();
-    if value.is_empty() { "Res" } else { value }
+    steleofd_xml::unescape(rest[..end].trim())
 }
 
 /// GB/T 33190 clause 7.8: read a `Res` file's font table. The declaration is
@@ -354,5 +353,31 @@ fn read_optional_bool(a: &steleofd_xml::Attributes, name: &str) -> Result<Option
     match a.get(name) {
         Some(raw) if !raw.is_empty() => Ok(Some(parse_bool("Font", name, raw)?)),
         _ => Ok(None),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_res_table_without_base_loc_keeps_its_own_directory() {
+        // Clause 7.8 leaves `BaseLoc` optional. A writer that spells the whole
+        // path in every reference relies on the default being "here", so
+        // inventing a `Res` folder would double the prefix and lose the file.
+        let xml = r#"<ofd:Res xmlns:ofd="http://www.ofdspec.org/2016">
+            <ofd:MultiMedias/></ofd:Res>"#;
+        assert_eq!(res_base_loc(xml), "");
+    }
+
+    #[test]
+    fn base_loc_entities_are_decoded() {
+        let xml = r#"<ofd:Res BaseLoc="Images&#x26;Fonts"/>"#;
+        assert_eq!(res_base_loc(xml), "Images&Fonts");
+        assert_eq!(
+            res_base_loc(r#"<ofd:Res BaseLoc="Res"/>"#),
+            "Res",
+            "a declared base is used as written"
+        );
     }
 }

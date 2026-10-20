@@ -38,7 +38,7 @@ pub fn load_images(package: &mut Package, doc_dir: &str) -> steleofd_error::Resu
             continue;
         };
         let list = content::read_multimedias(&text)?;
-        let base = steleofd_package::join(doc_dir, res_base_loc(&text));
+        let base = steleofd_package::join(doc_dir, &res_base_loc(&text));
         for media in list.items {
             // Only images carry bytes a backend can paint; audio and video
             // are action targets, not placements.
@@ -67,7 +67,7 @@ pub fn load_images(package: &mut Package, doc_dir: &str) -> steleofd_error::Resu
 /// The `BaseLoc` a `Res` table declares, defaulting to `Res` itself.
 ///
 /// A scanner, not a full parse, so a malformed table costs nothing.
-fn res_base_loc(xml: &str) -> &str {
+fn res_base_loc(xml: &str) -> String {
     content::res_base_loc(xml)
 }
 

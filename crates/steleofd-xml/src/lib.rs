@@ -34,6 +34,46 @@ pub fn prefix_of(qualified: &str) -> &str {
     }
 }
 
+/// Resolve the entity references an attribute value may carry: a reader that
+/// scans raw text sees `&#x26;` where the writer meant `&`, and a path built
+/// from the escaped form names no entry. Unknown references stay as written.
+pub fn unescape(raw: &str) -> String {
+    if !raw.contains('&') {
+        return raw.to_string();
+    }
+    let mut out = String::with_capacity(raw.len());
+    let mut rest = raw;
+    while let Some(at) = rest.find('&') {
+        out.push_str(&rest[..at]);
+        let tail = &rest[at..];
+        let Some(semi) = tail.find(';') else {
+            out.push_str(tail);
+            return out;
+        };
+        let name = &tail[1..semi];
+        let decoded = match name {
+            "amp" => Some('&'),
+            "lt" => Some('<'),
+            "gt" => Some('>'),
+            "quot" => Some('"'),
+            "apos" => Some('\''),
+            _ => name
+                .strip_prefix("#x")
+                .or_else(|| name.strip_prefix("#X"))
+                .and_then(|hex| u32::from_str_radix(hex, 16).ok())
+                .or_else(|| name.strip_prefix('#').and_then(|dec| dec.parse().ok()))
+                .and_then(char::from_u32),
+        };
+        match decoded {
+            Some(c) => out.push(c),
+            None => out.push_str(&tail[..=semi]),
+        }
+        rest = &tail[semi + 1..];
+    }
+    out.push_str(rest);
+    out
+}
+
 /// Convert a `quick-xml` failure into an XML error with a best-effort position.
 pub(crate) fn map_error(err: &quick_xml::Error, pos: (u64, u64)) -> OfdError {
     let (line, col) = pos;
@@ -260,5 +300,16 @@ mod tests {
     #[test]
     fn the_ofd_namespace_constant_matches_the_standard() {
         assert_eq!(OFD_NS, "http://www.ofdspec.org/2016");
+    }
+
+    #[test]
+    fn entities_decode_to_the_characters_a_writer_meant() {
+        assert_eq!(unescape("Images&#x26;Fonts"), "Images&Fonts");
+        assert_eq!(unescape("a&amp;b&#38;c"), "a&b&c");
+        assert_eq!(unescape("&lt;&gt;&quot;&apos;"), "<>\"'");
+        assert_eq!(unescape("plain/path"), "plain/path");
+        // An unknown reference is left visible rather than silently dropped.
+        assert_eq!(unescape("a&nbsp;b"), "a&nbsp;b");
+        assert_eq!(unescape("half &"), "half &");
     }
 }

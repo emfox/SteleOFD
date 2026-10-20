@@ -45,7 +45,7 @@ pub fn load_fonts(package: &mut Package, doc_dir: &str) -> steleofd_error::Resul
             continue;
         };
         let list = content::read_fonts(&text)?;
-        let base = steleofd_package::join(doc_dir, content::res_base_loc(&text));
+        let base = steleofd_package::join(doc_dir, &content::res_base_loc(&text));
         for font in list.items {
             let Ok(id) = font.id.parse::<u32>() else {
                 continue;
