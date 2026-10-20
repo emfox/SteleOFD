@@ -84,6 +84,14 @@ fn flatten_object(
         Object::TextObject(t) => flatten_text(t, params, colors, builder),
         Object::ImageObject(i) => flatten_image(i, builder),
         Object::CompositeObject(c) => flatten_composite(c, params, colors, composites, builder),
+        // Table 3 gives a block the same choice a layer holds, so its objects
+        // ride the block's own boundary and CTM before theirs apply.
+        Object::PageBlockObject(b) => with_object_space(&b.base, params, builder, |scope| {
+            for object in &b.objects {
+                flatten_object(object, params, colors, composites, scope)?;
+            }
+            Ok(())
+        }),
         Object::Unknown(_) => Ok(()),
     }
 }
@@ -95,6 +103,7 @@ fn visible_of(object: &Object) -> Option<bool> {
         Object::TextObject(o) => o.base.visible,
         Object::ImageObject(o) => o.base.visible,
         Object::CompositeObject(o) => o.base.visible,
+        Object::PageBlockObject(o) => o.base.visible,
         Object::Unknown(_) => None,
     }
 }

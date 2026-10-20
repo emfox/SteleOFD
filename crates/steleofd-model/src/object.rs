@@ -21,8 +21,24 @@ pub enum Object {
     ImageObject(ImageObject),
     /// A group of objects that move, hide and clip as one unit.
     CompositeObject(CompositeObject),
+    /// A nested block of objects, the one container clause 14 lets recur.
+    PageBlockObject(PageBlockObject),
     /// Something unrecognized, skipped at render time.
     Unknown(serde_json::Value),
+}
+
+/// GB/T 33190 table 3: a `PageBlock` element holds the same choice of objects
+/// a layer does, so blocks nest. Named apart from the page's `PageBlock` body
+/// because this one is an object in its own right, with a boundary and a CTM.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PageBlockObject {
+    /// Attributes common to every object.
+    #[serde(flatten)]
+    pub base: ObjectBase,
+    /// The objects this block groups, in drawing order.
+    #[serde(rename = "$value", default)]
+    pub objects: Vec<Object>,
 }
 
 /// GB/T 33190 clause 13: a composite object places a vector resource on the
@@ -46,6 +62,7 @@ impl Object {
             Self::TextObject(o) => o.base.id.as_ref(),
             Self::ImageObject(o) => o.base.id.as_ref(),
             Self::CompositeObject(o) => o.base.id.as_ref(),
+            Self::PageBlockObject(o) => o.base.id.as_ref(),
             Self::Unknown(_) => None,
         }
     }

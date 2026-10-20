@@ -747,6 +747,13 @@ pub(crate) fn read_layer(cursor: &mut Cursor<'_>, node: &Node) -> Result<Layer> 
                         .objects
                         .push(Object::CompositeObject(read_composite_object(cursor, &n)?));
                 }
+                // Table 3 lets a block hold the same choice a layer does, so a
+                // page that groups its objects there loses everything below.
+                Event::Start(n) if n.is("PageBlock") => {
+                    layer
+                        .objects
+                        .push(Object::PageBlockObject(read_page_block_object(cursor, &n)?));
+                }
                 // Vendor extensions are recorded as unknown and skipped at
                 // render time instead of failing the whole page.
                 Event::Start(other) => {
@@ -799,6 +806,45 @@ fn parse_base(node: &Node) -> Result<ObjectBase> {
         clips: None,
         actions: None,
     })
+}
+
+/// GB/T 33190 clause 14: a `PageBlock` groups the same choice of objects a
+/// layer holds, and blocks nest, so this reads one level and recurses.
+fn read_page_block_object(cursor: &mut Cursor<'_>, node: &Node) -> Result<PageBlockObject> {
+    let mut b = PageBlockObject {
+        base: parse_base(node)?,
+        objects: Vec::new(),
+    };
+    if !node.is_self_closing() {
+        loop {
+            match cursor.next_event()? {
+                Event::Start(n) if n.is("PathObject") => {
+                    b.objects.push(Object::PathObject(read_path_object(cursor, &n)?));
+                }
+                Event::Start(n) if n.is("TextObject") => {
+                    b.objects.push(Object::TextObject(read_text_object(cursor, &n)?));
+                }
+                Event::Start(n) if n.is("ImageObject") => {
+                    b.objects.push(Object::ImageObject(read_image_object(cursor, &n)?));
+                }
+                Event::Start(n) if n.is("CompositeObject") => {
+                    b.objects
+                        .push(Object::CompositeObject(read_composite_object(cursor, &n)?));
+                }
+                Event::Start(n) if n.is("PageBlock") => {
+                    b.objects
+                        .push(Object::PageBlockObject(read_page_block_object(cursor, &n)?));
+                }
+                Event::Start(other) => {
+                    cursor.skip_element(&other)?;
+                    b.objects.push(Object::unknown());
+                }
+                Event::End(_) | Event::Eof => break,
+                Event::Text(_) => {}
+            }
+        }
+    }
+    Ok(b)
 }
 
 /// GB/T 33190 clause 13: a composite object places a vector resource on the
