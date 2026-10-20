@@ -41,11 +41,20 @@ from pathlib import Path
 
 PACKAGE = "steleofd-reader"
 VERSION_FALLBACK = "0.2.0"
-ARCHITECTURE = "amd64"
 MAINTAINER = "SteleOFD <steleofd@example.invalid>"
 SECTION = "office"
 PRIORITY = "optional"
 HOMEPAGE = "https://github.com/emfox/SteleOFD"
+
+# The `Architecture` field `dpkg` matches against the host. UOS V20 runs on
+# both an x86 board and the Kunpeng and Phytium ARM64 ones, so the field is
+# read from the binary rather than assumed; naming the wrong one makes a
+# correct package refuse to install.
+ELF_ARCHITECTURES = {
+    62: "amd64",
+    183: "arm64",
+    258: "loong64",
+}
 
 # The glibc UOS Desktop V20 ships, which is also Debian 10's. A binary needing
 # anything above this installs cleanly and then fails to start.
@@ -73,6 +82,7 @@ Name=SteleOFD Reader
 GenericName=OFD Reader
 Comment=Read and export OFD documents
 Exec={EXECUTABLE} %f
+TryExec={EXECUTABLE}
 Icon={PACKAGE}
 Terminal=false
 Categories={SECTION.capitalize()};Viewer;Graphics;
@@ -96,6 +106,58 @@ ICON_SVG = f"""<?xml version="1.0" encoding="UTF-8"?>
   </g>
 </svg>
 """
+
+
+# The launcher and the icon are read from caches the desktop builds, so a
+# freshly installed package is invisible in the menu until they are rebuilt.
+# Both commands are optional: a container or a stripped system may not have
+# them, and a missing helper is not a reason to leave the package half set up.
+POSTINST = """#!/bin/sh
+set -e
+for tool in update-desktop-database update-icon-caches; do
+    if command -v "$tool" >/dev/null 2>&1; then
+        if [ "$tool" = update-desktop-database ]; then
+            "$tool" /usr/share/applications >/dev/null 2>&1 || true
+        else
+            "$tool" /usr/share/icons/hicolor >/dev/null 2>&1 || true
+        fi
+    fi
+done
+exit 0
+"""
+
+# Removing the files is not enough for the same reason: the menu keeps the
+# entry it built from a file that no longer exists until the cache is rebuilt.
+POSTRM = """#!/bin/sh
+set -e
+if [ "$1" = "remove" ] || [ "$1" = "purge" ]; then
+    if command -v update-desktop-database >/dev/null 2>&1; then
+        update-desktop-database /usr/share/applications >/dev/null 2>&1 || true
+    fi
+    if command -v update-icon-caches >/dev/null 2>&1; then
+        update-icon-caches /usr/share/icons/hicolor >/dev/null 2>&1 || true
+    fi
+fi
+exit 0
+"""
+
+
+def elf_architecture(binary: Path) -> str:
+    """The package architecture one ELF binary was built for.
+
+    Read from the header rather than inferred from the file name: a package
+    that names the wrong architecture is refused by `dpkg` on a correct
+    system, and the failure reads as a broken download.
+    """
+    head = binary.read_bytes()[:20]
+    if head[:4] != b"\x7fELF":
+        raise SystemExit(f"error: {binary} is not an ELF binary")
+    if head[4] == 1:
+        raise SystemExit(f"error: {binary} is 32-bit, which UOS V20 does not ship")
+    machine = int.from_bytes(head[18:20], "little" if head[5] == 1 else "big")
+    if machine not in ELF_ARCHITECTURES:
+        raise SystemExit(f"error: {binary} has ELF machine {machine}, which has no Debian name")
+    return ELF_ARCHITECTURES[machine]
 
 
 def glibc_required(binary: Path) -> set[tuple[int, int]]:
@@ -142,12 +204,12 @@ def check_glibc(binary: Path, baseline: tuple[int, int] = GLIBC_BASELINE) -> Non
         )
 
 
-def control_file(version: str, installed_kib: int) -> str:
+def control_file(version: str, architecture: str, installed_kib: int) -> str:
     """The package's own description, in the format `dpkg` reads."""
     return (
         f"Package: {PACKAGE}\n"
         f"Version: {version}\n"
-        f"Architecture: {ARCHITECTURE}\n"
+        f"Architecture: {architecture}\n"
         f"Maintainer: {MAINTAINER}\n"
         f"Installed-Size: {installed_kib}\n"
         f"Depends: {DEPENDS}\n"
@@ -161,7 +223,7 @@ def control_file(version: str, installed_kib: int) -> str:
     )
 
 
-def stage(root: Path, binary: Path, version: str) -> Path:
+def stage(root: Path, binary: Path, version: str, architecture: str) -> Path:
     """Lay the package's files out under `root` and return that root."""
     def place(relative: str, data: bytes, mode: int = 0o644) -> Path:
         path = root / relative
@@ -196,7 +258,10 @@ def stage(root: Path, binary: Path, version: str) -> Path:
 
     # `dpkg` reads the control file from the archive's own directory, not from
     # a list of files, so it sits outside the payload and is written here.
-    place("DEBIAN/control", control_file(version, installed_kib(root)).encode("utf-8"))
+    place("DEBIAN/control",
+          control_file(version, architecture, installed_kib(root)).encode("utf-8"))
+    place("DEBIAN/postinst", POSTINST.encode("utf-8"), 0o755)
+    place("DEBIAN/postrm", POSTRM.encode("utf-8"), 0o755)
     return root
 
 
@@ -277,17 +342,21 @@ def tar_tree(root: Path, arcname: str, skip: tuple[str, ...] = ()) -> bytes:
     return gzip.compress(raw.getvalue(), mtime=0)
 
 
-def package(binary: Path, version: str, out: Path, verify_glibc: bool) -> Path:
+def package(
+    binary: Path, version: str, out: Path, verify_glibc: bool, suffix: str = ""
+) -> Path:
     """Stage, check and write the archive into `out`."""
     if not binary.is_file():
         raise SystemExit(f"error: {binary} is not a file")
     if verify_glibc:
         check_glibc(binary)
 
+    architecture = elf_architecture(binary)
+    name = ARCHIVE_NAME.replace(".deb", f"-{architecture}{suffix}.deb")
     staging = Path(tempfile.mkdtemp(prefix="steleofd-uos-"))
     try:
-        stage(staging, binary, version)
-        archive = write_archive(staging, out / ARCHIVE_NAME)
+        stage(staging, binary, version, architecture)
+        archive = write_archive(staging, out / name)
     finally:
         shutil.rmtree(staging, ignore_errors=True)
     return archive
@@ -295,13 +364,13 @@ def package(binary: Path, version: str, out: Path, verify_glibc: bool) -> Path:
 
 def selftest() -> int:
     """The parts that need no toolchain: the layout and the control file."""
-    assert ARCHITECTURE == "amd64"
+    assert ELF_ARCHITECTURES[183] == "arm64"
     assert f"Exec={EXECUTABLE} %f" in DESKTOP_ENTRY
     assert f"Icon={PACKAGE}" in DESKTOP_ENTRY
     assert "MimeType=application/ofd;" in DESKTOP_ENTRY
     assert GLIBC_BASELINE == (2, 28)
 
-    control = control_file("1.2.3", 4096)
+    control = control_file("1.2.3", "amd64", 4096)
     assert "Package: steleofd-reader" in control
     assert "Architecture: amd64" in control
     assert "Version: 1.2.3" in control
@@ -318,10 +387,20 @@ def selftest() -> int:
     with tempfile.TemporaryDirectory() as tmp:
         work = Path(tmp)
         binary = work / EXECUTABLE
-        binary.write_bytes(b"\x7fELF")
+        # A minimal ELF header: the machine field is what the package reads
+        # its architecture from, so a package for the wrong board is caught
+        # here rather than by `dpkg` on the device.
+        for machine, expected in ((62, "amd64"), (183, "arm64")):
+            header = bytearray(64)
+            header[0:4] = b"\x7fELF"
+            header[4] = 2
+            header[5] = 1
+            header[18:20] = machine.to_bytes(2, "little")
+            binary.write_bytes(bytes(header))
+            assert elf_architecture(binary) == expected, machine
         root = work / "stage"
         root.mkdir()
-        stage(root, binary, "1.2.3")
+        stage(root, binary, "1.2.3", "amd64")
         archive = write_archive(root, work / ARCHIVE_NAME)
 
         members = ar_members(archive.read_bytes())
@@ -337,7 +416,14 @@ def selftest() -> int:
         assert not any(name.startswith("./DEBIAN") for name in payload), payload
 
         meta = tar_names(gzip.decompress(members["control.tar.gz"]))
-        assert meta == ["./control"], meta
+        assert meta == ["./control", "./postinst", "./postrm"], meta
+        # A maintainer script `dpkg` cannot execute is a package that fails to
+        # configure, so the mode is checked on the staged files as well.
+        for name in ("postinst", "postrm"):
+            mode = (root / "DEBIAN" / name).stat().st_mode
+            assert mode & stat.S_IXUSR, name
+        assert POSTINST.startswith("#!/bin/sh"), POSTINST[:20]
+        assert POSTRM.startswith("#!/bin/sh"), POSTRM[:20]
 
     print("selftest passed")
     return 0
@@ -379,9 +465,13 @@ def main(argv: list[str]) -> int:
         "--check-glibc", action="store_true",
         help="fail when the binary needs a glibc newer than the target ships",
     )
+    # A second build of the same package differs only in its renderer, so the
+    # name says which one it is rather than the release page carrying two
+    # assets that look identical.
+    parser.add_argument("--suffix", default="", help="extra text in the file name")
     args = parser.parse_args(argv)
 
-    archive = package(args.binary, args.version, args.out, args.check_glibc)
+    archive = package(args.binary, args.version, args.out, args.check_glibc, args.suffix)
     print(f"built {archive}")
     return 0
 
