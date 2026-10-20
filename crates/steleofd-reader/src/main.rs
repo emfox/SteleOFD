@@ -174,14 +174,25 @@ fn print_current_view(app: &mut App) {
 /// started by the system and the browser by a page, so this is absent there.
 #[cfg(not(any(target_arch = "wasm32", target_os = "android")))]
 fn main() -> eframe::Result {
-    let options = eframe::NativeOptions {
+    start(std::env::args().any(|arg| arg.starts_with("--renderer")))
+}
+
+/// The window settings one run starts with.
+#[cfg(not(any(target_arch = "wasm32", target_os = "android")))]
+fn window_options() -> eframe::NativeOptions {
+    eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_title("SteleOFD Reader")
             .with_inner_size([1100.0, 820.0])
             .with_min_inner_size([640.0, 480.0]),
         renderer: renderer_from_args(),
         ..Default::default()
-    };
+    }
+}
+
+/// Open the window and hand the process to the run loop.
+#[cfg(not(any(target_arch = "wasm32", target_os = "android")))]
+fn run(options: eframe::NativeOptions) -> eframe::Result {
     eframe::run_native(
         "SteleOFD Reader",
         options,
@@ -194,12 +205,18 @@ fn main() -> eframe::Result {
     )
 }
 
-/// The renderer a `--renderer` argument asks for, wgpu when it says nothing.
-/// A driver that cannot make a Vulkan device cannot say so in advance, which
-/// is why the choice is made at startup rather than at build time.
+/// `--renderer` asks for, wgpu when it says nothing.
+/// A driver that cannot make a requested device may die rather than return an
+/// error, so the other renderer is tried in a child process when one is named.
 #[cfg(not(any(target_arch = "wasm32", target_os = "android")))]
 fn renderer_from_args() -> eframe::Renderer {
-    let mut args = std::env::args().skip(1);
+    renderer_from(std::env::args().skip(1))
+}
+
+/// The renderer named by the arguments, or the default when none is.
+#[cfg(not(any(target_arch = "wasm32", target_os = "android")))]
+fn renderer_from<I: Iterator<Item = String>>(args: I) -> eframe::Renderer {
+    let mut args = args;
     while let Some(arg) = args.next() {
         let value = match arg.split_once('=') {
             Some(("--renderer", value)) => Some(value.to_owned()),
@@ -218,6 +235,102 @@ fn renderer_from_args() -> eframe::Renderer {
     eframe::Renderer::default()
 }
 
+/// Start the window, trying the other renderer if the window fails to come up.
+/// A driver can end the process by signal rather than return an error, which
+/// cannot be caught, so a named first attempt runs in a child process.
+#[cfg(not(any(target_arch = "wasm32", target_os = "android")))]
+fn start(named: bool) -> eframe::Result {
+    let retry = std::env::var_os(FELL_BACK).is_some();
+    let mut options = window_options();
+    if retry {
+        options.renderer = other_renderer(options.renderer);
+    }
+    if !named || retry {
+        return run(options);
+    }
+    // A named renderer is attempted in a child so a driver that kills the
+    // process can be noticed at all; the child itself falls back when re-run.
+    let program = std::env::current_exe().unwrap_or_else(|_| "steleofd-reader".into());
+    let status = std::process::Command::new(program)
+        .args(std::env::args().skip(1))
+        .env(FELL_BACK, "1")
+        .status();
+    match status {
+        Ok(status) if status.success() => Ok(()),
+        Ok(status) => {
+            eprintln!(
+                "steleofd-reader: neither renderer could open a window; the last exit was {status}"
+            );
+            std::process::exit(status.code().unwrap_or(1));
+        }
+        Err(err) => {
+            eprintln!("steleofd-reader: could not restart itself to try the other renderer: {err}");
+            Ok(())
+        }
+    }
+}
+
+/// The renderer to use when the requested one could not open a window.
+#[cfg(not(any(target_arch = "wasm32", target_os = "android")))]
+fn other_renderer(renderer: eframe::Renderer) -> eframe::Renderer {
+    match renderer {
+        eframe::Renderer::Glow => eframe::Renderer::Wgpu,
+        eframe::Renderer::Wgpu => eframe::Renderer::Glow,
+    }
+}
+
+/// Whether the environment says this run is the retry after a failed one.
+#[cfg(not(any(target_arch = "wasm32", target_os = "android")))]
+const FELL_BACK: &str = "STELEOFD_RENDERER_FELL_BACK";
+
 /// Neither of the other two builds has a `main` to start from.
 #[cfg(any(target_arch = "wasm32", target_os = "android"))]
 fn main() {}
+
+#[cfg(all(test, not(any(target_arch = "wasm32", target_os = "android"))))]
+mod tests {
+    use super::{other_renderer, renderer_from};
+
+    fn parsed(args: &[&str]) -> eframe::Renderer {
+        renderer_from(args.iter().map(|arg| (*arg).to_owned()))
+    }
+
+    #[test]
+    fn a_named_renderer_is_the_one_used() {
+        assert!(matches!(
+            parsed(&["--renderer", "glow"]),
+            eframe::Renderer::Glow
+        ));
+        assert!(matches!(
+            parsed(&["--renderer=wgpu"]),
+            eframe::Renderer::Wgpu
+        ));
+    }
+
+    #[test]
+    fn no_argument_keeps_the_default() {
+        assert!(matches!(parsed(&[]), eframe::Renderer::Wgpu));
+        assert!(matches!(parsed(&["page.ofd"]), eframe::Renderer::Wgpu));
+    }
+
+    #[test]
+    fn an_unknown_name_keeps_the_default() {
+        assert!(matches!(
+            parsed(&["--renderer", "software"]),
+            eframe::Renderer::Wgpu
+        ));
+        assert!(matches!(parsed(&["--renderer"]), eframe::Renderer::Wgpu));
+    }
+
+    #[test]
+    fn the_fallback_is_the_renderer_that_was_not_asked_for() {
+        assert!(matches!(
+            other_renderer(eframe::Renderer::Glow),
+            eframe::Renderer::Wgpu
+        ));
+        assert!(matches!(
+            other_renderer(eframe::Renderer::Wgpu),
+            eframe::Renderer::Glow
+        ));
+    }
+}
