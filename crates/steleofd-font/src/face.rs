@@ -137,6 +137,20 @@ impl FontFace {
         Some(self.cid_to_gid[at].1)
     }
 
+    /// Whether the face has an entry of its own for one run code, whatever
+    /// outline that entry holds. A CID zero names no glyph at all, so only a
+    /// real glyph id counts as an answer.
+    pub fn codes_glyph(&self, code: u16) -> bool {
+        let found = if self.cid_keyed {
+            self.glyph_for_cid(code)
+        } else {
+            Some(code)
+        };
+        found.is_some_and(|gid| {
+            self.with_face(|f| f.number_of_glyphs()).is_some_and(|n| gid < n)
+        })
+    }
+
     /// Outline for one entry of a display-list glyph run: a `CGTransform` run
     /// holds glyph indices, any other run Unicode code points.
     pub fn outline_for_run_code(&self, code: u16, glyph_index: bool) -> Option<Path> {

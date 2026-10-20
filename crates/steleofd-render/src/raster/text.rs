@@ -68,7 +68,17 @@ pub(crate) fn draw_text_inner(
         let Some((outline, _source)) =
             fonts.outline_for_code_in(&face, gid, run.codes_are_glyphs, &wanted)
         else {
-            missing += 1;
+            // A face that answers this code with a glyph of its own but no
+            // outline states a blank on purpose, which is not a gap.
+            let blank = run.codes_are_glyphs && face.codes_glyph(gid);
+            if !blank {
+                missing += 1;
+                tracing::debug!(
+                    code = gid,
+                    glyphs = run.codes_are_glyphs,
+                    "a run code had no outline in its face or any fallback"
+                );
+            }
             continue;
         };
         // Outlines are normalized to 1/1000 em with y pointing up, and the
