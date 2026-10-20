@@ -72,12 +72,18 @@ web-sys = { workspace = true, features = ["Window", "Document", "HtmlCanvasEleme
 # The desktop features are set per target for one reason: `accesskit` refuses to
 # compile off a desktop unless the activity is a game one, so Android takes both
 # this and the block below without it.
+#
+# Both renderers are compiled in. wgpu reaches Vulkan and is the default, but
+# the graphics stacks on the domestic boards implement OpenGL first and Vulkan
+# unevenly, so a reader that cannot start there falls back to glow at runtime
+# instead of needing a second package and a second download.
 [target.'cfg(not(target_os = "android"))'.dependencies.eframe]
 workspace = true
 default-features = false
 features = [
     "accesskit",
     "default_fonts",
+    "glow",
     "wayland",
     "web_screen_reader",
     "wgpu",
