@@ -309,8 +309,11 @@ impl TopDict {
                     let op = *dict.get(at + 1)?;
                     at += 2;
                     match op {
-                        6 => out.font_bbox = numbers(&stack)?,
-                        7 => out.font_matrix = numbers(&stack)?,
+                        6 => out.font_bbox = numbers(&stack).unwrap_or(out.font_bbox),
+                        7 => out.font_matrix = numbers(&stack).unwrap_or(out.font_matrix),
+                        // `ROS` states its three arguments, but a producer that
+                        // writes it bare leaves the stack holding whatever came
+                        // before, and clearing that would drop real fields.
                         30 => out.cid_keyed = true,
                         _ => {}
                     }
@@ -318,8 +321,8 @@ impl TopDict {
                 }
                 0..=21 => {
                     match b {
-                        15 => out.charset = Some(offset_of(&stack)?),
-                        17 => out.char_strings = offset_of(&stack)?,
+                        15 => out.charset = offset_of(&stack).or(out.charset),
+                        17 => out.char_strings = offset_of(&stack).unwrap_or(out.char_strings),
                         _ => {}
                     }
                     stack.clear();
@@ -667,6 +670,24 @@ pub(crate) mod tests {
             .expect("the ROS entry is in there");
         cff.splice(at..at + ros.len(), []);
         assert!(cid_charset(&cff).is_none());
+    }
+
+    #[test]
+    fn a_short_field_costs_itself_and_not_the_whole_dict() {
+        // A producer that writes one operand where four belong leaves the
+        // stack short; reading the rest of the DICT is still worth doing,
+        // since the offsets a face needs usually come after such a field.
+        let mut dict = Vec::new();
+        push_int(&mut dict, 307);
+        dict.extend_from_slice(&[17]); // CharStrings
+        push_int(&mut dict, 100);
+        dict.extend_from_slice(&[12, 6]); // FontBBox with one operand
+        push_int(&mut dict, 294);
+        dict.extend_from_slice(&[15]); // charset
+        let top = TopDict::from_dict(&dict).expect("one short field is not fatal");
+        assert_eq!(top.char_strings, 307);
+        assert_eq!(top.charset, Some(294));
+        assert_eq!(top.font_bbox, [0.0; 4], "the field keeps its default");
     }
 
     #[test]
