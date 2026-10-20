@@ -6,6 +6,7 @@ cli-version = 版本：{ $version }
 cli-embedded-fonts = 内嵌字体：{ $count }
 cli-font-substituted = 字体：{ $count } 个未内嵌，已用替代字体绘制（{ $names }）
 cli-font-missing = 警告：{ $count } 个字体（{ $names }）未内嵌且本机未安装，也找不到能覆盖其文字的替代字体，这些文字未绘制到页面
+cli-missing-images = 警告：{ $count } 个图片无法绘制，页面上不会出现
 cli-missing-glyphs = 警告：{ $count } 个字符在任何可用字体中都没有字形，页面上不会出现
 cli-signatures = 签名：{ $count }
 cli-no-pages = 该文档未声明任何页面

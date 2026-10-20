@@ -159,6 +159,88 @@ fn render_writes_a_png() {
     assert!(png.len() > 1000, "the page rendered to almost nothing");
 }
 
+/// A document whose only image is bytes no decoder accepts.
+fn broken_image_path() -> PathBuf {
+    const PAGE: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
+<Page>
+  <Area><PhysicalBox>0 0 210 297</PhysicalBox></Area>
+  <Content>
+    <Layer ID="2" Type="Body">
+      <ImageObject ID="3" Boundary="10 10 50 50" ResourceID="9">
+        <ImageClip ClipArea="10 10 50 50"/>
+      </ImageObject>
+    </Layer>
+  </Content>
+</Page>"#;
+    let entries = [
+        ("OFD.xml", OFD_XML.as_bytes().to_vec()),
+        ("Doc_0/Document.xml", DOCUMENT_XML.as_bytes().to_vec()),
+        ("Doc_0/Pages/Page_0/Content.xml", PAGE.as_bytes().to_vec()),
+        (
+            "Doc_0/DocumentRes.xml",
+            br#"<?xml version="1.0" encoding="UTF-8"?>
+<Res BaseLoc="Res"><MultiMedias><MultiMedia ID="9" Type="Image"><MediaFile>gone.png</MediaFile></MultiMedia></MultiMedias></Res>"#
+                .to_vec(),
+        ),
+        ("Doc_0/Res/gone.png", b"not a PNG".to_vec()),
+    ];
+    let borrowed: Vec<(&str, &[u8])> = entries
+        .iter()
+        .map(|(path, data)| (*path, data.as_slice()))
+        .collect();
+    let bytes = build_archive(&borrowed).expect("build fixture");
+    let path = scratch("broken-image").join("broken.ofd");
+    std::fs::write(&path, bytes).expect("write fixture");
+    path
+}
+
+#[test]
+fn render_reports_an_image_it_could_not_draw() {
+    // The page still writes, so the warning is the only sign that part of it
+    // never made it into the picture.
+    let path = broken_image_path();
+    let out = scratch("broken-render").join("page.png");
+    let report = report_for(&[
+        "render",
+        "--locale",
+        "en-US",
+        path.to_str().unwrap(),
+        "-o",
+        out.to_str().unwrap(),
+    ]);
+    assert!(out.is_file(), "the page was written anyway");
+    assert!(
+        !report.ok,
+        "a page short of an image must not report success: {}",
+        report.text
+    );
+    assert!(
+        report
+            .warnings
+            .iter()
+            .any(|w| w.contains("1 image could not be drawn")),
+        "warnings were {:?}",
+        report.warnings,
+    );
+}
+
+#[test]
+fn render_says_nothing_about_images_when_all_of_them_draw() {
+    let path = fixture_path();
+    let out = scratch("clean-render").join("page.png");
+    let report = report_for(&[
+        "render",
+        path.to_str().unwrap(),
+        "-o",
+        out.to_str().unwrap(),
+    ]);
+    assert!(
+        !report.warnings.iter().any(|w| w.contains("image")),
+        "warnings were {:?}",
+        report.warnings,
+    );
+}
+
 #[test]
 fn render_rejects_an_out_of_range_page() {
     let path = fixture_path();

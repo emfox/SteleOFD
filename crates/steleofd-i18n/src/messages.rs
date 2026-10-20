@@ -135,6 +135,8 @@ pub enum MessageId {
     CliFontMissing,
     /// Warning: glyphs had no outline in any face
     CliMissingGlyphs,
+    /// Warning: images could not be decoded and were left off the page
+    CliMissingImages,
     /// Signature count line in document info
     CliSignatures,
     /// The document declares no pages
@@ -257,6 +259,7 @@ impl MessageId {
             Self::CliFontSubstituted => "cli-font-substituted",
             Self::CliFontMissing => "cli-font-missing",
             Self::CliMissingGlyphs => "cli-missing-glyphs",
+            Self::CliMissingImages => "cli-missing-images",
             Self::CliSignatures => "cli-signatures",
             Self::CliNoPages => "cli-no-pages",
             Self::CliWrote => "cli-wrote",
@@ -354,6 +357,7 @@ impl MessageId {
         Self::CliFontSubstituted,
         Self::CliFontMissing,
         Self::CliMissingGlyphs,
+        Self::CliMissingImages,
         Self::CliSignatures,
         Self::CliNoPages,
         Self::CliWrote,
@@ -405,6 +409,7 @@ impl MessageId {
                 | Self::CliFontSubstituted
                 | Self::CliFontMissing
                 | Self::CliMissingGlyphs
+                | Self::CliMissingImages
                 | Self::CliSignatures
                 | Self::CliWrote
                 | Self::CliRenderedPage

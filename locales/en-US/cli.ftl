@@ -6,6 +6,10 @@ cli-version = Version: { $version }
 cli-embedded-fonts = Embedded fonts: { $count }
 cli-font-substituted = Fonts: { $count } not embedded, drawn with a substitute ({ $names })
 cli-font-missing = Warning: { $count } font(s) named { $names } not embedded and not installed, with no substitute covering their text
+cli-missing-images = { $count ->
+    [one] Warning: { $count } image could not be drawn and is missing from the page
+   *[other] Warning: { $count } images could not be drawn and are missing from the page
+}
 cli-missing-glyphs = { $count ->
     [one] Warning: { $count } character had no glyph in any available font, so the page is missing it
    *[other] Warning: { $count } characters had no glyph in any available font, so the page is missing them

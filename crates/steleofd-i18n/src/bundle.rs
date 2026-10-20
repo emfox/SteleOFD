@@ -404,6 +404,7 @@ pub fn all_keys() -> &'static [&'static str] {
         "cli-font-substituted",
         "cli-font-missing",
         "cli-missing-glyphs",
+        "cli-missing-images",
         "cli-signatures",
         "cli-no-pages",
         "cli-wrote",

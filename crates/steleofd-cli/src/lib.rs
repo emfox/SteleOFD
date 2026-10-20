@@ -255,6 +255,7 @@ fn render(
     // a PNG of a page that had nothing on it.
     let mut warnings = font_warnings(&doc, i18n, &fmt);
     warnings.extend(glyph_warning(raster.missing_glyphs, i18n, &fmt));
+    warnings.extend(image_warning(raster.skipped_image_ops, i18n, &fmt));
     Ok(Report::ok(text).warn(warnings))
 }
 
@@ -291,13 +292,27 @@ fn font_warnings(doc: &Document, i18n: &I18n, fmt: &LocalizedFormat) -> Vec<Stri
 }
 
 /// A line when characters were left out because no face carried them.
-fn glyph_warning(missing: usize, i18n: &I18n, fmt: &LocalizedFormat) -> Vec<String> {
+/// The count is passed as a number, not as formatted text: Fluent picks the
+/// plural branch from the value's type, so a `String` always falls to `other`.
+fn glyph_warning(missing: usize, i18n: &I18n, _fmt: &LocalizedFormat) -> Vec<String> {
     if missing == 0 {
         return Vec::new();
     }
     vec![i18n.text_with(
         MessageId::CliMissingGlyphs,
-        [("count", fmt.integer(missing as i64).into())],
+        [("count", (missing as i64).into())],
+    )]
+}
+
+/// An image the backend could not decode leaves a hole no other warning covers:
+/// the page still renders, and only the count says part of it is absent.
+fn image_warning(skipped: usize, i18n: &I18n, _fmt: &LocalizedFormat) -> Vec<String> {
+    if skipped == 0 {
+        return Vec::new();
+    }
+    vec![i18n.text_with(
+        MessageId::CliMissingImages,
+        [("count", (skipped as i64).into())],
     )]
 }
 
@@ -327,6 +342,7 @@ fn convert(
     // A conversion that loses a face or a glyph still writes a file, so the
     // counts collected on the way out are the only sign it happened.
     let mut missing_glyphs = 0usize;
+    let mut missing_images = 0usize;
     let (count, wrote) = match format {
         FormatArg::Pdf => {
             let out = dir.join(format!("{stem}.pdf"));
@@ -346,6 +362,7 @@ fn convert(
                 let out = dir.join(format!("{stem}-{index}.png"));
                 let (png, raster) = doc.to_png_with_stats(*index, &options)?;
                 missing_glyphs += raster.missing_glyphs;
+                missing_images += raster.skipped_image_ops;
                 std::fs::write(&out, png)?;
             }
             (indices.len(), None)
@@ -377,6 +394,7 @@ fn convert(
     let work = LocalizedFormat::new(i18n.locale().clone());
     let mut warnings = font_warnings(&doc, i18n, &work);
     warnings.extend(glyph_warning(missing_glyphs, i18n, &work));
+    warnings.extend(image_warning(missing_images, i18n, &work));
     Ok(Report::ok(lines.join("\n")).warn(warnings))
 }
 
