@@ -654,6 +654,41 @@ mod tests {
     }
 
     #[test]
+    fn an_image_fills_the_rect_its_placement_scope_sets() {
+        // An image is flattened in object space, so the state already carries
+        // the scale onto the page while the rect's origin is still millimetres.
+        // Composing the page transform on the wrong side skewed that origin.
+        let manager = FontManager::new();
+        let mut png = Vec::new();
+        image::DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(
+            4,
+            4,
+            image::Rgba([0, 0, 255, 255]),
+        ))
+        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+        .expect("encode");
+        let page = page_with(vec![
+            DrawOp::Save,
+            DrawOp::Transform(Affine::new(8.0, 0.0, 0.0, 8.0, 0.0, 0.0)),
+            DrawOp::Image {
+                image: ImageRef::new("img1", Arc::new(png), (4, 4), ImageCodec::Png),
+                dst: Rect::new(1.0, 1.0, 1.0, 1.0),
+                transform: Affine::IDENTITY,
+            },
+            DrawOp::Restore,
+        ]);
+        let out = render(&page, &manager);
+        // The rect spans 1 to 2 mm, so (5, 5) at 96 dpi is inside it and
+        // (2, 2) is the millimetre before it.
+        assert_eq!(pixel_at(&out, 5, 5)[2], 255, "inside the placement is blue");
+        assert_eq!(
+            pixel_at(&out, 2, 2),
+            [255, 255, 255, 255],
+            "outside the placement stays white"
+        );
+    }
+
+    #[test]
     fn text_renders_real_glyph_outlines() {
         let manager = manager_with_font();
         let run = steleofd_display::GlyphRun {

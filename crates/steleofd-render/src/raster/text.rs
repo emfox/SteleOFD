@@ -127,14 +127,15 @@ pub(crate) fn draw_image(
         return Ok(ImageOutcome::Failed);
     };
 
-    // Pixels map into the destination rect, which the placement transform
-    // then positions in page space.
-    let pixel_to_page = Affine::new(dst.w / iw as f64, 0.0, 0.0, dst.h / ih as f64, dst.x, dst.y);
-    // `pre_concat` multiplies on the right, which would apply the placement
-    // before the millimetre-to-pixel step and scale the rect's offset by it
-    // twice; composing left to right keeps the offset in page units.
-    let total =
-        to_ts(transform.then(pixel_to_page)).pre_concat(total_transform(state, &view, options.dpi));
+    // The pixels fill the destination rect and nothing else: the placement
+    // CTM is already in the graphics state, so applying `transform` here
+    // would scale the placement a second time.
+    let pixel_rect = Affine::new(dst.w / iw as f64, 0.0, 0.0, dst.h / ih as f64, dst.x, dst.y);
+    // `post_concat` multiplies on the right, which applies the rect before the
+    // millimetre-to-pixel step: that is the order the offsets need, since
+    // `pre_concat` would scale the rect's own origin by the page scale.
+    let _ = transform;
+    let total = to_ts(pixel_rect).post_concat(total_transform(state, &view, options.dpi));
     pixmap.draw_pixmap(
         0,
         0,
