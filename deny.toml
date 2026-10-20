@@ -17,12 +17,10 @@ version = 2
 # and turning every yanked crate into a blocked build trains people to ignore it.
 db-urls = ["https://github.com/RustSec/advisory-db"]
 ignore = [
-    # rustybuzz is unmaintained (RUSTSEC-2026-0206) and ttf-parser is too
-    # (RUSTSEC-2026-0192). Both are reachable with font bytes a document
-    # supplies, which is why they carry fuzz targets, but neither has a
-    # replacement this build can adopt: harfrust and skrifa are rewrites of the
-    # shaping and parsing APIs the renderer is built on. Tracked as R22.
-    "RUSTSEC-2026-0206",
+    # ttf-parser is unmaintained (RUSTSEC-2026-0192). It is reachable with font
+    # bytes a document supplies, which is why `ttf_face` fuzzes it, but the
+    # replacement RustSec suggests is skrifa, a rewrite of the parsing API the
+    # renderer is built on rather than a bump. Tracked as R22.
     "RUSTSEC-2026-0192",
     # zbus, zbus_names and zvariant are deprecated by their own authors in
     # favour of each other. They reach this build only through accesskit_unix,

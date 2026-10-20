@@ -6,14 +6,13 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 readme.workspace = true
-description = "Embedded fonts, system-resolved names, CID indices, metrics and shaping for OFD text"
+description = "Embedded fonts, system-resolved names, CID indices and metrics for OFD text"
 
 [dependencies]
 steleofd-common.workspace = true
 steleofd-error.workspace = true
 steleofd-geometry.workspace = true
 ttf-parser.workspace = true
-rustybuzz.workspace = true
 serde.workspace = true
 tracing.workspace = true
 

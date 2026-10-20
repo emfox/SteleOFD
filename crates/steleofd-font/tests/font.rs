@@ -1,12 +1,12 @@
 //! The font layer driven as a consumer.
-//! A real face is loaded from the shared fixture, so lookup, shaping, metrics
-//! and outlining run for real, plus the missing-font error a converter checks.
+//! A real face is loaded from the shared fixture, so lookup, metrics and
+//! outlining run for real, plus the missing-font error a converter checks.
 
 use std::sync::Arc;
 
-use steleofd_font::{FontId, FontManager, FontSource, FontTraits, ShapeOptions, shape_text};
+use steleofd_font::{FontId, FontManager, FontSource, FontTraits};
 
-/// The shared real face, so outlining and shaping are not degraded paths.
+/// The shared real face, so outlining is not a degraded path.
 fn font_bytes() -> Vec<u8> {
     let path = concat!(
         env!("CARGO_MANIFEST_DIR"),
@@ -138,100 +138,92 @@ fn an_unknown_font_id_is_an_error_not_a_panic() {
 }
 
 #[test]
-fn shaping_a_string_produces_one_glyph_per_character() {
+fn each_character_of_a_string_resolves_to_its_own_glyph() {
     let (manager, id) = manager_with_fixture();
-    let run = shape_text(&manager, id, "ABC", &ShapeOptions::default()).expect("shape");
-    assert_eq!(run.glyphs.len(), 3);
-    assert_eq!(run.text, "ABC");
-    assert!(run.total_advance > 0.0);
-    assert!(run.skipped_chars.is_empty());
-    // The clusters are character indices in source order, which is what a
-    // selection needs to map a glyph back to a caret position.
-    assert_eq!(run.clusters(), vec![0, 1, 2]);
-}
-
-#[test]
-fn shaping_an_empty_string_is_an_empty_run() {
-    let (manager, id) = manager_with_fixture();
-    let run = shape_text(&manager, id, "", &ShapeOptions::default()).expect("shape");
-    assert!(run.is_empty());
-    assert_eq!(run.total_advance, 0.0);
-}
-
-#[test]
-fn a_character_with_no_face_is_recorded_as_skipped() {
-    let (manager, id) = manager_with_fixture();
-    // Fallback is off and the fixture lacks the ideograph, so it cannot be
-    // drawn; the run reports it rather than silently emitting a blank.
-    let options = ShapeOptions {
-        allow_fallback: false,
-        ..Default::default()
-    };
-    let run = shape_text(&manager, id, "A\u{4e2d}", &options).expect("shape");
-    assert_eq!(run.glyphs.len(), 1, "only the 'A' can be shaped");
-    assert_eq!(run.skipped_chars, vec!['\u{4e2d}']);
-    assert!(run.has_missing_glyphs());
-}
-
-#[test]
-fn the_size_in_millimetres_scales_the_advance() {
-    let (manager, id) = manager_with_fixture();
-    let small = shape_text(
-        &manager,
-        id,
-        "A",
-        &ShapeOptions {
-            size_mm: 3.5,
-            ..Default::default()
-        },
-    )
-    .expect("small");
-    let large = shape_text(
-        &manager,
-        id,
-        "A",
-        &ShapeOptions {
-            size_mm: 7.0,
-            ..Default::default()
-        },
-    )
-    .expect("large");
-    // Doubling the size doubles the advance, which is the only thing the size
-    // is allowed to change.
-    let ratio = large.total_advance / small.total_advance;
-    assert!((ratio - 2.0).abs() < 0.01, "ratio was {ratio}");
-}
-
-#[test]
-fn an_advance_is_measured_in_a_thousandth_of_an_em() {
-    // The shaped width is the advance over a thousand em times the size, so an
-    // advance left in the face's own units would widen every run by its em.
-    let (manager, id) = manager_with_fixture();
-    let face = manager.face(id).expect("face");
-    let glyph = face.glyph_id(u32::from('A')).expect("A");
-    let advance = face.advance_width(glyph);
-    let size_mm = 3.5;
-    let run = shape_text(
-        &manager,
-        id,
-        "A",
-        &ShapeOptions {
-            size_mm,
-            ..Default::default()
-        },
-    )
-    .expect("shape");
-    let expected = advance / 1000.0 * size_mm;
+    let face = manager.face(id).expect("load");
+    let glyphs: Vec<u16> = "ABC"
+        .chars()
+        .map(|ch| {
+            face.glyph_id(u32::from(ch))
+                .expect("a letter of the fixture")
+        })
+        .collect();
+    assert_eq!(glyphs.len(), 3, "one glyph per character");
     assert!(
-        (run.total_advance - expected).abs() < 1e-9,
-        "one letter is {expected} mm wide, got {}",
-        run.total_advance
+        glyphs.iter().all(|&g| g != 0),
+        "none of them is .notdef, got {glyphs:?}"
     );
     assert!(
-        run.total_advance < size_mm,
-        "a letter is narrower than its size, got {}",
-        run.total_advance
+        glyphs.iter().all(|&g| face.advance_width(g) > 0.0),
+        "each moves the pen, got {glyphs:?}"
     );
+}
+
+#[test]
+fn an_empty_string_asks_the_face_for_nothing() {
+    let (manager, id) = manager_with_fixture();
+    let face = manager.face(id).expect("load");
+    let glyphs: Vec<u16> = ""
+        .chars()
+        .filter_map(|ch| face.glyph_id(u32::from(ch)))
+        .collect();
+    assert!(glyphs.is_empty());
+    let width: f64 = glyphs.iter().map(|&g| face.advance_width(g)).sum();
+    assert_eq!(width, 0.0, "an empty run is zero wide");
+}
+
+#[test]
+fn a_character_with_no_face_is_absent_rather_than_a_blank_glyph() {
+    let (manager, id) = manager_with_fixture();
+    let face = manager.face(id).expect("load");
+    // The fixture lacks the ideograph, so it cannot be drawn. The face says so
+    // instead of handing back .notdef, which would draw an empty box where the
+    // caller expected a character.
+    let resolved: Vec<Option<u16>> = "A\u{4e2d}"
+        .chars()
+        .map(|ch| face.glyph_id(u32::from(ch)))
+        .collect();
+    assert!(resolved[0].is_some(), "the 'A' resolves");
+    assert_eq!(resolved[1], None, "the ideograph does not");
+    assert_eq!(resolved.iter().flatten().count(), 1);
+}
+
+#[test]
+fn an_advance_in_a_thousandth_of_an_em_is_what_a_size_multiplies() {
+    // A box is laid out as `advance / 1000 * size_mm`; leaving the advance in
+    // the face's own units would widen every run by its em. Doubling the size
+    // is the only thing the size is allowed to change.
+    let (manager, id) = manager_with_fixture();
+    let face = manager.face(id).expect("load");
+    let a = face.glyph_id(u32::from('A')).expect("A");
+
+    let small = face.advance_width(a) / 1000.0 * 3.5;
+    let large = face.advance_width(a) / 1000.0 * 7.0;
+    assert!(
+        (large / small - 2.0).abs() < 1e-9,
+        "twice the size is twice the width, ratio was {}",
+        large / small
+    );
+    assert!(
+        small < 3.5,
+        "a letter is narrower than its size, got {small}"
+    );
+}
+
+#[test]
+fn an_advance_is_normalized_to_a_thousand_units_of_the_em() {
+    let (manager, id) = manager_with_fixture();
+    let face = manager.face(id).expect("load");
+    let a = face.glyph_id(u32::from('A')).expect("A");
+    let advance = face.advance_width(a);
+    assert!(
+        advance > 0.0 && advance < face.units_per_em(),
+        "a letter is a fraction of the em, got {advance} of {}",
+        face.units_per_em()
+    );
+    // At ten points, the default a document gets, the width in millimetres is
+    // the normalized advance scaled by the size.
+    assert!((advance / 1000.0 * 10.0 - face.advance_width(a) / 100.0).abs() < 1e-9);
 }
 
 #[test]

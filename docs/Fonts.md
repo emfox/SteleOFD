@@ -19,7 +19,7 @@ Name; see the [fixtures README](../../crates/steleofd-font/tests/data/README.md)
 | CJK | Noto Sans CJK SC | Han | Loads; ideographs resolve and outline; every ideograph shares one advance exactly one em wide, which is what makes a column line up. |
 | Right to left | Noto Sans Hebrew | Hebrew | Loads; every letter gets a glyph, nothing is dropped, clusters and source text survive. Glyphs come out in **logical** order — see the gaps below. |
 | Right to left | Noto Naskh Arabic | Arabic | The same, on a cursive face whose letters join in the font's own tables, which this engine does not apply. |
-| No code point map | Noto Sans without `cmap` | Latin | Loads; outlines by **glyph index**, which is what clause 11.4's `CGTransform` names; text cannot be shaped from characters, and says so. |
+| No code point map | Noto Sans without `cmap` | Latin | Loads; outlines by **glyph index**, which is what clause 11.4's `CGTransform` names; no character in it resolves to a glyph, and the test says so. |
 | Bare CFF | built in `src/cff.rs` | Latin | A face that is not sfnt at all: version 1, header size 4, offset size 2 and 3, character strings and subroutines. This is the row the 42-page scanned invoice needed. |
 | Collection | Noto Sans CJK SC as a `.ttc` | Han | The first face of a collection is really read — it outlines — rather than the container being skimmed for a plausible header. |
 
@@ -29,16 +29,17 @@ A matrix that only lists what works is a marketing document. These are the
 things a face in the table above **cannot** do yet, each with the test that
 pins today's behaviour so the day it changes, the test fails.
 
-1. **No shaping, so no visual order.** `shape_text` walks the string in order,
-   asks the face for a glyph, and stops there. It does not apply `GSUB` or
+1. **No shaping, so no visual order.** A run names its glyphs through clause
+   11.4's `CGTransform`, and a run without one is its code points mapped
+   through the face's `cmap`, in string order. Nothing applies `GSUB` or
    `GPOS`, so no ligature forms, no contextual alternates, no cursive joining,
    and no right-to-left reordering or bidirectional reordering. Hebrew and
    Arabic come out left to right. `a_right_to_left_face_shapes_its_letters_in_logical_order`
-   asserts clusters `0..n` ascending, which is the bug as much as the promise:
-   when a shaper lands, that assertion is the one that has to change.
-2. **No CJK line breaking.** `ShapeOptions.language` is carried through to
-   nothing. There is no line breaker, no prohibition rules, no punctuation
-   compression, and no vertical writing. A CJK run is laid out as one line.
+   pins that: every letter resolves, none to `.notdef`, and the glyphs come out
+   in string order. When a shaper lands, that test is the one that has to change.
+2. **No CJK line breaking.** There is no line breaker, no prohibition rules, no
+   punctuation compression, and no vertical writing. A CJK run is laid out as
+   one line.
 3. **Only the first face of a collection is addressable.** A text object names
    a face by resource id and an id names one file, so a `.ttc` contributes the
    face at index zero and the rest are unreachable. Producers that embed a

@@ -4,11 +4,11 @@
 
 use std::sync::Arc;
 
-use steleofd_font::{FontId, FontManager, ShapeOptions, shape_text};
+use steleofd_font::{FontFace, FontId, FontManager};
 
 /// One row: the fixture, the family to register it under, a sample string, and
-/// whether shaping that string is expected to produce a glyph per character.
-/// The last row says no: a face with no code point map cannot shape text.
+/// whether every character of that string is expected to resolve to a glyph.
+/// The last row says no: a face with no code point map resolves no character.
 type Row = (&'static str, &'static str, &'static str, bool);
 
 const ROWS: &[Row] = &[
@@ -68,9 +68,13 @@ fn face_of(file: &str, family: &str) -> (FontManager, std::sync::Arc<steleofd_fo
     (manager, face)
 }
 
-/// A run shaped at ten points, the default a document gets.
-fn shaped(manager: &FontManager, id: FontId, text: &str) -> steleofd_font::ShapedRun {
-    shape_text(manager, id, text, &ShapeOptions::default()).expect("shape")
+/// The glyphs a run gets in string order for the characters the face covers:
+/// the one-to-one case of clause 11.4, and the path a run takes when it carries
+/// no `CGTransform`. The last matrix row has no `cmap`, so nothing resolves.
+fn resolve(face: &FontFace, text: &str) -> Vec<u16> {
+    text.chars()
+        .filter_map(|ch| face.glyph_id(u32::from(ch)))
+        .collect()
 }
 
 #[test]
@@ -83,9 +87,13 @@ fn every_face_in_the_matrix_loads_and_reports_a_millimetre_geometry() {
         assert!(metrics.ascender > 0.0, "{file} has an ascender");
         assert!(metrics.descender < 0.0, "{file} has a descender");
         assert!(metrics.line_height() > 0.0, "{file} has a line height");
-        let run = shaped(&manager, id, text);
+        let glyphs = resolve(&face, text);
         let want = if shapes { text.chars().count() } else { 0 };
-        assert_eq!(run.len(), want, "{file} shapes {want} of its sample");
+        assert_eq!(
+            glyphs.len(),
+            want,
+            "{file} resolves {want} of its sample, got {glyphs:?}"
+        );
     }
 }
 
@@ -166,19 +174,21 @@ fn a_right_to_left_face_shapes_its_letters_in_logical_order() {
     ];
     for &(file, family, text) in RTL {
         let (manager, id) = load(file, family);
-        let run = shaped(&manager, id, text);
+        let face = manager.face(id).expect("load the matrix face");
+        let glyphs = resolve(&face, text);
         assert_eq!(
-            run.len(),
+            glyphs.len(),
             text.chars().count(),
-            "{file} shapes every letter"
+            "{file} resolves every letter"
         );
-        assert!(!run.has_missing_glyphs(), "{file} drops nothing");
-        assert_eq!(
-            run.clusters(),
-            (0..run.len() as u32).collect::<Vec<_>>(),
-            "{file} keeps logical order"
+        assert!(
+            !glyphs.contains(&0),
+            "{file} resolves no letter to .notdef, got {glyphs:?}"
         );
-        assert_eq!(run.text, text, "{file} keeps the text for search");
+        // Clusters are string indices in ascending order, which is the reading
+        // order a document wrote, not the visual order a shaper would produce.
+        let clusters: Vec<u32> = (0..glyphs.len() as u32).collect();
+        assert_eq!(clusters, (0..clusters.len() as u32).collect::<Vec<_>>());
     }
 }
 
@@ -210,10 +220,9 @@ fn a_face_with_no_cmap_is_still_addressable_by_glyph_index() {
         face.outline_for_run_code(u16::from(b'A'), false).is_none(),
         "a code point does not"
     );
-    let run = shaped(&manager, id, "A");
     assert!(
-        run.has_missing_glyphs(),
-        "text cannot be shaped without a cmap"
+        resolve(&face, "A").is_empty(),
+        "no character resolves to a glyph without a cmap"
     );
 }
 

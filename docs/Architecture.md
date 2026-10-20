@@ -208,7 +208,7 @@ one a consumer adds as a dependency; the rest ship as an application, and
 | L1 | `steleofd-package` | ZIP container I/O, safety validation, atomic replacement | published |
 | L1.5 | `steleofd-i18n` | Fluent localization layer | withheld |
 | L2 | `steleofd-geometry` | Backend-independent `Path` and `Affine` | published |
-| L2 | `steleofd-font` | Font registry, metrics, shaping, system fallback | published |
+| L2 | `steleofd-font` | Font registry, metrics, system fallback | published |
 | L2 | `steleofd-display` | **Display list IR**, the architectural keystone | published |
 | L2 | `steleofd-parser` | `Content.xml` to `DisplayList` | published |
 | L2 | `steleofd-render` | Raster backend: display list to pixels | published |
