@@ -91,6 +91,10 @@ CHECKS: tuple[Check, ...] = (
     # crate. This holds the two sets to the whole workspace and a published
     # crate to what a registry asks for, so a new crate cannot slip in unnamed.
     Check("publish", "policy", (py("scripts/check_publish.py"),)),
+    # The two READMEs drifted twice, and every count in them is a copy of
+    # something the workspace knows. The English one is the source of truth;
+    # this fails when the Chinese one states a different figure.
+    Check("readme", "policy", (py("scripts/check_readme.py"),)),
     Check("android", "package", (py("scripts/android_package.py", "selftest"),)),
     Check("uos", "package", (py("scripts/uos_package.py", "selftest"),)),
     Check(
