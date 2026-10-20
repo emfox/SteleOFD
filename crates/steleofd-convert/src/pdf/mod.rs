@@ -79,6 +79,19 @@ pub struct PdfSink<'a> {
     stats: ConversionStats,
 }
 
+/// What outlining one glyph run produced.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Outlined {
+    /// At least one glyph reached the page.
+    Drew,
+    /// Every code named a glyph the face or a substitute could draw.
+    Blank,
+    /// At least one code had no glyph anywhere, which the stats already hold.
+    Missing,
+    /// The run had no face or no fill, so none of it was drawn.
+    Dropped,
+}
+
 impl<'a> PdfSink<'a> {
     /// Start a page of the given size.
     pub fn new(page_box: Rect, options: &PdfOptions<'a>) -> Self {
@@ -272,16 +285,16 @@ impl<'a> PdfSink<'a> {
         ));
     }
 
-    /// Outline every glyph into vector paths, reporting whether any was drawn.
-    fn outline_text(&mut self, run: &GlyphRun) -> bool {
+    /// Outline every glyph into vector paths, reporting what became of them.
+    fn outline_text(&mut self, run: &GlyphRun) -> Outlined {
         let Some(fonts) = self.fonts else {
-            return false;
+            return Outlined::Dropped;
         };
         let Some(face) = steleofd_display::run_face(fonts, run) else {
-            return false;
+            return Outlined::Dropped;
         };
         let Some(fill) = &run.fill else {
-            return false;
+            return Outlined::Dropped;
         };
         let mut offset = 0.0;
         let mut drawn = 0usize;
@@ -293,7 +306,9 @@ impl<'a> PdfSink<'a> {
             offset += run.letter_spacing;
             let Some((outline, _source)) = fonts.outline_for_code(&face, gid, run.codes_are_glyphs)
             else {
-                missing += 1;
+                if fonts.is_missing_code(&face, gid, run.codes_are_glyphs) {
+                    missing += 1;
+                }
                 continue;
             };
             // Outlines are normalized to 1/1000 em with y pointing up: scale
@@ -322,10 +337,13 @@ impl<'a> PdfSink<'a> {
         }
         if drawn > 0 {
             self.stats.outlined_glyphs += drawn;
-            true
-        } else {
-            false
+            return Outlined::Drew;
         }
+        if missing > 0 {
+            return Outlined::Missing;
+        }
+        // Every code was blank on purpose, so nothing is missing here.
+        Outlined::Blank
     }
 
     /// Emit the run's Unicode text against a standard font.
@@ -517,12 +535,18 @@ impl PageSink for PdfSink<'_> {
         if run.glyphs.is_empty() {
             return;
         }
-        let outlined = match self.text {
-            TextExport::Outline => self.outline_text(run),
-            TextExport::LiveText => false,
-        };
-        if !outlined {
-            self.live_text(run);
+        match self.text {
+            TextExport::Outline => match self.outline_text(run) {
+                Outlined::Drew | Outlined::Blank => {}
+                // With no face to outline, the run's own text is still worth
+                // writing when it spells characters rather than glyph ids.
+                Outlined::Dropped => self.live_text(run),
+                // A face was there and could not draw these codes, so its text
+                // is no substitute: a viewer would set glyph ids as characters
+                // and put marks on the page that never were.
+                Outlined::Missing => self.stats.dropped_runs += 1,
+            },
+            TextExport::LiveText => self.live_text(run),
         }
     }
 

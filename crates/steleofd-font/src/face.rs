@@ -147,7 +147,8 @@ impl FontFace {
             Some(code)
         };
         found.is_some_and(|gid| {
-            self.with_face(|f| f.number_of_glyphs()).is_some_and(|n| gid < n)
+            self.with_face(|f| f.number_of_glyphs())
+                .is_some_and(|n| gid < n)
         })
     }
 

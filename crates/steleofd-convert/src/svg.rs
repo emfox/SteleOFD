@@ -479,7 +479,9 @@ impl SvgSink<'_> {
             offset += run.letter_spacing;
             let Some((outline, _source)) = fonts.outline_for_code(&face, gid, run.codes_are_glyphs)
             else {
-                missing += 1;
+                if fonts.is_missing_code(&face, gid, run.codes_are_glyphs) {
+                    missing += 1;
+                }
                 continue;
             };
             // Outlines are normalized to 1/1000 em with y pointing up, and the

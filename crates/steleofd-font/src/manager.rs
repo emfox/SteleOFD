@@ -521,6 +521,19 @@ impl FontManager {
         Some((outline, alt))
     }
 
+    /// Whether one run code was left out for want of a glyph, as opposed to a
+    /// face stating a blank on purpose. Every caller that counts gaps asks
+    /// here, so the three of them agree on what a gap is.
+    pub fn is_missing_code(&self, face: &FontFace, code: u16, glyph_index: bool) -> bool {
+        // A face that answers this code with a glyph of its own but no
+        // outline states a blank on purpose, which is not a gap.
+        if glyph_index && face.codes_glyph(code) {
+            return false;
+        }
+        self.outline_for_code_in(face, code, glyph_index, &[])
+            .is_none()
+    }
+
     /// Replace the fallback chain.
     pub fn set_fallback_chain(&self, ids: Vec<FontId>) {
         if let Ok(mut chain) = self.fallback_chain.write() {

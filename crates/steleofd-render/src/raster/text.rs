@@ -68,10 +68,7 @@ pub(crate) fn draw_text_inner(
         let Some((outline, _source)) =
             fonts.outline_for_code_in(&face, gid, run.codes_are_glyphs, &wanted)
         else {
-            // A face that answers this code with a glyph of its own but no
-            // outline states a blank on purpose, which is not a gap.
-            let blank = run.codes_are_glyphs && face.codes_glyph(gid);
-            if !blank {
+            if fonts.is_missing_code(&face, gid, run.codes_are_glyphs) {
                 missing += 1;
                 tracing::debug!(
                     code = gid,
