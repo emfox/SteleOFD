@@ -666,6 +666,37 @@ fn gb_t_33190_11_4_one_character_may_expand_into_many_glyphs() {
 }
 
 #[test]
+fn gb_t_33190_11_4_many_characters_may_become_many_glyphs() {
+    // Many-to-many, which table 48 allows and 11.2 alone cannot express: two
+    // Tamil characters, three glyphs, the glyphs taking the stretch's first
+    // character. Escapes keep this file English: 0BAA and 0BCB.
+    let runs = glyph_runs(
+        "",
+        "<CGTransform CodePosition=\"0\" CodeCount=\"2\" GlyphCount=\"3\">\
+         <Glyphs>34 76 88</Glyphs></CGTransform>\
+         <TextCode X=\"0\" Y=\"0\">\u{0baa}\u{0bcb}</TextCode>",
+    );
+    assert_eq!(runs.len(), 1, "the two characters make one run");
+    assert_eq!(runs[0].glyphs, vec![34, 76, 88]);
+    assert!(runs[0].codes_are_glyphs);
+    assert_eq!(
+        runs[0].cluster_map.as_deref(),
+        Some(&[0u32, 1, 1][..]),
+        "the second glyph pair belongs to the vowel sign, not to a third character"
+    );
+    assert_eq!(
+        runs[0].plain_text(),
+        "\u{0baa}\u{0bcb}",
+        "both characters stay for search"
+    );
+    assert_eq!(
+        runs[0].advances.len(),
+        runs[0].glyphs.len(),
+        "three glyphs means three advances"
+    );
+}
+
+#[test]
 fn gb_t_33190_11_4_absent_counts_default_to_one_character() {
     // CodeCount and GlyphCount default to one; the transform then covers a
     // single character and the rest of the text is untouched.
