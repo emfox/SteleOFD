@@ -179,6 +179,7 @@ fn main() -> eframe::Result {
             .with_title("SteleOFD Reader")
             .with_inner_size([1100.0, 820.0])
             .with_min_inner_size([640.0, 480.0]),
+        renderer: renderer_from_args(),
         ..Default::default()
     };
     eframe::run_native(
@@ -191,6 +192,30 @@ fn main() -> eframe::Result {
             Ok(Box::new(Reader::with_app(App::new())))
         }),
     )
+}
+
+/// The renderer a `--renderer` argument asks for, wgpu when it says nothing.
+/// A driver that cannot make a Vulkan device cannot say so in advance, which
+/// is why the choice is made at startup rather than at build time.
+#[cfg(not(any(target_arch = "wasm32", target_os = "android")))]
+fn renderer_from_args() -> eframe::Renderer {
+    let mut args = std::env::args().skip(1);
+    while let Some(arg) = args.next() {
+        let value = match arg.split_once('=') {
+            Some(("--renderer", value)) => Some(value.to_owned()),
+            Some(_) => None,
+            None if arg == "--renderer" => args.next(),
+            None => continue,
+        };
+        match value.as_deref() {
+            Some("glow") => return eframe::Renderer::Glow,
+            Some("wgpu") => return eframe::Renderer::Wgpu,
+            // An unknown name is not worth refusing to start over: the window
+            // is the point, and the default renderer is the one worth trying.
+            _ => {}
+        }
+    }
+    eframe::Renderer::default()
 }
 
 /// Neither of the other two builds has a `main` to start from.
