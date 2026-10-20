@@ -85,7 +85,7 @@ Exec={EXECUTABLE} %f
 TryExec={EXECUTABLE}
 Icon={PACKAGE}
 Terminal=false
-Categories={SECTION.capitalize()};Viewer;Graphics;
+Categories={SECTION.capitalize()};Viewer;
 MimeType=application/ofd;
 StartupNotify=true
 """
