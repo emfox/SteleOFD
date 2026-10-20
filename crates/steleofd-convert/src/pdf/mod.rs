@@ -203,7 +203,7 @@ impl<'a> PdfSink<'a> {
                 self.alphas.len() - 1
             }
         };
-        format!(" /GS{index} gs")
+        format!("/GS{index} gs")
     }
 
     /// Emit a path, flattening arcs and elevating curves into cubics.
@@ -305,6 +305,7 @@ impl<'a> PdfSink<'a> {
                 PaintShape::Solid(c) => {
                     let mut s = format!("{} rg", rgb(c));
                     if c.a != 255 {
+                        s.push(' ');
                         s.push_str(&self.alpha_state(c.a as f64 / 255.0));
                     }
                     s
@@ -458,6 +459,7 @@ impl PageSink for PdfSink<'_> {
                 Some(PaintShape::Solid(c)) => {
                     let _ = write!(setup, "{} rg", rgb(c));
                     if c.a != 255 {
+                        setup.push(' ');
                         setup.push_str(&self.alpha_state(c.a as f64 / 255.0));
                     }
                     operator.push_str(match shape.rule {
@@ -479,12 +481,14 @@ impl PageSink for PdfSink<'_> {
             }
         }
         if shape.stroke.is_some() {
+            setup.push(' ');
             setup.push_str(&stroke_prefix(shape.stroke_style, &self.ctm));
             if let Some(paint) = shape.stroke {
                 match paint {
                     PaintShape::Solid(c) => {
                         let _ = write!(setup, " {} RG", rgb(c));
                         if c.a != 255 {
+                            setup.push(' ');
                             setup.push_str(&self.alpha_state(c.a as f64 / 255.0));
                         }
                     }
