@@ -92,6 +92,7 @@ CHECKS: tuple[Check, ...] = (
     # crate to what a registry asks for, so a new crate cannot slip in unnamed.
     Check("publish", "policy", (py("scripts/check_publish.py"),)),
     Check("android", "package", (py("scripts/android_package.py", "selftest"),)),
+    Check("uos", "package", (py("scripts/uos_package.py", "selftest"),)),
     Check(
         "commits",
         "policy",
