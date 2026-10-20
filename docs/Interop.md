@@ -15,8 +15,9 @@ the same as being right.
 ## 1. Method
 
 The **golden book** ([`crates/steleofd-testkit/src/golden.rs`](../crates/steleofd-testkit/src/golden.rs))
-is nine small pages, one per renderer feature, each with a known expected
-picture. It was rendered twice at 96 dpi into 378x227 PNGs:
+is fourteen small pages: nine, one per renderer feature, each with a known
+expected picture, and five font pages added later. The nine are what the oracle
+saw. It was rendered twice at 96 dpi into 378x227 PNGs:
 
 - by SteleOFD (`steleofd render`), and
 - by a **second vendor's desktop reader** ("the oracle" below).
@@ -32,6 +33,16 @@ ofdrw as of commit `84e9eb2`.
 Five of the nine pages agree to anti-aliasing. The four that differ are
 `clip`, `gradient` (`AxialShd`), `radial` (`RadialShd`) and `wide` (a page
 box wider than `CommonData.PageArea`). They are examined in turn.
+
+The book grew five **font** pages afterwards, `latin`, `cjk`, `ttc`, `rtl` and
+`manytomany`, and these were **not** taken to the oracle. They exist for the
+other direction of drift: `ttf-parser` is unmaintained and R22 replaces it, and
+a replacement that rounds `units_per_em` differently or resolves a `cmap` subtable
+in another order moves glyph geometry while every op-level assertion still passes.
+Each page draws through one face of `crates/steleofd-font/tests/data`, the same
+subsets `tests/matrix.rs` claims coverage for, so a face that loses a glyph shows
+up as a page with less ink. They are a regression detector, not an interop
+finding, and no conclusion in the sections below rests on them.
 
 Pixel counts below are read from the PNGs directly. Colour counts are of
 distinct RGBA tuples; a real gradient carries hundreds, a flat fill one.

@@ -11,6 +11,12 @@ The fixtures are subsets of Noto faces, cut down so a test can say exactly what
 it expects. They carry the SIL Open Font License 1.1 and no Reserved Font
 Name; see the [fixtures README](../../crates/steleofd-font/tests/data/README.md).
 
+Five of these faces are also drawn into the golden book, one page each —
+`latin`, `cjk`, `ttc`, `rtl` and `manytomany` — and those pages are the only
+place glyph geometry is pinned as pixels. The matrix rows assert what a run
+*holds*; a face whose outlines move by a fraction of an em keeps every one of
+those assertions green. See [the golden images](#the-golden-images) below.
+
 ## The matrix
 
 | Row | Face | Script | Proven |
@@ -174,3 +180,33 @@ The path is short and every step is a clause:
 The matrix above covers steps 1 to 4 as an engine. It says nothing about how a
 backend paints the outline: that is the raster and vector exporters, which
 `docs/Roadmap.md` does not list as open.
+
+## The golden images
+
+A committed PNG per page, compared channel by channel at tolerance 4 and
+failing above 0.5% of pixels differing; `BLESS=1` rewrites them. Nine of the
+fourteen pages are renderer features — paths, paint, clips. The other five are
+the font pages, and they exist because of direction of drift the matrix cannot
+see.
+
+`ttf-parser` is unmaintained and R22 replaces it. A replacement that rounds
+`units_per_em` differently, picks another `cmap` subtable or reverses a contour
+moves glyphs by a fraction of an em — under a pixel at body size, several
+pixels at display size, and invisible to every op-level assertion, because the
+ops still name the same glyphs at the same positions. The pages pin what a run
+*cannot* say: where the ink landed. Moving `cjk`'s second line one pixel right
+already breaks the tolerance.
+
+| Page | Face | What moved would show |
+| --- | --- | --- |
+| `latin` | Noto Sans subset | Advances and outlines of two lines of Latin text |
+| `cjk` | Noto Sans CJK SC subset | The one-em advance that makes a column line up, over twelve ideographs |
+| `ttc` | the same face as a `.ttc` | That face zero of a collection is what gets read |
+| `rtl` | Noto Sans Hebrew subset | Glyph geometry on a face taken through the fallback chain, not embedded |
+| `manytomany` | Noto Sans CJK SC subset | Clause 11.4.5 on screen: two characters, three glyphs, three marks |
+
+`every_golden_page_paints_something` refuses a fixture that draws nothing, since
+a blank reference compares equal to the next blank page; and
+`the_font_pages_draw_the_glyphs_their_face_provides` sets an ink floor per page
+so a lost glyph or a `.notdef` substitution trips before the comparison does.
+

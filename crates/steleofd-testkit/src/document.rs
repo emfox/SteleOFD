@@ -162,13 +162,25 @@ pub fn annotated_archive(pages: usize, annotated: usize) -> Vec<u8> {
     build_archive(&borrowed).expect("archive")
 }
 
+/// The face the drawing fixtures embed, under the name a `FontFile` uses.
+pub const FONT_BYTES: &str = "Orbitron-Bold.ttf";
+
 /// A real face, so glyph outlining runs for real rather than degrading.
 pub fn font_bytes() -> Vec<u8> {
-    let path = concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../steleofd-render/tests/data/Orbitron-Bold.ttf"
-    );
-    std::fs::read(path).expect("font fixture")
+    font_file(FONT_BYTES)
+}
+
+/// One face from the font matrix, by the file name the matrix tests use, so a
+/// subset is cut once and both suites draw the same glyphs from it. The Orbitron
+/// face lives with the render fixtures and is reachable by the same name.
+pub fn font_file(name: &str) -> Vec<u8> {
+    let folder = if name == FONT_BYTES {
+        "../steleofd-render/tests/data"
+    } else {
+        "../steleofd-font/tests/data"
+    };
+    let path = format!("{}/{folder}/{name}", env!("CARGO_MANIFEST_DIR"));
+    std::fs::read(&path).unwrap_or_else(|e| panic!("read font fixture {path}: {e}"))
 }
 
 /// Build a package from entries written in the order given.

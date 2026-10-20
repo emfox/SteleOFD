@@ -20,7 +20,7 @@ pub use document::{
     SIGN_VALUE_FILE, SIGNS_ENTRY, SIGNS_XML, annotated_archive, archive_of, base_entries,
     font_bytes, multipage_archive, multipage_document_xml, open_package, open_package_bytes,
 };
-pub use golden::{DOCS, GoldenDoc, golden_archive, golden_book};
+pub use golden::{Content, DOCS, GoldenDoc, golden_archive, golden_book};
 pub use signed::{
     descriptor, descriptor_with_proof, fixture_bytes, signed_descriptor_entries, signed_fixture,
     signed_fixture_over, signed_fixture_with, unsigned_descriptor_entries,

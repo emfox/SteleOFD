@@ -205,3 +205,84 @@ fn the_even_odd_page_keeps_its_hole() {
     assert_eq!(centre.0[3], 0, "the inner square is cut out, not filled");
     assert!(ring.0[3] > 0, "the ring around it is painted");
 }
+
+#[test]
+fn every_golden_page_paints_something() {
+    // A reference that is a blank page compares equal to the next blank page,
+    // so a font fixture that draws nothing would pass forever while pinning
+    // nothing. Every page must have ink somewhere.
+    for doc in DOCS {
+        let page = decode(&render(doc), doc.name);
+        let inked = page.pixels().filter(|p| p.0[3] > 20).count();
+        assert!(
+            inked > 0,
+            "{} renders as a blank page, so it pins no glyph",
+            doc.name
+        );
+    }
+}
+
+#[test]
+fn the_font_pages_draw_the_glyphs_their_face_provides() {
+    // The five font fixtures exist because the drawing ones only ever draw one
+    // Latin face. Each pairs a page with the matrix face `tests/matrix.rs` claims
+    // covers its characters, so a lost glyph shows up as less ink than it had.
+    for name in ["latin", "cjk", "ttc", "rtl", "manytomany"] {
+        let doc = DOCS
+            .iter()
+            .find(|doc| doc.name == name)
+            .unwrap_or_else(|| panic!("the {name} fixture"));
+        assert!(
+            doc.font.is_some(),
+            "{name} must name the face it draws with"
+        );
+        let page = decode(&render(doc), doc.name);
+        let inked = page.pixels().filter(|p| p.0[3] > 20).count();
+        // The lightest of the five draws 880 pixels today; half that is the
+        // floor, so a lost glyph or a face that falls back to .notdef trips it
+        // while ordinary anti-aliasing noise does not.
+        assert!(
+            inked > 440,
+            "{name} draws {inked} inked pixels, too few for its text"
+        );
+    }
+}
+
+#[test]
+fn the_glyph_index_page_draws_the_glyphs_a_transform_names() {
+    // Clause 11.4.5 on screen: two characters, three glyphs, and all three
+    // have outlines in the subset, so the page shows three marks. A run that
+    // drew the two glyphs it had characters for would be visibly different.
+    let doc = DOCS
+        .iter()
+        .find(|doc| doc.name == "manytomany")
+        .expect("the many-to-many fixture");
+    let page = decode(&render(doc), doc.name);
+    // The three glyphs cover 105 columns today. Two of them would cover about
+    // seventy, so eighty separates three marks from two.
+    let (w, h) = page.dimensions();
+    let inked_columns = (0..w)
+        .filter(|x| (0..h).any(|y| page.get_pixel(*x, y).0[3] > 20))
+        .count();
+    assert!(
+        inked_columns > 80,
+        "the run spans {inked_columns} columns, which is not three glyphs"
+    );
+}
+
+#[test]
+fn a_face_the_document_does_not_embed_still_draws() {
+    // The right-to-left page names an id the resource table has no face for, so
+    // the fallback chain has to supply one. That chain is what decides whether
+    // a substituted document draws its text or its boxes.
+    let doc = DOCS
+        .iter()
+        .find(|doc| doc.name == "rtl")
+        .expect("the right-to-left fixture");
+    let page = decode(&render(doc), doc.name);
+    let inked = page.pixels().filter(|p| p.0[3] > 20).count();
+    // 1001 pixels today: four letters of a 12mm Hebrew face. A page of .notdef
+    // boxes has outlines too, so this is a floor rather than a proof, and the
+    // pixel comparison above is what says the right face drew them.
+    assert!(inked > 500, "the substitute draws {inked} inked pixels");
+}

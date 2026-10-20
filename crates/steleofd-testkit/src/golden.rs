@@ -1,8 +1,15 @@
-//! The golden-image fixtures: documents whose exact pixels are committed.
-//! Each is deliberately small and built from the fixtures already here, so the
-//! reference is a few kilobytes and the diff is legible.
+//! The golden-image fixtures: documents whose exact pixels are committed. The
+//! drawing ones exercise paths, paint and clips; the font ones pin glyph geometry,
+//! which a parser swap moves without any op-level test noticing.
 
 use steleofd_package::build_archive;
+
+use crate::document::{FONT_BYTES, font_file};
+
+/// The resource id the drawing fixtures name. Its face is the shared Orbitron;
+/// the font fixtures are numbered on from it, since one resource file serves
+/// every page of the book and two faces cannot share an id.
+pub const DRAWING_FONT: u16 = 7;
 
 /// A page content entry that draws a filled path and a text run, the shape
 /// every backend has to get right for the most common document there is.
@@ -162,76 +169,288 @@ pub const WIDE_XML: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
   </Content>
 </Page>"#;
 
+/// A page of one Latin face at a size large enough for the glyph outlines to
+/// show: a hinting or control-point change in the parser moves these pixels
+/// while leaving the advance so nearly the same that no op-level test sees it.
+pub fn latin_page(font: u16) -> String {
+    // The id is filled in by the builder, so one page cannot be copied into
+    // another with the wrong face attached.
+    format!(
+        r#"<?xml version="1.0" encoding="UTF-8"?>
+<Page>
+  <Area><PhysicalBox>0 0 100 60</PhysicalBox></Area>
+  <Content>
+    <Layer ID="2">
+      <TextObject ID="3" Boundary="0 0 90 25" Font="{font}" Size="12">
+        <FillColor Value="0 0 0"/>
+        <TextCode X="6" Y="18">AVWa</TextCode>
+      </TextObject>
+      <TextObject ID="4" Boundary="0 0 90 25" Font="{font}" Size="12">
+        <FillColor Value="0 0 0"/>
+        <TextCode X="6" Y="45">Hamburgefonstiv</TextCode>
+      </TextObject>
+    </Layer>
+  </Content>
+</Page>"#
+    )
+}
+
+/// Two characters drawn as three glyphs, clause 11.4.5. Glyphs 1, 13 and 15 of the
+/// CJK subset all have outlines, so the page shows the extra glyph getting an
+/// advance and a place, which the cluster map alone cannot.
+pub fn many_to_many_page(font: u16) -> String {
+    // The id is filled in by the builder, so one page cannot be copied into
+    // another with the wrong face attached.
+    format!(
+        r#"<?xml version="1.0" encoding="UTF-8"?>
+<Page>
+  <Area><PhysicalBox>0 0 100 60</PhysicalBox></Area>
+  <Content>
+    <Layer ID="2">
+      <TextObject ID="3" Boundary="5 5 90 50" Font="{font}" Size="12">
+        <FillColor Value="0 0 0"/>
+        <CGTransform CodePosition="0" CodeCount="2" GlyphCount="3"><Glyphs>1 13 15</Glyphs></CGTransform>
+        <TextCode X="6" Y="30">&#x4E2D;&#x56FD;</TextCode>
+      </TextObject>
+    </Layer>
+  </Content>
+</Page>"#
+    )
+}
+
+/// Twelve ideographs at a size that fills the page. A CJK advance that lands a
+/// hundredth of an em off changes every column position on a real invoice, and
+/// nothing in the op-level suites measures the advance in millimetres.
+pub fn cjk_page(font: u16) -> String {
+    // The id is filled in by the builder, so one page cannot be copied into
+    // another with the wrong face attached.
+    format!(
+        r#"<?xml version="1.0" encoding="UTF-8"?>
+<Page>
+  <Area><PhysicalBox>0 0 100 60</PhysicalBox></Area>
+  <Content>
+    <Layer ID="2">
+      <TextObject ID="3" Boundary="0 0 90 25" Font="{font}" Size="9">
+        <FillColor Value="0 0 0"/>
+        <TextCode X="6" Y="22">&#x4E2D;&#x53D1;&#x53F7;&#x56FD;&#x5B50;&#x5E74;</TextCode>
+      </TextObject>
+      <TextObject ID="4" Boundary="0 0 90 25" Font="{font}" Size="9">
+        <FillColor Value="0 0 0"/>
+        <TextCode X="6" Y="49">&#x65E5;&#x6708;&#x7535;&#x7968;&#x4F60;&#x597D;</TextCode>
+      </TextObject>
+    </Layer>
+  </Content>
+</Page>"#
+    )
+}
+
+/// The same face as a collection. Opening a `.ttc` means picking a face out of
+/// a directory of them, and the wrong index draws a plausible page of the wrong
+/// glyphs, which only a pixel comparison against the single-face page catches.
+pub fn ttc_page(font: u16) -> String {
+    // The id is filled in by the builder, so one page cannot be copied into
+    // another with the wrong face attached.
+    format!(
+        r#"<?xml version="1.0" encoding="UTF-8"?>
+<Page>
+  <Area><PhysicalBox>0 0 100 60</PhysicalBox></Area>
+  <Content>
+    <Layer ID="2">
+      <TextObject ID="3" Boundary="5 5 90 50" Font="{font}" Size="9">
+        <FillColor Value="0 0 0"/>
+        <TextCode X="6" Y="30">&#x4E2D;&#x56FD;</TextCode>
+      </TextObject>
+    </Layer>
+  </Content>
+</Page>"#
+    )
+}
+
+/// Hebrew through a face the run does not name, so the substitute the fallback
+/// chain picks is what gets drawn. Which face that is decides whether the page
+/// has letters or boxes, and no assertion on the chain's order sees the ink.
+pub fn rtl_page(font: u16) -> String {
+    // The id is filled in by the builder, so one page cannot be copied into
+    // another with the wrong face attached.
+    format!(
+        r#"<?xml version="1.0" encoding="UTF-8"?>
+<Page>
+  <Area><PhysicalBox>0 0 100 60</PhysicalBox></Area>
+  <Content>
+    <Layer ID="2">
+      <TextObject ID="3" Boundary="5 5 90 50" Font="{font}" Size="12">
+        <FillColor Value="0 0 0"/>
+        <TextCode X="6" Y="30">&#x5D0;&#x5D1;&#x5D2;&#x5D3;</TextCode>
+      </TextObject>
+    </Layer>
+  </Content>
+</Page>"#
+    )
+}
+
+/// How a page's content entry is produced: a constant for the drawing fixtures,
+/// or a template for a font fixture, whose text objects have to name the resource
+/// id the builder gave that page.
+#[derive(Clone, Copy)]
+pub enum Content {
+    /// Written out once, with no substitution.
+    Fixed(&'static str),
+    /// A template taking the resource id to declare.
+    WithFont(fn(u16) -> String),
+}
+
+impl Content {
+    /// The entry's bytes for one page.
+    fn build(self, font: u16) -> String {
+        match self {
+            Content::Fixed(text) => text.to_string(),
+            Content::WithFont(build) => build(font),
+        }
+    }
+}
+
 /// One entry in the golden set: a name, the page content, and the page box.
 /// The box is per-document because a fixture that only ever exercised one page
 /// size would leave the size path itself uncompared.
 pub struct GoldenDoc {
     /// Stable file stem, used for the reference PNG.
     pub name: &'static str,
-    /// The page content entry.
-    pub content: &'static str,
+    /// The page content entry, built with the resource id its text names.
+    pub content: Content,
     /// The page box as `x y width height`, in millimetres.
     pub page_box: &'static str,
     /// The `DrawParam` block this document needs, spliced into `CommonData`,
     /// or an empty string when the page names no draw parameters.
     pub draw_params: &'static str,
+    /// The face this document embeds and declares, or `None` for the drawing
+    /// fixtures, which carry the shared Orbitron under the id every page uses.
+    pub font: Option<FontResource>,
+}
+
+/// A face one document embeds, declared under the id its text objects name.
+/// The file name is also the fixture the font matrix reads, so a glyph this
+/// page draws is a glyph `tests/matrix.rs` has already claimed the face has.
+pub struct FontResource {
+    /// Family name the declaration gives.
+    pub family: &'static str,
+    /// File name under `steleofd-font/tests/data`, also its name in the package.
+    pub file: &'static str,
 }
 
 /// Every golden fixture, in the order they are compared.
 pub const DOCS: &[GoldenDoc] = &[
     GoldenDoc {
         name: "solid",
-        content: SOLID_XML,
+        content: Content::Fixed(SOLID_XML),
         page_box: "0 0 100 60",
         draw_params: "",
+        font: None,
     },
     GoldenDoc {
         name: "clip",
-        content: CLIP_XML,
+        content: Content::Fixed(CLIP_XML),
         page_box: "0 0 100 60",
         draw_params: "",
+        font: None,
     },
     GoldenDoc {
         name: "gradient",
-        content: GRADIENT_XML,
+        content: Content::Fixed(GRADIENT_XML),
         page_box: "0 0 100 60",
         draw_params: "",
+        font: None,
     },
     GoldenDoc {
         name: "radial",
-        content: RADIAL_XML,
+        content: Content::Fixed(RADIAL_XML),
         page_box: "0 0 100 60",
         draw_params: "",
+        font: None,
     },
     GoldenDoc {
         name: "dash",
-        content: DASH_XML,
+        content: Content::Fixed(DASH_XML),
         page_box: "0 0 100 60",
         draw_params: r#"<DrawParams><DrawParam ID="d1" DashPattern="6 4" LineWidth="3"/></DrawParams>"#,
+        font: None,
     },
     GoldenDoc {
         name: "evenodd",
-        content: EVENODD_XML,
+        content: Content::Fixed(EVENODD_XML),
         page_box: "0 0 100 60",
         draw_params: "",
+        font: None,
     },
     GoldenDoc {
         name: "strokeonly",
-        content: STROKEONLY_XML,
+        content: Content::Fixed(STROKEONLY_XML),
         page_box: "0 0 100 60",
         draw_params: "",
+        font: None,
     },
     GoldenDoc {
         name: "arcs",
-        content: ARCS_XML,
+        content: Content::Fixed(ARCS_XML),
         page_box: "0 0 100 60",
         draw_params: "",
+        font: None,
     },
     GoldenDoc {
         name: "wide",
-        content: WIDE_XML,
+        content: Content::Fixed(WIDE_XML),
         page_box: "0 0 297 100",
         draw_params: "",
+        font: None,
+    },
+    GoldenDoc {
+        name: "latin",
+        content: Content::WithFont(latin_page),
+        page_box: "0 0 100 60",
+        draw_params: "",
+        font: Some(FontResource {
+            family: "Noto Sans",
+            file: "steleofd-latin-subset.ttf",
+        }),
+    },
+    GoldenDoc {
+        name: "manytomany",
+        content: Content::WithFont(many_to_many_page),
+        page_box: "0 0 100 60",
+        draw_params: "",
+        font: Some(FontResource {
+            family: "Noto Sans CJK SC",
+            file: "steleofd-cjk-subset.ttf",
+        }),
+    },
+    GoldenDoc {
+        name: "cjk",
+        content: Content::WithFont(cjk_page),
+        page_box: "0 0 100 60",
+        draw_params: "",
+        font: Some(FontResource {
+            family: "Noto Sans CJK SC",
+            file: "steleofd-cjk-subset.ttf",
+        }),
+    },
+    GoldenDoc {
+        name: "ttc",
+        content: Content::WithFont(ttc_page),
+        page_box: "0 0 100 60",
+        draw_params: "",
+        font: Some(FontResource {
+            family: "Noto Sans CJK SC",
+            file: "steleofd-collection.ttc",
+        }),
+    },
+    GoldenDoc {
+        name: "rtl",
+        content: Content::WithFont(rtl_page),
+        page_box: "0 0 100 60",
+        draw_params: "",
+        font: Some(FontResource {
+            family: "Noto Sans Hebrew",
+            file: "steleofd-hebrew-subset.ttf",
+        }),
     },
 ];
 
@@ -265,6 +484,10 @@ fn build_golden(docs: &[GoldenDoc]) -> Vec<u8> {
         .map(|d| d.draw_params)
         .collect::<Vec<_>>()
         .join("");
+    // Every declaration in the file, so a page can name its own face while the
+    // others keep the shared one. Ids must differ, since a resource id is the
+    // only thing a text run says about which face it wants.
+    let fonts = fonts_of(docs);
     let document = format!(
         r#"<?xml version="1.0" encoding="UTF-8"?>
 <Document>
@@ -284,22 +507,81 @@ fn build_golden(docs: &[GoldenDoc]) -> Vec<u8> {
         ),
     ];
     for (index, doc) in docs.iter().enumerate() {
+        // Each page names its own id, so the book's pages cannot disagree with
+        // the per-document renders about which face they draw.
         entries.push((
             format!("Doc_0/Pages/Page_{index}/Content.xml"),
-            doc.content.as_bytes().to_vec(),
+            doc.content.build(font_id(doc)).into_bytes(),
         ));
     }
-    entries.push((
-        "Doc_0/Res/Orbitron-Bold.ttf".to_string(),
-        super::document::font_bytes(),
-    ));
+    for (file, bytes) in fonts.files {
+        entries.push((format!("Doc_0/Res/{file}"), bytes));
+    }
     entries.push((
         super::document::PUBLIC_RES_ENTRY.to_string(),
-        super::document::PUBLIC_RES_XML.as_bytes().to_vec(),
+        fonts.declarations.into_bytes(),
     ));
     let borrowed: Vec<(&str, &[u8])> = entries
         .iter()
         .map(|(p, d)| (p.as_str(), d.as_slice()))
         .collect();
     build_archive(&borrowed).expect("golden archive")
+}
+
+/// The id a document's text objects name for their face.
+fn font_id(doc: &GoldenDoc) -> u16 {
+    match DOCS.iter().position(|d| d.name == doc.name) {
+        Some(index) => DRAWING_FONT + index as u16,
+        None => DRAWING_FONT,
+    }
+}
+
+/// The faces a set of documents declares, and the bytes for each once.
+struct Fonts {
+    /// The whole `PublicRes.xml`, which the parser reads by that fixed name.
+    declarations: String,
+    /// One entry per distinct file, so a face a page and the book both embed is
+    /// stored once and a `.ttc` is not written twice.
+    files: Vec<(String, Vec<u8>)>,
+}
+
+/// Collect the declarations a set of documents needs.
+fn fonts_of(docs: &[GoldenDoc]) -> Fonts {
+    let mut entries = String::new();
+    let mut files: Vec<(String, Vec<u8>)> = Vec::new();
+    let mut ids: Vec<u16> = Vec::new();
+    for doc in docs {
+        let Some(font) = doc.font.as_ref() else {
+            continue;
+        };
+        let id = font_id(doc);
+        if !ids.contains(&id) {
+            ids.push(id);
+            entries.push_str(&format!(
+                r#"
+  <Font ID="{id}" FontName="{family}"><FontFile>{file}</FontFile></Font>"#,
+                family = font.family,
+                file = font.file,
+            ));
+        }
+        if !files.iter().any(|(name, _)| name == font.file) {
+            files.push((font.file.to_string(), font_file(font.file)));
+        }
+    }
+    // The drawing fixtures draw with the shared face under id 7. A font
+    // fixture may have claimed 7 already, in which case its declaration is the
+    // one that stands and those fixtures are not part of this set.
+    if !ids.contains(&DRAWING_FONT) {
+        files.push((FONT_BYTES.to_string(), font_file(FONT_BYTES)));
+        entries.push_str(&format!(
+            r#"
+  <Font ID="{DRAWING_FONT}" FontName="Orbitron"><FontFile>{FONT_BYTES}</FontFile></Font>"#
+        ));
+    }
+    Fonts {
+        declarations: format!(
+            "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<Res BaseLoc=\"Res\"><Fonts>{entries}\n</Fonts></Res>"
+        ),
+        files,
+    }
 }
