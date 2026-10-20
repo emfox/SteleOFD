@@ -285,7 +285,10 @@ status = "verified"
 tests = [
     "gb_t_33190_8_5_object_carries_boundary_and_visibility",
     "gb_t_33190_8_5_a_graphics_unit_resolves_from_its_resource_id",
+    "gb_t_33190_3_a_page_block_holds_objects_and_blocks_nest",
+    "gb_t_33190_3_a_nested_block_moves_its_objects_into_its_own_space",
 ]
+note = "Table 3 lists PageBlock among the objects a layer holds, and a block holds the same choice, so blocks recur."
 
 [[item]]
 clause = "9.1"

@@ -819,13 +819,16 @@ fn read_page_block_object(cursor: &mut Cursor<'_>, node: &Node) -> Result<PageBl
         loop {
             match cursor.next_event()? {
                 Event::Start(n) if n.is("PathObject") => {
-                    b.objects.push(Object::PathObject(read_path_object(cursor, &n)?));
+                    b.objects
+                        .push(Object::PathObject(read_path_object(cursor, &n)?));
                 }
                 Event::Start(n) if n.is("TextObject") => {
-                    b.objects.push(Object::TextObject(read_text_object(cursor, &n)?));
+                    b.objects
+                        .push(Object::TextObject(read_text_object(cursor, &n)?));
                 }
                 Event::Start(n) if n.is("ImageObject") => {
-                    b.objects.push(Object::ImageObject(read_image_object(cursor, &n)?));
+                    b.objects
+                        .push(Object::ImageObject(read_image_object(cursor, &n)?));
                 }
                 Event::Start(n) if n.is("CompositeObject") => {
                     b.objects

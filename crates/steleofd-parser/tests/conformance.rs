@@ -5,7 +5,7 @@ use steleofd_common::Rect;
 use steleofd_display::DrawOp;
 use steleofd_display::ops::Color;
 use steleofd_display::ops::Paint;
-use steleofd_geometry::Affine;
+use steleofd_geometry::{Affine, PathSegment};
 use steleofd_model::{ActionEvent, ActionKind, GotoTarget};
 use steleofd_package::{Package, build_archive};
 use steleofd_parser::Parser;
@@ -1608,6 +1608,74 @@ fn gb_t_33190_13_a_composite_object_draws_its_resources_content() {
     assert!(
         ops.iter().any(|op| matches!(op, DrawOp::Path { .. })),
         "the composite's own path is drawn, got {ops:?}"
+    );
+}
+
+#[test]
+fn gb_t_33190_3_a_page_block_holds_objects_and_blocks_nest() {
+    // Table 3 lists `PageBlock` among the objects a layer may hold, and the
+    // choice inside a block is the same one, so blocks recur. A page that
+    // groups its content this way still draws all of it.
+    let ops = page_ops(
+        r#"<PageBlock ID="10" Boundary="0 0 100 100">
+  <PathObject ID="11" Boundary="0 0 10 10">
+    <AbbreviatedData>M 0 0 L 10 0 L 10 10 Z</AbbreviatedData>
+  </PathObject>
+  <PageBlock ID="12" Boundary="10 10 50 50">
+    <PathObject ID="13" Boundary="0 0 20 20">
+      <AbbreviatedData>M 0 0 L 20 0 L 20 20 Z</AbbreviatedData>
+    </PathObject>
+  </PageBlock>
+</PageBlock>"#,
+        "",
+    );
+    let paths = ops
+        .iter()
+        .filter(|op| matches!(op, DrawOp::Path { .. }))
+        .count();
+    assert_eq!(
+        paths, 2,
+        "both the direct and the nested path draw, got {ops:?}"
+    );
+}
+
+#[test]
+fn gb_t_33190_3_a_nested_block_moves_its_objects_into_its_own_space() {
+    // A block carries a boundary and a CTM like any other object, and the
+    // objects inside are stated in that space, so the nested path lands at
+    // the block's offset rather than at the page origin.
+    let ops = page_ops(
+        r#"<PageBlock ID="10" Boundary="0 0 100 100">
+  <PageBlock ID="12" Boundary="40 50 20 20">
+    <PathObject ID="13" Boundary="0 0 20 20">
+      <AbbreviatedData>M 0 0 L 20 0 L 20 20 Z</AbbreviatedData>
+    </PathObject>
+  </PageBlock>
+</PageBlock>"#,
+        "",
+    );
+    let Some(DrawOp::Path { path, .. }) = ops.iter().find(|op| matches!(op, DrawOp::Path { .. }))
+    else {
+        panic!("the nested path draws, got {ops:?}");
+    };
+    // The path keeps the coordinates its own object space gives it; the
+    // block's corner reaches the page through the transform in front of it.
+    assert!(
+        path.segments.iter().any(|s| matches!(
+            s,
+            PathSegment::MoveTo(x, y) if x.abs() < 0.01 && y.abs() < 0.01
+        )),
+        "the path is stated in the block's space, got {:?}",
+        path.segments
+    );
+    let moved = ops.iter().find_map(|op| match op {
+        DrawOp::Transform(t) => Some(*t),
+        _ => None,
+    });
+    let moved = moved.expect("the block's corner is a transform on the list");
+    assert!(
+        (moved.e - 40.0).abs() < 0.01 && (moved.f - 50.0).abs() < 0.01,
+        "the block's boundary moves it, got {moved:?}"
     );
 }
 
