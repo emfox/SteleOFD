@@ -12,7 +12,7 @@ description = "Embedded fonts, system-resolved names, CID indices and metrics fo
 steleofd-common.workspace = true
 steleofd-error.workspace = true
 steleofd-geometry.workspace = true
-ttf-parser.workspace = true
+skrifa.workspace = true
 serde.workspace = true
 tracing.workspace = true
 

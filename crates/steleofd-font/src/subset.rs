@@ -405,26 +405,37 @@ pub fn subset(data: &[u8], glyphs: impl IntoIterator<Item = u16>) -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ttf_parser::OutlineBuilder;
+    use skrifa::MetadataProvider;
+    use skrifa::outline::OutlinePen;
+    use skrifa::raw::TableProvider;
 
     const LATIN: &[u8] = include_bytes!("../tests/data/steleofd-latin-subset.ttf");
 
-    fn face(data: &[u8]) -> ttf_parser::Face<'_> {
-        ttf_parser::Face::parse(data, 0).expect("fixture parses")
+    fn face(data: &[u8]) -> skrifa::FontRef<'_> {
+        skrifa::FontRef::new(data).expect("fixture parses")
+    }
+
+    /// The shape maps `ch` to, or nothing when it maps none.
+    fn glyph_of(f: &skrifa::FontRef<'_>, ch: char) -> Option<u16> {
+        let (_, _, sub) = f.cmap().ok()?.best_subtable()?;
+        sub.map_codepoint(ch).map(|g| g.to_u32() as u16)
+    }
+
+    /// How many glyphs the face carries.
+    fn glyph_count(f: &skrifa::FontRef<'_>) -> u16 {
+        f.maxp().expect("maxp").num_glyphs()
     }
 
     /// The glyphs a face maps `text` to, in the order given.
     fn glyphs(data: &[u8], text: &str) -> Vec<u16> {
         let f = face(data);
-        text.chars()
-            .filter_map(|c| f.glyph_index(c).map(|g| g.0))
-            .collect()
+        text.chars().filter_map(|c| glyph_of(&f, c)).collect()
     }
 
     #[derive(Default)]
     struct Ops(usize);
 
-    impl OutlineBuilder for Ops {
+    impl OutlinePen for Ops {
         fn move_to(&mut self, _: f32, _: f32) {
             self.0 += 1;
         }
@@ -446,7 +457,16 @@ mod tests {
     fn outline_ops(data: &[u8], glyph: u16) -> Option<usize> {
         let f = face(data);
         let mut ops = Ops::default();
-        f.outline_glyph(ttf_parser::GlyphId(glyph), &mut ops)?;
+        f.outline_glyphs()
+            .get(skrifa::GlyphId::new(u32::from(glyph)))?
+            .draw(
+                skrifa::outline::DrawSettings::unhinted(
+                    skrifa::instance::Size::unscaled(),
+                    &[] as &[skrifa::instance::NormalizedCoord],
+                ),
+                &mut ops,
+            )
+            .ok()?;
         Some(ops.0)
     }
 
@@ -459,7 +479,7 @@ mod tests {
         for (ch, original) in "AB".chars().zip(&keep) {
             // The glyph is renumbered, so the id need not match; what must
             // match is the outline the id names.
-            let new = sub.glyph_index(ch).expect("kept glyph is mapped").0;
+            let new = glyph_of(&sub, ch).expect("kept glyph is mapped");
             assert_eq!(
                 outline_ops(&out, new),
                 outline_ops(LATIN, *original),
@@ -479,9 +499,9 @@ mod tests {
         let out = subset(LATIN, glyphs(LATIN, "A"));
         let sub = face(&out);
         // Glyph 0 is `.notdef` and must be there in the subset too.
-        assert!(sub.number_of_glyphs() >= 1);
+        assert!(glyph_count(&sub) >= 1);
         assert_eq!(
-            sub.glyph_index('A').and_then(|g| outline_ops(&out, g.0)),
+            glyph_of(&sub, 'A').and_then(|g| outline_ops(&out, g)),
             outline_ops(LATIN, glyphs(LATIN, "A")[0])
         );
     }
@@ -490,7 +510,7 @@ mod tests {
     fn a_glyph_outside_the_subset_is_no_longer_mapped() {
         let out = subset(LATIN, glyphs(LATIN, "A"));
         assert!(
-            face(&out).glyph_index('Z').is_none(),
+            glyph_of(&face(&out), 'Z').is_none(),
             "a dropped glyph keeps no cmap entry"
         );
     }
@@ -520,12 +540,12 @@ mod tests {
         let wanted = glyphs(LATIN, "ABC");
         let out = subset(LATIN, wanted.clone());
         // One glyph per requested, plus `.notdef`.
-        assert_eq!(face(&out).number_of_glyphs(), wanted.len() as u16 + 1);
+        assert_eq!(glyph_count(&face(&out)), wanted.len() as u16 + 1);
     }
 
     #[test]
     fn asking_for_every_glyph_gives_the_original_back() {
-        let count = face(LATIN).number_of_glyphs();
+        let count = glyph_count(&face(LATIN));
         let out = subset(LATIN, 0..count);
         assert_eq!(
             out.len(),
@@ -540,9 +560,12 @@ mod tests {
         let out = subset(LATIN, keep);
         let sub = face(&out);
         for ch in "AVav".chars() {
-            let glyph = sub.glyph_index(ch).expect("kept glyph is mapped");
+            let glyph = glyph_of(&sub, ch).expect("kept glyph is mapped");
             assert!(
-                sub.glyph_hor_advance(glyph).is_some(),
+                sub.hmtx()
+                    .ok()
+                    .and_then(|h| h.advance(skrifa::GlyphId::new(u32::from(glyph))))
+                    .is_some(),
                 "{ch} must keep its advance, or a line cannot be measured"
             );
         }

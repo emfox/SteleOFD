@@ -189,13 +189,14 @@ fourteen pages are renderer features — paths, paint, clips. The other five are
 the font pages, and they exist because of direction of drift the matrix cannot
 see.
 
-`ttf-parser` is unmaintained and R22 replaces it. A replacement that rounds
-`units_per_em` differently, picks another `cmap` subtable or reverses a contour
-moves glyphs by a fraction of an em — under a pixel at body size, several
-pixels at display size, and invisible to every op-level assertion, because the
-ops still name the same glyphs at the same positions. The pages pin what a run
-*cannot* say: where the ink landed. Moving `cjk`'s second line one pixel right
-already breaks the tolerance.
+A font parser that rounds `units_per_em` differently, picks another `cmap`
+subtable or reverses a contour moves glyphs by a fraction of an em — under a
+pixel at body size, several pixels at display size, and invisible to every
+op-level assertion, because the ops still name the same glyphs at the same
+positions. The pages pin what a run *cannot* say: where the ink landed. Moving
+`cjk`'s second line one pixel right already breaks the tolerance. That is how
+R22 was settled: `ttf-parser` became `skrifa`, and these five pages were the
+test of whether the swap kept the geometry, not the assumption that it would.
 
 | Page | Face | What moved would show |
 | --- | --- | --- |

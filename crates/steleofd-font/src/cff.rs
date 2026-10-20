@@ -644,10 +644,24 @@ pub(crate) mod tests {
         let cff = synthetic_cff();
         let sfnt = wrap_bare_cff(&cff).expect("wrap");
         assert_eq!(&sfnt[..4], b"OTTO");
-        let face = ttf_parser::Face::parse(&sfnt, 0).expect("the backend opens it");
-        assert_eq!(face.number_of_glyphs(), 3);
-        assert_eq!(face.units_per_em(), 1000);
-        assert!(face.ascender() > 0, "{:?}", face.ascender());
+        let face = skrifa::FontRef::new(&sfnt).expect("the backend opens it");
+        assert_eq!(
+            skrifa::raw::TableProvider::maxp(&face)
+                .expect("maxp")
+                .num_glyphs(),
+            3
+        );
+        assert_eq!(
+            skrifa::raw::TableProvider::head(&face)
+                .expect("head")
+                .units_per_em(),
+            1000
+        );
+        let ascender = skrifa::raw::TableProvider::hhea(&face)
+            .expect("hhea")
+            .ascender()
+            .to_i16();
+        assert!(ascender > 0, "{ascender:?}");
     }
 
     #[test]

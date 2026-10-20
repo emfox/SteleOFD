@@ -1,8 +1,8 @@
 #![no_main]
 
-//! Font bytes arrive from the document, so the TrueType reader must answer
-//! every input with a face or an error. A panic here would take the reader
-//! down on a file it was asked to display.
+//! Font bytes arrive from the document, so the reader must answer every input
+//! with a face or an error. A panic here would take the reader down on a file
+//! it was asked to display, and the parser is reachable from every page.
 
 use std::sync::Arc;
 

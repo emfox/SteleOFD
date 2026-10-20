@@ -248,4 +248,14 @@ fn a_font_collection_yields_its_first_face() {
         !face.has_codepoint(u32::from('A')),
         "it is the CJK face, not a stray header"
     );
+    // Face zero of this collection is not at the start of the file. A reader
+    // that opens byte zero instead reads a table directory out of a table, and
+    // the numbers it reports are plausible enough that only the ink catches it.
+    let path = format!(
+        "{}/tests/data/steleofd-collection.ttc",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    let bytes = std::fs::read(&path).expect("read the collection");
+    let first = u32::from_be_bytes([bytes[12], bytes[13], bytes[14], bytes[15]]);
+    assert!(first > 0, "the fixture really does start its face later");
 }

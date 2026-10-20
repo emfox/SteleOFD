@@ -134,6 +134,15 @@ section only when a release actually has one.
   face's `cmap` in string order, so a shaper was a second opinion nothing asked
   for — it could disagree with the file about which glyph to draw. This removes
   public items, which is what makes the version `0.3.0` rather than `0.2.1`.
+- **`ttf-parser` is gone.** It had been declared unmaintained by its author and
+  RustSec recorded it as `RUSTSEC-2026-0192`, so every font a document supplies
+  was read by a parser nobody would fix. Fonts are now read through `skrifa`.
+  The five queries this layer makes — code point to glyph, units per em,
+  advance, outline, reverse `cmap` — answer the same values: the five font
+  golden pages render unchanged, and they were committed before the swap
+  precisely so that could be asserted rather than assumed. The one difference
+  is that an outline no longer repeats the closing line before `Close`, since
+  `Close` already returns to the start.
 
 ## [0.2.0] - 2026-10-19
 

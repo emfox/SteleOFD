@@ -1,6 +1,5 @@
-//! A structural check before the backend sees the bytes: `ttf-parser` asserts
-//! on a table directory whose offsets run past 4 GiB, the directory is a
-//! document's to choose, and a panic aborts instead of unwinding under fuzzing.
+//! A structural check before the backend sees the bytes, since a table
+//! directory is a document's to choose.
 
 /// The three magic numbers an sfnt may begin with: TrueType 1.0, and the
 /// `true` and `OTTO` tags. A bare CFF is wrapped before it reaches this check.
@@ -9,17 +8,33 @@ const SFNT_MAGICS: [[u8; 4]; 3] = [[0x00, 0x01, 0x00, 0x00], *b"true", *b"OTTO"]
 /// The tag a font collection begins with; each face in it has its own offset.
 const COLLECTION_MAGIC: [u8; 4] = *b"ttcf";
 
-/// Whether the table directory describes tables that fit in the file. A file
-/// this cannot read answers `false` too, which the caller reports as a parse
-/// error, because that is what a malformed font is.
-pub fn directory_fits(data: &[u8]) -> bool {
-    let Some(magic) = data.get(..4) else {
-        return false;
+/// The index of the first face the file holds, if every directory it names
+/// fits. A file this cannot read answers `None`, which the caller reports as
+/// a parse error, because that is what a malformed font is.
+pub fn first_face(data: &[u8]) -> Option<u32> {
+    let magic = data.get(..4)?;
+    // Both a single font and a collection answer `0`: the first face of either
+    // is the one an id names, and only the collection has a directory to look
+    // up. What the check decides is whether every one of those directories fits.
+    let fits = if magic == COLLECTION_MAGIC {
+        collection_fits(data)
+    } else {
+        SFNT_MAGICS.iter().any(|m| m == magic) && fits(data, 0)
     };
-    if magic == COLLECTION_MAGIC {
-        return collection_fits(data);
-    }
-    SFNT_MAGICS.iter().any(|m| m == magic) && fits(data, 0)
+    fits.then_some(0)
+}
+
+/// The offset of each face a collection header lists.
+fn face_offsets(data: &[u8]) -> impl Iterator<Item = u32> + '_ {
+    let count = data
+        .get(8..12)
+        .map(|b| u32::from_be_bytes([b[0], b[1], b[2], b[3]]) as usize)
+        .unwrap_or(0);
+    (0..count).filter_map(move |face| {
+        let at = 12 + face * 4;
+        let b = data.get(at..at + 4)?;
+        Some(u32::from_be_bytes([b[0], b[1], b[2], b[3]]))
+    })
 }
 
 /// A collection header lists an offset per face; every one must fit, because
@@ -32,14 +47,10 @@ fn collection_fits(data: &[u8]) -> bool {
     let Some(end) = count.checked_mul(4).and_then(|n| n.checked_add(12)) else {
         return false;
     };
-    if end > data.len() {
+    if end > data.len() || count == 0 {
         return false;
     }
-    (0..count).all(|face| {
-        let at = 12 + face * 4;
-        let offset = u32::from_be_bytes([data[at], data[at + 1], data[at + 2], data[at + 3]]);
-        fits(data, offset as usize)
-    })
+    face_offsets(data).all(|offset| fits(data, offset as usize))
 }
 
 /// Read the directory at `base` and check every record against the file.
@@ -75,6 +86,11 @@ fn fits(data: &[u8], base: usize) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Whether the table directory describes tables that fit in the file.
+    fn directory_fits(data: &[u8]) -> bool {
+        first_face(data).is_some()
+    }
 
     /// The smallest directory a check can pass: no records, a valid magic.
     fn empty_directory() -> Vec<u8> {

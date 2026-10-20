@@ -3,6 +3,8 @@
 use std::panic::AssertUnwindSafe;
 use std::sync::Arc;
 
+use skrifa::MetadataProvider;
+use skrifa::raw::TableProvider;
 use steleofd_error::{FontError, Result};
 use steleofd_geometry::{Path, PathSegment};
 
@@ -19,6 +21,9 @@ pub struct FontFace {
     id: FontId,
     family: String,
     data: Arc<Vec<u8>>,
+    /// Which face of the file this is: zero for a single font, and the index
+    /// the collection header lists it under otherwise.
+    face_index: u32,
     is_fallback: bool,
     metrics: FontMetrics,
     units_per_em: f64,
@@ -35,6 +40,7 @@ impl std::fmt::Debug for FontFace {
             .field("id", &self.id)
             .field("family", &self.family)
             .field("bytes", &self.data.len())
+            .field("face_index", &self.face_index)
             .field("is_fallback", &self.is_fallback)
             .field("cid_keyed", &self.cid_keyed)
             .finish()
@@ -60,26 +66,42 @@ impl FontFace {
         };
         // The directory is read here first: the backend asserts on one that
         // does not fit, and a panic is a crash where unwinding is compiled out.
-        if !sfnt::directory_fits(data.as_slice()) {
+        let Some(index) = sfnt::first_face(data.as_slice()) else {
             return Err(FontError::Parse("the table directory does not fit".to_string()).into());
-        }
+        };
         let (units_per_em, metrics) = guard::guard("the face", || {
-            let face = ttf_parser::Face::parse(data.as_slice(), 0)
+            let font = skrifa::FontRef::from_index(data.as_slice(), index)
                 .map_err(|e| FontError::Parse(format!("font parse failed: {e:?}")))?;
+            let head = font
+                .head()
+                .map_err(|e| FontError::Parse(format!("the head table is unreadable: {e:?}")))?;
+            let hhea = font
+                .hhea()
+                .map_err(|e| FontError::Parse(format!("the hhea table is unreadable: {e:?}")))?;
 
-            let upem = face.units_per_em() as f64;
+            let upem = head.units_per_em() as f64;
             if upem <= 0.0 {
                 return Err(FontError::Parse("font units_per_em is zero".to_string()).into());
             }
             let k = 1000.0 / upem;
+            // `OS/2` is optional in the format, and the two heights it carries
+            // are version 2 additions, so either absence is a face that states
+            // no cap or x height rather than a broken file.
+            let os2 = font.os2().ok();
+            let ascent = hhea.ascender().to_i16();
+            let cap_height = os2
+                .as_ref()
+                .and_then(|t| t.s_cap_height())
+                .unwrap_or(ascent);
+            let x_height = os2.as_ref().and_then(|t| t.sx_height()).unwrap_or(0);
 
             let m = FontMetrics {
-                units_per_em: face.units_per_em(),
-                ascender: face.ascender() as f64 * k,
-                descender: face.descender() as f64 * k,
-                line_gap: face.line_gap() as f64 * k,
-                cap_height: face.capital_height().unwrap_or(face.ascender()) as f64 * k,
-                x_height: face.x_height().unwrap_or(0) as f64 * k,
+                units_per_em: head.units_per_em(),
+                ascender: ascent as f64 * k,
+                descender: hhea.descender().to_i16() as f64 * k,
+                line_gap: hhea.line_gap().to_i16() as f64 * k,
+                cap_height: cap_height as f64 * k,
+                x_height: x_height as f64 * k,
             };
             Ok((upem, m))
         })?;
@@ -88,6 +110,7 @@ impl FontFace {
             id,
             family,
             data,
+            face_index: index,
             is_fallback,
             metrics,
             units_per_em,
@@ -147,7 +170,7 @@ impl FontFace {
             Some(code)
         };
         found.is_some_and(|gid| {
-            self.with_face(|f| f.number_of_glyphs())
+            self.with_face(|f| f.maxp().map(|t| t.num_glyphs()).unwrap_or(0))
                 .is_some_and(|n| gid < n)
         })
     }
@@ -166,40 +189,41 @@ impl FontFace {
 
     /// Build a temporary backend face for one query. A panic in the backend
     /// answers the query with nothing rather than ending the process.
-    fn with_face<T>(&self, f: impl FnOnce(&ttf_parser::Face<'_>) -> T) -> Option<T> {
-        // The closure borrows `f`, which is not required to be unwind safe, so
-        // the call is wrapped rather than the closure asserted safe.
+    fn with_face<T>(&self, f: impl FnOnce(&skrifa::FontRef<'_>) -> T) -> Option<T> {
+        // The closure borrows `f`, which is not unwind safe, so the call is
+        // wrapped rather than asserted safe. The index was read at load time.
         let queried = AssertUnwindSafe(|| {
-            let face = ttf_parser::Face::parse(self.data.as_slice(), 0)
+            let font = skrifa::FontRef::from_index(self.data.as_slice(), self.face_index)
                 .map_err(|e| FontError::Parse(format!("font parse failed: {e:?}")))?;
-            Ok(f(&face))
+            Ok(f(&font))
         });
         guard::guard("a glyph", queried).ok()
     }
 
     /// Glyph id for a Unicode code point.
     pub fn glyph_id(&self, codepoint: u32) -> Option<u16> {
-        let ch = char::from_u32(codepoint)?;
-        self.with_face(|f| f.glyph_index(ch).map(|g| g.0)).flatten()
+        self.with_face(|f| {
+            let (_, _, sub) = f.cmap().ok()?.best_subtable()?;
+            sub.map_codepoint(codepoint).map(|g| g.to_u32() as u16)
+        })
+        .flatten()
     }
 
     /// Reverse lookup from glyph id to Unicode, needed for search and copy.
     /// Walks the `cmap` subtables at O(cmap size), so callers should cache.
     pub fn reverse_cmap(&self, glyph: u16) -> Option<u32> {
-        self.with_face(|face| {
-            let cmap = face.tables().cmap?;
-            for subtable in cmap.subtables {
-                let mut found: Option<u32> = None;
-                subtable.codepoints(|cp| {
-                    if found.is_none()
-                        && let Some(g) = subtable.glyph_index(cp)
-                        && g.0 == glyph
-                    {
-                        found = Some(cp);
+        self.with_face(|font| {
+            let cmap = font.cmap().ok()?;
+            // Every subtable, not just the best one: a glyph a symbol or a
+            // Mac Roman subtable names is still a glyph the face maps.
+            for record in cmap.encoding_records() {
+                let Ok(sub) = record.subtable(cmap.offset_data()) else {
+                    continue;
+                };
+                for (cp, g) in sub.iter() {
+                    if g.to_u32() == u32::from(glyph) {
+                        return Some(cp);
                     }
-                });
-                if found.is_some() {
-                    return found;
                 }
             }
             None
@@ -210,8 +234,9 @@ impl FontFace {
     /// Horizontal advance in 1/1000 em, the OFD convention.
     pub fn advance_width(&self, glyph: u16) -> f64 {
         self.with_face(|f| {
-            let upem = f.units_per_em().max(1) as f64;
-            let units = f.glyph_hor_advance(ttf_parser::GlyphId(glyph)).unwrap_or(0) as f64;
+            let upem = f.head().map(|h| h.units_per_em()).unwrap_or(1).max(1) as f64;
+            let gid = skrifa::GlyphId::new(u32::from(glyph));
+            let units = f.hmtx().ok().and_then(|h| h.advance(gid)).unwrap_or(0) as f64;
             units * 1000.0 / upem
         })
         .unwrap_or(0.0)
@@ -221,12 +246,26 @@ impl FontFace {
     /// Size scaling is left to the render layer's CTM, so one outline can be
     /// reused across font sizes.
     pub fn outline(&self, glyph: u16) -> Option<Path> {
-        self.with_face(|face| {
+        self.with_face(|font| {
+            let upem = font.head().map(|h| h.units_per_em()).unwrap_or(0) as f64;
+            if upem <= 0.0 {
+                return None;
+            }
             let mut builder = OutlineBuilder {
                 path: Path::new(),
-                scale: 1000.0 / face.units_per_em() as f64,
+                scale: 1000.0 / upem,
             };
-            face.outline_glyph(ttf_parser::GlyphId(glyph), &mut builder)?;
+            let gid = skrifa::GlyphId::new(u32::from(glyph));
+            let outline = font.outline_glyphs().get(gid)?;
+            outline
+                .draw(
+                    skrifa::outline::DrawSettings::unhinted(
+                        skrifa::instance::Size::unscaled(),
+                        &[] as &[skrifa::instance::NormalizedCoord],
+                    ),
+                    &mut builder,
+                )
+                .ok()?;
             Some(builder.path)
         })
         .flatten()
@@ -257,12 +296,15 @@ impl FontFace {
     /// a space is often drawn from the fallback rather than mapped, and a run
     /// whose only unmapped character is a space still reads correctly.
     pub fn covers(&self, codepoints: &[u32]) -> bool {
-        self.with_face(|face| {
+        self.with_face(|font| {
+            let Some((_, _, sub)) = font.cmap().ok().and_then(|c| c.best_subtable()) else {
+                return false;
+            };
             codepoints.iter().all(|&cp| {
                 if cp < 0x20 || is_space(cp) {
                     return true;
                 }
-                char::from_u32(cp).is_some_and(|ch| face.glyph_index(ch).is_some())
+                sub.map_codepoint(cp).is_some()
             })
         })
         .unwrap_or(false)
@@ -296,7 +338,7 @@ struct OutlineBuilder {
     scale: f64,
 }
 
-impl ttf_parser::OutlineBuilder for OutlineBuilder {
+impl skrifa::outline::OutlinePen for OutlineBuilder {
     fn move_to(&mut self, x: f32, y: f32) {
         self.path.segments.push(PathSegment::MoveTo(
             x as f64 * self.scale,
@@ -362,7 +404,11 @@ mod tests {
         let outline = face
             .outline_for_run_code(963, true)
             .expect("the CID names a glyph");
-        assert_eq!(outline.segments.len(), 6, "a square is four lines");
+        // A square is a move, four lines and a close. The closing line back to
+        // the start is not one of them: `Close` already returns to it, and a
+        // repeated `LineTo` only re-states the point a fill ignores.
+        assert_eq!(outline.segments.len(), 5, "a square is four lines");
+        assert!(matches!(outline.segments.last(), Some(PathSegment::Close)));
         // The other direction is a code point, and a CFF has no cmap, so it
         // finds nothing rather than the wrong glyph.
         assert!(face.outline_for_run_code(963, false).is_none());

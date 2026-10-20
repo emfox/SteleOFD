@@ -36,9 +36,9 @@ box wider than `CommonData.PageArea`). They are examined in turn.
 
 The book grew five **font** pages afterwards, `latin`, `cjk`, `ttc`, `rtl` and
 `manytomany`, and these were **not** taken to the oracle. They exist for the
-other direction of drift: `ttf-parser` is unmaintained and R22 replaces it, and
-a replacement that rounds `units_per_em` differently or resolves a `cmap` subtable
-in another order moves glyph geometry while every op-level assertion still passes.
+other direction of drift: a font parser that rounds `units_per_em` differently
+or resolves a `cmap` subtable in another order moves glyph geometry while every
+op-level assertion still passes, and R22 replaced the parser outright.
 Each page draws through one face of `crates/steleofd-font/tests/data`, the same
 subsets `tests/matrix.rs` claims coverage for, so a face that loses a glyph shows
 up as a page with less ink. They are a regression detector, not an interop
