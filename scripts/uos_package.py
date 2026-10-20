@@ -17,8 +17,8 @@ system installs and then refuses to start, so `--check-glibc` reads the
 symbols the binary asks for and fails the build rather than the user.
 
 Usage:
-    python3 scripts/uos_package.py --binary PATH --version 0.2.0 --out DIR
-    python3 scripts/uos_package.py --binary PATH --version 0.2.0 --out DIR --check-glibc
+    python3 scripts/uos_package.py --binary PATH --version 0.3.0 --out DIR
+    python3 scripts/uos_package.py --binary PATH --version 0.3.0 --out DIR --check-glibc
     python3 scripts/uos_package.py selftest
 
 Exit code: 0 on success, 1 on failure.
@@ -40,7 +40,7 @@ import tempfile
 from pathlib import Path
 
 PACKAGE = "steleofd-reader"
-VERSION_FALLBACK = "0.2.0"
+VERSION_FALLBACK = "0.3.0"
 MAINTAINER = "SteleOFD <steleofd@example.invalid>"
 SECTION = "office"
 PRIORITY = "optional"

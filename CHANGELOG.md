@@ -125,6 +125,16 @@ section only when a release actually has one.
   continuations are A4; one size for the file either cropped a continuation or
   left a band of white under the first page.
 
+### Removed
+
+- **`steleofd-font` no longer shapes text.** The `shape` module, `shape_text`,
+  `ShapeOptions`, `ShapedRun` and `ShapedGlyph` are gone, and with them
+  `rustybuzz`. A document states its glyphs through clause 11.4's
+  `CGTransform`, and a run without one is its code points mapped through the
+  face's `cmap` in string order, so a shaper was a second opinion nothing asked
+  for — it could disagree with the file about which glyph to draw. This removes
+  public items, which is what makes the version `0.3.0` rather than `0.2.1`.
+
 ## [0.2.0] - 2026-10-19
 
 The first release since `0.1.1` that changes what the engine draws and what a
