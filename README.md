@@ -111,7 +111,7 @@ parser is the part handling untrusted input.
 
 ## Module map
 
-Twenty-six crates in five layers. An arrow points from a crate to what it
+Twenty-seven crates in five layers. An arrow points from a crate to what it
 depends on; boxes below the facade are pulled in only when a feature names them.
 
 ```
@@ -240,13 +240,17 @@ python3 scripts/check_all.py --quick     # the policy gates only
 python3 scripts/check_i18n.py            # message key consistency across locales
 python3 scripts/check_language.py        # English-only policy and comment density
 python3 scripts/check_publish.py --list  # which crates reach a registry
+python3 scripts/check_readme.py          # the counts both READMEs state
 ```
 
 The i18n check compares the catalogues: same file set, same key set, consistent
 placeholders, and the `all_keys()` list in Rust matching the keys in the FTL
 files. The publish check holds the two sets — nineteen crates that publish and
-seven that do not — to the whole workspace, so a new crate cannot slip in
-without saying where it goes.
+eight that do not — to the whole workspace, so a new crate cannot slip in
+without saying where it goes. The README check reads every count out of the
+English README and the same sentence out of the Chinese one, so the two cannot
+state different figures: `README.md` is the source of truth and
+`README.zh-CN.md` follows it.
 
 ## Contributing
 

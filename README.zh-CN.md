@@ -13,7 +13,7 @@ SteleOFD 是 [GB/T 33190-2016《电子文件存储与交换格式 版式文档�
 的 Rust 实现。从解析到渲染全部自研，仓库里唯一的 C 库是 fontconfig——
 由 reader 在 Linux 上经 `font-kit` 调用。
 
-当前发布版本为 `0.1.1`：本版本提供了什么见 [`CHANGELOG`](CHANGELOG.md)，
+当前发布版本为 `0.2.0`：本版本提供了什么见 [`CHANGELOG`](CHANGELOG.md)，
 尚待完成的事项及其所属版本见 [`docs/Roadmap.md`](docs/Roadmap.md)。
 
 本文档分两部分：前半部分给使用 SteleOFD 的人，后半部分给参与开发的人。
@@ -97,7 +97,7 @@ OFD 和 PDF 都是版式文档，区别在于 OFD 是开放的 ZIP + XML 容器�
 
 ## 模块关系
 
-26 个 crate，五个层次。箭头由使用者指向被依赖者；门面之下的方框，
+27 个 crate，五个层次。箭头由使用者指向被依赖者；门面之下的方框，
 只有 feature 指名时才会被引入。
 
 ```
@@ -221,11 +221,15 @@ python3 scripts/check_all.py --quick     # 只跑策略类检查
 python3 scripts/check_i18n.py            # 各语言消息键的一致性
 python3 scripts/check_language.py        # 仅英文策略与注释密度
 python3 scripts/check_publish.py --list  # 哪些 crate 会发布到注册表
+python3 scripts/check_readme.py          # 两版 README 各自声明的数字
 ```
 
 i18n 检查比对各语言目录：文件集合、键集合、占位符一致，且 Rust 中的
-`all_keys()` 列表与 FTL 文件中的键一致。发布检查把 19 个发布、7 个不发布的
+`all_keys()` 列表与 FTL 文件中的键一致。发布检查把 19 个发布、8 个不发布的
 两档清单与整个 workspace 对齐，新增 crate 若未声明去向就会失败。
+README 检查逐条比对两版：英文版里的每一处计数，与中文版中同一句话写下的
+数字必须相等。两版因此不可能各说各的数字——以 `README.md` 为准，
+`README.zh-CN.md` 跟随它。
 
 ## 贡献
 
