@@ -25,6 +25,7 @@ import argparse
 import shutil
 import subprocess
 import sys
+import tempfile
 import zipfile
 from pathlib import Path
 
@@ -131,62 +132,62 @@ def keystore(work: Path) -> Path:
 
 
 def package(sdk: Path, library: Path, out: Path) -> Path:
-    """Compile, align and sign the archive into `out`, beside everything else."""
-    if out.exists():
-        shutil.rmtree(out)
-    work = out
-    work.mkdir(parents=True)
-    manifest = write_manifest(work)
+    """Compile, align and sign the archive into `out`, beside everything else.
 
-    # The resource table has to be the SDK's own binary form: the signer reads
-    # the minimum SDK out of a compiled manifest, so the archive cannot be a
-    # plain zip of the source text.
-    base = build_tool(sdk, "aapt")
-    assets = work / "assets"
-    assets.mkdir()
-    compiled = work / "compiled.apk"
-    platform = sorted((sdk / "platforms").glob("android-*"))[-1]
-    run([
-        base, "package", "-f", "-M", str(manifest),
-        "-I", str(platform / "android.jar"), "-A", str(assets), "-F", str(compiled),
-    ])
+    `out` holds the rest of the release too, so the scaffolding is staged beside
+    a temporary directory instead of beside the archive, and only the archive is
+    written here: emptying this directory would take the notes and any part of
+    the manifest a re-run had already gathered with it.
+    """
+    work = Path(tempfile.mkdtemp(prefix="steleofd-android-"))
+    try:
+        manifest = write_manifest(work)
 
-    unsigned = write_archive(work, library, compiled)
-    # Alignment must happen before signing: a signer rewrites the archive, and
-    # an unaligned entry cannot be mapped by the loader afterwards.
-    aligned = work / "aligned.apk"
-    run([build_tool(sdk, "zipalign"), "-f", "4", str(unsigned), str(aligned)])
+        # The resource table has to be the SDK's own binary form: the signer reads
+        # the minimum SDK out of a compiled manifest, so the archive cannot be a
+        # plain zip of the source text.
+        base = build_tool(sdk, "aapt")
+        assets = work / "assets"
+        assets.mkdir()
+        compiled = work / "compiled.apk"
+        platform = sorted((sdk / "platforms").glob("android-*"))[-1]
+        run([
+            base, "package", "-f", "-M", str(manifest),
+            "-I", str(platform / "android.jar"), "-A", str(assets), "-F", str(compiled),
+        ])
 
-    key = keystore(work)
-    signed = work / ARCHIVE_NAME
-    run([
-        build_tool(sdk, "apksigner"), "sign",
-        "--ks", str(key),
-        "--ks-pass", "pass:steleofd",
-        "--ks-key-alias", "steleofd",
-        "--key-pass", "pass:steleofd",
-        "--out", str(signed),
-        str(aligned),
-    ])
-    # A signature that does not verify is an archive no device will install,
-    # so the build fails here rather than at the downloader.
-    run([build_tool(sdk, "apksigner"), "verify", str(signed)])
-    # Only the archive is published; the manifest, the key and the unsigned
-    # copies are scaffolding, and a leftover would be checksummed beside it.
-    for leftover in work.iterdir():
-        if leftover == signed:
-            continue
-        if leftover.is_dir():
-            shutil.rmtree(leftover)
-        else:
-            leftover.unlink()
-    return signed
+        unsigned = write_archive(work, library, compiled)
+        # Alignment must happen before signing: a signer rewrites the archive, and
+        # an unaligned entry cannot be mapped by the loader afterwards.
+        aligned = work / "aligned.apk"
+        run([build_tool(sdk, "zipalign"), "-f", "4", str(unsigned), str(aligned)])
+
+        key = keystore(work)
+        signed = work / ARCHIVE_NAME
+        run([
+            build_tool(sdk, "apksigner"), "sign",
+            "--ks", str(key),
+            "--ks-pass", "pass:steleofd",
+            "--ks-key-alias", "steleofd",
+            "--key-pass", "pass:steleofd",
+            "--out", str(signed),
+            str(aligned),
+        ])
+        # A signature that does not verify is an archive no device will install,
+        # so the build fails here rather than at the downloader.
+        run([build_tool(sdk, "apksigner"), "verify", str(signed)])
+        # Only the archive is published; the manifest, the key and the unsigned
+        # copies are scaffolding, and a leftover would be checksummed beside it.
+        out.mkdir(parents=True, exist_ok=True)
+        published = out / ARCHIVE_NAME
+        shutil.copyfile(signed, published)
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+    return published
 
 
 def selftest() -> int:
     """The parts that need no SDK: the manifest and the archive layout."""
-    import tempfile
-
     assert f'package="{PACKAGE}"' in MANIFEST
     assert f'android:value="{LIBRARY}"' in MANIFEST
     assert f'android:name="{ACTIVITY}"' in MANIFEST
