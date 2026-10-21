@@ -255,6 +255,13 @@ jobs:
       - name: Check the generated C header is current
         run: git diff --exit-code crates/steleofd-ffi/include/steleofd.h
 
+      # The notes are read here because this job is the only one that always
+      # runs: read them in a job a matrix can skip, and the release ships empty.
+      - name: Read the release notes from the changelog
+        run: |
+          mkdir -p dist
+          python3 scripts/release_notes.py "$GITHUB_REF_NAME" > dist/RELEASE_NOTES.md
+
       - name: Install wasm-pack
         run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
 
@@ -276,11 +283,6 @@ jobs:
       # every artefact is published beside the digest that identifies it.
       - name: Checksum the artefacts
         run: python3 scripts/release_checksums.py generate dist --sums SHA256SUMS.artefacts
-
-      # Notes come from the changelog so the archive and the release page are
-      # one commit.
-      - name: Read the release notes from the changelog
-        run: python3 scripts/release_notes.py "$GITHUB_REF_NAME" > dist/RELEASE_NOTES.md
 
       - name: Attach the artefacts to the release
         uses: softprops/action-gh-release@v2
@@ -346,11 +348,13 @@ jobs:
       - name: Checksum the package
         run: python3 scripts/release_checksums.py generate dist --sums SHA256SUMS.uos
 
+      # The archive is named for the architecture it was built for, so it is
+      # matched by pattern rather than by a name the script would have to keep.
       - name: Attach the package to the release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            dist/steleofd-reader-uos.deb
+            dist/steleofd-reader-uos-*.deb
             dist/SHA256SUMS.uos
 
   # A release asset is replaced, never merged, by an upload of the same name.
