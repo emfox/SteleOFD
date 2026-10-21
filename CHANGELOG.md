@@ -6,6 +6,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). How a
 release is written up is in
 [Conventions.md](docs/Conventions.md#5-closing-a-roadmap-item).
 
+## [Unreleased]
+
+### C ABI
+
+- **The threading and re-entrancy contract is stated** in the header beside the handle.
+
+### Parser
+
+- **A text code's offsets are read as positions or as steps** according to how many of them the list supplies, which nothing pinned before.
+
 ## [0.3.0] - 2026-10-21
 
 This release removes public API, which is why it is `0.3.0` and not a patch. What
@@ -172,6 +182,7 @@ A nine-page golden book is compared against another vendor's reader and a second
 - Office formats and OCR are planned, not built.
 - iOS is not in the release matrix, and the release artefacts are unsigned.
 
+[Unreleased]: https://github.com/emfox/SteleOFD/compare/v0.3.0...HEAD
 [0.3.0]: https://github.com/emfox/SteleOFD/releases/tag/v0.3.0
 [0.2.0]: https://github.com/emfox/SteleOFD/releases/tag/v0.2.0
 [0.1.1]: https://github.com/emfox/SteleOFD/releases/tag/v0.1.1
