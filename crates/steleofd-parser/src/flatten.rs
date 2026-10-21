@@ -674,8 +674,8 @@ fn glyph_turn(read: ReadDirection, char_dir: CharDirection) -> f64 {
 }
 
 /// Where a `TextCode` puts each of its glyphs, from the offsets in table 46.
-/// A list shorter than the steps between the glyphs is read as positions and a
-/// longer one as steps; docs/Architecture.md says why a producer needs both.
+/// A list shorter than the steps between the glyphs is read as positions, and
+/// `docs/Architecture.md` says why a producer needs both readings.
 struct GlyphAt<'a> {
     code: &'a TextCode,
     /// List too short for the text, so the entries place glyphs.
@@ -1151,6 +1151,40 @@ mod tests {
     fn unknown_objects_are_skipped_silently() {
         let ops = run(vec![Object::unknown()], &HashMap::new()).expect("flatten");
         assert!(ops.is_empty());
+    }
+
+    #[test]
+    fn a_short_list_places_its_glyphs_and_a_long_one_steps_them() {
+        // "AB" has one step between its two characters, so two offsets are not
+        // shorter than the steps: the list describes distance, not position.
+        let stepping = only_offsets(&[4.0, 9.0], "AB");
+        let steps = GlyphAt::new(&stepping, "AB", 3.0);
+        assert!(!steps.placed);
+        assert_eq!(steps.offset(1), 4.0, "the first entry, not the second");
+        assert_eq!(steps.reach_at(1), 9.0, "the second entry is the one after");
+
+        // "A B" has two steps and two offsets, which is not shorter: these are
+        // distances, and a placing read would put the second glyph at 4 mm.
+        let placing = only_offsets(&[4.0, 4.0], "A B");
+        let spaced = GlyphAt::new(&placing, "A B", 3.0);
+        assert!(!spaced.placed);
+        assert_eq!(spaced.offset(2), 8.0, "the two entries summed");
+
+        // One offset for two steps is shorter, so it is a spot, and the glyphs
+        // it does not name walk on from it by their size.
+        let placing = only_offsets(&[4.0], "A B");
+        let placed = GlyphAt::new(&placing, "A B", 3.0);
+        assert!(placed.placed);
+        assert_eq!(placed.offset(1), 7.0, "one glyph on from the only spot");
+        assert_eq!(placed.offset(2), 10.0, "and the next one size past it");
+    }
+
+    /// A text code whose horizontal offsets are the only thing the test states.
+    fn only_offsets(delta_x: &[f64], text: &str) -> TextCode {
+        let mut code = TextCode::default();
+        code.delta_x = delta_x.to_vec();
+        code.text = text.to_string();
+        code
     }
 
     #[test]
