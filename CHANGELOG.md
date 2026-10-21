@@ -2,15 +2,16 @@
 
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project
-adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). How a
+release is written up is in
+[Conventions.md](docs/Conventions.md#5-closing-a-roadmap-item).
 
-A release is described by what it offers, grouped by capability, rather than by
-the conventional-commit types that produced it: for a version that is still the
-first, `Added` would list everything and `Changed` would list nothing a reader
-can act on. Later versions keep that shape and add a `Changed` or `Removed`
-section only when a release actually has one.
+## [0.3.0] - 2026-10-21
 
-## [Unreleased]
+This release removes public API, which is why it is `0.3.0` and not a patch. What
+it adds is a reader that follows a published guideline and can say what it sees
+without relying on colour, an export path that no longer loses pages, and a
+budget for memory beside the one for time.
 
 ### Reader interface
 
@@ -171,7 +172,7 @@ A nine-page golden book is compared against another vendor's reader and a second
 - Office formats and OCR are planned, not built.
 - iOS is not in the release matrix, and the release artefacts are unsigned.
 
-[Unreleased]: https://github.com/emfox/SteleOFD/compare/v0.2.0...main
+[0.3.0]: https://github.com/emfox/SteleOFD/releases/tag/v0.3.0
 [0.2.0]: https://github.com/emfox/SteleOFD/releases/tag/v0.2.0
 [0.1.1]: https://github.com/emfox/SteleOFD/releases/tag/v0.1.1
 [0.1.0]: https://github.com/emfox/SteleOFD/releases/tag/v0.1.0

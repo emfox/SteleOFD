@@ -280,6 +280,10 @@ the commit that made the change, which is where anyone debugging it will look.
 A changelog long enough that nobody reads it has stopped being a changelog,
 which is the failure this rule exists to prevent.
 
+Entries are grouped by capability rather than by the conventional-commit type
+that produced them, and a `Changed` or `Removed` heading appears only when the
+release actually has one.
+
 ## 6. Public API changes
 
 `cargo-semver-checks` compares the public API of every crate that states
