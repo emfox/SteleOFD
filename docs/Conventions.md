@@ -273,6 +273,13 @@ against — says so in the changelog only when a user could notice.
 This is what keeps `Roadmap.md` from becoming a history: a closed item moves
 into the changelog, and nothing is left behind in the file it came from.
 
+An entry is one sentence, and two only when the change is one a user could get
+hurt by. What a reader needs is what they can now do and what it replaced; the
+mechanism, the test that proves it and the clause that motivated it belong in
+the commit that made the change, which is where anyone debugging it will look.
+A changelog long enough that nobody reads it has stopped being a changelog,
+which is the failure this rule exists to prevent.
+
 ## 6. Public API changes
 
 `cargo-semver-checks` compares the public API of every crate that states
