@@ -242,9 +242,9 @@ impl FontFace {
         .unwrap_or(0.0)
     }
 
-    /// Glyph outline normalized to the 1/1000 em space.
-    /// Size scaling is left to the render layer's CTM, so one outline can be
-    /// reused across font sizes.
+    /// Glyph outline normalized to the 1/1000 em space, scaled by the render
+    /// layer's CTM rather than sized here. No ink answers `None`, not an empty
+    /// path: a caller transforming what it gets back sees the difference.
     pub fn outline(&self, glyph: u16) -> Option<Path> {
         self.with_face(|font| {
             let upem = font.head().map(|h| h.units_per_em()).unwrap_or(0) as f64;
@@ -266,6 +266,9 @@ impl FontFace {
                     &mut builder,
                 )
                 .ok()?;
+            if builder.path.is_empty() {
+                return None;
+            }
             Some(builder.path)
         })
         .flatten()
@@ -412,6 +415,27 @@ mod tests {
         // The other direction is a code point, and a CFF has no cmap, so it
         // finds nothing rather than the wrong glyph.
         assert!(face.outline_for_run_code(963, false).is_none());
+    }
+
+    #[test]
+    fn a_glyph_with_no_ink_answers_with_nothing() {
+        // A space maps to a glyph the face carries and draws nothing for, and
+        // the parsers this layer has used disagree on that answer's shape.
+        let face = face_of(&latin_face());
+        let space = face.glyph_id(u32::from(' ')).expect("a space is mapped");
+        assert!(face.outline(space).is_none(), "no ink, no outline");
+        assert!(matches!(face.glyph_outline(space), GlyphOutline::Empty));
+        let ink = face.glyph_id(u32::from('A')).expect("a letter is mapped");
+        assert!(face.outline(ink).is_some_and(|p| !p.is_empty()));
+    }
+
+    /// The Latin matrix fixture, which has both ink and a mapped space.
+    fn latin_face() -> Vec<u8> {
+        std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/data/steleofd-latin-subset.ttf"
+        ))
+        .expect("font fixture")
     }
 
     #[test]
