@@ -39,6 +39,21 @@ import tarfile
 import tempfile
 from pathlib import Path
 
+
+def gzip_bytes(data: bytes) -> bytes:
+    """Deflate `data` with a zeroed timestamp, on any Python this runs under.
+
+    `gzip.compress(..., mtime=0)` is 3.8 and later, and this script runs inside
+    the Debian 10 container the package is built in, whose python3 is 3.7. A
+    fixed header is what makes two builds of one version compare equal, so the
+    field is written by hand rather than left to the default clock reading.
+    """
+    packed = io.BytesIO()
+    with gzip.GzipFile(fileobj=packed, mode="wb", mtime=0) as handle:
+        handle.write(data)
+    return packed.getvalue()
+
+
 PACKAGE = "steleofd-reader"
 VERSION_FALLBACK = "0.3.0"
 MAINTAINER = "SteleOFD <steleofd@example.invalid>"
@@ -248,11 +263,10 @@ def stage(root: Path, binary: Path, version: str, architecture: str) -> Path:
         place(f"{DOC_DIR}/copyright", text)
     place(
         f"{DOC_DIR}/changelog.Debian.gz",
-        gzip.compress(
+        gzip_bytes(
             f"{PACKAGE} ({version}) unstable; urgency=medium\n\n"
             f"  * Release {version}.\n\n"
-            f" -- {MAINTAINER}  Thu, 01 Jan 1970 00:00:00 +0000\n".encode("utf-8"),
-            mtime=0,
+            f" -- {MAINTAINER}  Thu, 01 Jan 1970 00:00:00 +0000\n".encode("utf-8")
         ),
     )
 
@@ -339,7 +353,7 @@ def tar_tree(root: Path, arcname: str, skip: tuple[str, ...] = ()) -> bytes:
                     archive.addfile(info, handle)
             else:
                 archive.addfile(info)
-    return gzip.compress(raw.getvalue(), mtime=0)
+    return gzip_bytes(raw.getvalue())
 
 
 def package(
