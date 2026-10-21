@@ -54,7 +54,13 @@ LOCALE_DIR = "locales"
 CODE_SUFFIXES = {".rs", ".toml", ".c", ".h", ".js", ".ts", ".py"}
 
 COMMENT_RE = re.compile(r"^\s*(///|//!|//)")
+# Section 2 of docs/Conventions.md: one line, two when they are needed. The
+# wider allowance is for `///` and `//!` alone, because those are published as
+# rustdoc, and the C header is generated from them: a contract a C caller reads
+# has no other home. An inline `//` keeps the three-line ceiling.
+DOC_COMMENT_RE = re.compile(r"^\s*(///|//!)")
 MAX_COMMENT_BLOCK = 3
+MAX_DOC_COMMENT_BLOCK = 6
 
 
 def first_cjk(text: str) -> tuple[int, str] | None:
@@ -133,22 +139,32 @@ def check_comment_density(files: list[Path]) -> list[str]:
         if p.suffix != ".rs":
             continue
         rel = p.relative_to(REPO).as_posix()
-        lines = p.read_text(encoding="utf-8").splitlines()
-        run = 0
+        run: list[str] = []
         start = 0
-        for i, line in enumerate(lines, 1):
+
+        def close(last: int) -> None:
+            if not run:
+                return
+            # One inline line among the doc ones drops the run to the narrow
+            # ceiling, so a doc block cannot carry an implementation note past
+            # the three lines a `//` comment is held to.
+            doc_only = all(DOC_COMMENT_RE.match(line) for line in run)
+            limit = MAX_DOC_COMMENT_BLOCK if doc_only else MAX_COMMENT_BLOCK
+            if len(run) > limit:
+                wider = "" if limit == MAX_COMMENT_BLOCK else f", doc comments allow {limit}"
+                errors.append(
+                    f"{rel}: comment block of {len(run)} lines at L{start}-L{last}{wider}"
+                )
+
+        for i, line in enumerate(p.read_text(encoding="utf-8").splitlines(), 1):
             if COMMENT_RE.match(line):
-                if run == 0:
+                if not run:
                     start = i
-                run += 1
+                run.append(line)
             else:
-                if run > MAX_COMMENT_BLOCK:
-                    errors.append(
-                        f"{rel}: comment block of {run} lines at L{start}-L{start + run - 1}"
-                    )
-                run = 0
-        if run > MAX_COMMENT_BLOCK:
-            errors.append(f"{rel}: comment block of {run} lines at L{start}")
+                close(i - 1)
+                run = []
+        close(start + len(run) - 1)
     return errors
 
 
@@ -170,7 +186,10 @@ def main() -> int:
 
     if not args.cjk_only:
         dense = check_comment_density(files)
-        print(f"[comments] {len(dense)} comment block(s) exceed {MAX_COMMENT_BLOCK} lines")
+        print(
+            f"[comments] {len(dense)} comment block(s) exceed the density limits "
+            f"({MAX_COMMENT_BLOCK} lines; {MAX_DOC_COMMENT_BLOCK} for doc comments)"
+        )
         failures += dense
 
     if not failures:

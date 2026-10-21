@@ -42,13 +42,20 @@ comment is noise.
 | Position | Limit |
 | --- | --- |
 | Inline comment inside a function body | 1 line; 2 lines only when genuinely needed |
-| Item doc comment (`///`, `//!`) on a struct, enum, field, variant, or function | 1 line; 2 lines maximum |
+| Item doc comment (`///`, `//!`) on a struct, enum, field, variant, or function | 6 lines maximum; see below |
 | Module-level header (`//!` at top of `lib.rs` or a large module) | 3 lines maximum |
 | Trailing comment on one line | 1 line |
 
+Doc comments get the wider limit because they are published: rustdoc shows
+them, and cbindgen writes them into `crates/steleofd-ffi/include/steleofd.h`, so
+a contract a C caller has to honour has no other home than the `///` above the
+type it describes. The wider limit does not extend to a `//` line, so an
+implementation note in the middle of a doc block still fails.
+
 Hard rules:
 
-- No comment block longer than 3 lines, anywhere.
+- No comment block longer than 3 lines, except a block of doc comments only,
+  which stops at 6.
 - Do not restate the function signature in prose.
 - Do not keep commented-out code; delete it, git remembers.
 - Do not write changelog or history notes in comments; that belongs in commits.
