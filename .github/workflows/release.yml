@@ -314,8 +314,10 @@ jobs:
           rm -f /etc/apt/sources.list.d/*.list
           printf 'deb http://archive.debian.org/debian buster main\ndeb http://archive.debian.org/debian-security buster/updates main\n' > /etc/apt/sources.list
           apt-get -o Acquire::Check-Valid-Until=false -o Acquire::Check-Date=false update -qq
+          # python3 is not in a Debian 10 base image, and the step that turns
+          # the build into a `.deb` is written in it.
           apt-get install -y -qq --no-install-recommends \
-            curl ca-certificates build-essential pkg-config git \
+            curl ca-certificates build-essential pkg-config git python3 \
             libfontconfig1-dev libfreetype6-dev
 
       - name: Install toolchain
