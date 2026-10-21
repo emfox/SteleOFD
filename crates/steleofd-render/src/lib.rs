@@ -9,6 +9,9 @@ pub mod raster;
 
 pub use raster::{Cubic, RasterOutput, RenderOptions, arc_cubics, render_page};
 
-// TODO: self-built clip stack, native tiny-skia clipping is enough for now.
-// TODO: font subsetting for PDF and SVG export, currently embedded in full.
-// TODO: bitmap render cache and page-window eviction, deferred until measured.
+// Subsetting is not this crate's to do: `steleofd-core` cuts each embedded face
+// to the glyphs the display list names, and neither exporter carries a font;
+// they outline every glyph into a path.
+
+// The clip and the bitmap cache are deferred rather than settled, each waiting
+// on a measurement rather than on a reason; `docs/Roadmap.md` carries both.

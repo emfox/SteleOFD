@@ -245,6 +245,13 @@ is the reason the format is used at all.
   now produces the reading the gate consumes, the two are separate checks so a
   skipped run skips the gate, and a log older than the newest source file is
   refused by name rather than trusted.
+- **A render note that outlived the code is gone, and the claim it made is a
+  test.** The crate header still asked for font subsetting before PDF and SVG
+  export. Nothing embeds a face: `steleofd-core` cuts each one to the glyphs the
+  display list names, and both exporters outline every glyph into a path. The
+  header now says so, and an export test reads the deflated content stream back
+  to prove the glyph is a filled path with no `/FontFile` beside it, so the next
+  reader does not have to take a comment's word for it.
 
 ### Naming
 

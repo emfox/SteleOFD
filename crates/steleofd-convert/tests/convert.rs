@@ -2,7 +2,7 @@
 //! Every test uses the public surface and asserts only on what a caller can
 //! observe: the shape of the bytes, the reported stats, and the errors.
 
-use steleofd_common::Rect;
+use steleofd_common::{Millimeter, Rect};
 use steleofd_convert::{
     ConversionStats, PdfOptions, SvgOptions, TextExport, document_to_pdf, document_to_pdf_pages,
     document_to_pdf_pages_with_stats, page_to_pdf, page_to_svg, pages_to_svg,
@@ -303,4 +303,100 @@ fn stats_of_svg(page: &PageDisplay) -> ConversionStats {
     steleofd_convert::replay(page, &mut sink).expect("replay");
     // `finish` consumes the sink and returns the stats it accumulated.
     sink.finish().1
+}
+
+/// One glyph of Orbitron, the face the font fixtures are drawn with.
+fn one_glyph_page() -> (PageDisplay, FontManager) {
+    let bytes = std::fs::read(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../steleofd-render/tests/data/Orbitron-Bold.ttf"
+    ))
+    .expect("font fixture");
+    let mut fonts = FontManager::new();
+    fonts.registry_mut().register_embedded(
+        "Orbitron-Bold.ttf",
+        "Orbitron",
+        std::sync::Arc::new(bytes),
+    );
+    let run = steleofd_display::GlyphRun {
+        font: steleofd_font::FontId(0),
+        size: Millimeter(3.0),
+        glyphs: vec![65],
+        advances: vec![3.0],
+        text: Some("A".into()),
+        cluster_map: None,
+        codes_are_glyphs: false,
+        transform: steleofd_geometry::Affine::IDENTITY,
+        glyph_angle: 0.0,
+        fill: Some(Paint::Solid(Color::BLACK)),
+        stroke: None,
+        letter_spacing: 0.0,
+        word_spacing: 0.0,
+        bbox: Rect::new(0.0, 0.0, 3.0, 3.0),
+    };
+    let page = PageDisplay {
+        index: 0,
+        page_box: Rect::A4_PORTRAIT,
+        ops: vec![DrawOp::Text(run)],
+        content_bbox: Rect::new(0.0, 0.0, 3.0, 3.0),
+    };
+    (page, fonts)
+}
+
+#[test]
+fn an_exported_glyph_is_a_path_rather_than_an_embedded_face() {
+    // Neither exporter carries a font. A PDF that embedded one would name a
+    // descriptor and a face stream; these draw the outline instead. The content
+    // stream is deflated, so it is read back rather than searched for.
+    let (page, fonts) = one_glyph_page();
+    let pdf = page_to_pdf(
+        &page,
+        &PdfOptions {
+            fonts: Some(&fonts),
+            ..PdfOptions::default()
+        },
+    )
+    .expect("convert");
+    let text = String::from_utf8_lossy(&pdf);
+    assert!(
+        !text.contains("/FontFile") && !text.contains("/FontDescriptor"),
+        "an embedded face is exactly what these two names record"
+    );
+    let content = content_of(&pdf);
+    assert!(
+        !content.contains("/FontFile") && !content.contains("/FontDescriptor"),
+        "the content stream names no face either"
+    );
+    assert!(
+        content.contains(" c\n"),
+        "the glyph arrived as bezier segments: {content}"
+    );
+    let last = content.lines().map(str::trim).rfind(|l| !l.is_empty());
+    assert!(
+        last.is_some_and(|l| l.ends_with(" f")),
+        "the glyph path ends filled rather than stroked: {content}"
+    );
+
+    let svg = page_to_svg(
+        &page,
+        &SvgOptions {
+            fonts: Some(&fonts),
+            ..SvgOptions::default()
+        },
+    )
+    .expect("convert");
+    assert!(svg.contains("<path"), "the glyph became a path: {svg}");
+    assert!(
+        !svg.contains("@font-face"),
+        "the SVG embedded the face it was told to draw"
+    );
+}
+
+/// The decoded content of a one-page PDF written by this crate. The stream is
+/// deflated, so a search of the raw bytes finds only compressed noise: what a
+/// glyph became has to be read back to be seen.
+fn content_of(pdf: &[u8]) -> String {
+    let doc = lopdf::Document::load_mem(pdf).expect("the export is a PDF");
+    let page = doc.get_pages().into_values().next().expect("a page");
+    String::from_utf8_lossy(&doc.get_page_content(page)).into_owned()
 }
