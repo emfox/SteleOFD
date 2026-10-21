@@ -20,7 +20,12 @@
 
 
 /**
- * One open document, opaque to C: only a pointer ever crosses the boundary.
+ * One open document, opaque to C: only a pointer crosses the boundary.
+ *
+ * Threads: one handle belongs to one thread at a time, though not always the
+ * one that opened it. Two threads must not call on one handle at once, since
+ * a call may rewrite the arena the last pointer came from. Different handles
+ * share nothing and run in parallel. Calls never re-enter, as none invokes one.
  */
 typedef struct SteleofdDocument SteleofdDocument;
 
@@ -99,9 +104,9 @@ typedef struct SteleofdSignature {
 const char *steleofd_version(void);
 
 /**
- * Open an `.ofd` file from its raw bytes. Returns a handle to release
- * with `steleofd_close`, or null on failure with a message in `err_buf`,
- * which may itself be null to drop it.
+ * Open an `.ofd` file from its raw bytes. Returns a handle to release with
+ * `steleofd_close`, or null on failure with a message in `err_buf`. The
+ * handle belongs to the calling thread; see `SteleofdDocument`.
  */
 struct SteleofdDocument *steleofd_open(const uint8_t *bytes,
                                        size_t len,
@@ -109,7 +114,8 @@ struct SteleofdDocument *steleofd_open(const uint8_t *bytes,
                                        size_t err_len);
 
 /**
- * Release a handle. Null is a no-op, so teardown paths need no check.
+ * Release a handle. Null is a no-op, so teardown paths need no check. No other
+ * call on the handle may be running on another thread; both go with it.
  */
 void steleofd_close(struct SteleofdDocument *doc);
 
