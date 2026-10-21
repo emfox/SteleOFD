@@ -37,6 +37,9 @@ from pathlib import Path
 
 MANIFEST_NAME = "SHA256SUMS"
 CHUNK = 1 << 20
+# Read by the upload step as the release body rather than published as an
+# asset, so a manifest that listed it would name a file no download has.
+NOT_ASSETS = {"RELEASE_NOTES.md"}
 
 
 def digest(path: Path) -> str:
@@ -55,7 +58,11 @@ def digest(path: Path) -> str:
 def payloads(directory: Path, manifest: str) -> list[Path]:
     """Every file in the directory except the manifest itself, path-sorted."""
     return sorted(
-        (p for p in directory.iterdir() if p.is_file() and p.name != manifest),
+        (
+            p
+            for p in directory.iterdir()
+            if p.is_file() and p.name != manifest and p.name not in NOT_ASSETS
+        ),
         key=lambda p: p.name,
     )
 
@@ -69,7 +76,9 @@ def generate(directory: Path, manifest: str) -> int:
         print(f"error: {directory} holds no files to checksum", file=sys.stderr)
         return 1
     lines = [f"{digest(path)}  {path.name}" for path in files]
-    body = "\n".join(lines) + "\n"
+    # Sorted here rather than left to the caller's shell: a manifest that
+    # arrived unsorted would be a `SHA256SUMS` nobody could diff.
+    body = "\n".join(sorted(lines, key=lambda line: line.split("  ", 1)[1])) + "\n"
     (directory / manifest).write_text(body, encoding="utf-8")
     print(f"wrote {directory / manifest}")
     for path in files:
@@ -144,6 +153,24 @@ def selftest() -> int:
         checks.append(
             ("the manifest is deterministic", (root / MANIFEST_NAME).read_text(encoding="utf-8") == first)
         )
+        # Sort order is part of that stability, and the release merges these
+        # files with the shell rather than through this script.
+        by_name = sorted(first.splitlines(), key=lambda line: line.split("  ", 1)[1])
+        checks.append(
+            ("the manifest is sorted by name", first.splitlines() == by_name)
+        )
+
+        # A manifest that listed the notes would name a file the release never
+        # publishes as an asset, which the merge step then fails to check.
+        (root / "RELEASE_NOTES.md").write_text("notes\n", encoding="utf-8")
+        generate(root, MANIFEST_NAME)
+        checks.append(
+            (
+                "the notes stay out of the manifest",
+                "RELEASE_NOTES.md" not in (root / MANIFEST_NAME).read_text(encoding="utf-8"),
+            )
+        )
+        (root / "RELEASE_NOTES.md").unlink()
 
         (root / "a.bin").write_bytes(b"tampered")
         checks.append(("verify rejects a tampered file", verify(root, MANIFEST_NAME) == 1))
