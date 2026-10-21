@@ -7,6 +7,7 @@ the easier to get wrong, so most of this exercises the parser that recovers it,
 and one case runs the gate against a log that is over its ceiling.
 """
 
+import os
 import pathlib
 import subprocess
 import sys
@@ -104,6 +105,29 @@ class DirectoryTest(unittest.TestCase):
             code, output = self.run_gate(root)
         self.assertIn("page_raster/1", output)
         self.assertIn("18.8 MB", output)
+
+
+class StalenessTest(unittest.TestCase):
+    """A reading describes the code that produced it, and nothing else."""
+
+    def test_a_log_written_after_the_source_is_accepted(self):
+        with tempfile.TemporaryDirectory() as directory:
+            log = pathlib.Path(directory) / "benchmarks.log"
+            log.write_text("", encoding="utf-8")
+            self.assertEqual(gate.stale(log), "")
+
+    def test_a_log_written_before_the_source_is_named_with_its_fix(self):
+        with tempfile.TemporaryDirectory() as directory:
+            log = pathlib.Path(directory) / "benchmarks.log"
+            log.write_text("", encoding="utf-8")
+            # Backdating the log is what an older `cargo bench` left behind.
+            os.utime(log, (0, 0))
+            reason = gate.stale(log)
+        self.assertIn("older than the last source change", reason)
+        self.assertIn("run_benchmarks.py", reason)
+
+    def test_the_source_date_is_the_newest_file_that_could_move_a_benchmark(self):
+        self.assertGreater(gate.newest_source(), 0.0)
 
 
 class BudgetTest(unittest.TestCase):

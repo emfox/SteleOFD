@@ -228,12 +228,21 @@ CHECKS: tuple[Check, ...] = (
         (py("scripts/sample_fetch.py", "gbt33190-samples", "--parse"),),
         needs=("cargo", "gb-samples"),
     ),
-    # The budget in docs/Performance.md, read from a benchmark run's output.
+    # The budget in docs/Performance.md. Two steps rather than one: the gate
+    # reads `target/criterion`, so a cached reading would let it pass on code
+    # that has since changed, and only an actual run rules that out. The run
+    # also writes the log the memory readings are read from.
+    Check(
+        "bench",
+        "perf",
+        (py("scripts/run_benchmarks.py"),),
+        needs=("cargo",),
+    ),
     Check(
         "performance",
         "perf",
         (py("scripts/check_performance.py"),),
-        needs=("criterion",),
+        needs=("bench",),
     ),
 )
 
@@ -286,9 +295,11 @@ def precondition(name: str) -> tuple[bool, str]:
         if importlib.util.find_spec("lxml") is None:
             return False, "lxml is missing (python3 -m pip install lxml)"
         return True, ""
-    if name == "criterion":
+    if name == "bench":
+        # A reading is only as good as the run that produced it, so this is a
+        # dependency rather than a suggestion: a skipped `bench` skips the gate.
         if not (ROOT / "target" / "criterion").is_dir():
-            return False, "no target/criterion (run `cargo bench` first)"
+            return False, "no benchmark run (perf/bench produces one)"
         return True, ""
     if name == "fixture-sources":
         if not (ROOT / FIXTURE_FILES).is_dir():

@@ -14,6 +14,10 @@ all move a benchmark by tens of percent, so a gate on the *change* would be red
 on a bad afternoon and ignored within a week. The ceiling is set well above the
 baseline on purpose: what it catches is the change that makes a page cost several
 times what it did, which is the one worth stopping.
+
+A reading is only accepted from a log newer than the last source change, so a
+stale `target/criterion` cannot answer for code that has moved since; the log
+that satisfies this is the one `scripts/run_benchmarks.py` writes.
 """
 
 from __future__ import annotations
@@ -49,6 +53,11 @@ MEMORY_BUDGETS = [
 
 # What the memory benchmark prints for one reading, and the file it keeps it in.
 MEMORY_PREFIX = "memory-held:"
+# Where scripts/run_benchmarks.py puts the combined output of a run.
+BENCH_LOG = CRITERION / "benchmarks.log"
+# Directories whose newest file dates a change: a reading older than the code
+# that produced it says nothing about the code.
+SOURCES = (REPO / "crates", REPO / "Cargo.toml", REPO / "Cargo.lock")
 READINGS = "memory-readings.log"
 MEMORY_LINE = re.compile(rf"^{MEMORY_PREFIX} (\S+) ([0-9.]+) MB\b", re.MULTILINE)
 
@@ -104,6 +113,37 @@ def memory_readings(
     return readings, gap if not readings else ""
 
 
+def newest_source() -> float:
+    """The modification time of the newest file that could move a benchmark."""
+    newest = 0.0
+    for root in SOURCES:
+        if root.is_file():
+            newest = max(newest, root.stat().st_mtime)
+            continue
+        for path in root.rglob("*"):
+            if path.suffix in {".rs", ".toml", ".lock"} and path.is_file():
+                newest = max(newest, path.stat().st_mtime)
+    return newest
+
+
+def stale(log: Path) -> str:
+    """Why a log cannot answer for the current tree, or "" when it can.
+
+    A reading is compared against the budget as if it described this checkout,
+    so a log written before the last edit would report on code that is gone.
+    The comparison is deliberately coarse: one timestamp, no per-file mapping,
+    because the cost of being wrong is a re-run rather than a wrong verdict.
+    """
+    wrote = log.stat().st_mtime
+    changed = newest_source()
+    if changed > wrote:
+        return (
+            f"{log.name} is older than the last source change "
+            f"({(changed - wrote) / 60:.0f} min); run scripts/run_benchmarks.py"
+        )
+    return ""
+
+
 def inferred_logs(criterion_dir: Path) -> list[Path]:
     """A note in place of each reading criterion kept no text for.
 
@@ -147,8 +187,17 @@ def main() -> int:
 
     if not args.criterion_dir.exists():
         print(f"no benchmark output at {args.criterion_dir}")
-        print("run `cargo bench` first")
+        print("run scripts/run_benchmarks.py first")
         return 1
+
+    # Only the default directory is dated: a `--criterion-dir` or `--logs` names
+    # a run the caller already vouches for, and `newest_source()` would compare
+    # it against this checkout rather than the one it came from.
+    if args.criterion_dir == CRITERION and not args.logs:
+        reason = stale(BENCH_LOG) if BENCH_LOG.exists() else stale(CRITERION)
+        if reason:
+            print(f"FAILED: {reason}")
+            return 1
 
     missing = []
     over = []
@@ -190,6 +239,9 @@ def main() -> int:
 
     if missing:
         print(f"\nFAILED: {len(missing)} budgeted line(s) produced no output")
+        if not BENCH_LOG.exists():
+            print("  run scripts/run_benchmarks.py, which writes "
+                  f"{BENCH_LOG.relative_to(REPO)}")
         for name in missing:
             # A timing leaves an estimate; a memory reading leaves a printout,
             # so the hint names the run each kind needs.

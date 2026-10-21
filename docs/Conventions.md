@@ -145,7 +145,7 @@ next to the check that produced it. Grouped by what they need:
 | `schema` | `validate_ofd.py --allow-foreign` over `compliance/fixtures` | `lxml` |
 | `rust` | `cargo fmt`, `clippy`, the `msrv` check, `build` and `test`, the golden images, the headless reader window, `check_compliance.py`, and the matrix freshness diff | `cargo`, `git`, and the Rust channel named by `rust-version` for `msrv` |
 | `samples` | `sample_fetch.py`, `--check` then `--parse`, once per set | the fetched samples, `cargo` |
-| `perf` | `check_performance.py` against the budget in [Performance.md](Performance.md) | a `cargo bench` run |
+| `perf` | `run_benchmarks.py` then `check_performance.py` against the budget in [Performance.md](Performance.md) | `cargo` |
 | `review` | `check_commit_scope.py`, which names commits that read as more than one change | `git` |
 | `deps` | `cargo deny --all-features check`: advisories, licences, bans and sources | `cargo-deny` |
 
@@ -154,6 +154,17 @@ next to the check that produced it. Grouped by what they need:
 `cargo +<that version> check`, so the minimum the project states is a fact
 rather than a claim. It skips, with the reason, on a machine that has not
 installed that channel.
+
+`perf` is two checks because `check_performance.py` reads `target/criterion`,
+and a reading left by an older run would pass a gate on code that has since
+changed: the first check is the `cargo bench` run that produces a fresh one,
+and the gate refuses a log older than the newest source file. It is also the
+slowest group, which is why `--quick` leaves it out.
+
+`samples` is the one group that can need the network. `sample_fetch.py` fetches
+a third-party sample only when the pinned hash cannot account for what is on
+disk, so a working copy that already holds the sets runs offline; a machine
+without them and without a route out fails here rather than passing quietly.
 
 `deps` reads `deny.toml` rather than a command line, so a decision about a
 dependency is a reviewable diff instead of a flag somebody remembered. A

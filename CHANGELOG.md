@@ -238,6 +238,13 @@ is the reason the format is used at all.
   matches the target `cargo build` produces locally instead of a Chocolatey
   install on a Windows runner, and the jobs that read the fetched samples now
   fetch them before running.
+- **The performance gate runs the benchmarks instead of reading the last run's.**
+  `check_performance.py` reads `target/criterion`, so it was gating whatever was
+  in that directory: a cached reading passed on code that had since changed, and
+  a benchmark that no longer ran still answered for itself. `run_benchmarks.py`
+  now produces the reading the gate consumes, the two are separate checks so a
+  skipped run skips the gate, and a log older than the newest source file is
+  refused by name rather than trusted.
 
 ### Naming
 
