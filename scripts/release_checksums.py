@@ -43,8 +43,12 @@ def digest(path: Path) -> str:
     """The SHA-256 of one file, read in chunks so a large binary is fine."""
     sha = hashlib.sha256()
     with path.open("rb") as handle:
-        while chunk := handle.read(CHUNK):
+        # Read, then test: this script also runs inside the Debian 10 container
+        # that builds the UOS package, whose python3 is 3.7 and has no `:=`.
+        chunk = handle.read(CHUNK)
+        while chunk:
             sha.update(chunk)
+            chunk = handle.read(CHUNK)
     return sha.hexdigest()
 
 
