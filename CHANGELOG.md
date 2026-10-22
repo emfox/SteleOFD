@@ -8,6 +8,13 @@ release is written up is in
 
 ## [Unreleased]
 
+### Render
+
+- **A clip is shared rather than copied** by the saved state, and a page whose
+  clips are one at a time now holds one mask instead of one per save. What a
+  clip costs is stated in `docs/Performance.md`, which is where the budget for
+  it lives.
+
 ### C ABI
 
 - **The threading and re-entrancy contract is stated** in the header beside the handle.
