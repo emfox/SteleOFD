@@ -280,6 +280,82 @@ fn a_clip_of_two_subpaths_paints_both_of_them() {
 }
 
 #[test]
+fn a_clip_lasts_until_the_scope_that_set_it_closes() {
+    let fonts = FontManager::new();
+    // A clip inside a saved scope, over a red square that the clip covers
+    // whole. The blue after the restore is a different square, so a blue pixel
+    // there can only have arrived because the clip was gone by then.
+    let page = page_with(vec![
+        DrawOp::Save,
+        DrawOp::ClipPath {
+            path: rect(0.0, 0.0, 40.0, 40.0),
+            rule: PaintRule::NonZero,
+        },
+        filled(rect(0.0, 0.0, 40.0, 40.0), Color::rgba(255, 0, 0, 255)),
+        DrawOp::Restore,
+        filled(rect(60.0, 60.0, 60.0, 60.0), Color::rgba(0, 0, 255, 255)),
+    ]);
+    let output = render_page(&page, &fonts, &RenderOptions::default()).expect("render");
+    assert_eq!(pixel(&output, 30, 30), [255, 0, 0, 255], "inside the clip");
+    assert_eq!(
+        pixel(&output, 300, 300),
+        [0, 0, 255, 255],
+        "past the restore the clip is gone, so blue reaches here"
+    );
+    assert_eq!(
+        pixel(&output, 30, 300),
+        [255, 255, 255, 255],
+        "and the clip still held while it was in force"
+    );
+}
+
+#[test]
+fn nested_clips_intersect_rather_than_replace() {
+    let fonts = FontManager::new();
+    // The first clip is two disjoint squares, so dropping it leaves paint where
+    // the second clip alone would still allow some: the result distinguishes an
+    // intersection from a replacement, which one square and one clip would not.
+    let outer = Path::build(|b| {
+        b.rect(0.0, 0.0, 20.0, 20.0);
+        b.rect(40.0, 40.0, 20.0, 20.0);
+    });
+    let page = page_with(vec![
+        DrawOp::ClipPath {
+            path: outer,
+            rule: PaintRule::NonZero,
+        },
+        DrawOp::ClipPath {
+            path: rect(0.0, 0.0, 30.0, 30.0),
+            rule: PaintRule::NonZero,
+        },
+        filled(rect(0.0, 0.0, 200.0, 200.0), Color::rgba(255, 0, 0, 255)),
+    ]);
+    let output = render_page(&page, &fonts, &RenderOptions::default()).expect("render");
+    let k = RenderOptions::default().dpi / 25.4;
+    let at = |mm: f64| (mm * k) as u32;
+    assert_eq!(
+        pixel(&output, at(10.0), at(10.0)),
+        [255, 0, 0, 255],
+        "the overlap of the two clips is painted"
+    );
+    assert_eq!(
+        pixel(&output, at(18.0), at(6.0)),
+        [255, 0, 0, 255],
+        "including the part only the second clip's outline would have allowed"
+    );
+    assert_eq!(
+        pixel(&output, at(25.0), at(25.0)),
+        [255, 255, 255, 255],
+        "inside the second clip only, which the first one excludes"
+    );
+    assert_eq!(
+        pixel(&output, at(50.0), at(50.0)),
+        [255, 255, 255, 255],
+        "the first clip's second square is outside the second clip"
+    );
+}
+
+#[test]
 fn a_run_with_no_glyphs_paints_nothing() {
     let (fonts, id) = manager_with_fixture();
     // An empty run is a legitimate input — a blank line in a text block — and
