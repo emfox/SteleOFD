@@ -117,14 +117,14 @@ impl<'a> SvgSink<'a> {
 
     /// The `fill`/`stroke` value for a paint. A gradient is defined inline,
     /// because the paint carries its own axis, so no earlier op is needed.
+    /// A mesh is not one: it has no SVG paint to name, so `path` writes it.
     fn paint_ref(&mut self, shape: PaintShape<'_>) -> String {
         match shape {
             PaintShape::Solid(c) => hex(c),
             PaintShape::Linear(spec) => self.define_linear(spec),
             PaintShape::Radial(spec) => self.define_radial(spec),
-            // SVG 1.1 has no mesh gradient fill; the mean vertex colour keeps
-            // the region painted rather than dropping a fill that the reader
-            // does draw.
+            // Reached only for a colour that is not a paint, which a mesh never
+            // is: the mean keeps the region filled rather than dropping it.
             PaintShape::Mesh(spec) => mesh_average(spec),
             PaintShape::Pattern(spec) => self.define_pattern(spec),
         }
@@ -310,6 +310,33 @@ impl<'a> SvgSink<'a> {
             steleofd_display::RadialForm::Flat(color) => hex(&color),
         }
     }
+
+    /// Paint a Gouraud mesh as one `<path>` per triangle, filled with the mean
+    /// of that triangle's three vertices. SVG 1.1 has no mesh gradient, and a
+    /// triangle is the coarsest thing it can fill unevenly: the colour changes
+    /// at each edge instead of across the face, so the triangles are visible as
+    /// flat facets. That is a finer copy of the page than one colour for the
+    /// whole region, and it is what the export promises rather than a stand-in.
+    fn mesh_triangles(&mut self, spec: &steleofd_display::MeshSpec) {
+        for tri in &spec.triangles {
+            let Some(v) = tri_vertices(spec, tri) else {
+                continue;
+            };
+            // User space, so the triangle is stated once and the transform the
+            // replay opened onto the page places it like any other path.
+            self.line(format!(
+                "<path d=\"M{} {} L{} {} L{} {} Z\" fill=\"{}\" fill-opacity=\"{}\"/>",
+                num(v[0].x),
+                num(v[0].y),
+                num(v[1].x),
+                num(v[1].y),
+                num(v[2].x),
+                num(v[2].y),
+                hex(&triangle_mean(&v)),
+                num(triangle_alpha(&v))
+            ));
+        }
+    }
 }
 
 impl PageSink for SvgSink<'_> {
@@ -381,7 +408,18 @@ impl PageSink for SvgSink<'_> {
 
     fn path(&mut self, shape: PathShape<'_>) {
         let mut attrs = format!("d=\"{}\"", path_data(shape.path));
+        // A mesh has no SVG 1.1 paint, so its triangles are drawn under this
+        // path's fill and clip and the geometry keeps only its stroke. An empty
+        // mesh leaves nothing to draw and keeps the mean colour.
+        let mesh = match shape.fill {
+            Some(PaintShape::Mesh(spec)) if !spec.triangles.is_empty() => Some(spec),
+            _ => None,
+        };
         match shape.fill {
+            Some(PaintShape::Mesh(spec)) if mesh.is_none() => {
+                let _ = write!(attrs, " fill=\"{}\"", mesh_average(spec));
+            }
+            Some(_) if mesh.is_some() => attrs.push_str(" fill=\"none\""),
             Some(paint) => {
                 let reference = self.paint_ref(paint);
                 let _ = write!(attrs, " fill=\"{reference}\"");
@@ -408,6 +446,12 @@ impl PageSink for SvgSink<'_> {
                 attrs.push_str(&stroke_attrs(shape.stroke_style));
             }
             None => attrs.push_str(" stroke=\"none\""),
+        }
+        // The triangles come first and the outline over them, so a shape that
+        // is both mesh-filled and stroked keeps both, in the order an opaque
+        // fill followed by its stroke paints them.
+        if let Some(spec) = mesh {
+            self.mesh_triangles(spec);
         }
         self.line(format!("<path {attrs}/>"));
     }
@@ -560,6 +604,42 @@ fn mesh_average(spec: &steleofd_display::MeshSpec) -> String {
     });
     let mean = Color::rgba((sum.0 / n) as u8, (sum.1 / n) as u8, (sum.2 / n) as u8, 255);
     hex(&mean)
+}
+
+/// The three vertices of a triangle, or nothing when one index is out of
+/// range. A mesh from a damaged document can name a vertex it never defined.
+fn tri_vertices(
+    spec: &steleofd_display::MeshSpec,
+    tri: &[usize; 3],
+) -> Option<[steleofd_display::MeshVertex; 3]> {
+    let mut out = [*spec.points.first()?; 3];
+    for (slot, index) in out.iter_mut().zip(tri) {
+        *slot = *spec.points.get(*index)?;
+    }
+    Some(out)
+}
+
+/// The mean of a triangle's three vertex colours. Nearest-neighbour rather
+/// than area-weighted: a mesh from the standard is an even lattice, so the
+/// vertices of one triangle are about as far apart as the next one's.
+fn triangle_mean(v: &[steleofd_display::MeshVertex; 3]) -> Color {
+    let mean = |pick: fn(&steleofd_display::MeshVertex) -> u8| {
+        let sum: u32 = v.iter().map(|p| u32::from(pick(p))).sum();
+        (sum / 3) as u8
+    };
+    Color::rgba(
+        mean(|p| p.color.r),
+        mean(|p| p.color.g),
+        mean(|p| p.color.b),
+        255,
+    )
+}
+
+/// The mean alpha of a triangle's vertices, as a `0..=1` fraction, so a mesh
+/// that fades out keeps its transparency once it is one path per triangle.
+fn triangle_alpha(v: &[steleofd_display::MeshVertex; 3]) -> f64 {
+    let sum: u32 = v.iter().map(|p| u32::from(p.color.a)).sum();
+    f64::from(sum) / 3.0 / 255.0
 }
 
 /// The first opaque fill inside a pattern's cell, used where the repeat cannot
@@ -802,8 +882,104 @@ mod tests {
     use super::*;
     use steleofd_common::{Millimeter, Point};
     use steleofd_display::DrawOp;
+    use steleofd_display::MeshSpec;
     use steleofd_display::ops::{GradientStop, Paint};
     use steleofd_font::FontId;
+
+    /// A mesh vertex at a position, carrying a colour.
+    fn vertex(x: f64, y: f64, color: Color) -> steleofd_display::MeshVertex {
+        steleofd_display::MeshVertex { x, y, color }
+    }
+
+    /// The vertex colours a mesh triangle carries, read off the XML.
+    fn triangle_fills(svg: &str) -> Vec<String> {
+        svg.match_indices("<path d=\"M")
+            .filter_map(|(i, _)| {
+                let tail = &svg[i..];
+                let end = tail.find("/>")?;
+                let element = &tail[..end];
+                if !element.contains("fill-opacity") {
+                    return None;
+                }
+                let start = element.find("fill=\"#")? + 7;
+                Some(element[start - 1..start + 6].to_string())
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_mesh_is_exported_as_one_path_per_triangle() {
+        // Two triangles over four vertices, each corner a different colour, so
+        // one mean for the whole mesh and one per triangle differ visibly.
+        let mut page = page(Vec::new());
+        page.ops.push(DrawOp::Path {
+            path: rect(0.0, 0.0, 40.0, 40.0),
+            fill: Some(Paint::Mesh(Box::new(MeshSpec {
+                points: vec![
+                    vertex(0.0, 0.0, Color::rgba(255, 0, 0, 255)),
+                    vertex(40.0, 0.0, Color::rgba(0, 255, 0, 255)),
+                    vertex(0.0, 40.0, Color::rgba(0, 0, 255, 255)),
+                    vertex(40.0, 40.0, Color::rgba(255, 255, 0, 255)),
+                ],
+                triangles: vec![[0, 1, 2], [1, 3, 2]],
+            }))),
+            stroke: None,
+            stroke_style: StrokeStyle::default(),
+            rule: PaintRule::NonZero,
+        });
+        let svg = page_to_svg(&page, &SvgOptions::default()).expect("convert");
+        let fills = triangle_fills(&svg);
+        assert_eq!(fills.len(), 2, "one path per triangle: {svg}");
+        // Red, green and blue average to (85, 85, 85); the other triangle is
+        // green, yellow and blue, which averages to (85, 170, 85).
+        assert_eq!(fills[0], "#555555", "{svg}");
+        assert_eq!(fills[1], "#55aa55", "{svg}");
+        // The geometry keeps only its stroke, so it does not paint over them.
+        assert!(svg.contains("fill=\"none\""), "{svg}");
+    }
+
+    #[test]
+    fn a_mesh_triangle_out_of_range_is_skipped_not_fatal() {
+        let mut page = page(Vec::new());
+        page.ops.push(DrawOp::Path {
+            path: rect(0.0, 0.0, 40.0, 40.0),
+            fill: Some(Paint::Mesh(Box::new(MeshSpec {
+                points: vec![
+                    vertex(0.0, 0.0, Color::rgba(255, 0, 0, 255)),
+                    vertex(40.0, 0.0, Color::rgba(0, 255, 0, 255)),
+                    vertex(0.0, 40.0, Color::rgba(0, 0, 255, 255)),
+                ],
+                // The second triangle names a vertex that was never written.
+                triangles: vec![[0, 1, 2], [0, 1, 9]],
+            }))),
+            stroke: None,
+            stroke_style: StrokeStyle::default(),
+            rule: PaintRule::NonZero,
+        });
+        let svg = page_to_svg(&page, &SvgOptions::default()).expect("convert");
+        assert_eq!(triangle_fills(&svg).len(), 1, "{svg}");
+    }
+
+    #[test]
+    fn a_mesh_with_no_triangles_keeps_the_mean_colour() {
+        let mut page = page(Vec::new());
+        page.ops.push(DrawOp::Path {
+            path: rect(0.0, 0.0, 40.0, 40.0),
+            fill: Some(Paint::Mesh(Box::new(MeshSpec {
+                points: vec![
+                    vertex(0.0, 0.0, Color::rgba(0, 0, 0, 255)),
+                    vertex(40.0, 40.0, Color::rgba(255, 255, 255, 255)),
+                ],
+                triangles: Vec::new(),
+            }))),
+            stroke: None,
+            stroke_style: StrokeStyle::default(),
+            rule: PaintRule::NonZero,
+        });
+        let svg = page_to_svg(&page, &SvgOptions::default()).expect("convert");
+        assert!(triangle_fills(&svg).is_empty(), "{svg}");
+        assert!(svg.contains("fill=\"#7f7f7f\""), "{svg}");
+    }
 
     /// A real face, so outlining runs for real rather than degrading.
     fn font_bytes() -> Vec<u8> {
