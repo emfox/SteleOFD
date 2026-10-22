@@ -54,7 +54,7 @@ way.
          |
          +--> render    raster                    screen and images
          +--> print                               printing
-         +--> convert   PDF / SVG / PNG           Office and OCR are planned
+         +--> convert   PDF / SVG / PNG
          +--> search    text extraction
 ```
 
@@ -214,7 +214,7 @@ one a consumer adds as a dependency; the rest ship as an application, and
 | L2 | `steleofd-render` | Raster backend: display list to pixels | published |
 | L3 | `steleofd-crypto` | SM2, SM3, SM4, X.509, PKCS#12 | published |
 | L3 | `steleofd-sign` | Electronic seals and verification per GB/T 38540 | published |
-| L3 | `steleofd-convert` | Format interconversion: PDF, SVG, PNG (Office, OCR planned) | published |
+| L3 | `steleofd-convert` | Format interconversion: PDF, SVG, PNG | published |
 | L3 | `steleofd-edit` | Command-pattern editing with an undo stack | published |
 | L3 | `steleofd-search` | Full-text search and reverse glyph-to-Unicode lookup | published |
 | L3 | `steleofd-archive` | Archival compliance validation (OFD-A) | published |
@@ -241,16 +241,17 @@ print    = ["dep:steleofd-print"]
 sign     = ["dep:steleofd-sign", "dep:steleofd-crypto"]
 convert  = ["dep:steleofd-convert", "dep:steleofd-render"]
 pdf      = ["convert", "steleofd-convert/pdf"]
-office   = ["convert", "steleofd-convert/office"]   # not implemented yet
-ocr      = ["convert", "steleofd-convert/ocr"]      # not implemented yet
 edit     = ["dep:steleofd-edit"]
 search   = ["dep:steleofd-search"]
 archive  = ["dep:steleofd-archive"]
 async    = ["dep:rayon"]
 ```
 
-`office` and `ocr` compile and change nothing; they exist so the capability has
-a name before it has an implementation. Everything else is wired.
+`office` and `ocr` are not features, and were removed rather than finished:
+both compiled and changed nothing, so enabling one asked for a capability and
+got a crate without it. A feature is a promise that something happens, and
+these are recorded in `docs/Roadmap.md` until something does. Everything above
+trims what it names.
 
 Typical combinations:
 

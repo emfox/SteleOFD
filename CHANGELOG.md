@@ -8,6 +8,15 @@ release is written up is in
 
 ## [Unreleased]
 
+### Features
+
+- **Four features that compiled to nothing are gone**: `office` and `ocr` in
+  `steleofd-convert` and `steleofd-core`, `xsd-validate` in
+  `steleofd-archive`, and `backend-raster` in `steleofd-render`. Enabling one
+  now fails the build rather than succeeding and changing nothing, so a caller
+  who asks for a capability is told it is absent. `scripts/check_publish.py`
+  holds every remaining feature to being read by code.
+
 ### Convert
 
 - **SVG export writes a Gouraud mesh as one path per triangle** rather than one

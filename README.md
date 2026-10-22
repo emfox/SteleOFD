@@ -32,7 +32,7 @@ for anyone working on it.
 | Capability | What it covers |
 |---|---|
 | Reading and rendering | GB/T 33190 rendering, lossless zoom, sharded loading for large documents |
-| Conversion | OFD to and from PDF, SVG and PNG; batch and merge. Office and OCR are planned, not built |
+| Conversion | OFD to and from PDF, SVG and PNG; batch and merge |
 | Signatures | SM2 signatures, SM3 digests, SM4 encryption and GB/T 20520 timestamps. Verification checks the proof and the certificate's window at the signing time; a caller who wants the issuer question answered passes its own trust anchors and gets a separate verdict for a signer outside them. International algorithms are named by GB/T 38540-2020 but not implemented |
 | Delivery | One engine, built as a CLI, WebAssembly, a C ABI library, an HTTP service and a desktop reader |
 | Localization | Fluent message layer, en-US and zh-CN |
@@ -185,7 +185,9 @@ DisplayList (flattened, absolute CTM, resources resolved)
        +--> search    text extraction
 ```
 
-Office and OCR conversion are on the roadmap, not in the code.
+Office and OCR conversion are on the roadmap, not in the code: there is no
+feature for either, so asking for one fails to build rather than compiling to
+nothing.
 
 ## No user-facing text in the engine
 
