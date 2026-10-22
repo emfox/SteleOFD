@@ -8,6 +8,11 @@ What it enforces is that the choice was made, that the two sets still add up to
 the whole workspace, and that a published crate has the metadata and the
 dependency form that `cargo publish` needs.
 
+It also checks the features, which are the other half of a public promise: a
+feature that compiles and changes nothing tells an enabler the crate has a
+capability it does not. Every declared feature must be consumed by code, and the
+names this project has removed must not come back.
+
 Usage:
     python3 scripts/check_publish.py            # check the workspace
     python3 scripts/check_publish.py --list     # which crates publish, and why
@@ -30,6 +35,11 @@ ROOT = Path(__file__).resolve().parent.parent
 # source. `license` and `repository` come from the workspace, so a crate that
 # inherits them passes without restating them.
 REQUIRED = ("description", "license", "repository", "readme")
+
+# Features removed because they compiled and changed nothing. A name that comes
+# back is either an implementation, in which case this list is the wrong place
+# for it, or the same lie told again. `docs/Architecture.md` states the rule.
+RETIRED_FEATURES = ("office", "ocr")
 
 EXPLAIN = {
     "description": "one sentence on what the crate is for, shown in registry search",
@@ -104,6 +114,117 @@ def inspect(manifest: Path) -> tuple[str, list[str], str | None]:
     return label, [f"no {field} (a registry asks for it)" for field in missing], None
 
 
+def features(manifest: Path) -> dict[str, str]:
+    """Each declared feature and its definition, from the `[features]` table.
+
+    `default` is left out: it names other features rather than a capability, and
+    a caller never enables it by name.
+    """
+    text = manifest.read_text(encoding="utf-8")
+    match = re.search(r"^\[features\]\n(.*?)(?=^\[|\Z)", text, re.M | re.S)
+    if match is None:
+        return {}
+    found: dict[str, str] = {}
+    for line in match.group(1).splitlines():
+        entry = re.match(r'^([A-Za-z0-9_-]+)\s*=\s*(.+)$', line)
+        if entry is None or entry.group(1) == "default":
+            continue
+        found[entry.group(1)] = entry.group(2).strip()
+    return found
+
+
+def parts_of(definition: str) -> list[str]:
+    """The entries of a feature's list, unquoted and trimmed of comments.
+
+    A quoted name is a feature of this crate; an unquoted one either names a
+    dependency (`dep:x`) or a feature of one (`dep/feature`), which is the same
+    distinction Cargo draws. Both are needed here, so the quotes come off and
+    whatever follows them is dropped: a note about the choice is not part of it.
+    """
+    body = definition.strip().strip("[]")
+    found = []
+    for part in body.split(","):
+        name = part.strip().split("#")[0].strip().strip('"')
+        if name:
+            found.append(name)
+    return found
+
+
+def usage_of(name: str, crate: Path) -> bool:
+    """Whether any code in the crate reads this feature.
+
+    A `cfg(feature = "x")` reference is what a capability looks like in code.
+    An optional dependency alone is not: `dep:x` compiles a crate in that
+    nothing then calls, which is the same empty promise in a different form.
+    """
+    haystack = " ".join(
+        path.read_text(encoding="utf-8", errors="ignore")
+        for path in crate.rglob("*.rs")
+        if "target" not in path.parts
+    )
+    return f'feature = "{name}"' in haystack
+
+
+def reads(
+    name: str,
+    parts: list[str],
+    declared: dict[str, str],
+    crate: Path,
+    seen: set[str] | None = None,
+) -> bool:
+    """Whether some code in the crate ends up reached by enabling this feature.
+
+    Three ways to reach code, and one that reaches it by itself: a `cfg` on the
+    name, a `cfg` further along a chain of forwards in this crate, or a `dep:x`
+    that compiles a crate in — which code may then call without a gate, so the
+    dependency being used is the only use there is to have.
+    """
+    seen = seen or set()
+    if name in seen:
+        return False
+    seen.add(name)
+    if usage_of(name, crate):
+        return True
+    for part in parts:
+        if part.startswith("dep:"):
+            return True
+        if "/" in part:
+            continue
+        forwarded = declared.get(part)
+        if forwarded is None:
+            continue
+        inner = parts_of(forwarded)
+        if reads(part, inner, declared, crate, seen):
+            return True
+    return False
+
+
+def feature_problems(manifest: Path) -> list[str]:
+    """Problems with one crate's features, as messages.
+
+    One rule. A feature exists to switch code on, so a name that no code ends up
+    reading is a name that changes nothing, whether it expands to an empty list
+    or to a list of real things. A forwarding feature is followed to what it
+    forwards to, so a chain that ends at code passes and a chain that ends at
+    nothing does not. What is not checked is a name that points at nothing at
+    all: Cargo refuses to resolve it, so the build says it first and more
+    precisely.
+    """
+    crate = manifest.parent
+    label = crate.name
+    declared = features(manifest)
+    found: list[str] = []
+    for name in RETIRED_FEATURES:
+        if name in declared:
+            found.append(f"{label}: the feature `{name}` was retired and is back")
+    for name, definition in declared.items():
+        parts = parts_of(definition)
+        if not reads(name, parts, declared, crate):
+            what = f"expands to {definition}" if parts else "expands to nothing"
+            found.append(f"{label}: the feature `{name}` {what} and no code reads it")
+    return found
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description=__doc__,
@@ -134,6 +255,7 @@ def main() -> int:
             unpublished.append((label, "no reason given"))
             problems.append(f"{label}: publish = false without a comment saying why")
         problems.extend(f"{label}: {message}" for message in found)
+        problems.extend(feature_problems(manifest))
 
     if args.list:
         print(f"published ({len(published)}):")
@@ -154,7 +276,8 @@ def main() -> int:
         print("\nSee docs/Roadmap.md (R7) for what the registry surface is.")
         return 1
 
-    print("\nOK: every crate states where it goes, with what a registry asks for")
+    print("\nOK: every crate states where it goes, with what a registry asks for,")
+    print("    and every feature it declares is consumed")
     return 0
 
 
