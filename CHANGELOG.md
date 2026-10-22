@@ -8,6 +8,13 @@ release is written up is in
 
 ## [Unreleased]
 
+### Convert
+
+- **SVG export writes a Gouraud mesh as one path per triangle** rather than one
+  mean colour for the whole region. SVG 1.1 has no mesh gradient, so the shaded
+  area is now a faceted copy of itself instead of a flat patch; `docs/Interop.md`
+  states the limit and what replaces it.
+
 ### Render
 
 - **A clip is shared rather than copied** by the saved state, and a page whose

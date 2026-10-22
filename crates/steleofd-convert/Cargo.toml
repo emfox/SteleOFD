@@ -27,10 +27,9 @@ lopdf = { workspace = true, optional = true }
 [features]
 default = ["pdf"]
 pdf     = ["dep:lopdf"]
-# Declared so the intent is visible, but nothing consumes them yet: enabling
-# either compiles and changes nothing. Office interop is M6 in the roadmap.
-office  = []
-ocr     = []
+# No `office` or `ocr` feature: one that compiles and does nothing reads as a
+# capability this crate has. Enabling either now fails the build, which is the
+# honest answer. `docs/Roadmap.md` carries the intent.
 
 [dev-dependencies]
 criterion.workspace = true

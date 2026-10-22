@@ -19,11 +19,9 @@ tiny-skia.workspace = true
 image.workspace = true
 tracing.workspace = true
 
-[features]
-default = ["backend-raster"]
-# The raster backend is the one that exists. A command-stream backend for
-# browsers is planned; it lands as its own feature when it lands, not before.
-backend-raster   = []
+# No `backend-raster` feature: the raster backend is the one that exists, so
+# naming it was a promise of a choice the crate does not offer. A command-stream
+# backend for browsers lands as its own feature when it lands, not before.
 
 [package.metadata.cargo-semver-checks.lints]
 workspace = true

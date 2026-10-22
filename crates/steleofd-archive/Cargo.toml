@@ -17,9 +17,8 @@ steleofd-xml.workspace = true
 serde.workspace = true
 tracing.workspace = true
 
-[features]
-default = []
-xsd-validate = []
+# No `xsd-validate` feature: a check against the annex A schemas would be worth
+# having, but the name enabled nothing, and `docs/Roadmap.md` carries the intent.
 
 [package.metadata.cargo-semver-checks.lints]
 workspace = true

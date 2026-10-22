@@ -195,8 +195,35 @@ says and what every sample does. The regression test is
 `gb_t_33190_8_4_a_clip_stays_in_object_space_beside_the_ctm`
 (`crates/steleofd-parser/tests/conformance.rs`).
 
-## 6. Blending: no mode to support, so nothing is left unsupported
+## 6. A Gouraud mesh in SVG, where SVG 1.1 has no mesh
 
+**Standard.** Clause 8.3.4.4 (*GouraudShd*): a lattice of points, each with a
+colour, and the triangles over them, coloured by straight-line interpolation
+across each face. Table 28 makes it a complex colour like the two shadings
+above, so it fills and strokes graphics and text.
+
+**What the other formats do.** PDF has a construct for exactly this:
+`ShadingType 4`, a free-form triangle mesh with a colour per vertex, which is
+why the PDF export reproduces the mesh rather than approximating it. SVG 1.1
+has none: its only paints are a solid colour, a linear gradient, a radial
+gradient and a pattern, and none of them varies by vertex. SVG 2's `<meshgradient>`
+would, and no renderer here reads SVG 2 gradients.
+
+**Verdict.** The limit is in the format, not in this project, so the export no
+longer spends a whole region on one colour: each triangle becomes one `<path>`
+filled with the mean of its three vertices. The colour then changes at every
+edge rather than across every face, which is a coarser copy of the page but a
+copy of it — a mesh of 400 triangles carries 400 flat patches of the shaded
+region instead of one flat patch of the whole. The geometry keeps its stroke
+and no fill, the triangles carry the fill, and a mesh with no triangles at all
+keeps the mean vertex colour, because there is nothing finer to draw.
+
+Two consequences a caller should know. A stroked mesh outline is drawn over the
+triangles rather than under them, so a stroke wide enough to overlap the fill
+covers it. And the file grows by roughly one `<path>` per triangle, which for a
+page-sized mesh is a few thousand short elements rather than a single fill.
+
+## 7. Blending: no mode to support, so nothing is left unsupported
 The maintainer asked whether the engine should honour a blend mode, so the
 first move was to look for one. There is none to find.
 
@@ -218,7 +245,7 @@ blend mode that a producer writes anyway travels in a non-standard extension,
 which the reader ignores the same way it ignores every unrecognised attribute —
 it does not fail, and it does not guess at an effect the standard never named.
 
-## 7. What this changed in our own code
+## 8. What this changed in our own code
 
 The comparison paid for itself in the other direction. The four oracle gaps
 above are external; these were ours, found while establishing them:
@@ -230,7 +257,7 @@ above are external; these were ours, found while establishing them:
 | Path coordinates read as absolute, not offsets from the boundary corner | parser | made relative, clause 8.1.4 |
 | `Clips` read with a nonexistent `TransFlag` | parser, model | attribute removed (section 5) |
 
-## 8. Reproducing
+## 9. Reproducing
 
 The golden fixtures and the writer are in
 [`crates/steleofd-testkit`](../crates/steleofd-testkit). Regression compares

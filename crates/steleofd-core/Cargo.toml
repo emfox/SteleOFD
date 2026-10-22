@@ -38,17 +38,16 @@ steleofd-testkit.workspace = true
 default = ["render", "sign", "convert", "pdf"]
 
 # Capability features, to trim binary size per delivery form.
-render   = ["dep:steleofd-render", "steleofd-render/backend-raster"]
+render   = ["dep:steleofd-render"]
 print    = ["dep:steleofd-print"]
 sign     = ["dep:steleofd-sign", "dep:steleofd-crypto"]
 # Convert pulls in the raster backend anyway (PNG output goes through it),
 # so naming the dependency here costs no extra compilation.
 convert  = ["dep:steleofd-convert", "dep:steleofd-render"]
 pdf      = ["convert", "steleofd-convert/pdf"]
-# Not implemented yet; they forward to convert's placeholder features and
-# change nothing. Kept so the capability has a name. See roadmap M6.
-office   = ["convert", "steleofd-convert/office"]
-ocr      = ["convert", "steleofd-convert/ocr"]
+# No `office` or `ocr` feature here either: a forwarding name enabled nothing
+# in the crate it named, so a caller asked for a capability and compiled
+# without it. Enabling one now fails the build rather than lying.
 edit     = ["dep:steleofd-edit"]
 search   = ["dep:steleofd-search"]
 archive  = ["dep:steleofd-archive"]
