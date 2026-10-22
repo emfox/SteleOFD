@@ -171,7 +171,7 @@ pub fn render_page(
                 let ts_path = to_ts_path(path, total)?;
                 let mut mask = clip_mask(&state, width, height)?;
                 mask.intersect_path(&ts_path, fill_rule(*rule), true, Transform::identity());
-                state.clip = Some(mask);
+                state.clip = Some(Arc::new(mask));
             }
             DrawOp::ClipText(run) => {
                 // A text clip is the glyph outlines themselves, resolved the
@@ -188,7 +188,7 @@ pub fn render_page(
                             Transform::identity(),
                         );
                     }
-                    state.clip = Some(mask);
+                    state.clip = Some(Arc::new(mask));
                 }
             }
             DrawOp::Path {
@@ -204,20 +204,16 @@ pub fn render_page(
                     match paint {
                         // A mesh cannot be a tiny-skia shader, so it is painted
                         // per pixel and masked by the outline being filled.
-                        Paint::Mesh(spec) => mesh::paint_mesh(
-                            &mut pixmap,
-                            spec,
-                            &ts_path,
-                            state.clip.as_ref(),
-                            total,
-                        ),
+                        Paint::Mesh(spec) => {
+                            mesh::paint_mesh(&mut pixmap, spec, &ts_path, state.clip_ref(), total)
+                        }
                         // A pattern is vector content, so it is rasterized once
                         // and tiled; the same mask confines the repeat.
                         Paint::Pattern(spec) => pattern::paint_pattern(
                             &mut pixmap,
                             spec,
                             &ts_path,
-                            state.clip.as_ref(),
+                            state.clip_ref(),
                             fonts,
                             total,
                         ),
@@ -228,7 +224,7 @@ pub fn render_page(
                                 &p,
                                 fill_rule(*rule),
                                 Transform::identity(),
-                                state.clip.as_ref(),
+                                state.clip_ref(),
                             );
                         }
                     }
@@ -241,7 +237,7 @@ pub fn render_page(
                         &p,
                         &ts_stroke,
                         Transform::identity(),
-                        state.clip.as_ref(),
+                        state.clip_ref(),
                     );
                 }
             }

@@ -5,26 +5,36 @@ use super::*;
 #[derive(Clone)]
 pub(crate) struct State {
     pub(crate) ctm: Affine,
-    pub(crate) clip: Option<Mask>,
+    pub(crate) clip: Option<Arc<Mask>>,
 }
 
-/// The mask a clip intersects into, starting opaque on the first use and
-/// reusing the current one so nested clips compose.
+impl State {
+    /// The clip as tiny-skia takes it, which is a borrow rather than a clone.
+    pub(crate) fn clip_ref(&self) -> Option<&Mask> {
+        self.clip.as_deref()
+    }
+}
+
+/// The mask a clip intersects into, starting opaque on the first use so nested
+/// clips compose. One copy of the page arrives here whatever the stack holds,
+/// because a clip is shared: saving the state costs a pointer, not a page.
 pub(crate) fn clip_mask(state: &State, width: u32, height: u32) -> Result<Mask> {
-    state
-        .clip
-        .clone()
-        .filter(|m| m.width() == width && m.height() == height)
-        .or_else(|| {
-            Mask::new(width, height).map(|mut m| {
-                m.data_mut().fill(255);
-                m
-            })
-        })
-        .ok_or(OfdError::Render(RenderError::InvalidSize {
+    let size = || {
+        OfdError::Render(RenderError::InvalidSize {
             w: width,
             h: height,
-        }))
+        })
+    };
+    match state.clip_ref() {
+        // The whole page, copied once: the same bytes as turning one opaque
+        // mask into another, and a clip is a whole-page operation either way.
+        Some(m) if m.width() == width && m.height() == height => Ok(m.clone()),
+        _ => {
+            let mut mask = Mask::new(width, height).ok_or_else(size)?;
+            mask.data_mut().fill(255);
+            Ok(mask)
+        }
+    }
 }
 
 /// Per-glyph outlines in page pixel space, in draw order. Outlines are

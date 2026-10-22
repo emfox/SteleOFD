@@ -149,7 +149,7 @@ pub(crate) fn draw_image(
         img.as_ref(),
         &PixmapPaint::default(),
         total,
-        state.clip.as_ref(),
+        state.clip_ref(),
     );
     Ok(ImageOutcome::Drawn)
 }

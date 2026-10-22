@@ -13,5 +13,5 @@ pub use raster::{Cubic, RasterOutput, RenderOptions, arc_cubics, render_page};
 // to the glyphs the display list names, and neither exporter carries a font;
 // they outline every glyph into a path.
 
-// The clip and the bitmap cache are deferred rather than settled, each waiting
-// on a measurement rather than on a reason; `docs/Roadmap.md` carries both.
+// The bitmap cache is deferred rather than settled, waiting on a measurement
+// rather than on a reason; `docs/Roadmap.md` carries it.
