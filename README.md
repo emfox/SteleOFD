@@ -15,8 +15,8 @@ fixed-layout electronic documents](https://openstd.samr.gov.cn/bzgk/gb/newGbInfo
 Parsing and rendering are written from scratch; the one C library in the tree is
 fontconfig, reached through `font-kit` by the reader on Linux.
 
-The current release is `0.2.0`, and the tree is building `0.3.0`, which removes
-a public module and so cannot be a patch. What `0.2.0` offers is in the
+The current release is `0.4.0`. It removes four feature names that enabled
+nothing, which is why it is `0.4.0` and not a patch. What it offers is in the
 [`CHANGELOG`](CHANGELOG.md); what is still to build, and which release has
 claimed it, is in [`docs/Roadmap.md`](docs/Roadmap.md).
 

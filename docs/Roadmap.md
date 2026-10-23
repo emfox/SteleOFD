@@ -24,8 +24,7 @@ promise.
 
 | Version | Theme |
 | --- | --- |
-| `0.4+` | R3 the Android build that crashes on open |
-| `0.5+` | R7 which crates are published |
+| `0.5+` | R3 the Android build that crashes on open, and R7 which crates are published |
 | unversioned | R8 packaging, and the rest |
 
 ## Ranking
@@ -49,20 +48,15 @@ then what a signature is asked to prove, then distribution, then the rest.
 The version column is not the ranking read downwards. R3 is the crash, which by
 the first rule ranks at the top, and it sits below the publishing work only
 because diagnosing it needs a device or an emulator that no other row does; a
-`0.4` promise would be one the project cannot keep.
+version promise would be one the project cannot keep.
 
 ## Open
-
-### 0.4+
-
-| # | Item | Target | Why it ranks here | Done when |
-| --- | --- | --- | --- | --- |
-| R3 | **The Android build crashes on open.** The archive installs, then exits before a page is drawn. One cause is found and fixed: the Android `eframe` features asked for Wayland and X11, which no device has, so the loaded library quit. The build now proves that target compiles on every push, and the entry point reports on logcat. What remains is that no run on a device has confirmed it. | `0.4+` | A crash outranks a slow page, so it sits above the packaging work; but the last step needs a device or an emulator, which no other row does, so it is not promised to a version. | The arm64 archive from the release page opens `ofdrw/999.ofd` on a device and on an emulator, and the crash has a regression test that fails without the fix. |
 
 ### 0.5+
 
 | # | Item | Target | Why it ranks here | Done when |
 | --- | --- | --- | --- | --- |
+| R3 | **The Android build crashes on open.** The archive installs, then exits before a page is drawn. One cause is found and fixed: the Android `eframe` features asked for Wayland and X11, which no device has, so the loaded library quit. The build now proves that target compiles on every push, and the entry point reports on logcat. What remains is that no run on a device has confirmed it. | `0.5+` | A crash outranks a slow page, so it sits above the packaging work; but the last step needs a device or an emulator, which no other row does, so it is not promised to a version. | The arm64 archive from the release page opens `ofdrw/999.ofd` on a device and on an emulator, and the crash has a regression test that fails without the fix. |
 | R7 | **The crates are not on a registry yet.** The surface is decided: nineteen crates publish and eight do not, each stating its `publish` field and a `description`, and `check_publish.py` enforces both sets in CI. What remains is the act. `cargo package -p steleofd-core` still fails because the crates it depends on are not there, so publishing has to go leaf first through the dependency layers, and a version already on the registry cannot be replaced. The semver gate is now set for it: a break needs a minor version and the check compares against the parent commit, so the bump a break costs is decided when it merges rather than when it ships. | Publishing is how the engine reaches anyone not building an application around it. It is held back by a decision rather than by order: a published API is fixed per version, so it waits until the features and the surface have settled. | `cargo add steleofd-core` builds against crates.io at the version then shipped, the release notes name the nineteen crates, and a CI job fails when a published crate's metadata stops being complete. |
 
 ### Unversioned
