@@ -6,28 +6,34 @@
 // no-op on the other systems, so it stays unconditional.
 #![cfg_attr(windows, windows_subsystem = "windows")]
 
+#[cfg(not(target_os = "android"))]
 use eframe::egui::{self, Ui};
 #[cfg(not(any(target_arch = "wasm32", target_os = "android")))]
 use steleofd_i18n::MessageId;
+#[cfg(not(target_os = "android"))]
 use steleofd_reader::App;
 #[cfg(not(any(target_arch = "wasm32", target_os = "android")))]
 use steleofd_reader::ExportFormat;
 #[cfg(not(any(target_arch = "wasm32", target_os = "android")))]
 use steleofd_reader::ReaderMessage;
+#[cfg(not(target_os = "android"))]
 use steleofd_reader::window;
 
-#[cfg(target_os = "android")]
-mod android;
 #[cfg(target_arch = "wasm32")]
 mod web;
 
 /// The window state, boxed so `eframe` can own it.
+///
+/// Android has its own copy inside the library, because the device loads the
+/// cdylib and the binary is never started there.
+#[cfg(not(target_os = "android"))]
 pub(crate) struct Reader {
     app: App,
     /// The title last pushed to the window, so it is pushed only on a change.
     title: String,
 }
 
+#[cfg(not(target_os = "android"))]
 impl Reader {
     pub(crate) fn with_app(app: App) -> Self {
         Self {
@@ -37,6 +43,7 @@ impl Reader {
     }
 }
 
+#[cfg(not(target_os = "android"))]
 impl eframe::App for Reader {
     fn ui(&mut self, ui: &mut Ui, _frame: &mut eframe::Frame) {
         let requests = window::draw(ui, &mut self.app);
@@ -49,6 +56,7 @@ impl eframe::App for Reader {
     }
 }
 
+#[cfg(not(target_os = "android"))]
 impl Reader {
     /// Push the document's name into the window title bar, when it changes.
     fn sync_title(&mut self, ui: &mut Ui) {
