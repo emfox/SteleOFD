@@ -10,27 +10,159 @@ use eframe::egui;
 use jni::objects::{JObject, JString};
 use jni::{Env, JavaVM, jni_sig, jni_str};
 
+/// The last thing a reader reports, and it must land somewhere: Android has no
+/// stderr to read and no console to watch, so a log line is only written when
+/// `android.util.Log` is behind it.
+struct Logcat;
+
+impl log::Log for Logcat {
+    fn enabled(&self, _metadata: &log::Metadata<'_>) -> bool {
+        true
+    }
+
+    fn log(&self, record: &log::Record<'_>) {
+        write_to_logcat(record.level(), &record.args().to_string());
+    }
+
+    fn flush(&self) {}
+}
+
+/// One line to `android.util.Log`, on whatever thread writes it. Every failure
+/// is dropped rather than reported: the report would go to the log being
+/// written, and a logger that recursed would never return.
+fn write_to_logcat(level: log::Level, message: &str) {
+    let Some(vm) = JavaVM::singleton().ok().or_else(|| VM.get().cloned()) else {
+        return;
+    };
+    let _ = vm.attach_current_thread(|env| -> Result<(), jni::errors::Error> {
+        let tag = env.new_string("steleofd_reader")?;
+        let text = env.new_string(message)?;
+        let method = match level {
+            log::Level::Error => jni_str!("e"),
+            log::Level::Warn => jni_str!("w"),
+            log::Level::Info => jni_str!("i"),
+            log::Level::Debug | log::Level::Trace => jni_str!("d"),
+        };
+        env.call_static_method(
+            jni_str!("android.util.Log"),
+            method,
+            jni_sig!((tag: java.lang.String, message: java.lang.String) -> int),
+            &[(&tag).into(), (&text).into()],
+        )?;
+        Ok(())
+    });
+}
+
+/// The VM the library was loaded into, kept because `JavaVM::singleton` alone
+/// is not enough: it is set by `JNI_OnLoad`, which runs before the entry point
+/// but leaves nothing usable for a thread that has not attached yet.
+static VM: std::sync::OnceLock<JavaVM> = std::sync::OnceLock::new();
+
 /// Called by `android-activity` once the activity exists. `no_mangle` is what
 /// makes the symbol reachable from the Java side.
 #[unsafe(no_mangle)]
 fn android_main(app: android_activity::AndroidApp) {
+    // Installed first, so a reader that stops while it is still starting leaves
+    // a reason behind rather than an empty window and a silent log.
+    if log::set_logger(&Logcat).is_ok() {
+        // `debug` because wgpu explains a refused device at that level, and a
+        // device that cannot draw is the failure this build exists to report.
+        log::set_max_level(log::LevelFilter::Debug);
+    }
     log::info!("android_main started on {:?}", thread_name());
     // Read before the loop starts: the intent names the document the tap was
     // for, and the activity is the only handle on it.
     let handed_over = document_from_intent(&app);
-    let options = eframe::NativeOptions {
-        android_app: Some(app),
-        viewport: egui::ViewportBuilder::default()
-            .with_title("SteleOFD Reader")
-            .with_min_inner_size([360.0, 480.0]),
-        renderer: eframe::Renderer::Wgpu,
-        ..Default::default()
+    // `setprop debug.steleofd.renderer glow` picks the renderer on a device
+    // whose driver refuses one of them, and is how the emulator is tested:
+    // its software Vulkan builds a wgpu device and then never finishes a frame.
+    let first = match renderer_choice() {
+        Some(renderer) => renderer,
+        None => eframe::Renderer::Wgpu,
     };
-    if let Err(err) = open(options, handed_over) {
-        log::error!(
-            "android_main on {:?}: the window closed with {err}",
-            thread_name()
-        );
+    // wgpu first, as on the desktop, but a driver may refuse a pipeline rather
+    // than report it, and an emulator's software Vulkan does exactly that: the
+    // same loop the desktop runs then applies, and the refusal is not the end.
+    let mut last = None;
+    for renderer in [first, other(first)] {
+        let options = NativeOptions {
+            android_app: Some(app.clone()),
+            viewport: egui::ViewportBuilder::default()
+                .with_title("SteleOFD Reader")
+                .with_min_inner_size([360.0, 480.0]),
+            renderer,
+            ..Default::default()
+        };
+        match open(options, handed_over.clone()) {
+            Ok(()) => {
+                log::info!("android_main on {:?} returned", thread_name());
+                return;
+            }
+            Err(err) => {
+                log::error!("the window did not open with {renderer:?}: {err}");
+                last = Some(err);
+            }
+        }
+    }
+    // Logcat is the only place this is seen, so the report names the reason
+    // rather than leaving an activity that quits without one.
+    if let Some(err) = last {
+        log::error!("neither renderer could open a window; the last said {err}");
+    }
+}
+
+/// The renderer the device asks for, if it asks. A property is read instead of
+/// an environment variable because nothing sets one for an app the launcher
+/// starts, while `setprop` works on any device.
+fn renderer_choice() -> Option<eframe::Renderer> {
+    let asked = system_property("debug.steleofd.renderer")?;
+    match asked.trim() {
+        "glow" => Some(eframe::Renderer::Glow),
+        "wgpu" => Some(eframe::Renderer::Wgpu),
+        other => {
+            log::warn!("debug.steleofd.renderer names {other:?}, which is neither glow nor wgpu");
+            None
+        }
+    }
+}
+
+/// An Android system property. `std::env::var` does not see these: they live in
+/// a shared-memory region the runtime reads, not in the environment, so the
+/// `setprop` a tester types would otherwise be invisible to the app.
+fn system_property(name: &str) -> Option<String> {
+    const MAX: usize = 92;
+    // SAFETY: `__system_property_get` writes at most `MAX` bytes plus the
+    // terminator into the buffer, and the buffer is that size; the name is
+    // NUL-terminated below and outlives the call.
+    let mut value = [0u8; MAX];
+    let mut key = Vec::with_capacity(name.len() + 1);
+    key.extend_from_slice(name.as_bytes());
+    key.push(0);
+    let read = unsafe {
+        __system_property_get(
+            key.as_ptr().cast::<std::ffi::c_char>(),
+            value.as_mut_ptr().cast::<std::ffi::c_char>(),
+        )
+    };
+    if read <= 0 {
+        return None;
+    }
+    let taken = usize::try_from(read).ok()?.min(MAX - 1);
+    String::from_utf8(value[..taken].to_vec())
+        .ok()
+        .filter(|text| !text.is_empty())
+}
+
+unsafe extern "C" {
+    /// The platform's property reader, which every Android libc exports.
+    fn __system_property_get(name: *const std::ffi::c_char, value: *mut std::ffi::c_char) -> i32;
+}
+
+/// The renderer to try when the one asked for could not open a window.
+fn other(renderer: eframe::Renderer) -> eframe::Renderer {
+    match renderer {
+        eframe::Renderer::Glow => eframe::Renderer::Wgpu,
+        eframe::Renderer::Wgpu => eframe::Renderer::Glow,
     }
 }
 

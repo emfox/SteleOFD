@@ -387,7 +387,16 @@ impl App {
         let Some(dropped) = self.pending_open.take() else {
             return false;
         };
+        // A device has no console, so the outcome is the only record of whether
+        // the hand-over reached the frame that opens it: the log is where an
+        // empty window is told apart from a document that was refused.
+        #[cfg(target_os = "android")]
+        log::info!("opening the document the platform handed over");
         if let Err(err) = self.open_dropped(dropped) {
+            #[cfg(target_os = "android")]
+            log::error!("the handed-over document was refused: {}", err.message);
+            #[cfg(not(target_os = "android"))]
+            tracing::error!("the handed-over document was refused: {}", err.message);
             self.set_error(err.message);
         }
         true

@@ -54,6 +54,24 @@ fn the_android_build_names_no_desktop_session() {
     );
 }
 
+/// Both renderers, because a device cannot be asked which it will accept.
+///
+/// An emulator's software Vulkan builds a wgpu device and then refuses the
+/// pipelines the frame needs, and a build that named wgpu alone would have
+/// nothing to fall back to: the activity would open and then show nothing.
+#[test]
+fn the_android_build_carries_a_second_renderer() {
+    let text = manifest();
+    let features = eframe_features(&text, r#"target_os = "android""#)
+        .expect("Android names its own eframe features");
+    for present in ["glow", "wgpu"] {
+        assert!(
+            features.iter().any(|feature| feature == present),
+            "Android cannot fall back without `{present}`: {features:?}"
+        );
+    }
+}
+
 #[test]
 fn the_desktop_build_keeps_the_session_it_runs_in() {
     let text = manifest();

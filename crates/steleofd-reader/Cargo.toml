@@ -95,7 +95,10 @@ workspace = true
 default-features = false
 # Android has no Wayland or X session to speak to, and no reader on a device
 # reports through accesskit; asking for either is how a loaded library quits.
-features = ["android-native-activity", "default_fonts", "wgpu"]
+# Both renderers are compiled in for the same reason as on the desktop: an
+# emulator's software Vulkan refuses the pipelines wgpu needs, and a reader
+# that shipped wgpu alone would have nothing to fall back to on it.
+features = ["android-native-activity", "default_fonts", "glow", "wgpu"]
 
 # The window decorations winit draws itself when a compositor offers none.
 # `eframe` does not pass this through, so the desktop target names winit too.
