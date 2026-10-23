@@ -8,6 +8,12 @@ release is written up is in
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-23
+
+This release removes four feature names, which is why it is `0.4.0` and not a
+patch. What it adds is a shaded region that exports as shaded, and a page whose
+clips cost one mask rather than one per save.
+
 ### Features
 
 - **Four features that compiled to nothing are gone**: `office` and `ocr` in
@@ -205,7 +211,8 @@ A nine-page golden book is compared against another vendor's reader and a second
 - Office formats and OCR are planned, not built.
 - iOS is not in the release matrix, and the release artefacts are unsigned.
 
-[Unreleased]: https://github.com/emfox/SteleOFD/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/emfox/SteleOFD/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/emfox/SteleOFD/releases/tag/v0.4.0
 [0.3.0]: https://github.com/emfox/SteleOFD/releases/tag/v0.3.0
 [0.2.0]: https://github.com/emfox/SteleOFD/releases/tag/v0.2.0
 [0.1.1]: https://github.com/emfox/SteleOFD/releases/tag/v0.1.1
