@@ -4,17 +4,17 @@
 //! uses. A device also has no file dialog, so a document arrives through the
 //! intent that started the activity, read before the first frame.
 
+use crate::{App, DroppedFile, window};
+use eframe::NativeOptions;
 use eframe::egui;
 use jni::objects::{JObject, JString};
 use jni::{Env, JavaVM, jni_sig, jni_str};
-use steleofd_reader::{App, DroppedFile};
-
-use crate::Reader;
 
 /// Called by `android-activity` once the activity exists. `no_mangle` is what
 /// makes the symbol reachable from the Java side.
 #[unsafe(no_mangle)]
 fn android_main(app: android_activity::AndroidApp) {
+    log::info!("android_main started on {:?}", thread_name());
     // Read before the loop starts: the intent names the document the tap was
     // for, and the activity is the only handle on it.
     let handed_over = document_from_intent(&app);
@@ -23,36 +23,52 @@ fn android_main(app: android_activity::AndroidApp) {
         viewport: egui::ViewportBuilder::default()
             .with_title("SteleOFD Reader")
             .with_min_inner_size([360.0, 480.0]),
+        renderer: eframe::Renderer::Wgpu,
         ..Default::default()
     };
-    let still_open = eframe::run_native(
-        "SteleOFD Reader",
-        options,
-        Box::new(move |cc| {
-            // The system face carries the Chinese labels, as on the desktop.
-            steleofd_reader::fonts::install_cjk_fallback(&cc.egui_ctx);
-            let mut reader = App::new();
-            if let Some(dropped) = handed_over {
-                // Stored rather than opened: the first frame is the first place
-                // a failure has a status bar to be written into.
-                reader.hand_over(dropped);
-            }
-            Ok(Box::new(Reader::with_app(reader)))
-        }),
-    );
-    if let Err(err) = still_open {
-        // Logcat is the only place this is seen, so the report says the thread
-        // and the reason rather than leaving a silent exit.
+    if let Err(err) = open(options, handed_over) {
         log::error!(
             "android_main on {:?}: the window closed with {err}",
             thread_name()
         );
-        return;
     }
-    log::warn!(
-        "android_main on {:?} returned: the event loop ended",
-        thread_name()
-    );
+}
+
+/// One attempt at the window, with the renderer `options` names.
+fn open(options: NativeOptions, handed_over: Option<DroppedFile>) -> eframe::Result {
+    eframe::run_native(
+        "SteleOFD Reader",
+        options,
+        Box::new(move |cc| {
+            // The system face carries the Chinese labels, as on the desktop.
+            crate::fonts::install_cjk_fallback(&cc.egui_ctx);
+            let mut app = App::new();
+            if let Some(dropped) = handed_over {
+                // Stored rather than opened: the first frame is the first place
+                // a failure has a status bar to be written into.
+                app.hand_over(dropped);
+            }
+            Ok(Box::new(Window(app)))
+        }),
+    )
+}
+
+/// The frame around [`window::draw`], the same one the desktop runs.
+///
+/// The binary's copy serves the platform dialogs as well; a device has none, so
+/// this one draws and closes and asks nothing of the platform.
+struct Window(App);
+
+impl eframe::App for Window {
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        let requests = window::draw(ui, &mut self.0);
+        let title = self.0.title();
+        ui.ctx()
+            .send_viewport_cmd(egui::ViewportCommand::Title(title));
+        if requests.quit {
+            ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+        }
+    }
 }
 
 /// The document the activity was started for, if it was started for one.
@@ -187,10 +203,13 @@ fn read_uri(
     // Read in chunks into a buffer rather than asking the stream for its size:
     // a provider is free to report none, and the length of a shared document is
     // not a number a reader should trust in advance.
+    const CHUNK: usize = 64 * 1024;
     let mut bytes = Vec::new();
-    let chunk = [0u8; 64 * 1024];
     loop {
-        let buffer = env.byte_array_from_slice(&chunk)?;
+        // A fresh array per read, because the provider writes into this one and
+        // the bytes have to be taken back out of it: appending from the Rust
+        // side alone would append the zeroes it was filled with.
+        let buffer = env.new_byte_array(CHUNK)?;
         let read = env
             .call_method(
                 &stream,
@@ -202,8 +221,12 @@ fn read_uri(
         if read <= 0 {
             break;
         }
-        let taken = usize::try_from(read)?;
-        bytes.extend_from_slice(&chunk[..taken]);
+        let taken = usize::try_from(read)?.min(CHUNK);
+        // `jbyte` is signed, and a document is a stream of bytes: the values are
+        // reinterpreted rather than converted, so a byte above 0x7f keeps its bits.
+        let mut filled = vec![0i8; taken];
+        buffer.get_region(env, 0, &mut filled)?;
+        bytes.extend(filled.into_iter().map(|signed| signed as u8));
     }
     // The stream owns a file descriptor, and a reader that closed the document
     // without closing this would hold the provider open until the app exits.
@@ -299,12 +322,20 @@ fn display_name(env: &mut Env<'_>, activity: &JObject<'_>, uri: &JObject<'_>) ->
 
 /// The library version the Java VM is told about when the library is loaded;
 /// `android-activity` defines the activity, so exporting the symbol is enough.
+/// The VM is kept here because this is the only moment it is handed over.
 #[unsafe(no_mangle)]
 pub extern "C" fn JNI_OnLoad(
-    _vm: *mut jni::sys::JavaVM,
+    vm: *mut jni::sys::JavaVM,
     _reserved: *mut std::ffi::c_void,
 ) -> jni::sys::jint {
-    log::info!("the library was loaded, on {:?}", thread_name());
+    if !vm.is_null() {
+        // SAFETY: the VM outlives every thread in this process, and the
+        // pointer is the one the runtime passed in.
+        let _ = VM.set(unsafe { JavaVM::from_raw(vm) });
+    }
+    // Written straight to the log rather than through `log`: this runs before
+    // the entry point installs the sink, so a record here would go nowhere.
+    write_to_logcat(log::Level::Info, "the library was loaded");
     jni::sys::JNI_VERSION_1_6
 }
 
