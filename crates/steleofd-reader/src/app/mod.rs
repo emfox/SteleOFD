@@ -89,6 +89,11 @@ pub struct App {
     error: Option<AppError>,
     info: Option<String>,
     want_open: bool,
+    /// A document the platform handed over before the frame could take it. A
+    /// host that learns of a file outside a frame — Android reads it out of the
+    /// activity before the event loop is running — has nowhere else to put it,
+    /// because a frame draws the state it is given rather than waiting for one.
+    pending_open: Option<DroppedFile>,
     want_quit: bool,
 }
 
@@ -238,6 +243,7 @@ impl App {
             error: None,
             info: None,
             want_open: false,
+            pending_open: None,
             want_quit: false,
         }
     }
@@ -364,6 +370,27 @@ impl App {
         self.print_settings = None;
         self.comparison = None;
         self.comparison_open = false;
+    }
+
+    /// Take a document the platform handed over outside a frame.
+    ///
+    /// It is stored rather than opened, because the frame that opens it is the
+    /// one that can report a failure: an open that fails before the window
+    /// exists would set an error nothing had yet drawn.
+    pub fn hand_over(&mut self, dropped: DroppedFile) {
+        self.pending_open = Some(dropped);
+    }
+
+    /// Open whatever was handed over, and report the failure the way a drop
+    /// does. Called once per frame before anything else is drawn.
+    pub fn take_handed_over(&mut self) -> bool {
+        let Some(dropped) = self.pending_open.take() else {
+            return false;
+        };
+        if let Err(err) = self.open_dropped(dropped) {
+            self.set_error(err.message);
+        }
+        true
     }
 
     /// The one-line description of the open document, for the status bar.
@@ -739,8 +766,19 @@ impl App {
     }
 
     /// The hint shown on the empty window, where a file can be dropped.
+    ///
+    /// Android has nothing to drop onto and no dialog to reach, so the hint
+    /// there names the only way in — opening the file from another app — rather
+    /// than telling the reader to drag or to press a button that is not drawn.
     pub fn drop_hint(&self) -> String {
-        self.text(ReaderMessage::DropHint)
+        #[cfg(target_os = "android")]
+        {
+            self.text(ReaderMessage::NoDialogHint)
+        }
+        #[cfg(not(target_os = "android"))]
+        {
+            self.text(ReaderMessage::DropHint)
+        }
     }
 }
 

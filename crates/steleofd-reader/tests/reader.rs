@@ -1624,3 +1624,77 @@ mod comparison {
         );
     }
 }
+
+/// A document the platform hands over outside a frame: Android reads the bytes
+/// out of the activity's intent before the event loop starts, and has nowhere
+/// to put them until the first frame runs.
+mod handed_over {
+    use super::*;
+
+    #[test]
+    fn a_document_handed_over_lands_on_the_next_frame() {
+        let mut app = App::new();
+        let bytes = steleofd_testkit::multipage_archive(2);
+        app.hand_over(DroppedFile::Bytes {
+            name: "shared.ofd".to_owned(),
+            bytes,
+        });
+        assert!(
+            !app.is_open(),
+            "the hand-over is stored, not opened behind the frame"
+        );
+
+        assert!(
+            app.take_handed_over(),
+            "the frame takes what was handed over"
+        );
+        assert!(app.is_open(), "the document is open after the first frame");
+        assert_eq!(app.page_count(), 2);
+        assert!(
+            app.title().contains("shared.ofd"),
+            "the name travels with the bytes: {}",
+            app.title()
+        );
+        assert_eq!(
+            app.error(),
+            None,
+            "a document that opened is not also an error"
+        );
+    }
+
+    #[test]
+    fn taking_twice_opens_once() {
+        let mut app = App::new();
+        app.hand_over(DroppedFile::Bytes {
+            name: "shared.ofd".to_owned(),
+            bytes: steleofd_testkit::multipage_archive(1),
+        });
+        assert!(app.take_handed_over());
+        assert!(
+            !app.take_handed_over(),
+            "the second frame has nothing left to open"
+        );
+        assert_eq!(app.page_count(), 1);
+    }
+
+    #[test]
+    fn nothing_handed_over_is_not_a_failure() {
+        let mut app = App::new();
+        assert!(!app.take_handed_over());
+        assert_eq!(app.error(), None);
+    }
+
+    /// A share of something that is not a document is reported the way a drop
+    /// of one is, rather than opening an empty window with no explanation.
+    #[test]
+    fn a_share_that_is_not_a_document_is_an_error() {
+        let mut app = App::new();
+        app.hand_over(DroppedFile::Bytes {
+            name: "notes.txt".to_owned(),
+            bytes: b"not an archive".to_vec(),
+        });
+        app.take_handed_over();
+        assert!(!app.is_open());
+        assert!(app.error().is_some(), "the failure reaches the status bar");
+    }
+}

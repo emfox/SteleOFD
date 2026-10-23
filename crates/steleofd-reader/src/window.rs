@@ -54,6 +54,10 @@ pub fn draw(ui: &mut Ui, app: &mut App) -> WindowRequests {
     // Appearance lands before the first widget is built: `egui` resolves a
     // style when a widget is made, so a late push would flash for one frame.
     apply_appearance(ui, app);
+    // A document the platform handed over before this frame counts as an open
+    // request that has already been answered, so it lands before the panels
+    // read the document they would otherwise describe as absent.
+    app.take_handed_over();
     take_drops(ui, app);
     draw_menu(ui, app, &mut requests);
     draw_toolbar(ui, app);
