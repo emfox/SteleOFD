@@ -52,6 +52,26 @@ version promise would be one the project cannot keep.
 
 ## Open
 
+Each row below is tracked as an issue, indexed by
+[#1](https://github.com/emfox/SteleOFD/issues/1). This file stays the source of
+truth for the ranking and the exit criteria; the issue is where the work moves.
+
+| # | Issue | Version |
+| --- | --- | --- |
+| R3 | [#3](https://github.com/emfox/SteleOFD/issues/3) | `0.5+` |
+| R7 | [#4](https://github.com/emfox/SteleOFD/issues/4) | `0.5+` |
+| R21 | [#5](https://github.com/emfox/SteleOFD/issues/5) | unversioned |
+| R25 | [#6](https://github.com/emfox/SteleOFD/issues/6) | unversioned |
+| R26 | [#7](https://github.com/emfox/SteleOFD/issues/7) | unversioned |
+| R8 | [#8](https://github.com/emfox/SteleOFD/issues/8) | unversioned |
+| R9 | [#9](https://github.com/emfox/SteleOFD/issues/9) | unversioned |
+| R12 | [#10](https://github.com/emfox/SteleOFD/issues/10) | unversioned |
+| R13 | [#11](https://github.com/emfox/SteleOFD/issues/11) | unversioned |
+| R14 | [#12](https://github.com/emfox/SteleOFD/issues/12) | unversioned |
+| R15 | [#13](https://github.com/emfox/SteleOFD/issues/13) | unversioned |
+
+R16 is a standing task rather than an item, so it has no issue.
+
 ### 0.5+
 
 | # | Item | Target | Why it ranks here | Done when |
