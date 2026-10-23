@@ -1,10 +1,8 @@
 //! The Android entry point. An Android app has no `main`: the system starts a
 //! thread of its own and calls `android_main` on it, handing over the activity
-//! the event loop needs. Everything after that is the same frame the desktop uses.
-//!
-//! Android also has no file dialog, so a document arrives one way: the system
-//! starts the activity with an intent naming it, and the reader copies the
-//! bytes out of the content provider behind the URI before the first frame.
+//! the event loop needs. Everything after that is the same frame the desktop
+//! uses. A device also has no file dialog, so a document arrives through the
+//! intent that started the activity, read before the first frame.
 
 use eframe::egui;
 use jni::objects::{JObject, JString};
@@ -59,14 +57,10 @@ fn android_main(app: android_activity::AndroidApp) {
 
 /// The document the activity was started for, if it was started for one.
 ///
-/// A tap on an `.ofd` file arrives as `ACTION_VIEW` with a `content://` URI; a
-/// share arrives as `ACTION_SEND` with the same. Either way the bytes live
-/// behind a provider, so they are read here rather than kept as a path: the
-/// sandbox the URI points into is gone once the activity stops being in front.
-///
-/// Every failure is logged and then dropped. A reader that refused to start
-/// because a share it could not read was malformed would be worse than one
-/// that started empty.
+/// A tap arrives as `ACTION_VIEW` with a content URI, a share as `ACTION_SEND`
+/// with the same, and the bytes are read now rather than kept as a path: the
+/// sandbox behind the URI is gone once the activity leaves the front. Every
+/// failure is logged and dropped: refusing to start would be worse than empty.
 fn document_from_intent(app: &android_activity::AndroidApp) -> Option<DroppedFile> {
     match read_shared_document(app) {
         Ok(Some(document)) => Some(document),
