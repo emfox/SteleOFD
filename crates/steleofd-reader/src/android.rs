@@ -452,11 +452,14 @@ fn display_name(env: &mut Env<'_>, activity: &JObject<'_>, uri: &JObject<'_>) ->
     name.filter(|name| !name.is_empty())
 }
 
-/// The library version the Java VM is told about when the library is loaded;
-/// `android-activity` defines the activity, so exporting the symbol is enough.
-/// The VM is kept here because this is the only moment it is handed over.
+/// The library version the Java VM is told about when the library is loaded.
+///
+/// # Safety
+///
+/// The Java runtime calls this with the VM it runs in. The pointer is stored
+/// and cloned, never read through.
 #[unsafe(no_mangle)]
-pub extern "C" fn JNI_OnLoad(
+pub unsafe extern "C" fn JNI_OnLoad(
     vm: *mut jni::sys::JavaVM,
     _reserved: *mut std::ffi::c_void,
 ) -> jni::sys::jint {

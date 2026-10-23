@@ -39,6 +39,32 @@ TARGET_SDK = 34
 ARCHIVE_NAME = "steleofd-reader-android.apk"
 # The name `System.loadLibrary` looks for, which is the crate's library name.
 LIBRARY = "steleofd_reader"
+# A `NativeActivity` that is asked to handle a configuration change itself is
+# not recreated for it. Recreation is what a reader cannot survive: the activity
+# it holds is destroyed, and with it the EGL surface the frame is drawn on, so a
+# rotation or a font-size change would end in a blank window. Every change the
+# frame can absorb is therefore claimed here rather than left to the system.
+CONFIG_CHANGES = "|".join(
+    [
+        "colorMode",
+        "density",
+        "fontScale",
+        "fontWeightAdjustment",
+        "keyboard",
+        "keyboardHidden",
+        "layoutDirection",
+        "locale",
+        "mcc",
+        "mnc",
+        "navigation",
+        "orientation",
+        "screenLayout",
+        "screenSize",
+        "smallestScreenSize",
+        "touchscreen",
+        "uiMode",
+    ]
+)
 # The workspace manifest, which is where the one version of everything lives.
 MANIFEST_TOML = Path(__file__).resolve().parent.parent / "Cargo.toml"
 
@@ -81,7 +107,7 @@ MANIFEST = """<?xml version="1.0" encoding="utf-8"?>
         <activity
             android:name="{activity}"
             android:exported="true"
-            android:configChanges="orientation|keyboardHidden|screenSize"
+            android:configChanges="{config_changes}"
             android:screenOrientation="unspecified">
             <meta-data android:name="android.app.lib_name" android:value="{library}" />
             <intent-filter>
@@ -126,12 +152,42 @@ def manifest_text(version: str) -> str:
         target_sdk=TARGET_SDK,
         activity=ACTIVITY,
         library=LIBRARY,
+        config_changes=CONFIG_CHANGES,
     )
 
 
-# One ABI for now: the arm64 devices the app targets, and the only target the
-# workflow builds. Adding another is another `--lib` and another directory.
-ABI_DIR = "lib/arm64-v8a"
+# The directory the loader reads the library out of. Its name is the ABI, and a
+# library filed under the wrong one is installed happily and then fails at
+# `dlopen` with a bare architecture mismatch, so the ABI is read from the
+# library rather than assumed: `--lib` may be any target the workflow builds.
+ABI_DIRS = {
+    0xB7: "arm64-v8a",  # EM_AARCH64
+    0x3E: "x86_64",  # EM_X86_64
+}
+
+
+def el_fake(machine: int, *, sixty_four_bit: bool = True) -> Path:
+    """A file holding just enough of an ELF header to be told apart."""
+    header = bytearray(20)
+    header[:4] = b"\x7fELF"
+    header[4] = 2 if sixty_four_bit else 1
+    header[18:20] = machine.to_bytes(2, "little")
+    path = Path(tempfile.mkdtemp()) / "libfake.so"
+    path.write_bytes(bytes(header))
+    return path
+
+
+def library_abi(path: Path) -> str:
+    """The ABI directory a library belongs in, from its ELF header."""
+    header = path.open("rb").read(20)
+    if len(header) < 20 or header[:4] != b"\x7fELF":
+        raise SystemExit(f"error: {path} is not an ELF library")
+    if header[4] != 2:
+        raise SystemExit(f"error: {path} is not a 64-bit library")
+    machine = int.from_bytes(header[18:20], "little")
+    if machine not in ABI_DIRS:
+        raise SystemExit(f"error: {path} is built for machine {machine:#x}, which no ABI dir names")
+    return f"lib/{ABI_DIRS[machine]}"
 
 
 def build_tool(sdk: Path, name: str) -> str:
@@ -166,7 +222,7 @@ def write_manifest(work: Path, version: str) -> Path:
     return manifest
 
 
-def write_archive(work: Path, library: Path, compiled: Path) -> Path:
+def write_archive(work: Path, library: Path, compiled: Path, abi_dir: str) -> Path:
     """Add the library to the archive the packager built, and return it.
 
     The manifest inside must stay the binary form the packager wrote: the
@@ -175,7 +231,7 @@ def write_archive(work: Path, library: Path, compiled: Path) -> Path:
     unsigned = work / "unsigned.apk"
     shutil.copyfile(compiled, unsigned)
     with zipfile.ZipFile(unsigned, "a", zipfile.ZIP_DEFLATED) as archive:
-        archive.write(library, f"{ABI_DIR}/{library.name}")
+        archive.write(library, f"{abi_dir}/{library.name}")
     return unsigned
 
 
@@ -222,7 +278,7 @@ def package(sdk: Path, library: Path, out: Path) -> Path:
             "-I", str(platform / "android.jar"), "-A", str(assets), "-F", str(compiled),
         ])
 
-        unsigned = write_archive(work, library, compiled)
+        unsigned = write_archive(work, library, compiled, library_abi(library))
         # Alignment must happen before signing: a signer rewrites the archive, and
         # an unaligned entry cannot be mapped by the loader afterwards.
         aligned = work / "aligned.apk"
@@ -261,7 +317,12 @@ def selftest() -> int:
     assert f'android:name="{ACTIVITY}"' in rendered
     assert 'android:hasCode="false"' in rendered
     assert MIN_SDK < TARGET_SDK
-    assert ABI_DIR == "lib/arm64-v8a"
+
+    # The ABI directory comes from the library, so a package cannot be built
+    # for one architecture and filed under another: that installs cleanly and
+    # then fails at `dlopen` on the device.
+    assert library_abi(el_fake(0xB7)) == "lib/arm64-v8a"
+    assert library_abi(el_fake(0x3E)) == "lib/x86_64"
 
     # The version is read rather than written twice, so a release cannot ship a
     # package whose `versionCode` still names the release before it.
@@ -281,6 +342,16 @@ def selftest() -> int:
     assert 'android:mimeType="application/ofd"' in rendered
     assert 'android:pathSuffix=".ofd"' in rendered
 
+    # A configuration change the activity does not claim recreates it, and the
+    # recreation destroys the surface the frame is drawn on: the reader then
+    # shows a blank window after a rotation or a theme switch, which is the
+    # failure this attribute exists to prevent.
+    claimed = CONFIG_CHANGES.split("|")
+    for required in ("orientation", "screenSize", "smallestScreenSize", "density", "uiMode"):
+        assert required in claimed, required
+    assert f'android:configChanges="{CONFIG_CHANGES}"' in rendered
+    assert "keyboardHidden" in claimed, "a hardware keyboard must not rebuild the app"
+
     # The manifest is XML, and the packager rejects one that will not parse:
     # a comment may not hold a double hyphen, and an attribute may not be bare.
     assert "--" not in rendered.split("<application")[0].split("<manifest")[1]
@@ -291,16 +362,16 @@ def selftest() -> int:
     with tempfile.TemporaryDirectory() as tmp:
         work = Path(tmp)
         library = work / f"lib{LIBRARY}.so"
-        library.write_bytes(b"\x7fELF")
+        library.write_bytes(el_fake(0xB7).read_bytes())
         compiled = work / "compiled.apk"
         with zipfile.ZipFile(compiled, "w", zipfile.ZIP_DEFLATED) as archive:
             archive.write(write_manifest(work, version), "AndroidManifest.xml")
-        unsigned = write_archive(work, library, compiled)
+        unsigned = write_archive(work, library, compiled, library_abi(library))
         with zipfile.ZipFile(unsigned) as archive:
             names = set(archive.namelist())
     expected = {
         "AndroidManifest.xml",
-        f"{ABI_DIR}/lib{LIBRARY}.so",
+        f"lib/arm64-v8a/lib{LIBRARY}.so",
     }
     assert names == expected, names
     print("selftest passed")
