@@ -5,6 +5,11 @@
 #![warn(missing_docs)]
 
 pub mod app;
+// The entry point a device calls. It is declared here and not in `main.rs`
+// because Android loads the cdylib, and that library is built from this crate
+// root: the same `mod` under the binary would compile and then export nothing.
+#[cfg(target_os = "android")]
+pub mod android;
 pub mod export_worker;
 pub mod fonts;
 pub mod icons;
