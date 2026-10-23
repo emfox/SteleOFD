@@ -66,3 +66,27 @@ fn the_desktop_build_keeps_the_session_it_runs_in() {
         );
     }
 }
+
+/// What the empty window says on a device.
+///
+/// Android has no drop target and no file dialog, so the desktop hint tells a
+/// reader to do two things that cannot be done there. The hint is chosen by
+/// target rather than by a runtime check, so only the label that would be
+/// drawn is asserted against, and the other is kept out of the way.
+#[test]
+fn the_system_without_a_dialog_is_told_what_it_can_do() {
+    let hint = steleofd_reader::App::new().drop_hint();
+    assert!(!hint.is_empty());
+    #[cfg(target_os = "android")]
+    {
+        assert!(
+            !hint.contains("Drop") && !hint.contains("Open File"),
+            "the hint names an action a device does not have: {hint}"
+        );
+    }
+    #[cfg(not(target_os = "android"))]
+    assert!(
+        hint.contains("Drop"),
+        "the desktop hint names the drop target: {hint}"
+    );
+}
