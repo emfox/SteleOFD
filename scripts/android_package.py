@@ -22,6 +22,7 @@ Exit code: 0 on success, 1 on failure.
 from __future__ import annotations
 
 import argparse
+import re
 import shutil
 import subprocess
 import sys
@@ -38,31 +39,95 @@ TARGET_SDK = 34
 ARCHIVE_NAME = "steleofd-reader-android.apk"
 # The name `System.loadLibrary` looks for, which is the crate's library name.
 LIBRARY = "steleofd_reader"
+# The workspace manifest, which is where the one version of everything lives.
+MANIFEST_TOML = Path(__file__).resolve().parent.parent / "Cargo.toml"
+
+
+def version_code(version: str) -> int:
+    """The integer Android orders releases by, from a semantic version.
+
+    Android compares `versionCode` as a plain integer and refuses an archive
+    that reuses one, so it has to move with the version rather than be written
+    beside it: `major*10000 + minor*100 + patch`, which holds until a minor
+    reaches 100. A prerelease sorts with the release it precedes, because the
+    store has no way to say "before".
+    """
+    match = re.match(r"^(\d+)\.(\d+)\.(\d+)", version)
+    if not match:
+        raise SystemExit(f"error: {version} is not a version")
+    major, minor, patch = (int(part) for part in match.groups())
+    return major * 10_000 + minor * 100 + patch
+
+
+def workspace_version() -> str:
+    """The version named once in the workspace manifest."""
+    text = MANIFEST_TOML.read_text(encoding="utf-8")
+    match = re.search(r'^version\s*=\s*"([^"]+)"', text, re.MULTILINE)
+    if not match:
+        raise SystemExit(f"error: {MANIFEST_TOML} names no version")
+    return match.group(1)
+
 
 # Written out rather than left to the packager, which defaults both to empty.
-# The code is the manifest's `major*10000 + minor*100 + patch`, which Android
-# requires to increase with every published version and no more than that.
-MANIFEST = f"""<?xml version="1.0" encoding="utf-8"?>
+# Both are filled from the workspace version when the manifest is written, so a
+# release cannot ship a package that claims to be the one before it.
+MANIFEST = """<?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="{PACKAGE}"
-    android:versionCode="101"
-    android:versionName="0.1.1">
-    <uses-sdk android:minSdkVersion="{MIN_SDK}" android:targetSdkVersion="{TARGET_SDK}" />
+    package="{package}"
+    android:versionCode="{version_code}"
+    android:versionName="{version_name}">
+    <uses-sdk android:minSdkVersion="{min_sdk}" android:targetSdkVersion="{target_sdk}" />
     <application android:label="SteleOFD Reader" android:hasCode="false">
         <activity
-            android:name="{ACTIVITY}"
+            android:name="{activity}"
             android:exported="true"
             android:configChanges="orientation|keyboardHidden|screenSize"
             android:screenOrientation="unspecified">
-            <meta-data android:name="android.app.lib_name" android:value="steleofd_reader" />
+            <meta-data android:name="android.app.lib_name" android:value="{library}" />
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- The reader has no file dialog on Android: `rfd` has no backend
+                 there, so a document arrives through one of these two. A tap in
+                 a file manager sends VIEW, a share from any app sends SEND, and
+                 both hand over a content URI the reader copies the bytes of.
+                 The suffix rather than a pattern: `.*\.ofd` stops at the first
+                 dot, so `a.b.ofd` would never match, and a provider whose MIME
+                 type it cannot name is the common case for a sideloaded one. -->
+            <intent-filter android:label="Open an OFD">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="content" android:host="*" android:mimeType="application/ofd" />
+                <data android:scheme="content" android:host="*" android:pathSuffix=".ofd" />
+                <data android:scheme="file" android:pathSuffix=".ofd" />
+                <data android:scheme="file" android:mimeType="application/ofd" />
+                <data android:mimeType="application/ofd" />
+            </intent-filter>
+            <intent-filter android:label="Open an OFD">
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="application/ofd" />
             </intent-filter>
         </activity>
     </application>
 </manifest>
 """
+
+
+def manifest_text(version: str) -> str:
+    """The manifest for one version, with every count filled in."""
+    return MANIFEST.format(
+        package=PACKAGE,
+        version_code=version_code(version),
+        version_name=version,
+        min_sdk=MIN_SDK,
+        target_sdk=TARGET_SDK,
+        activity=ACTIVITY,
+        library=LIBRARY,
+    )
+
 
 # One ABI for now: the arm64 devices the app targets, and the only target the
 # workflow builds. Adding another is another `--lib` and another directory.
@@ -94,10 +159,10 @@ def run(command: list[str]) -> None:
         raise SystemExit(f"error: {printable} failed with {code}")
 
 
-def write_manifest(work: Path) -> Path:
+def write_manifest(work: Path, version: str) -> Path:
     """Write the manifest out, so the packager reads it from a file."""
     manifest = work / "AndroidManifest.xml"
-    manifest.write_text(MANIFEST, encoding="utf-8")
+    manifest.write_text(manifest_text(version), encoding="utf-8")
     return manifest
 
 
@@ -141,7 +206,8 @@ def package(sdk: Path, library: Path, out: Path) -> Path:
     """
     work = Path(tempfile.mkdtemp(prefix="steleofd-android-"))
     try:
-        manifest = write_manifest(work)
+        version = workspace_version()
+        manifest = write_manifest(work, version)
 
         # The resource table has to be the SDK's own binary form: the signer reads
         # the minimum SDK out of a compiled manifest, so the archive cannot be a
@@ -188,12 +254,37 @@ def package(sdk: Path, library: Path, out: Path) -> Path:
 
 def selftest() -> int:
     """The parts that need no SDK: the manifest and the archive layout."""
-    assert f'package="{PACKAGE}"' in MANIFEST
-    assert f'android:value="{LIBRARY}"' in MANIFEST
-    assert f'android:name="{ACTIVITY}"' in MANIFEST
-    assert 'android:hasCode="false"' in MANIFEST
+    version = workspace_version()
+    rendered = manifest_text(version)
+    assert f'package="{PACKAGE}"' in rendered
+    assert f'android:value="{LIBRARY}"' in rendered
+    assert f'android:name="{ACTIVITY}"' in rendered
+    assert 'android:hasCode="false"' in rendered
     assert MIN_SDK < TARGET_SDK
     assert ABI_DIR == "lib/arm64-v8a"
+
+    # The version is read rather than written twice, so a release cannot ship a
+    # package whose `versionCode` still names the release before it.
+    assert f'android:versionName="{version}"' in rendered, version
+    assert f'android:versionCode="{version_code(version)}"' in rendered
+    assert version_code("0.4.0") == 400
+    assert version_code("1.2.3") == 10203
+    assert version_code("0.4.0-rc.1") == 400, "a prerelease sorts with its release"
+    assert version_code("0.4.1") > version_code("0.4.0"), "a patch is a higher code"
+    assert version_code("0.5.0") > version_code("0.4.9"), "a minor outranks every patch"
+
+    # A document can only reach the reader through one of these two actions:
+    # there is no file dialog to fall back on, so their absence is the reader
+    # starting on a canvas nothing can fill.
+    assert "android.intent.action.VIEW" in rendered
+    assert "android.intent.action.SEND" in rendered
+    assert 'android:mimeType="application/ofd"' in rendered
+    assert 'android:pathSuffix=".ofd"' in rendered
+
+    # The manifest is XML, and the packager rejects one that will not parse:
+    # a comment may not hold a double hyphen, and an attribute may not be bare.
+    assert "--" not in rendered.split("<application")[0].split("<manifest")[1]
+    assert "&" not in rendered.replace("&amp;", ""), "an unescaped ampersand"
 
     # The archive is laid out the same way here, so a change to the layout is
     # caught without an SDK or a toolchain.
@@ -203,7 +294,7 @@ def selftest() -> int:
         library.write_bytes(b"\x7fELF")
         compiled = work / "compiled.apk"
         with zipfile.ZipFile(compiled, "w", zipfile.ZIP_DEFLATED) as archive:
-            archive.write(write_manifest(work), "AndroidManifest.xml")
+            archive.write(write_manifest(work, version), "AndroidManifest.xml")
         unsigned = write_archive(work, library, compiled)
         with zipfile.ZipFile(unsigned) as archive:
             names = set(archive.namelist())
