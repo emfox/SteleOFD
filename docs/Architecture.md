@@ -194,32 +194,43 @@ exemption, because a C ABI requires it. Two designs were reworked to reach this:
 ## 3. Crate inventory
 
 The **Registry** column is what `publish` in each manifest states, and
-`scripts/check_publish.py` holds it to the whole workspace. A published crate is
-one a consumer adds as a dependency; the rest ship as an application, and
-`steleofd-i18n` and `steleofd-testkit` stay in the workspace alone.
+`scripts/check_publish.py` holds it to the whole workspace. The rest ship as an
+application, and `steleofd-i18n` and `steleofd-testkit` stay in the workspace
+alone.
+
+Publishing is not one promise but three, and the column says which:
+
+| Registry | What it promises |
+|---|---|
+| **surface** | An entry point a consumer adds on purpose. Its public API is what this project undertakes to keep working. |
+| **extension** | A seam a consumer implements against — a backend, a font loader, a display list. Changes here are slower and announced. |
+| **transitive** | Published because cargo requires it, not because it is an interface. `steleofd-core` names it, so a registry needs it; nothing outside this project should depend on it directly. |
+
+`scripts/publish_order.py` prints the registry closure in dependency order,
+which is also the order `cargo publish` has to run in.
 
 | Layer | Crate | Responsibility | Registry |
 |---|---|---|---|
-| L0 | `steleofd-common` | Value types (`Millimeter`, `Point`, `Rect`), versions, standard constants | published |
-| L0 | `steleofd-error` | Unified error taxonomy | published |
-| L0 | `steleofd-io` | `ByteSource` and `ByteSink` abstraction over file, memory, slice and directory | published |
-| L1 | `steleofd-model` | OFD data model (`CT_*` and `ST_*` type system) | published |
-| L1 | `steleofd-xml` | XML codec wrapping quick-xml | published |
-| L1 | `steleofd-package` | ZIP container I/O, safety validation, atomic replacement | published |
+| L0 | `steleofd-common` | Value types (`Millimeter`, `Point`, `Rect`), versions, standard constants | transitive |
+| L0 | `steleofd-error` | Unified error taxonomy | transitive |
+| L0 | `steleofd-io` | `ByteSource` and `ByteSink` abstraction over file, memory, slice and directory | transitive |
+| L1 | `steleofd-model` | OFD data model (`CT_*` and `ST_*` type system) | transitive |
+| L1 | `steleofd-xml` | XML codec wrapping quick-xml | transitive |
+| L1 | `steleofd-package` | ZIP container I/O, safety validation, atomic replacement | transitive |
 | L1.5 | `steleofd-i18n` | Fluent localization layer | withheld |
-| L2 | `steleofd-geometry` | Backend-independent `Path` and `Affine` | published |
-| L2 | `steleofd-font` | Font registry, metrics, system fallback | published |
-| L2 | `steleofd-display` | **Display list IR**, the architectural keystone | published |
-| L2 | `steleofd-parser` | `Content.xml` to `DisplayList` | published |
-| L2 | `steleofd-render` | Raster backend: display list to pixels | published |
-| L3 | `steleofd-crypto` | SM2, SM3, SM4, X.509, PKCS#12 | published |
-| L3 | `steleofd-sign` | Electronic seals and verification per GB/T 38540 | published |
-| L3 | `steleofd-convert` | Format interconversion: PDF, SVG, PNG | published |
-| L3 | `steleofd-edit` | Command-pattern editing with an undo stack | published |
-| L3 | `steleofd-search` | Full-text search and reverse glyph-to-Unicode lookup | published |
-| L3 | `steleofd-archive` | Archival compliance validation (OFD-A) | published |
-| L3 | `steleofd-print` | Printing, reusing the display list for fidelity | published |
-| L4 | `steleofd-core` | Facade, trimming capabilities through features | published |
+| L2 | `steleofd-geometry` | Backend-independent `Path` and `Affine` | extension |
+| L2 | `steleofd-font` | Font registry, metrics, system fallback | extension |
+| L2 | `steleofd-display` | **Display list IR**, the architectural keystone | extension |
+| L2 | `steleofd-parser` | `Content.xml` to `DisplayList` | extension |
+| L2 | `steleofd-render` | Raster backend: display list to pixels | extension |
+| L3 | `steleofd-crypto` | SM2, SM3, SM4, X.509, PKCS#12 | surface |
+| L3 | `steleofd-sign` | Electronic seals and verification per GB/T 38540 | surface |
+| L3 | `steleofd-convert` | Format interconversion: PDF, SVG, PNG | surface |
+| L3 | `steleofd-edit` | Command-pattern editing with an undo stack | surface |
+| L3 | `steleofd-search` | Full-text search and reverse glyph-to-Unicode lookup | surface |
+| L3 | `steleofd-archive` | Archival compliance validation (OFD-A) | surface |
+| L3 | `steleofd-print` | Printing, reusing the display list for fidelity | surface |
+| L4 | `steleofd-core` | Facade, trimming capabilities through features | surface |
 | L5 | `steleofd-cli` | Command line tool `steleofd` | withheld |
 | L5 | `steleofd-wasm` | Browser WebAssembly bindings | withheld |
 | L5 | `steleofd-ffi` | C ABI shared library for OA and ERP integration | withheld |

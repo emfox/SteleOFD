@@ -91,6 +91,11 @@ CHECKS: tuple[Check, ...] = (
     # crate. This holds the two sets to the whole workspace and a published
     # crate to what a registry asks for, so a new crate cannot slip in unnamed.
     Check("publish", "policy", (py("scripts/check_publish.py"),)),
+    # Publishing is a closure, not a list: a published crate names another, and
+    # cargo resolves that name from the registry once the crate leaves this
+    # tree. This fails when the published set is not closed under its own
+    # dependencies, which is the mistake that only shows up at release time.
+    Check("publish-order", "policy", (py("scripts/publish_order.py"),)),
     # The two READMEs drifted twice, and every count in them is a copy of
     # something the workspace knows. The English one is the source of truth;
     # this fails when the Chinese one states a different figure.
