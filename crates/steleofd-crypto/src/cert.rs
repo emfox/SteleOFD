@@ -459,7 +459,6 @@ mod tests {
             !signed_value_covers(&der, "Signature.xml"),
             "a value naming no path covers no descriptor"
         );
-
     }
 
     #[test]
