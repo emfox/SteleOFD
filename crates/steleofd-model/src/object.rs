@@ -53,6 +53,9 @@ pub struct CompositeObject {
     /// Id of the vector resource inside the document.
     #[serde(rename = "ResourceID", default)]
     pub resource_id: RefId,
+    /// Fill and stroke, which annex A lets a composite state on itself.
+    #[serde(flatten)]
+    pub graphics: PathGraphics,
 }
 impl Object {
     /// Reference id common to every authored object.
@@ -297,35 +300,50 @@ pub struct PathObject {
     /// Attributes shared by every object.
     #[serde(flatten)]
     pub base: ObjectBase,
-    /// Abbreviated path commands (`M`, `L`, `C`, `Q`, `A`, `Z`).
+    /// The figure itself, as the path commands an OFD file abbreviates.
     #[serde(rename = "AbbreviatedData", default)]
     pub abbreviated_data: String,
+    /// The paint the figure is drawn with, and the rule that decides which
+    /// side of its outline is inside.
+    #[serde(flatten)]
+    pub graphics: PathGraphics,
+}
+
+impl PathObject {
+    /// The effective presence of each paint, once defaults are applied.
+    /// Annex A defaults `CT_Path` to stroked and unfilled, the reverse of the
+    /// pair `CT_Text` carries, so a producer that names only `FillColor` is
+    /// still drawing a line.
+    pub fn paints(&self) -> (bool, bool) {
+        (
+            self.graphics.fill.unwrap_or(false),
+            self.graphics.stroke.unwrap_or(true),
+        )
+    }
+}
+
+/// The paint of a figure, which annex A hangs off `CT_Path` — the same element
+/// a `CompositeObject` names through `ResourceID` when its vector graphic is
+/// embedded in the file. Both reach a renderer as a figure to stroke or fill,
+/// so both are described once and the parser accepts either.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PathGraphics {
     /// Fill colour, overriding any draw parameter.
     #[serde(rename = "FillColor", skip_serializing_if = "Option::is_none")]
     pub fill_color: Option<ColorRef>,
     /// Stroke colour, overriding any draw parameter.
     #[serde(rename = "StrokeColor", skip_serializing_if = "Option::is_none")]
     pub stroke_color: Option<ColorRef>,
-    /// Whether the interior is filled.
+    /// Whether the interior is filled; `false` where the file says nothing.
     #[serde(rename = "Fill", skip_serializing_if = "Option::is_none")]
     pub fill: Option<bool>,
-    /// Whether the outline is stroked.
+    /// Whether the outline is stroked; `true` where the file says nothing.
     #[serde(rename = "Stroke", skip_serializing_if = "Option::is_none")]
     pub stroke: Option<bool>,
-    /// Fill rule, `NonZero` (the default) or `Even-Odd`.
+    /// Fill rule, `NonZero` where the file says nothing.
     #[serde(rename = "Rule", skip_serializing_if = "Option::is_none")]
     pub rule: Option<FillRuleStyle>,
-}
-
-impl PathObject {
-    /// The effective presence of each paint, once defaults are applied.
-    /// OFD says an absent `Fill` means filled, while an absent `Stroke` means
-    /// unstroked, which is asymmetric and easy to get wrong.
-    pub fn paints(&self) -> (bool, bool) {
-        let fill = self.fill.unwrap_or(true);
-        let stroke = self.stroke.unwrap_or(false);
-        (fill, stroke)
-    }
 }
 
 impl Valid for PathObject {
@@ -597,21 +615,24 @@ mod tests {
     }
 
     #[test]
-    fn an_absent_fill_means_filled_but_an_absent_stroke_means_unstroked() {
+    fn an_absent_stroke_means_stroked_but_an_absent_fill_means_unfilled() {
         // This asymmetry is mandated by the standard and is easy to invert.
         let p = PathObject {
             base: base(),
             abbreviated_data: "M 0 0 L 10 10".to_string(),
             ..Default::default()
         };
-        assert_eq!(p.paints(), (true, false));
+        assert_eq!(p.paints(), (false, true));
 
         let both = PathObject {
-            fill: Some(false),
-            stroke: Some(true),
+            graphics: PathGraphics {
+                fill: Some(true),
+                stroke: Some(false),
+                ..Default::default()
+            },
             ..p.clone()
         };
-        assert_eq!(both.paints(), (false, true));
+        assert_eq!(both.paints(), (true, false));
     }
 
     #[test]
@@ -691,11 +712,13 @@ mod tests {
         let obj = Object::PathObject(PathObject {
             base: base(),
             abbreviated_data: "M 0 0 L 10 10 Z".to_string(),
-            fill_color: Some(ColorRef::from_hex("#FF0000")),
-            stroke_color: None,
-            fill: Some(true),
-            stroke: Some(true),
-            rule: Some(FillRuleStyle::EvenOdd),
+            graphics: PathGraphics {
+                fill_color: Some(ColorRef::from_hex("#FF0000")),
+                stroke_color: None,
+                fill: Some(true),
+                stroke: Some(true),
+                rule: Some(FillRuleStyle::EvenOdd),
+            },
         });
 
         let json = serde_json::to_string(&obj).expect("serialize");

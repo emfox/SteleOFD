@@ -709,13 +709,50 @@ pub fn read_template_block(xml: &str) -> Result<PageBlock> {
     loop {
         match cursor.next_event()? {
             Event::Start(n) if n.is("Content") => layers.extend(read_layers_strict(&mut cursor)?),
-            Event::Start(_) => {}
+            // Anything else under the root is stepped over unless it wraps a
+            // layer: walking into `Area` is how `PhysicalBox` was taken for an
+            // object and the layer beneath it never reached the page.
+            Event::Start(n) => {
+                if !n.is_self_closing() && !has_layer_under(&cursor, &n)? {
+                    cursor.skip_element(&n)?;
+                }
+            }
             Event::End(_) => break,
             Event::Eof => break,
             Event::Text(_) => {}
         }
     }
     Ok(PageBlock { layers })
+}
+
+/// Whether a layer sits at or below an element, so a root that merely wraps the
+/// layers is walked into and anything else is stepped over. The cursor is left
+/// where it was: this asks a clone of it, not the one being read.
+fn has_layer_under(cursor: &Cursor<'_>, node: &Node) -> Result<bool> {
+    let mut probe = cursor.clone();
+    let mut depth = 1usize;
+    while let Ok(event) = probe.next_event() {
+        match event {
+            Event::Start(n) => {
+                if n.is("Layer") {
+                    return Ok(true);
+                }
+                if !n.is_self_closing() {
+                    depth += 1;
+                }
+            }
+            Event::End(_) => {
+                depth -= 1;
+                if depth == 0 {
+                    return Ok(false);
+                }
+            }
+            Event::Eof => return Ok(false),
+            Event::Text(_) => {}
+        }
+    }
+    let _ = node;
+    Ok(false)
 }
 
 pub(crate) fn read_layer(cursor: &mut Cursor<'_>, node: &Node) -> Result<Layer> {
@@ -861,6 +898,7 @@ fn read_composite_object(cursor: &mut Cursor<'_>, node: &Node) -> Result<Composi
             .get("ResourceID")
             .unwrap_or_default()
             .to_string(),
+        ..Default::default()
     };
     if !node.is_self_closing() {
         loop {
@@ -1065,18 +1103,21 @@ fn read_path_object(cursor: &mut Cursor<'_>, node: &Node) -> Result<PathObject> 
     let a = node.attributes();
     let mut p = PathObject {
         base: parse_base(node)?,
-        fill: match a.get("Fill") {
-            Some(raw) => Some(parse_bool("PathObject", "Fill", raw)?),
-            None => None,
-        },
-        stroke: match a.get("Stroke") {
-            Some(raw) => Some(parse_bool("PathObject", "Stroke", raw)?),
-            None => None,
-        },
-        rule: match a.get("Rule") {
-            Some("Even-Odd") => Some(FillRuleStyle::EvenOdd),
-            Some(_) => Some(FillRuleStyle::NonZero),
-            None => None,
+        graphics: PathGraphics {
+            fill: match a.get("Fill") {
+                Some(raw) => Some(parse_bool("PathObject", "Fill", raw)?),
+                None => None,
+            },
+            stroke: match a.get("Stroke") {
+                Some(raw) => Some(parse_bool("PathObject", "Stroke", raw)?),
+                None => None,
+            },
+            rule: match a.get("Rule") {
+                Some("Even-Odd") => Some(FillRuleStyle::EvenOdd),
+                Some(_) => Some(FillRuleStyle::NonZero),
+                None => None,
+            },
+            ..Default::default()
         },
         ..Default::default()
     };
@@ -1087,10 +1128,10 @@ fn read_path_object(cursor: &mut Cursor<'_>, node: &Node) -> Result<PathObject> 
                     p.abbreviated_data = cursor.read_text()?
                 }
                 Event::Start(n) if n.is("FillColor") => {
-                    p.fill_color = Some(read_color(&n, cursor)?)
+                    p.graphics.fill_color = Some(read_color(&n, cursor)?)
                 }
                 Event::Start(n) if n.is("StrokeColor") => {
-                    p.stroke_color = Some(read_color(&n, cursor)?)
+                    p.graphics.stroke_color = Some(read_color(&n, cursor)?)
                 }
                 Event::Start(n) if n.is("Clips") => p.base.clips = Some(read_clips(cursor)?),
                 Event::Start(n) if n.is("Actions") => p.base.actions = Some(read_actions(cursor)?),

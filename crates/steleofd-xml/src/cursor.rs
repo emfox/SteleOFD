@@ -121,6 +121,7 @@ fn read_attributes(start: &quick_xml::events::BytesStart<'_>) -> Result<Attribut
 }
 
 /// A pull cursor over an XML document.
+#[derive(Clone)]
 pub struct Cursor<'a> {
     reader: quick_xml::Reader<&'a [u8]>,
     buf: Vec<u8>,

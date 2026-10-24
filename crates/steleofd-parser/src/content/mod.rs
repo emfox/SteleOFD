@@ -16,8 +16,8 @@ use steleofd_model::object::{
     Action, ActionEvent, ActionKind, Actions, CGTransform, CharDirection, Clip, ClipArea, ClipList,
     CompositeObject, DashPattern, Dest, DrawParam, FillRuleStyle, GotoTarget, GraphicsUnit,
     ImageObject, LineCapStyle, LineJoinStyle, MovieAction, MovieOperator, Object, ObjectBase,
-    PageBlockObject, PathObject, ReadDirection, Region, RegionArea, SoundAction, TextClip,
-    TextCode, TextObject, UriAction,
+    PageBlockObject, PathGraphics, PathObject, ReadDirection, Region, RegionArea, SoundAction,
+    TextClip, TextCode, TextObject, UriAction,
 };
 use steleofd_xml::cursor::Event;
 use steleofd_xml::{Cursor, Node, parse_bool, parse_number_list, parse_number_list_n};

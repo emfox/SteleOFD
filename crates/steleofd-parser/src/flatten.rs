@@ -525,18 +525,28 @@ fn flatten_path(
         return Err(OfdError::Format(FormatError::MissingPathData));
     }
     let path: Path = crate::pathdata::parse_path(data)?;
-    // `CT_Path` defaults `Stroke` true and `Fill` false, the reverse of the
-    // usual pair, so an object that names only a stroke stays a stroke.
-    let fill_on = p.fill.or(param.and_then(|d| d.fill)).unwrap_or(false);
-    let stroke_on = p.stroke.or(param.and_then(|d| d.stroke)).unwrap_or(true);
+    // Annex A defaults `Stroke` true and `Fill` false. A producer that writes
+    // only `FillColor` is drawing a line, and reading the pair the other way
+    // round turns every such line into a zero-area fill that shows nothing.
+    let mut paints = p.paints();
+    // Clause 12.2 gives the draw parameter the same two switches, and names it
+    // as the source the object falls back to, so it decides where the object
+    // says nothing.
+    if let Some(d) = param {
+        paints.0 = p.graphics.fill.or(d.fill).unwrap_or(paints.0);
+        paints.1 = p.graphics.stroke.or(d.stroke).unwrap_or(paints.1);
+    }
+    let (fill_on, stroke_on) = paints;
     let style = stroke_style_of(&p.base, param);
     let black = default_color();
     let fill_color = p
+        .graphics
         .fill_color
         .as_ref()
         .or(param.and_then(|d| d.fill_color.as_ref()))
         .unwrap_or(&black);
     let stroke_color = p
+        .graphics
         .stroke_color
         .as_ref()
         .or(param.and_then(|d| d.stroke_color.as_ref()))
@@ -557,7 +567,7 @@ fn flatten_path(
             fill,
             stroke,
             stroke_style: style,
-            rule: fill_rule(p.rule),
+            rule: fill_rule(p.graphics.rule),
         });
         Ok(())
     })
@@ -1020,7 +1030,7 @@ mod tests {
     use super::*;
     use steleofd_common::Rect;
     use steleofd_model::document::{Layer, PageBlock};
-    use steleofd_model::object::{ImageObject, PathObject, TextCode, TextObject};
+    use steleofd_model::object::{ImageObject, PathGraphics, PathObject, TextCode, TextObject};
 
     fn builder() -> DisplayListBuilder {
         DisplayListBuilder::new(Rect::A4_PORTRAIT)
@@ -1051,7 +1061,10 @@ mod tests {
     /// without the object also asking for a stroke.
     fn filled_path_object(data: &str) -> PathObject {
         PathObject {
-            fill: Some(true),
+            graphics: PathGraphics {
+                fill: Some(true),
+                ..Default::default()
+            },
             ..path_object(data)
         }
     }
