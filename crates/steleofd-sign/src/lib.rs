@@ -94,8 +94,16 @@ pub struct StampAnnot {
 pub struct Signature {
     /// Identifier of the signature element.
     pub id: Option<String>,
-    /// DER-encoded check value (the SM2 signature).
+    /// DER-encoded check value (the SM2 signature over the file digests). The
+    /// descriptor carries it inline or the signed value file does.
     pub check_value: Vec<u8>,
+    /// Archive path of the descriptor this signature was read from, set by
+    /// the reader so a `SignedValue` envelope can be matched to it.
+    pub descriptor_path: Option<String>,
+    /// The digest a `SignedValue` states for the descriptor it covers. When
+    /// present the signature is over that digest rather than over the digests
+    /// of the files the descriptor names, which is GB/T 38540's arrangement.
+    pub sealed_digest: Option<Vec<u8>>,
     /// Archive path of the signed value, from `SignedValue`. The proof itself
     /// lives in a separate file there rather than inline in the descriptor.
     pub signed_value_ref: Option<String>,
@@ -121,6 +129,10 @@ pub struct Signature {
 /// names the entry element `Signature`, on top of the older `Sign` spelling.
 pub fn read_sign_list(package: &mut Package, loc: &str) -> Result<Vec<SignRef>, OfdError> {
     let xml = package.read_string(loc)?;
+    // A `BaseLoc` inside the list is written relative to the list itself, the
+    // same rule `Signature.seal` follows, so `Sign_0/Signature.xml` in a list
+    // at `Doc_0/Signs/Signatures.xml` names `Doc_0/Signs/Sign_0/...`.
+    let dir = steleofd_package::parent_of(loc);
     let mut cursor = Cursor::new(&xml);
     let mut signs = Vec::new();
     loop {
@@ -135,7 +147,7 @@ pub fn read_sign_list(package: &mut Package, loc: &str) -> Result<Vec<SignRef>, 
                             Some(t) if t.eq_ignore_ascii_case("Sign") => SignatureKind::Sign,
                             _ => SignatureKind::Seal,
                         },
-                        base_loc: base.to_string(),
+                        base_loc: signature_path(package, &dir, base),
                     });
                 }
             }
@@ -149,10 +161,38 @@ pub fn read_sign_list(package: &mut Package, loc: &str) -> Result<Vec<SignRef>, 
     Ok(signs)
 }
 
+/// The entry a `BaseLoc` in the list names.
+/// Clause 18.1 fixes no base for it and writers disagree, so the entry that
+/// exists decides between the list's own directory and the document root. When
+/// neither exists the reference is left as written: resolving it would invent a
+/// path the file never named, and the reader reports the miss by that name.
+fn signature_path(package: &Package, dir: &str, base: &str) -> String {
+    let beside = steleofd_package::resolve(dir, base);
+    if package.contains(&beside) {
+        return beside;
+    }
+    let from_document = steleofd_package::resolve(&document_dir(dir), base);
+    if package.contains(&from_document) {
+        return from_document;
+    }
+    base.to_string()
+}
+
+/// The `Doc_N` directory a path sits under, or the root above it.
+fn document_dir(path: &str) -> String {
+    match path.split_once('/') {
+        Some((head, _)) if head.starts_with(steleofd_package::DOCS_PREFIX) => head.to_string(),
+        _ => String::new(),
+    }
+}
+
 /// Read one signature descriptor file.
 pub fn read_signature(package: &mut Package, base_loc: &str) -> Result<Signature, OfdError> {
     let xml = package.read_string(base_loc)?;
-    let mut signature = Signature::default();
+    let mut signature = Signature {
+        descriptor_path: Some(base_loc.to_string()),
+        ..Signature::default()
+    };
     // Clause 18.2.2: CheckMethod sits on References once and governs every
     // Reference below it. Clause 18.2.3: the proof itself is not inline; the
     // descriptor points at it with SignedValue, a path.
@@ -251,10 +291,32 @@ impl Signature {
     /// Read the signed value the descriptor points at, if it has one. The proof
     /// lives in its own file rather than inline, so it takes a second read.
     pub fn read_check_value(&mut self, package: &mut Package) -> Result<(), OfdError> {
-        if let Some(loc) = self.signed_value_ref.clone()
-            && let Some(bytes) = package.read_optional(&loc)?
-        {
-            self.check_value = b64_ish(&bytes);
+        let Some(loc) = self.signed_value_ref.clone() else {
+            return Ok(());
+        };
+        let Some(bytes) = package.read_optional(&loc)? else {
+            return Ok(());
+        };
+        // GB/T 38540 packs the certificate, the digest of the signed
+        // descriptor and the signature into one envelope, so all three arrive
+        // together. A file holding only the signature is taken as it stands.
+        match steleofd_crypto::split_signed_value(&bytes) {
+            Some((signature, certificate)) => {
+                self.check_value = signature;
+                if self.certificate.is_none() {
+                    self.certificate = certificate;
+                }
+                // The envelope names the descriptor it covers, so its digest
+                // is the signed content only when that name is this file.
+                let covers_self = self
+                    .descriptor_path
+                    .as_deref()
+                    .is_none_or(|path| steleofd_crypto::signed_value_covers(&bytes, path));
+                if covers_self {
+                    self.sealed_digest = steleofd_crypto::signed_value_digest(&bytes);
+                }
+            }
+            None => self.check_value = b64_ish(&bytes),
         }
         Ok(())
     }
@@ -492,6 +554,11 @@ pub fn verify_with_public_key(
     let Some(digest) = signed_digest(package, sig)? else {
         return Ok(VerifyStatus::Unchecked);
     };
+    // Without a key nothing can be checked, and reporting an untouched
+    // document as tampered says more than the evidence supports.
+    if public_key.is_empty() {
+        return Ok(VerifyStatus::Unchecked);
+    }
     let ok = sm2_verify(public_key, &digest, &sig.check_value)
         .map_err(|e| OfdError::Signature(SignatureError::UnsupportedFormat(e.to_string())))?;
     Ok(if ok {
@@ -526,18 +593,20 @@ pub fn verify_signature_under(
     sig: &Signature,
     policy: &TrustPolicy<'_>,
 ) -> Result<VerifyStatus, OfdError> {
-    let cert = sig.certificate.as_ref().ok_or_else(|| {
-        OfdError::Signature(SignatureError::CertificateChain(
-            "signature carries no certificate".into(),
-        ))
-    })?;
-    let parsed = Certificate::parse_der(cert).map_err(|e| {
+    // The certificate may sit inline or inside the signed value file, so the
+    // proof is read before the key is looked for.
+    let mut sig = sig.clone();
+    sig.read_check_value(package)?;
+    let Some(cert) = sig.certificate.clone() else {
+        // Without a key nothing can be proved; the digests still show whether
+        // the files were edited, which is what `Unchecked` reports.
+        return verify_with_public_key(package, &sig, &[]);
+    };
+    let parsed = Certificate::parse_der(&cert).map_err(|e| {
         OfdError::Signature(SignatureError::UnsupportedFormat(format!(
             "embedded certificate unreadable: {e}"
         )))
     })?;
-    let mut sig = sig.clone();
-    sig.read_check_value(package)?;
     if certificate_covers_signing_time(&sig) == Some(false) {
         // The proof may be perfectly good and still prove nothing: a key that
         // had expired may be used by anyone holding it.
@@ -594,9 +663,12 @@ pub fn verify_descriptor(
 /// reference order, with each `CheckValue` compared as it goes. A reference
 /// naming a digest this build lacks answers `None`, which is not an edit.
 pub fn signed_digest(package: &mut Package, sig: &Signature) -> Result<Option<Vec<u8>>, OfdError> {
+    if let Some(sealed) = &sig.sealed_digest {
+        return Ok(Some(sealed.clone()));
+    }
     let mut combined = Vec::new();
     for reference in &sig.references {
-        if !reference.check_method.eq_ignore_ascii_case("SM3") {
+        if !is_sm3(&reference.check_method) {
             tracing::debug!(
                 method = %reference.check_method,
                 "a reference names a digest this build does not compute"
@@ -614,6 +686,12 @@ pub fn signed_digest(package: &mut Package, sig: &Signature) -> Result<Option<Ve
         combined.extend_from_slice(&digest);
     }
     Ok(Some(sm3(&combined).to_vec()))
+}
+
+/// Whether `CheckMethod` names SM3, which descriptors spell either as the
+/// algorithm name or as its object identifier.
+fn is_sm3(method: &str) -> bool {
+    method.eq_ignore_ascii_case("SM3") || method == steleofd_crypto::SM3_OID
 }
 
 fn base64_decode(text: &str) -> Option<Vec<u8>> {

@@ -54,12 +54,46 @@ impl Sm2KeyPair {
     }
 }
 
-/// Verify an SM2 signature against a 65-byte uncompressed public key.
+/// Verify an SM2 signature over a message the signer already digested.
+///
+/// GB/T 38540 signs a digest rather than the bytes it summarises, so the
+/// message arithmetic is `SM3(ZA || digest)` and the digest arrives as `M`.
 ///
 /// Returns `Ok(true)` when valid, `Ok(false)` when well-formed but wrong.
 pub fn sm2_verify(
     public_key: &[u8],
     message: &[u8],
+    signature_der: &[u8],
+) -> Result<bool, OfdError> {
+    verify_with(
+        public_key,
+        |key, sig| key.verify(message, sig),
+        signature_der,
+    )
+}
+
+/// Verify a signature over a digest that was signed as a prehash: the caller
+/// states the bytes the signer digested, and this one checks them without
+/// hashing again.
+pub fn sm2_verify_digest(
+    public_key: &[u8],
+    digest: &[u8],
+    signature_der: &[u8],
+) -> Result<bool, OfdError> {
+    verify_with(
+        public_key,
+        |key, sig| {
+            use signature::hazmat::PrehashVerifier;
+            key.verify_prehash(digest, sig)
+        },
+        signature_der,
+    )
+}
+
+/// Run one verification against a parsed key and signature.
+fn verify_with(
+    public_key: &[u8],
+    check: impl FnOnce(&sm2::dsa::VerifyingKey, &sm2::dsa::Signature) -> Result<(), signature::Error>,
     signature_der: &[u8],
 ) -> Result<bool, OfdError> {
     let verifying = sm2::dsa::VerifyingKey::from_sec1_bytes(DEFAULT_DISTINGUISHED_ID, public_key)
@@ -68,5 +102,5 @@ pub fn sm2_verify(
     })?;
     let sig = sm2::dsa::Signature::from_der(signature_der)
         .map_err(|_| OfdError::Crypto(CryptoError::Operation("malformed signature".into())))?;
-    Ok(verifying.verify(message, &sig).is_ok())
+    Ok(check(&verifying, &sig).is_ok())
 }

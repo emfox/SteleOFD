@@ -12,9 +12,11 @@ pub mod symmetric;
 pub mod timestamp;
 pub mod trust;
 
-pub use asymmetric::{Sm2KeyPair, sm2_verify};
-pub use cert::{Certificate, KeyUsage};
-pub use digest::{Sm3Hash, sm3};
+pub use asymmetric::{Sm2KeyPair, sm2_verify, sm2_verify_digest};
+pub use cert::{
+    Certificate, KeyUsage, signed_value_covers, signed_value_digest, split_signed_value,
+};
+pub use digest::{SM3_OID, Sm3Hash, sm3};
 pub use symmetric::{Sm4Key, Sm4Mode};
 pub use timestamp::TimeStampToken;
 pub use trust::{MAX_CHAIN_DEPTH, PathError, TrustAnchors, validate_path};

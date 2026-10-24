@@ -130,7 +130,7 @@ fn missing_reference_is_tampered() {
 }
 
 #[test]
-fn verify_without_certificate_fails_cleanly() {
+fn verify_without_certificate_reports_unchecked() {
     let entries = vec![
         ("Signs/Signs.xml", signs_xml()),
         (
@@ -142,8 +142,14 @@ fn verify_without_certificate_fails_cleanly() {
     let (mut sig, _pair) = make_signature(&entries, &[("SM3", "Doc_0/Document.xml")]);
     sig.certificate = None;
     let mut package = open(&entries);
-    let out = verify_signature(&mut package, &sig);
-    assert!(out.is_err(), "no certificate means no verification");
+    // Without a key nothing can be proved either way. Saying "tampered" would
+    // accuse an untouched document, so the answer is that it was not checked.
+    let out = verify_signature(&mut package, &sig).expect("no failure to report");
+    assert_eq!(
+        out,
+        VerifyStatus::Unchecked,
+        "a missing certificate leaves the signature unproved rather than broken"
+    );
 }
 
 #[test]

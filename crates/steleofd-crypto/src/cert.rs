@@ -331,9 +331,142 @@ fn tlv(der: &[u8], at: usize) -> Option<Tlv> {
     })
 }
 
+/// Split a `SignedValue` into the certificate and the signature it carries.
+///
+/// GB/T 35275 makes the signed value a SEQUENCE of the value, the signer's
+/// certificate, the algorithm and the signature itself. A producer may instead
+/// write the bare signature, so a blob that is not such a SEQUENCE is returned
+/// as the signature with no certificate rather than refused.
+pub fn split_signed_value(der: &[u8]) -> Option<(Vec<u8>, Option<Vec<u8>>)> {
+    let outer = tlv(der, 0)?;
+    if outer.content_at + outer.content_len != der.len() || der[0] != 0x30 {
+        return None;
+    }
+    let mut at = outer.content_at;
+    let mut certificate = None;
+    while at < outer.content_at + outer.content_len {
+        let item = tlv(der, at)?;
+        let body = der.get(item.content_at..item.content_at + item.content_len)?;
+        // The certificate is an OCTET STRING wrapping its DER, which is how
+        // 35275 keeps it apart from the value beside it.
+        if der[at] == 0x04 && Certificate::parse_der(body).is_ok() {
+            certificate = Some(body.to_vec());
+        }
+        at = item.content_at + item.content_len;
+    }
+    let signature = last_tlv_body(der, outer)?;
+    Some((signature, certificate))
+}
+
+/// The SM3 digest a `SignedValue` states for the descriptor it covers, when it
+/// states one. GB/T 38540 makes the signed content a digest plus the name of
+/// what it digests, so the envelope says what the signature is over rather
+/// than repeating it.
+pub fn signed_value_digest(der: &[u8]) -> Option<Vec<u8>> {
+    let outer = tlv(der, 0)?;
+    let content = tlv(der, outer.content_at)?;
+    let end = content.content_at + content.content_len;
+    let mut at = content.content_at;
+    while at < end {
+        let item = tlv(der, at)?;
+        let body = der.get(item.content_at..item.content_at + item.content_len)?;
+        // A BIT STRING names its unused bits in the first octet.
+        let bits = match body.split_first() {
+            Some((0, rest)) if rest.len() == 32 => rest,
+            _ => body,
+        };
+        if der[at] == 0x03 && bits.len() == 32 {
+            return Some(bits.to_vec());
+        }
+        at = item.content_at + item.content_len;
+    }
+    None
+}
+
+/// Whether the signature is over the descriptor itself, which a `SignedValue`
+/// says by naming it.
+pub fn signed_value_covers(der: &[u8], path: &str) -> bool {
+    der.windows(path.len()).any(|w| w == path.as_bytes())
+}
+
+/// The body of the last child of a SEQUENCE, which 35275 makes the signature.
+fn last_tlv_body(der: &[u8], outer: Tlv) -> Option<Vec<u8>> {
+    let end = outer.content_at + outer.content_len;
+    let mut at = outer.content_at;
+    let mut last = None;
+    while at < end {
+        let item = tlv(der, at)?;
+        last = Some(
+            der.get(item.content_at..item.content_at + item.content_len)?
+                .to_vec(),
+        );
+        at = item.content_at + item.content_len;
+    }
+    last.map(|body| match body.split_first() {
+        // A BIT STRING names its unused bits in the first octet.
+        Some((0, rest)) => rest.to_vec(),
+        _ => body,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_signed_value_yields_the_signature_and_the_certificate() {
+        // SEQUENCE { SEQUENCE{...}, OCTET STRING(cert), OID, BIT STRING(sig) }
+        // is the shape the standard gives the signed value. The certificate is
+        // recognised by parsing it, so the case carries a fixture one.
+        let cert = include_bytes!("../tests/data/test-cert.der").to_vec();
+        let mut body = vec![0x30, 0x03, 0x02, 0x01, 0x04, 0x04, 0x82];
+        body.extend_from_slice(&(cert.len() as u16).to_be_bytes());
+        body.extend_from_slice(&cert);
+        body.extend_from_slice(&[0x06, 0x08, 0x2a, 0x81, 0x1c, 0xcf, 0x55, 0x01, 0x83, 0x75]);
+        body.extend_from_slice(&[0x03, 0x04, 0x00, 0x30, 0x02, 0x05]);
+        let mut der = vec![0x30, 0x82];
+        der.extend_from_slice(&(body.len() as u16).to_be_bytes());
+        der.extend_from_slice(&body);
+
+        let (signature, carried) = split_signed_value(&der).expect("a signed value");
+        assert_eq!(signature, vec![0x30, 0x02, 0x05], "the bit string's body");
+        assert_eq!(
+            carried.as_deref(),
+            Some(cert.as_slice()),
+            "the certificate travels with the signature"
+        );
+    }
+
+    #[test]
+    fn a_signed_value_states_the_digest_it_covers() {
+        // SEQUENCE { SEQUENCE{ version, ..., TIME, BIT STRING(digest), IA5(path) } }
+        let digest = [0xABu8; 32];
+        let mut inner = vec![0x30, 0x25, 0x02, 0x01, 0x04];
+        inner.extend_from_slice(&[0x03, 0x21, 0x00]);
+        inner.extend_from_slice(&digest);
+        let mut body = inner.clone();
+        body.extend_from_slice(&[0x03, 0x42, 0x00]);
+        body.resize(body.len() + 65, 0x11);
+        let mut der = vec![0x30, 0x81];
+        der.push(body.len() as u8);
+        der.extend_from_slice(&body);
+
+        assert_eq!(
+            signed_value_digest(&der).as_deref(),
+            Some(digest.as_slice())
+        );
+        assert!(
+            !signed_value_covers(&der, "Signature.xml"),
+            "a value naming no path covers no descriptor"
+        );
+
+    }
+
+    #[test]
+    fn a_value_that_is_not_an_envelope_carries_no_certificate() {
+        // A file holding only the signature has no SEQUENCE around it.
+        assert!(split_signed_value(&[0x05, 0x00]).is_none());
+    }
 
     #[test]
     fn tbs_range_walks_an_outer_sequence() {

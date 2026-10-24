@@ -2,6 +2,10 @@
 
 use sm3::Digest;
 
+/// The object identifier GM/T 0004 gives SM3, which a signature descriptor
+/// names in `CheckMethod`. Producers also spell the algorithm `SM3`.
+pub const SM3_OID: &str = "1.2.156.10197.1.401";
+
 /// Length of an SM3 digest in bytes.
 pub const SM3_DIGEST_LEN: usize = 32;
 
