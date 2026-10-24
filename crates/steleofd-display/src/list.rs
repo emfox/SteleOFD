@@ -22,7 +22,7 @@ pub struct PageDisplay {
 impl PageDisplay {
     /// Whether the page has nothing visible to draw.
     pub fn is_blank(&self) -> bool {
-        self.ops.is_empty() || self.content_bbox.area() <= 0.0
+        !self.ops.iter().any(draws_ink)
     }
     /// Cheap upper bound on commands that may survive viewport culling.
     pub fn visible_ops_count(&self, viewport: Rect) -> usize {
@@ -30,6 +30,26 @@ impl PageDisplay {
             return 0;
         }
         self.ops.len()
+    }
+}
+
+/// Whether a command puts ink on the page. A table's rules are horizontal and
+/// vertical lines, so they have no area at all, yet they are the whole of a
+/// grid: deciding blankness by bounds alone calls such a page empty.
+fn draws_ink(op: &DrawOp) -> bool {
+    match op {
+        DrawOp::Path {
+            path,
+            fill,
+            stroke,
+            stroke_style,
+            ..
+        } => {
+            (fill.is_some() && path.tight_bounding_box().area() > 0.0)
+                || (stroke.is_some() && stroke_style.width > 0.0)
+        }
+        DrawOp::Text(_) | DrawOp::Image { .. } => true,
+        _ => false,
     }
 }
 
@@ -211,6 +231,23 @@ mod tests {
             fill: Some(Paint::Solid(Color::BLACK)),
             stroke: None,
             stroke_style: StrokeStyle::default(),
+            rule: PaintRule::NonZero,
+        });
+    }
+
+    /// A straight line drawn as a stroke, which is what a table rule is.
+    fn stroke_line(builder: &mut DisplayListBuilder, x1: f64, y1: f64, x2: f64, y2: f64) {
+        let path = Path::build(|b| {
+            b.move_to(x1, y1).line_to(x2, y2);
+        });
+        builder.push(DrawOp::Path {
+            path,
+            fill: None,
+            stroke: Some(Paint::Solid(Color::BLACK)),
+            stroke_style: StrokeStyle {
+                width: 0.25,
+                ..StrokeStyle::default()
+            },
             rule: PaintRule::NonZero,
         });
     }
@@ -459,6 +496,18 @@ mod tests {
         assert!(!page.is_blank());
         assert_eq!(page.ops.len(), 1);
         assert_eq!(page.visible_ops_count(Rect::A4_PORTRAIT), 1);
+    }
+
+    #[test]
+    fn a_page_of_table_rules_is_not_blank() {
+        // A grid is made of horizontal and vertical rules, and each has no area
+        // of its own: the union of their bounds does, so reading blankness off
+        // the bounds answered "blank" for every table page.
+        let mut b = DisplayListBuilder::new(Rect::A4_PORTRAIT);
+        stroke_line(&mut b, 10.0, 40.0, 190.0, 40.0);
+        stroke_line(&mut b, 10.0, 40.0, 10.0, 250.0);
+        let page = b.finish(0);
+        assert!(!page.is_blank(), "a frame and a rule are ink");
     }
 
     #[test]
