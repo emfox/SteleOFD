@@ -362,8 +362,12 @@ pub fn build_archive(entries: &[(&str, &[u8])]) -> Result<Vec<u8>> {
     let mut cursor = std::io::Cursor::new(Vec::new());
     {
         let mut writer = zip::ZipWriter::new(&mut cursor);
+        // The default timestamp is the clock, and two writes of one document
+        // then differ in bytes and in digest. The epoch the format starts at
+        // keeps the writer a pure function of its entries.
         let options = zip::write::SimpleFileOptions::default()
-            .compression_method(zip::CompressionMethod::Deflated);
+            .compression_method(zip::CompressionMethod::Deflated)
+            .last_modified_time(zip::DateTime::default());
         for (name, data) in entries {
             writer
                 .start_file(*name, options)

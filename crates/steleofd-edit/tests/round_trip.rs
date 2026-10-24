@@ -165,24 +165,22 @@ fn a_page_file_that_no_longer_parses_is_refused() {
 
 #[test]
 fn a_written_archive_is_byte_stable_across_two_builds() {
-    // Two writes of the same entries must produce the same archive, or a
-    // caller's file differs from the one it just saved and nothing can be
-    // compared by digest.
+    // Two writes of one document must match byte for byte, or a caller cannot
+    // compare what it saved by digest. Waiting past a clock tick is what
+    // proves the timestamp is not the clock's.
     let entries = entries_with(CONTENT_XML);
-    let first = build_archive(
-        &entries
-            .iter()
-            .map(|(name, data)| (*name, data.as_slice()))
-            .collect::<Vec<_>>(),
-    )
-    .expect("write");
-    let second = build_archive(
-        &entries
-            .iter()
-            .map(|(name, data)| (*name, data.as_slice()))
-            .collect::<Vec<_>>(),
-    )
-    .expect("write");
+    let build = || {
+        build_archive(
+            &entries
+                .iter()
+                .map(|(name, data)| (*name, data.as_slice()))
+                .collect::<Vec<_>>(),
+        )
+        .expect("write")
+    };
+    let first = build();
+    std::thread::sleep(std::time::Duration::from_millis(2100));
+    let second = build();
     assert_eq!(first, second);
 }
 
