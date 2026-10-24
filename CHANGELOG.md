@@ -34,6 +34,12 @@ release is written up is in
   and premultiplied RGBA for a canvas. JBIG2 moves to `steleofd_io::decode::jbig2`;
   `steleofd-io` now depends on `steleofd-display` for `ImageCodec`.
 
+- **A comparison's verdicts are told apart from the judging that produces
+  them.** `Comparison`, `PageDiff` and `PageChange` are what a caller reads and
+  stay in `compare`; `compare()` and the page-by-page rule moved to
+  `compare::judge`, so the file that states the data no longer carries the rule
+  and 118 lines of its tests. No API change.
+
 ### Examples
 
 - **One worked example per delivery form**, each a single file that opens a
