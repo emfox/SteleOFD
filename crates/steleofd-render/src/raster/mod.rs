@@ -295,7 +295,25 @@ use shape::{
 };
 use text::{ImageOutcome, TextOutcome, draw_image, draw_text};
 
-pub use steleofd_geometry::{Cubic, arc_cubics};
+pub use steleofd_geometry::Cubic;
+
+/// Convert one elliptical arc into cubic segments.
+///
+/// The conversion itself lives in `steleofd-geometry`. This stays a definition
+/// rather than a re-export because the API gate reads a re-exported item as
+/// absent from the crate that used to define it, and callers import it here.
+#[allow(clippy::too_many_arguments)]
+pub fn arc_cubics(
+    rx_in: f64,
+    ry_in: f64,
+    rot_deg: f64,
+    large: bool,
+    sweep: bool,
+    from: (f64, f64),
+    to: (f64, f64),
+) -> Vec<Cubic> {
+    steleofd_geometry::arc_cubics(rx_in, ry_in, rot_deg, large, sweep, from, to)
+}
 
 /// Rasterize a pattern cell at `scale` pixels per millimetre, so a tile and the
 /// page it repeats on agree. The cell carries its own bounds, which become the
