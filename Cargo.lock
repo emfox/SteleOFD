@@ -4642,6 +4642,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "sofd"
+version = "0.5.0"
+dependencies = [
+ "rayon",
+ "sofd-archive",
+ "sofd-common",
+ "sofd-convert",
+ "sofd-crypto",
+ "sofd-display",
+ "sofd-edit",
+ "sofd-error",
+ "sofd-font",
+ "sofd-geometry",
+ "sofd-io",
+ "sofd-model",
+ "sofd-package",
+ "sofd-parser",
+ "sofd-print",
+ "sofd-render",
+ "sofd-search",
+ "sofd-sign",
+ "sofd-testkit",
+ "tracing",
+]
+
+[[package]]
 name = "sofd-archive"
 version = "0.5.0"
 dependencies = [
@@ -4659,8 +4685,8 @@ dependencies = [
  "anyhow",
  "clap",
  "serde_json",
+ "sofd",
  "sofd-archive",
- "sofd-core",
  "sofd-error",
  "sofd-font",
  "sofd-i18n",
@@ -4686,40 +4712,14 @@ dependencies = [
  "criterion",
  "image",
  "lopdf",
+ "sofd",
  "sofd-common",
- "sofd-core",
  "sofd-display",
  "sofd-error",
  "sofd-font",
  "sofd-geometry",
  "sofd-io",
  "sofd-render",
- "sofd-testkit",
- "tracing",
-]
-
-[[package]]
-name = "sofd-core"
-version = "0.5.0"
-dependencies = [
- "rayon",
- "sofd-archive",
- "sofd-common",
- "sofd-convert",
- "sofd-crypto",
- "sofd-display",
- "sofd-edit",
- "sofd-error",
- "sofd-font",
- "sofd-geometry",
- "sofd-io",
- "sofd-model",
- "sofd-package",
- "sofd-parser",
- "sofd-print",
- "sofd-render",
- "sofd-search",
- "sofd-sign",
  "sofd-testkit",
  "tracing",
 ]
@@ -4758,8 +4758,8 @@ dependencies = [
 name = "sofd-edit"
 version = "0.5.0"
 dependencies = [
+ "sofd",
  "sofd-common",
- "sofd-core",
  "sofd-display",
  "sofd-error",
  "sofd-model",
@@ -4780,7 +4780,7 @@ name = "sofd-ffi"
 version = "0.5.0"
 dependencies = [
  "cbindgen",
- "sofd-core",
+ "sofd",
  "sofd-error",
  "sofd-font",
  "sofd-testkit",
@@ -4865,9 +4865,9 @@ version = "0.5.0"
 dependencies = [
  "criterion",
  "proptest",
+ "sofd",
  "sofd-common",
  "sofd-convert",
- "sofd-core",
  "sofd-display",
  "sofd-error",
  "sofd-font",
@@ -4907,8 +4907,8 @@ dependencies = [
  "jni",
  "log",
  "rfd",
+ "sofd",
  "sofd-common",
- "sofd-core",
  "sofd-error",
  "sofd-i18n",
  "sofd-print",
@@ -4957,7 +4957,7 @@ dependencies = [
  "axum",
  "serde",
  "serde_json",
- "sofd-core",
+ "sofd",
  "sofd-error",
  "sofd-font",
  "sofd-testkit",
@@ -5000,7 +5000,7 @@ dependencies = [
  "console_error_panic_hook",
  "serde",
  "serde-wasm-bindgen",
- "sofd-core",
+ "sofd",
  "sofd-error",
  "sofd-font",
  "sofd-testkit",

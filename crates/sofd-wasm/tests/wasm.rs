@@ -2,7 +2,7 @@
 //! the methods that never build a JS value. The JS-returning methods only
 //! run under wasm, where a browser supplies the runtime.
 
-use sofd_core::{Document, SearchOptions};
+use sofd::{Document, SearchOptions};
 use sofd_testkit::{SIGN_FILE, fixture_bytes};
 use sofd_wasm::OfdDocument;
 use sofd_wasm::shapes::{

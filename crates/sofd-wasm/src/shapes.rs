@@ -3,7 +3,7 @@
 //! the browser gets these objects, and `Intl` formats their numbers.
 
 use serde::Serialize;
-use sofd_core::{Document, SearchOptions, VerifyStatus};
+use sofd::{Document, SearchOptions, VerifyStatus};
 use sofd_error::OfdError;
 use sofd_font::FontSource;
 

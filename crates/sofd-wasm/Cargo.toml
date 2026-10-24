@@ -12,7 +12,7 @@ publish = false
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-sofd-core = { workspace = true, features = ["render", "sign", "convert", "search"] }
+sofd = { workspace = true, features = ["render", "sign", "convert", "search"] }
 sofd-error.workspace = true
 sofd-font.workspace = true
 wasm-bindgen.workspace = true

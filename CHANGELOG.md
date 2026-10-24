@@ -10,6 +10,13 @@ release is written up is in
 
 ### Changed
 
+- **The crates are named `sofd`, and the facade is that bare name.** Every
+  package, module path and C symbol moved from `steleofd_*` to `sofd_*`, so
+  `cargo add sofd` and `use sofd::Document` is the whole of what a caller now
+  needs; the eighteen internals keep their suffixes, and `sOFD` is how the
+  project is written in prose. Nothing a document draws changes: 116 pages over
+  the 35 samples, plus 22 PDFs and 90 SVGs, are byte-identical before and after.
+
 - **The paint a graphic unit carries is stated once, on `ObjectBase`.** Fill
   colour, stroke colour and the two switches were repeated on `PathObject`,
   `TextObject` and `DrawParam` and resolved again in each flattening path; they
@@ -71,7 +78,7 @@ clips cost one mask rather than one per save.
 ### Features
 
 - **Four features that compiled to nothing are gone**: `office` and `ocr` in
-  `sofd-convert` and `sofd-core`, `xsd-validate` in
+  `sofd-convert` and `sofd`, `xsd-validate` in
   `sofd-archive`, and `backend-raster` in `sofd-render`. Enabling one
   now fails the build rather than succeeding and changing nothing, so a caller
   who asks for a capability is told it is absent. `scripts/check_publish.py`
@@ -148,7 +155,7 @@ budget for memory beside the one for time.
 
 ### Known limits
 
-- No crate is published to a registry yet, so this release is a source tag and a set of artefacts rather than a `cargo add sofd-core`.
+- No crate is published to a registry yet, so this release is a source tag and a set of artefacts rather than a `cargo add sofd`.
 - Blending is deliberately unsupported: the standard defines no blend mode, and `Alpha` is the whole of its transparency model.
 - Office formats and OCR are planned, not built.
 - iOS is not in the release matrix, and the release artefacts are unsigned.
@@ -191,7 +198,7 @@ signature is allowed to say.
 
 ### Known limits
 
-- No crate is published to a registry yet, so this release is a source tag and a set of artefacts rather than a `cargo add sofd-core`.
+- No crate is published to a registry yet, so this release is a source tag and a set of artefacts rather than a `cargo add sofd`.
 - Blending is deliberately unsupported: the standard defines no blend mode, and `Alpha` is the whole of its transparency model.
 - Office formats and OCR are planned, not built.
 - iOS is not in the release matrix, and the release artefacts are unsigned.

@@ -12,7 +12,7 @@
 | L5 adapters   sofd-cli / -wasm / -ffi / -server / -reader      |
 |               The only layer aware of a concrete delivery form     |
 +--------------------------------------------------------------------+
-| L4 facade     sofd-core                                        |
+| L4 facade     sofd                                        |
 |               The single public entry point, trims capabilities    |
 |               through features, free to refactor internals         |
 +--------------------------------------------------------------------+
@@ -204,7 +204,7 @@ Publishing is not one promise but three, and the column says which:
 |---|---|
 | **surface** | An entry point a consumer adds on purpose. Its public API is what this project undertakes to keep working. |
 | **extension** | A seam a consumer implements against — a backend, a font loader, a display list. Changes here are slower and announced. |
-| **transitive** | Published because cargo requires it, not because it is an interface. `sofd-core` names it, so a registry needs it; nothing outside this project should depend on it directly. |
+| **transitive** | Published because cargo requires it, not because it is an interface. `sofd` names it, so a registry needs it; nothing outside this project should depend on it directly. |
 
 `scripts/publish_order.py` prints the registry closure in dependency order,
 which is also the order `cargo publish` has to run in.
@@ -230,7 +230,7 @@ which is also the order `cargo publish` has to run in.
 | L3 | `sofd-search` | Full-text search and reverse glyph-to-Unicode lookup | surface |
 | L3 | `sofd-archive` | Archival compliance validation (OFD-A) | surface |
 | L3 | `sofd-print` | Printing, reusing the display list for fidelity | surface |
-| L4 | `sofd-core` | Facade, trimming capabilities through features | surface |
+| L4 | `sofd` | Facade, trimming capabilities through features | surface |
 | L5 | `sofd-cli` | Command line tool `sofd` | withheld |
 | L5 | `sofd-wasm` | Browser WebAssembly bindings | withheld |
 | L5 | `sofd-ffi` | C ABI shared library for OA and ERP integration | withheld |

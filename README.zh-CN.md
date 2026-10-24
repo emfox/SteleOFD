@@ -74,10 +74,10 @@ sha256sum -c SHA256SUMS          # 或者完全不依赖本项目
 crate 目前尚未发布到注册表：哪些会发布、发布前还差什么，见
 [issue #4](https://github.com/emfox/sOFD/issues/4)。
 
-19 个 crate 会进入注册表，但其中只有一部分是接口。加上 `sofd-core` 就够用；
+19 个 crate 会进入注册表，但其中只有一部分是接口。加上 `sofd` 就够用；
 它依赖的那些 crate 是被 cargo 一起带过来的，并不是让你逐个点名。哪些是哪一类，
 见 [Architecture.md 第 3 节](docs/Architecture.md#3-crate-inventory)；
-`python3 scripts/publish_order.py` 会打印依赖闭包——从 `sofd-core` 出发
+`python3 scripts/publish_order.py` 会打印依赖闭包——从 `sofd` 出发
 是全部 19 个，而单独发布 `sofd-crypto` 只需要 3 个。
 
 ## 遵循的规范
@@ -133,7 +133,7 @@ OFD 和 PDF 都是版式文档，区别在于 OFD 是开放的 ZIP + XML 容器�
                                   │
                                   ▼
   ┌──────────────────────────────────────────────────────────────────────┐
-  │  sofd-core —— 一个句柄，每个能力对应一个 feature                 │
+  │  sofd —— 一个句柄，每个能力对应一个 feature                 │
   └──────────────────────────────────────────────────────────────────────┘
                                   │
   ┌──────────────────────────────────────────────────────────────────────┐

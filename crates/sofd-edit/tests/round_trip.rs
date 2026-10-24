@@ -2,7 +2,7 @@
 //! container. There is no serializer yet, so these tests replace or drop an
 //! entry and assert on the document reopened from the result.
 
-use sofd_core::Document;
+use sofd::Document;
 use sofd_package::build_archive;
 use sofd_testkit::{CONTENT_ENTRY, CONTENT_XML, DOCUMENT_ENTRY, OFD_XML, archive_of, font_bytes};
 

@@ -2,7 +2,7 @@
 //! GB/T 33190-2016 that need no rendering to assert. Names map to entries in
 //! compliance/gb-t-33190.toml, and the register is what keeps this honest.
 
-use sofd_core::Document;
+use sofd::Document;
 use sofd_package::{ENTRY_POINT, EntryKind, Package, build_archive};
 
 const OFD_XML: &str = r#"<?xml version="1.0" encoding="UTF-8"?>

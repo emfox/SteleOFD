@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard};
 
-use sofd_core::Document;
+use sofd::Document;
 use uuid::Uuid;
 
 /// One open document, shared by every request working on it.

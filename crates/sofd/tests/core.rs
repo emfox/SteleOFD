@@ -111,16 +111,16 @@ fn seal_descriptor(page_ref: &str, boundary: &str) -> String {
     )
 }
 
-fn open(entries: &[(&str, Vec<u8>)]) -> sofd_core::Document {
+fn open(entries: &[(&str, Vec<u8>)]) -> sofd::Document {
     let borrowed: Vec<(&str, &[u8])> = entries
         .iter()
         .map(|(path, data)| (*path, data.as_slice()))
         .collect();
     let bytes = build_archive(&borrowed).expect("build fixture");
-    sofd_core::Document::open_bytes(&bytes).expect("open document")
+    sofd::Document::open_bytes(&bytes).expect("open document")
 }
 
-fn two_page_document() -> sofd_core::Document {
+fn two_page_document() -> sofd::Document {
     let entries = [
         ("OFD.xml", OFD_XML.as_bytes().to_vec()),
         (
@@ -167,13 +167,13 @@ fn version_reports_the_declared_version() {
 fn rejects_a_container_without_the_entry_point() {
     let bytes =
         build_archive(&[("Doc_0/Document.xml", b"<Document/>".as_slice())]).expect("build fixture");
-    let err = sofd_core::Document::open_bytes(&bytes).expect_err("must fail");
+    let err = sofd::Document::open_bytes(&bytes).expect_err("must fail");
     assert!(err.to_string().contains("not a valid OFD"), "got {err}");
 }
 
 #[test]
 fn rejects_bytes_that_are_not_a_container() {
-    let err = sofd_core::Document::open_bytes(b"not an ofd package").expect_err("must fail");
+    let err = sofd::Document::open_bytes(b"not an ofd package").expect_err("must fail");
     assert!(err.to_string().contains("container"), "got {err}");
 }
 
@@ -662,8 +662,8 @@ fn comparing_against_a_page_short_reads_as_removed() {
     ];
     let after = open(&entries);
     let diff = before.compare(&after);
-    assert_eq!(diff.pages[0].change, sofd_core::PageChange::Unchanged);
-    assert_eq!(diff.pages[1].change, sofd_core::PageChange::Removed);
+    assert_eq!(diff.pages[0].change, sofd::PageChange::Unchanged);
+    assert_eq!(diff.pages[1].change, sofd::PageChange::Removed);
     assert_eq!(diff.changed_pages(), 1);
 }
 
@@ -771,7 +771,7 @@ fn a_malformed_resource_table_surfaces_instead_of_being_swallowed() {
         .map(|(path, data)| (*path, data.as_slice()))
         .collect();
     let bytes = build_archive(&borrowed).expect("build fixture");
-    let err = sofd_core::Document::open_bytes(&bytes).expect_err("must fail");
+    let err = sofd::Document::open_bytes(&bytes).expect_err("must fail");
     assert!(matches!(err, OfdError::Xml(_)), "got {err:?}");
 }
 
@@ -814,7 +814,7 @@ fn gb_t_33190_15_annotations_are_joined_back_to_their_pages() {
     // The index names pages by id, not by index, so reading the marks means
     // joining the two. Two pages of three carry a mark each.
     let doc = sofd_testkit::annotated_archive(3, 2);
-    let mut document = sofd_core::Document::open_bytes(&doc).expect("open fixture");
+    let mut document = sofd::Document::open_bytes(&doc).expect("open fixture");
     let marks = document.annotations().expect("annotations");
     assert_eq!(marks.len(), 2, "one mark per annotated page");
     assert_eq!(marks[0].page, 0);
@@ -832,7 +832,7 @@ fn gb_t_33190_15_annotations_are_joined_back_to_their_pages() {
 fn a_document_without_an_annotation_index_has_no_annotations() {
     // No index is not a failure: most documents carry no marks at all.
     let doc = sofd_testkit::multipage_archive(2);
-    let mut document = sofd_core::Document::open_bytes(&doc).expect("open fixture");
+    let mut document = sofd::Document::open_bytes(&doc).expect("open fixture");
     assert_eq!(document.annotations().expect("annotations"), Vec::new());
 }
 
@@ -862,7 +862,7 @@ fn an_annotation_file_that_will_not_read_costs_only_its_own_page() {
         .map(|(path, data)| (path.as_str(), data.as_slice()))
         .collect();
     let bytes = build_archive(&rebuilt).expect("archive");
-    let mut document = sofd_core::Document::open_bytes(&bytes).expect("open fixture");
+    let mut document = sofd::Document::open_bytes(&bytes).expect("open fixture");
     let marks = document.annotations().expect("annotations");
     assert_eq!(marks.len(), 1, "the page that still has a file reports it");
     assert_eq!(marks[0].page, 1);
@@ -988,7 +988,7 @@ fn each_signature_reports_whether_its_timestamp_binds_it() {
     let verdicts = doc.verify_timestamps().expect("timestamp verdicts");
     assert_eq!(verdicts.len(), 1);
     // AAAA decodes to three zero bytes, which the token does not cover.
-    assert_eq!(verdicts[0], sofd_core::TimestampStatus::Unbound);
+    assert_eq!(verdicts[0], sofd::TimestampStatus::Unbound);
 }
 
 #[cfg(feature = "sign")]
@@ -1008,5 +1008,5 @@ fn a_signature_with_no_timestamp_reports_absent() {
     ];
     let mut doc = open(&entries);
     let verdicts = doc.verify_timestamps().expect("timestamp verdicts");
-    assert_eq!(verdicts, vec![sofd_core::TimestampStatus::Absent]);
+    assert_eq!(verdicts, vec![sofd::TimestampStatus::Absent]);
 }

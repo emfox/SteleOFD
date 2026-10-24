@@ -110,7 +110,7 @@ fn run_worker(
     while let Ok(request) = work.recv() {
         let count = request.pages.len();
         if document.is_none() {
-            match sofd_core::Document::open_bytes(&bytes) {
+            match sofd::Document::open_bytes(&bytes) {
                 Ok(doc) => document = Some(doc),
                 Err(err) => {
                     let _ = finish.send(PrintResult {
@@ -140,7 +140,7 @@ fn run_worker(
 /// A job that plans but will not rasterize is not a print job, so the second
 /// failure is reported rather than swallowed.
 fn print(
-    doc: &sofd_core::Document,
+    doc: &sofd::Document,
     request: &PrintRequest,
 ) -> (Vec<SheetReport>, usize, Option<String>) {
     let mut settings = request.settings.clone();

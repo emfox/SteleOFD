@@ -154,7 +154,7 @@ fn run_worker(
     finish: &Sender<RenderResult>,
 ) {
     let mut document = None;
-    let mut seals: Option<Vec<sofd_core::Seal>> = None;
+    let mut seals: Option<Vec<sofd::Seal>> = None;
     let mut pending: Option<RenderRequest> = None;
     loop {
         // Hold the request we are about to render, and look at whatever has
@@ -197,7 +197,7 @@ fn run_worker(
             let _ = own_to_worker.send(*later);
         }
         if document.is_none() {
-            match sofd_core::Document::open_bytes(&bytes) {
+            match sofd::Document::open_bytes(&bytes) {
                 Ok(doc) => document = Some(doc),
                 Err(err) => {
                     let _ = finish.send(RenderResult {

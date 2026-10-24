@@ -2,7 +2,7 @@
 //! No C types live here, so every shape is unit-testable on the host: the
 //! boundary in [`crate::lib`] only moves these values across.
 
-use sofd_core::{Document, SearchOptions, VerifyStatus};
+use sofd::{Document, SearchOptions, VerifyStatus};
 use sofd_error::OfdError;
 use sofd_font::FontSource;
 

@@ -7,7 +7,7 @@
 
 use std::path::PathBuf;
 
-use sofd_core::{Document, RenderOptions};
+use sofd::{Document, RenderOptions};
 use sofd_io::FileSource;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {

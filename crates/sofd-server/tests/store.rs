@@ -2,7 +2,7 @@
 //! behave the same from the API's point of view. Ownership by tenant is part of
 //! the store rather than a layer above it, so it is pinned here.
 
-use sofd_core::Document;
+use sofd::Document;
 use sofd_server::Store;
 use sofd_testkit::fixture_bytes;
 use uuid::Uuid;

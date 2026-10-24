@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 
-use sofd_core::{Document, RenderOptions};
+use sofd::{Document, RenderOptions};
 
 /// The resolution bounds the reader will rasterize at.
 pub const MIN_DPI: f32 = 24.0;
@@ -259,7 +259,7 @@ pub fn render_page_with_seals(
     doc: &Document,
     page: usize,
     dpi: f32,
-    seals: &[sofd_core::Seal],
+    seals: &[sofd::Seal],
     window: Option<sofd_common::Rect>,
 ) -> Result<RenderedPage, sofd_error::OfdError> {
     let size_mm = doc
@@ -311,7 +311,7 @@ fn narrow(window: sofd_common::Rect, dpi: f32) -> sofd_common::Rect {
 /// failing the page, exactly as a missing image resource is.
 fn stamp_seal(
     raster: &mut image::RgbaImage,
-    seal: &sofd_core::Seal,
+    seal: &sofd::Seal,
     dpi: f64,
     window: Option<sofd_common::Rect>,
 ) {

@@ -106,7 +106,7 @@ fn run_worker(bytes: Vec<u8>, work: &Receiver<ExportRequest>, finish: &Sender<Ex
     while let Ok(request) = work.recv() {
         let count = request.pages.len();
         if document.is_none() {
-            match sofd_core::Document::open_bytes(&bytes) {
+            match sofd::Document::open_bytes(&bytes) {
                 Ok(doc) => document = Some(doc),
                 Err(err) => {
                     let _ = finish.send(ExportResult {
@@ -135,7 +135,7 @@ fn run_worker(bytes: Vec<u8>, work: &Receiver<ExportRequest>, finish: &Sender<Ex
 /// Produce the requested files. The files written before a failure are returned
 /// alongside the error, because they exist on disk and a caller that reports
 /// "nothing was written" would be lying about half the output.
-fn write(doc: &sofd_core::Document, request: &ExportRequest) -> (Vec<PathBuf>, Option<String>) {
+fn write(doc: &sofd::Document, request: &ExportRequest) -> (Vec<PathBuf>, Option<String>) {
     match request.format {
         ExportFormat::Pdf => match doc.to_pdf_pages(&request.pages) {
             Ok(bytes) => match std::fs::write(&request.destination, bytes) {
@@ -148,7 +148,7 @@ fn write(doc: &sofd_core::Document, request: &ExportRequest) -> (Vec<PathBuf>, O
             Err(err) => (Vec::new(), Some(err.to_string())),
         },
         ExportFormat::Png => {
-            let options = sofd_core::RenderOptions {
+            let options = sofd::RenderOptions {
                 dpi: f64::from(request.dpi),
                 ..Default::default()
             };

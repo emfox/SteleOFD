@@ -2,7 +2,7 @@
 //! No HTTP types live here, so every shape is testable on the host.
 
 use serde::{Deserialize, Serialize};
-use sofd_core::{Document, SearchOptions, VerifyStatus};
+use sofd::{Document, SearchOptions, VerifyStatus};
 use sofd_error::OfdError;
 use sofd_font::FontSource;
 use uuid::Uuid;

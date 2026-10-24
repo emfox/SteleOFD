@@ -5,7 +5,7 @@
 use axum::Router;
 use axum::body::{Body, Bytes};
 use axum::http::{HeaderMap, Request, StatusCode};
-use sofd_core::Document;
+use sofd::Document;
 use sofd_server::config::Settings;
 use sofd_server::dto::{Opened, SearchHit, SignatureStatus};
 use sofd_server::{AppState, KeyRing, RateLimit, Store, api};

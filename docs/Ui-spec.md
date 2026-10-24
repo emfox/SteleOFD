@@ -56,7 +56,7 @@ resource pipeline, and §5.4 says how.
 
 | Layer | File | May know about | May not |
 | --- | --- | --- | --- |
-| Engine | `sofd-core`, `sofd-render` | documents, pixels | the reader |
+| Engine | `sofd`, `sofd-render` | documents, pixels | the reader |
 | State | `crates/sofd-reader/src/app.rs` | the engine, i18n | `egui`, widgets, pixels |
 | Worker | `crates/sofd-reader/src/render_worker.rs` | the engine, channels | `App`, `egui` |
 | Cache | `crates/sofd-reader/src/viewer.rs` | the engine, `ColorImage` | `App`, layout |

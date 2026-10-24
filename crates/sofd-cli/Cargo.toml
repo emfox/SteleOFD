@@ -13,7 +13,7 @@ name = "sofd"
 path = "src/main.rs"
 
 [dependencies]
-sofd-core = { workspace = true, features = ["render", "sign", "convert", "print", "edit", "search", "archive", "async"] }
+sofd = { workspace = true, features = ["render", "sign", "convert", "print", "edit", "search", "archive", "async"] }
 sofd-error.workspace = true
 sofd-font.workspace = true
 sofd-i18n.workspace = true

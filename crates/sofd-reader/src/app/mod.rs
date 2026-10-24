@@ -2,7 +2,7 @@
 
 use std::path::{Path, PathBuf};
 
-use sofd_core::{Annotation, Comparison, Document, SearchOptions, VerifyStatus};
+use sofd::{Annotation, Comparison, Document, SearchOptions, VerifyStatus};
 use sofd_i18n::{I18n, MessageId};
 
 use crate::message::ReaderMessage;

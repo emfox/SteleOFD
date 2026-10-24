@@ -33,7 +33,7 @@ pdf     = ["dep:lopdf"]
 
 [dev-dependencies]
 criterion.workspace = true
-sofd-core.workspace = true
+sofd.workspace = true
 sofd-testkit.workspace = true
 
 [[bench]]

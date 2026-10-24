@@ -9,7 +9,7 @@ pub mod raster;
 
 pub use raster::{RasterOutput, RenderOptions, render_page};
 
-// Subsetting is not this crate's to do: `sofd-core` cuts each embedded face
+// Subsetting is not this crate's to do: `sofd` cuts each embedded face
 // to the glyphs the display list names, and neither exporter carries a font;
 // they outline every glyph into a path.
 

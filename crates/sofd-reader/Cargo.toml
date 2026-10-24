@@ -23,8 +23,8 @@ crate-type = ["rlib", "cdylib"]
 
 [dependencies]
 # The facade re-exports the option and verdict types its own methods take, so
-# the reader names them through `sofd-core` and depends on nothing below.
-sofd-core = { workspace = true, features = ["render", "search", "pdf", "print", "annot"] }
+# the reader names them through `sofd` and depends on nothing below.
+sofd = { workspace = true, features = ["render", "search", "pdf", "print", "annot"] }
 # Search hits carry a page-space rectangle, and `Rect` is defined here.
 sofd-common.workspace = true
 sofd-i18n.workspace = true

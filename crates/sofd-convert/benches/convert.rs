@@ -3,9 +3,9 @@
 //! backends are measured apart: they share the display list and nothing else.
 
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
+use sofd::Document;
 use sofd_convert::png::page_to_png;
 use sofd_convert::{PdfOptions, SvgOptions, TextExport, page_to_pdf, page_to_svg};
-use sofd_core::Document;
 use sofd_render::RenderOptions;
 use sofd_testkit::{OBJECTS_PER_PAGE, bench_archive};
 

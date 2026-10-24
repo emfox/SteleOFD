@@ -10,8 +10,8 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 use clap::Parser;
+use sofd::{Document, RenderOptions, SearchOptions, VerifyStatus};
 use sofd_archive::Severity;
-use sofd_core::{Document, RenderOptions, SearchOptions, VerifyStatus};
 use sofd_error::{FontError, FormatError, OfdError};
 use sofd_font::FontSource;
 use sofd_i18n::format::LocalizedFormat;

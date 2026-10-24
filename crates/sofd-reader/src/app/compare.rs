@@ -3,7 +3,7 @@
 //! window can list what changed.
 
 use super::*;
-use sofd_core::{Comparison, PageChange};
+use sofd::{Comparison, PageChange};
 
 impl App {
     /// Whether the comparison panel is showing.

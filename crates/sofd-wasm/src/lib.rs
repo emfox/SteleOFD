@@ -12,7 +12,7 @@ use std::sync::Once;
 use serde::Serialize;
 use wasm_bindgen::prelude::*;
 
-use sofd_core::{Document, RenderOptions, SearchOptions};
+use sofd::{Document, RenderOptions, SearchOptions};
 
 use crate::shapes::DocumentInfo;
 

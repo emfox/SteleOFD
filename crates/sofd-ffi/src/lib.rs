@@ -14,7 +14,7 @@ use std::ffi::{CStr, CString, c_char};
 use std::os::raw::c_int;
 use std::ptr;
 
-use sofd_core::Document;
+use sofd::Document;
 use sofd_error::OfdError;
 
 // The handle stays opaque to C, which is also how the header generator is
@@ -374,7 +374,7 @@ pub extern "C" fn sofd_render_png(
             dpi: dpi.to_bits(),
         },
         |inner| {
-            let options = sofd_core::RenderOptions {
+            let options = sofd::RenderOptions {
                 dpi,
                 ..Default::default()
             };

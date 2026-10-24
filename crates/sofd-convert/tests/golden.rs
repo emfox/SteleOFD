@@ -32,7 +32,7 @@ const RENDER_OPTIONS: RenderOptions = RenderOptions {
 /// Render one golden document to PNG bytes, through the same path a caller uses.
 fn render(doc: &GoldenDoc) -> Vec<u8> {
     let bytes = golden_archive(doc);
-    let document = sofd_core::Document::open_bytes(&bytes).expect("open the golden archive");
+    let document = sofd::Document::open_bytes(&bytes).expect("open the golden archive");
     document
         .to_png(0, &RENDER_OPTIONS)
         .unwrap_or_else(|e| panic!("render {}: {e}", doc.name))
@@ -149,7 +149,7 @@ fn the_book_holds_every_fixture_as_a_page() {
     // from the per-fixture documents the reference set is comparing something
     // no oracle ever saw.
     let bytes = sofd_testkit::golden_book();
-    let document = sofd_core::Document::open_bytes(&bytes).expect("open the book");
+    let document = sofd::Document::open_bytes(&bytes).expect("open the book");
     assert_eq!(
         document.page_count(),
         DOCS.len(),
@@ -178,7 +178,7 @@ fn each_book_page_keeps_its_own_size() {
     // The fixtures no longer share a page box, so the book has to honour a
     // per-page extent rather than the common one it opens with.
     let bytes = sofd_testkit::golden_book();
-    let document = sofd_core::Document::open_bytes(&bytes).expect("open the book");
+    let document = sofd::Document::open_bytes(&bytes).expect("open the book");
     let wide = document
         .to_png(8, &RENDER_OPTIONS)
         .expect("render the landscape page");

@@ -25,7 +25,7 @@ fn sample() -> Option<PathBuf> {
 /// The open display list of a page, or nothing when the sample is absent.
 fn page(index: usize) -> Option<sofd_display::PageDisplay> {
     let data = std::fs::read(sample()?).ok()?;
-    let doc = sofd_core::Document::open_bytes(&data).expect("the sample opens");
+    let doc = sofd::Document::open_bytes(&data).expect("the sample opens");
     // A fetched sample that stops flattening is the failure these tests exist
     // to catch, so an unreadable page may not come back as a skip.
     let displayed = doc.page(index).cloned();

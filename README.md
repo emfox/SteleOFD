@@ -81,11 +81,11 @@ what is left before they can, is
 [issue #4](https://github.com/emfox/sOFD/issues/4).
 
 Nineteen crates reach a registry, but only some of them are interfaces. Add
-`sofd-core` and you are done; the crates it depends on come along because
+`sofd` and you are done; the crates it depends on come along because
 cargo requires them, not because you were meant to name them. Which is which is
 in [Architecture.md § 3](docs/Architecture.md#3-crate-inventory), and
 `python3 scripts/publish_order.py` prints the dependency closure — from
-`sofd-core` that is all nineteen, while `sofd-crypto` alone needs three.
+`sofd` that is all nineteen, while `sofd-crypto` alone needs three.
 
 ## What it reads
 
@@ -150,7 +150,7 @@ depends on; boxes below the facade are pulled in only when a feature names them.
                                   │
                                   ▼
   ┌──────────────────────────────────────────────────────────────────────┐
-  │  sofd-core                                                       │
+  │  sofd                                                       │
   │  one handle, one feature per capability                              │
   └──────────────────────────────────────────────────────────────────────┘
                                   │

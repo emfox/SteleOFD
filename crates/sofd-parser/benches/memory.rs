@@ -3,8 +3,8 @@
 //! cache that holds the pages fits. Bytes are counted by the allocator below.
 
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
+use sofd::Document;
 use sofd_convert::png::page_to_png;
-use sofd_core::Document;
 use sofd_render::RenderOptions;
 use sofd_testkit::bench_archive;
 use std::alloc::{GlobalAlloc, Layout, System};
