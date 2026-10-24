@@ -1,0 +1,31 @@
+[package]
+name = "sofd-search"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+description = "Full-text search over an OFD document, answering with page, run and rectangle"
+keywords = ["ofd", "search", "full-text", "text"]
+categories = ["text-processing"]
+
+[dependencies]
+sofd-common.workspace = true
+sofd-display.workspace = true
+sofd-geometry.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+sofd-font.workspace = true
+criterion.workspace = true
+sofd-package.workspace = true
+sofd-parser.workspace = true
+sofd-testkit.workspace = true
+
+[[bench]]
+name = "search"
+harness = false
+
+[package.metadata.cargo-semver-checks.lints]
+workspace = true

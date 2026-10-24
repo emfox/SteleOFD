@@ -11,7 +11,7 @@
       </ofd:PathObject>
       <ofd:TextObject ID="4" Boundary="10 40 90 20" Font="5" Size="3.5">
         <ofd:FillColor Value="0 0 0"/>
-        <ofd:TextCode X="10" Y="50">SteleOFD</ofd:TextCode>
+        <ofd:TextCode X="10" Y="50">sOFD</ofd:TextCode>
       </ofd:TextObject>
     </ofd:Layer>
   </ofd:Content>

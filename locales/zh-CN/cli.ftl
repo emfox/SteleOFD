@@ -1,4 +1,4 @@
-# SteleOFD 简体中文 · 命令行输出
+# sOFD 简体中文 · 命令行输出
 
 cli-pages = 页数：{ $count }
 cli-page-size = 页面尺寸：{ $w } x { $h } 毫米

@@ -1,4 +1,4 @@
-# SteleOFD English (US) · Conversion module
+# sOFD English (US) · Conversion module
 
 convert-start = Start Conversion
 convert-progress = Converting: { $done } / { $total }

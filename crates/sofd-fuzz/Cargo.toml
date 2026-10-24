@@ -1,0 +1,12 @@
+[package]
+name = "sofd-fuzz"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+description = "Fuzz targets for the parsers that take bytes from a document"
+# The targets need a nightly compiler and libFuzzer, so the crate is a workspace
+# member that CI builds and a registry never sees.
+publish = false

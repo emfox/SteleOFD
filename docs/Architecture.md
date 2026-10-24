@@ -1,7 +1,7 @@
-# SteleOFD Rust Architecture
+# sOFD Rust Architecture
 
 > Version v0.1 | 26 crates | `cargo check --workspace` clean
-> Brand: SteleOFD (external); code prefix: `steleofd-*`
+> Brand: sOFD (external); code prefix: `sofd-*`
 
 ---
 
@@ -9,14 +9,14 @@
 
 ```
 +--------------------------------------------------------------------+
-| L5 adapters   steleofd-cli / -wasm / -ffi / -server / -reader      |
+| L5 adapters   sofd-cli / -wasm / -ffi / -server / -reader      |
 |               The only layer aware of a concrete delivery form     |
 +--------------------------------------------------------------------+
-| L4 facade     steleofd-core                                        |
+| L4 facade     sofd-core                                        |
 |               The single public entry point, trims capabilities    |
 |               through features, free to refactor internals         |
 +--------------------------------------------------------------------+
-| L1.5 i18n     steleofd-i18n                                        |
+| L1.5 i18n     sofd-i18n                                        |
 |               Depended on by presentation only, never by engine    |
 +--------------------------------------------------------------------+
 | L3 capability sign / crypto / convert / edit / search / archive /  |
@@ -62,7 +62,7 @@ way.
 logic would be duplicated N times, the backends would disagree (the classic
 "export does not match the preview"), and no optimization could be shared.
 
-**Solution:** `steleofd-display` defines a single intermediate representation. The
+**Solution:** `sofd-display` defines a single intermediate representation. The
 parser flattens the nested template tree into a one-dimensional command sequence
 carrying absolute transforms, and every backend consumes only that IR.
 
@@ -72,7 +72,7 @@ carrying absolute transforms, and every backend consumes only that IR.
 - A new backend only translates the `DrawOp` enum without understanding OFD;
 - Viewport culling, batching and glyph caching can be implemented once.
 
-**Key constraint:** `steleofd-display` depends on **no backend library** (no
+**Key constraint:** `sofd-display` depends on **no backend library** (no
 tiny-skia, no lopdf), only on geometry and fonts, and the whole IR is
 serializable. That is what lets it cross process and language boundaries.
 
@@ -108,7 +108,7 @@ ABI, JS and Python, and adding a language never touches engine code.
 
 ### 2.4 Unified error taxonomy
 
-`steleofd-error` defines one error enum per subsystem, each concerned only with its
+`sofd-error` defines one error enum per subsystem, each concerned only with its
 own failure semantics: `PackageError`, `XmlError`, `FormatError`, `RenderError`,
 `FontError`, `SignatureError`, `CryptoError`, `ConvertError` and `EditError`, all
 converting losslessly into the top level `OfdError`.
@@ -179,7 +179,7 @@ one run without the return becoming an advance that drags the row sideways.
 
 ### 2.7 Zero unsafe
 
-The whole workspace uses `#![forbid(unsafe_code)]`; `steleofd-ffi` is the only
+The whole workspace uses `#![forbid(unsafe_code)]`; `sofd-ffi` is the only
 exemption, because a C ABI requires it. Two designs were reworked to reach this:
 
 - **Font cache:** previously extended a borrow with `unsafe`; now returns
@@ -195,7 +195,7 @@ exemption, because a C ABI requires it. Two designs were reworked to reach this:
 
 The **Registry** column is what `publish` in each manifest states, and
 `scripts/check_publish.py` holds it to the whole workspace. The rest ship as an
-application, and `steleofd-i18n` and `steleofd-testkit` stay in the workspace
+application, and `sofd-i18n` and `sofd-testkit` stay in the workspace
 alone.
 
 Publishing is not one promise but three, and the column says which:
@@ -204,39 +204,39 @@ Publishing is not one promise but three, and the column says which:
 |---|---|
 | **surface** | An entry point a consumer adds on purpose. Its public API is what this project undertakes to keep working. |
 | **extension** | A seam a consumer implements against — a backend, a font loader, a display list. Changes here are slower and announced. |
-| **transitive** | Published because cargo requires it, not because it is an interface. `steleofd-core` names it, so a registry needs it; nothing outside this project should depend on it directly. |
+| **transitive** | Published because cargo requires it, not because it is an interface. `sofd-core` names it, so a registry needs it; nothing outside this project should depend on it directly. |
 
 `scripts/publish_order.py` prints the registry closure in dependency order,
 which is also the order `cargo publish` has to run in.
 
 | Layer | Crate | Responsibility | Registry |
 |---|---|---|---|
-| L0 | `steleofd-common` | Value types (`Millimeter`, `Point`, `Rect`), versions, standard constants | transitive |
-| L0 | `steleofd-error` | Unified error taxonomy | transitive |
-| L0 | `steleofd-io` | `ByteSource`/`ByteSink` over file, memory, slice and directory, and the one image-resource decoder | transitive |
-| L1 | `steleofd-model` | OFD data model (`CT_*` and `ST_*` type system) | transitive |
-| L1 | `steleofd-xml` | XML codec wrapping quick-xml | transitive |
-| L1 | `steleofd-package` | ZIP container I/O, safety validation, atomic replacement | transitive |
-| L1.5 | `steleofd-i18n` | Fluent localization layer | withheld |
-| L2 | `steleofd-geometry` | Backend-independent `Path` and `Affine` | extension |
-| L2 | `steleofd-font` | Font registry, metrics, system fallback | extension |
-| L2 | `steleofd-display` | **Display list IR**, the architectural keystone | extension |
-| L2 | `steleofd-parser` | `Content.xml` to `DisplayList` | extension |
-| L2 | `steleofd-render` | Raster backend: display list to pixels | extension |
-| L3 | `steleofd-crypto` | SM2, SM3, SM4, X.509, PKCS#12 | surface |
-| L3 | `steleofd-sign` | Electronic seals and verification per GB/T 38540 | surface |
-| L3 | `steleofd-convert` | Format interconversion: PDF, SVG, PNG | surface |
-| L3 | `steleofd-edit` | Command-pattern editing with an undo stack | surface |
-| L3 | `steleofd-search` | Full-text search and reverse glyph-to-Unicode lookup | surface |
-| L3 | `steleofd-archive` | Archival compliance validation (OFD-A) | surface |
-| L3 | `steleofd-print` | Printing, reusing the display list for fidelity | surface |
-| L4 | `steleofd-core` | Facade, trimming capabilities through features | surface |
-| L5 | `steleofd-cli` | Command line tool `steleofd` | withheld |
-| L5 | `steleofd-wasm` | Browser WebAssembly bindings | withheld |
-| L5 | `steleofd-ffi` | C ABI shared library for OA and ERP integration | withheld |
-| L5 | `steleofd-reader` | Desktop reader (egui/eframe) | withheld |
-| L5 | `steleofd-server` | HTTP service for batch conversion and verification | withheld |
-| — | `steleofd-testkit` | Fixtures shared by the test suites, a dev-dependency only | withheld |
+| L0 | `sofd-common` | Value types (`Millimeter`, `Point`, `Rect`), versions, standard constants | transitive |
+| L0 | `sofd-error` | Unified error taxonomy | transitive |
+| L0 | `sofd-io` | `ByteSource`/`ByteSink` over file, memory, slice and directory, and the one image-resource decoder | transitive |
+| L1 | `sofd-model` | OFD data model (`CT_*` and `ST_*` type system) | transitive |
+| L1 | `sofd-xml` | XML codec wrapping quick-xml | transitive |
+| L1 | `sofd-package` | ZIP container I/O, safety validation, atomic replacement | transitive |
+| L1.5 | `sofd-i18n` | Fluent localization layer | withheld |
+| L2 | `sofd-geometry` | Backend-independent `Path` and `Affine` | extension |
+| L2 | `sofd-font` | Font registry, metrics, system fallback | extension |
+| L2 | `sofd-display` | **Display list IR**, the architectural keystone | extension |
+| L2 | `sofd-parser` | `Content.xml` to `DisplayList` | extension |
+| L2 | `sofd-render` | Raster backend: display list to pixels | extension |
+| L3 | `sofd-crypto` | SM2, SM3, SM4, X.509, PKCS#12 | surface |
+| L3 | `sofd-sign` | Electronic seals and verification per GB/T 38540 | surface |
+| L3 | `sofd-convert` | Format interconversion: PDF, SVG, PNG | surface |
+| L3 | `sofd-edit` | Command-pattern editing with an undo stack | surface |
+| L3 | `sofd-search` | Full-text search and reverse glyph-to-Unicode lookup | surface |
+| L3 | `sofd-archive` | Archival compliance validation (OFD-A) | surface |
+| L3 | `sofd-print` | Printing, reusing the display list for fidelity | surface |
+| L4 | `sofd-core` | Facade, trimming capabilities through features | surface |
+| L5 | `sofd-cli` | Command line tool `sofd` | withheld |
+| L5 | `sofd-wasm` | Browser WebAssembly bindings | withheld |
+| L5 | `sofd-ffi` | C ABI shared library for OA and ERP integration | withheld |
+| L5 | `sofd-reader` | Desktop reader (egui/eframe) | withheld |
+| L5 | `sofd-server` | HTTP service for batch conversion and verification | withheld |
+| — | `sofd-testkit` | Fixtures shared by the test suites, a dev-dependency only | withheld |
 
 ---
 
@@ -247,14 +247,14 @@ Features trim binary size per delivery form:
 ```toml
 [features]
 default  = ["render", "sign", "convert", "pdf"]
-render   = ["dep:steleofd-render", "steleofd-render/backend-raster"]
-print    = ["dep:steleofd-print"]
-sign     = ["dep:steleofd-sign", "dep:steleofd-crypto"]
-convert  = ["dep:steleofd-convert", "dep:steleofd-render"]
-pdf      = ["convert", "steleofd-convert/pdf"]
-edit     = ["dep:steleofd-edit"]
-search   = ["dep:steleofd-search"]
-archive  = ["dep:steleofd-archive"]
+render   = ["dep:sofd-render", "sofd-render/backend-raster"]
+print    = ["dep:sofd-print"]
+sign     = ["dep:sofd-sign", "dep:sofd-crypto"]
+convert  = ["dep:sofd-convert", "dep:sofd-render"]
+pdf      = ["convert", "sofd-convert/pdf"]
+edit     = ["dep:sofd-edit"]
+search   = ["dep:sofd-search"]
+archive  = ["dep:sofd-archive"]
 async    = ["dep:rayon"]
 ```
 
@@ -308,7 +308,7 @@ There are two catalogues, not one, and they live beside the layer that shows
 their strings:
 
 ```
-crates/steleofd-i18n/locales/        # engine messages, keyed MessageId
+crates/sofd-i18n/locales/        # engine messages, keyed MessageId
 ├── en-US/          <- fallback locale, must always be complete
 │   ├── core.ftl        application level
 │   ├── convert.ftl     conversion module
@@ -318,7 +318,7 @@ crates/steleofd-i18n/locales/        # engine messages, keyed MessageId
 │   └── error.ftl       error messages
 └── zh-CN/          <- same structure
 
-crates/steleofd-reader/locales/      # reader interface, keyed ReaderMessage
+crates/sofd-reader/locales/      # reader interface, keyed ReaderMessage
 ├── en-US/reader.ftl
 └── zh-CN/reader.ftl
 ```
@@ -326,7 +326,7 @@ crates/steleofd-reader/locales/      # reader interface, keyed ReaderMessage
 The reader owns its own `ReaderMessage` list and its own `reader.ftl`, and merges
 it into the engine bundle with `I18nBuilder::add_resource`, reaching its strings
 through the key-based `I18n::text_key`. The engine never names a widget it does
-not own, which is why `steleofd-i18n` holds engine messages only. The reader's
+not own, which is why `sofd-i18n` holds engine messages only. The reader's
 layout and per-frame flow are fixed in [`Ui-spec.md`](Ui-spec.md).
 
 **Current state:** 73 engine keys and 32 reader keys, each across 2 locales with
@@ -382,7 +382,7 @@ at **3.9 MB/s**.
 
 ```bash
 cargo check --offline --workspace          # whole workspace, once deps are cached
-cargo check -p steleofd-i18n               # a single crate
+cargo check -p sofd-i18n               # a single crate
 cargo test --offline --workspace           # full test run
 cargo clippy --offline --workspace -- -D warnings
 python3 scripts/check_i18n.py              # message catalogue consistency
@@ -416,7 +416,7 @@ opt-level = "s"         # size first for WASM
 | **P3b printing** | `print`: task planning and rasterization | Done |
 | **P4b facade** | `core`: the feature-trimmed public surface | Done |
 | **P4 verification** | Signature verification in `crypto` and `sign` | Done |
-| **P5a delivery** | `cli`: the `steleofd` command line tool | Done |
+| **P5a delivery** | `cli`: the `sofd` command line tool | Done |
 | **P5b delivery** | `wasm`: browser bindings over the `core` facade | Done |
 | **P5c delivery** | `ffi`: C ABI shared library for OA and ERP integration | Done |
 | **P5d delivery** | `server`: HTTP service paths for OA and ERP back ends | Done |
@@ -430,7 +430,7 @@ displaying a single OFD page, then broaden capabilities. That yields end-to-end
 feedback early instead of spinning inside abstraction layers.
 
 **Still to build:** the original sequence is complete and shipped as `0.1.0`;
-concrete work is in the [issue tracker](https://github.com/emfox/SteleOFD/issues)
+concrete work is in the [issue tracker](https://github.com/emfox/sOFD/issues)
 and the direction it serves in [`Roadmap.md`](Roadmap.md). Clause-level
 conformance is tracked in
 `compliance/gb-t-33190.toml`; 74 clauses are registered, 73 of them `verified`
@@ -453,7 +453,7 @@ actually needs.
    parser ignores it and the clip stays in object space. See
    [`INTEROP.md`](INTEROP.md).
 2. **Fonts are embedded in full — superseded.** PDF and SVG export now subset:
-   `steleofd-font::subset` rebuilds `glyf`/`loca`/`cmap`/`maxp`/`hmtx`/`hhea`/
+   `sofd-font::subset` rebuilds `glyf`/`loca`/`cmap`/`maxp`/`hmtx`/`hhea`/
    `head` down to the glyphs a document uses, and a face it cannot rewrite (CFF,
    or no `cmap`) is carried whole. A 20 MB CJK collection no longer costs 20 MB
    per conversion.
@@ -468,7 +468,7 @@ actually needs.
 5. **Chinese national cryptography: pure Rust — settled.** The project uses the
    pure-Rust `sm2`/`sm3`/`sm4` path, which keeps WASM and cross-compilation
    working and needs no C toolchain. X.509 validation is handled in
-   `steleofd-crypto`. `GmSSL` stays listed as a reference implementation, not a
+   `sofd-crypto`. `GmSSL` stays listed as a reference implementation, not a
    dependency.
 6. **Domestic OS support:** open. No native build or test matrix on Kylin or
    UnionTech UOS is in place; the release workflow builds Linux, macOS and

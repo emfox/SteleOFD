@@ -1,0 +1,23 @@
+[package]
+name = "sofd-package"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+description = "Open the ZIP container an OFD file is, and hand out its entries as bytes"
+keywords = ["ofd", "zip", "container", "archive"]
+categories = ["encoding", "filesystem"]
+
+[dependencies]
+sofd-error.workspace = true
+sofd-io.workspace = true
+zip.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
+
+[package.metadata.cargo-semver-checks.lints]
+workspace = true

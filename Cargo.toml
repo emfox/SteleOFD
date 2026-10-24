@@ -3,53 +3,53 @@ resolver = "3"
 members = [
     # Update this list whenever a crate is added.
     # L0 foundation: pure capability, no domain semantics
-    "crates/steleofd-common",
-    "crates/steleofd-error",
-    "crates/steleofd-io",
+    "crates/sofd-common",
+    "crates/sofd-error",
+    "crates/sofd-io",
 
     # L1 format: OFD national standard data model
-    "crates/steleofd-model",
-    "crates/steleofd-xml",
-    "crates/steleofd-package",
+    "crates/sofd-model",
+    "crates/sofd-xml",
+    "crates/sofd-package",
 
     # L1.5 i18n: depended on by presentation only, never by the engine
-    "crates/steleofd-i18n",
+    "crates/sofd-i18n",
 
     # L2 engine: parsing, geometry, rendering, fonts
-    "crates/steleofd-geometry",
-    "crates/steleofd-font",
-    "crates/steleofd-display",
-    "crates/steleofd-parser",
-    "crates/steleofd-render",
+    "crates/sofd-geometry",
+    "crates/sofd-font",
+    "crates/sofd-display",
+    "crates/sofd-parser",
+    "crates/sofd-render",
 
     # L3 capabilities: decoupled business capabilities
-    "crates/steleofd-sign",
-    "crates/steleofd-crypto",
-    "crates/steleofd-convert",
-    "crates/steleofd-edit",
-    "crates/steleofd-search",
-    "crates/steleofd-archive",
-    "crates/steleofd-print",
+    "crates/sofd-sign",
+    "crates/sofd-crypto",
+    "crates/sofd-convert",
+    "crates/sofd-edit",
+    "crates/sofd-search",
+    "crates/sofd-archive",
+    "crates/sofd-print",
 
     # L4 facade
-    "crates/steleofd-core",
+    "crates/sofd-core",
 
     # L5 adapters: one per delivery form
-    "crates/steleofd-cli",
-    "crates/steleofd-wasm",
-    "crates/steleofd-ffi",
-    "crates/steleofd-server",
+    "crates/sofd-cli",
+    "crates/sofd-wasm",
+    "crates/sofd-ffi",
+    "crates/sofd-server",
 
     # L5 adapters: the native desktop reader
-    "crates/steleofd-reader",
+    "crates/sofd-reader",
 
     # Testing support: fixtures shared by the suites, never released
-    "crates/steleofd-testkit",
+    "crates/sofd-testkit",
 
     # Fuzz targets: nightly only, and the crate wraps cargo-fuzz's own one
-    "crates/steleofd-fuzz",
+    "crates/sofd-fuzz",
 ]
-default-members = ["crates/steleofd-core", "crates/steleofd-cli"]
+default-members = ["crates/sofd-core", "crates/sofd-cli"]
 
 [workspace.package]
 version = "0.5.0"
@@ -58,33 +58,33 @@ edition = "2024"
 # checking the workspace under this exact toolchain, not by trying to infer it.
 rust-version = "1.92"
 license = "Apache-2.0"
-repository = "https://github.com/emfox/SteleOFD"
+repository = "https://github.com/emfox/sOFD"
 readme = "README.md"
 authors = ["OFD Team"]
 
 [workspace.dependencies]
 # Internal crates: paths declared once so each crate stays consistent
-steleofd-common   = { path = "crates/steleofd-common",   version = "0.5.0" }
-steleofd-error    = { path = "crates/steleofd-error",    version = "0.5.0" }
-steleofd-io       = { path = "crates/steleofd-io",       version = "0.5.0" }
-steleofd-model    = { path = "crates/steleofd-model",    version = "0.5.0" }
-steleofd-xml      = { path = "crates/steleofd-xml",      version = "0.5.0" }
-steleofd-package  = { path = "crates/steleofd-package",  version = "0.5.0" }
-steleofd-i18n     = { path = "crates/steleofd-i18n",     version = "0.5.0" }
-steleofd-geometry = { path = "crates/steleofd-geometry", version = "0.5.0" }
-steleofd-font     = { path = "crates/steleofd-font",     version = "0.5.0" }
-steleofd-display  = { path = "crates/steleofd-display",  version = "0.5.0" }
-steleofd-parser   = { path = "crates/steleofd-parser",   version = "0.5.0" }
-steleofd-render   = { path = "crates/steleofd-render",   version = "0.5.0" }
-steleofd-sign     = { path = "crates/steleofd-sign",     version = "0.5.0" }
-steleofd-crypto   = { path = "crates/steleofd-crypto",   version = "0.5.0" }
-steleofd-convert  = { path = "crates/steleofd-convert",  version = "0.5.0", default-features = false }
-steleofd-edit     = { path = "crates/steleofd-edit",     version = "0.5.0" }
-steleofd-search   = { path = "crates/steleofd-search",   version = "0.5.0" }
-steleofd-archive  = { path = "crates/steleofd-archive",  version = "0.5.0" }
-steleofd-print    = { path = "crates/steleofd-print",    version = "0.5.0" }
-steleofd-core     = { path = "crates/steleofd-core",     version = "0.5.0" }
-steleofd-testkit  = { path = "crates/steleofd-testkit",  version = "0.5.0" }
+sofd-common   = { path = "crates/sofd-common",   version = "0.5.0" }
+sofd-error    = { path = "crates/sofd-error",    version = "0.5.0" }
+sofd-io       = { path = "crates/sofd-io",       version = "0.5.0" }
+sofd-model    = { path = "crates/sofd-model",    version = "0.5.0" }
+sofd-xml      = { path = "crates/sofd-xml",      version = "0.5.0" }
+sofd-package  = { path = "crates/sofd-package",  version = "0.5.0" }
+sofd-i18n     = { path = "crates/sofd-i18n",     version = "0.5.0" }
+sofd-geometry = { path = "crates/sofd-geometry", version = "0.5.0" }
+sofd-font     = { path = "crates/sofd-font",     version = "0.5.0" }
+sofd-display  = { path = "crates/sofd-display",  version = "0.5.0" }
+sofd-parser   = { path = "crates/sofd-parser",   version = "0.5.0" }
+sofd-render   = { path = "crates/sofd-render",   version = "0.5.0" }
+sofd-sign     = { path = "crates/sofd-sign",     version = "0.5.0" }
+sofd-crypto   = { path = "crates/sofd-crypto",   version = "0.5.0" }
+sofd-convert  = { path = "crates/sofd-convert",  version = "0.5.0", default-features = false }
+sofd-edit     = { path = "crates/sofd-edit",     version = "0.5.0" }
+sofd-search   = { path = "crates/sofd-search",   version = "0.5.0" }
+sofd-archive  = { path = "crates/sofd-archive",  version = "0.5.0" }
+sofd-print    = { path = "crates/sofd-print",    version = "0.5.0" }
+sofd-core     = { path = "crates/sofd-core",     version = "0.5.0" }
+sofd-testkit  = { path = "crates/sofd-testkit",  version = "0.5.0" }
 
 # External dependencies: versions pinned in one place
 zip        = { version = "9", default-features = false, features = ["deflate", "deflate64", "time"] }

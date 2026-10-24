@@ -1,7 +1,7 @@
-# SteleOFD 简体中文 · 核心通用文案
+# sOFD 简体中文 · 核心通用文案
 # 规范：键名用英文短横线，禁止用中文或句子做键名。
 
-app-name = SteleOFD
+app-name = sOFD
 app-ready = 就绪
 app-loading = 加载中…（{ $percent }%）
 app-cancelled = 操作已取消

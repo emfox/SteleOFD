@@ -1,0 +1,121 @@
+[package]
+name = "sofd-reader"
+description = "Native desktop reader for OFD documents"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+# Ships as an application, not as a dependency.
+publish = false
+
+[[bin]]
+name = "sofd-reader"
+path = "src/main.rs"
+
+[lib]
+name = "sofd_reader"
+path = "src/lib.rs"
+# A shared library as well as an rlib: Android loads the reader through
+# `System.loadLibrary` rather than starting it as a program, and a feature that
+# changed this would make the artefact depend on how it was built.
+crate-type = ["rlib", "cdylib"]
+
+[dependencies]
+# The facade re-exports the option and verdict types its own methods take, so
+# the reader names them through `sofd-core` and depends on nothing below.
+sofd-core = { workspace = true, features = ["render", "search", "pdf", "print", "annot"] }
+# Search hits carry a page-space rectangle, and `Rect` is defined here.
+sofd-common.workspace = true
+sofd-i18n.workspace = true
+sofd-error.workspace = true
+# The reader prints what it shows, so it plans print jobs through the facade
+# and names the settings types that go with them.
+sofd-print.workspace = true
+egui.workspace = true
+# `eframe` is declared per target below, because Android refuses `accesskit`
+# unless the activity is a game one; the desktop feature set matches its
+# defaults, so nothing there changes.
+image.workspace = true
+tracing.workspace = true
+
+# The platform dialog. `rfd` has no backend for Android, so the reader asks
+# for it only where there is one and reads dropped or passed files instead.
+[target.'cfg(not(target_os = "android"))'.dependencies]
+rfd = "0.17"
+
+# The interface needs a CJK-capable face for Chinese labels, and egui ships
+# none; the system one is read through font-kit, the same resolver the engine
+# uses. A browser and Android have no font-kit, so the crate drops out there.
+[target.'cfg(not(any(target_arch = "wasm32", target_os = "android")))'.dependencies]
+font-kit = "0.13"
+
+# A page starts the web build rather than a window, so it needs the JavaScript
+# glue and a logger that writes to the browser console; Android logs the same
+# way through `log`, which the two share.
+[target.'cfg(any(target_arch = "wasm32", target_os = "android"))'.dependencies]
+log = { workspace = true }
+
+# Android starts the app through this crate, which hands over the activity the
+# event loop needs; eframe re-exports it, but as a path rather than a name.
+[target.'cfg(target_os = "android")'.dependencies]
+android-activity = "0.6"
+# The types `JNI_OnLoad` is declared with; the version is the one the
+# activity crate already links, so there is one copy of it.
+jni = "0.22"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen.workspace = true
+wasm-bindgen-futures.workspace = true
+web-sys = { workspace = true, features = ["Window", "Document", "HtmlCanvasElement"] }
+
+# The desktop features are set per target for one reason: `accesskit` refuses to
+# compile off a desktop unless the activity is a game one, so Android takes both
+# this and the block below without it.
+#
+# Both renderers are compiled in. wgpu reaches Vulkan and is the default, but
+# the graphics stacks on the domestic boards implement OpenGL first and Vulkan
+# unevenly, so a reader that cannot start there falls back to glow at runtime
+# instead of needing a second package and a second download.
+[target.'cfg(not(target_os = "android"))'.dependencies.eframe]
+workspace = true
+default-features = false
+features = [
+    "accesskit",
+    "default_fonts",
+    "glow",
+    "wayland",
+    "web_screen_reader",
+    "wgpu",
+    "x11",
+]
+
+[target.'cfg(target_os = "android")'.dependencies.eframe]
+workspace = true
+default-features = false
+# Android has no Wayland or X session to speak to, and no reader on a device
+# reports through accesskit; asking for either is how a loaded library quits.
+# Both renderers are compiled in for the same reason as on the desktop: an
+# emulator's software Vulkan refuses the pipelines wgpu needs, and a reader
+# that shipped wgpu alone would have nothing to fall back to on it.
+features = ["android-native-activity", "default_fonts", "glow", "wgpu"]
+
+# The window decorations winit draws itself when a compositor offers none.
+# `eframe` does not pass this through, so the desktop target names winit too.
+# The `crossfont` variant rather than the default `ab_glyph` one, because the
+# latter parses its title face through `owned_ttf_parser` and leaves an
+# unmaintained crate in the tree; this project reads its own fonts with
+# `skrifa`, and the frame's face should not be the exception.
+[target.'cfg(not(any(target_arch = "wasm32", target_os = "android")))'.dependencies.winit]
+version = "0.30"
+default-features = false
+features = ["wayland-csd-adwaita-crossfont"]
+
+[dev-dependencies]
+egui.workspace = true
+# Drives the real widget tree without a display, which is how the window's
+# layout is proven in CI rather than only in the state machine below it.
+egui_kittest = { version = "0.35", features = ["eframe"] }
+# Layout has nothing to arrange in a one-page document, so the arrangement
+# tests need a fixture with several pages.
+sofd-testkit.workspace = true

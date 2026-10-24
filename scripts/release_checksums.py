@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-SteleOFD release checksum tool.
+sOFD release checksum tool.
 
 The release workflow ships unsigned, portable builds for three desktop systems.
 There are no signing keys, so the trust anchor a downloader has is the checksum:

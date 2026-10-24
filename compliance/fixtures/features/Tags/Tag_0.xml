@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- The tag vocabulary is defined by the schema named in CustomTag/@NameSpace,
      so this file is a plain instance rather than an annex A root. -->
-<Tag xmlns="urn:steleofd:fixtures:tags" id="1">
+<Tag xmlns="urn:sofd:fixtures:tags" id="1">
   <Label>conformance</Label>
   <Note>Exercises the custom tag clause of GB/T 33190-2016 section 8.</Note>
 </Tag>

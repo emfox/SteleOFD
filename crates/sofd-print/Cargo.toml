@@ -1,0 +1,25 @@
+[package]
+name = "sofd-print"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+description = "Turn a display list into a print job, from the same list the screen draws"
+keywords = ["ofd", "print", "raster", "output"]
+categories = ["multimedia::images"]
+
+# Printing consumes the same display list as screen rendering,
+# which is what keeps output faithful to the preview.
+[dependencies]
+sofd-common.workspace = true
+sofd-error.workspace = true
+sofd-display.workspace = true
+sofd-geometry.workspace = true
+sofd-render.workspace = true
+sofd-font.workspace = true
+tracing.workspace = true
+
+[package.metadata.cargo-semver-checks.lints]
+workspace = true

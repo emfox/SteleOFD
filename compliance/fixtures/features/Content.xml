@@ -8,7 +8,7 @@
       <ofd:PathObject ID="3" Boundary="10 10 60 20" Fill="true" LineWidth="1.5" Cap="Round" Join="Bevel">
         <ofd:Actions>
           <ofd:Action Event="CLICK">
-            <ofd:URI URI="https://example.org/steleofd" Base="https://example.org/" Target="_blank"/>
+            <ofd:URI URI="https://example.org/sofd" Base="https://example.org/" Target="_blank"/>
           </ofd:Action>
         </ofd:Actions>
         <ofd:StrokeColor Value="0 0 0"/>
@@ -24,7 +24,7 @@
           </ofd:Action>
         </ofd:Actions>
         <ofd:FillColor Value="0 0 0"/>
-        <ofd:TextCode X="10" Y="50">SteleOFD</ofd:TextCode>
+        <ofd:TextCode X="10" Y="50">sOFD</ofd:TextCode>
       </ofd:TextObject>
       <ofd:CompositeObject ID="6" Boundary="100 40 40 40" ResourceID="11"/>
     </ofd:Layer>

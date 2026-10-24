@@ -1,4 +1,4 @@
-# SteleOFD English (US) · Editing module
+# sOFD English (US) · Editing module
 
 edit-undo = Undo
 edit-redo = Redo

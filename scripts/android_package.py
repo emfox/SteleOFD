@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-SteleOFD Android package builder.
+sOFD Android package builder.
 
 The reader is one activity that draws with `eframe`, so the package needs very
 little: a manifest naming that activity, the native library it loads, and the
@@ -30,15 +30,15 @@ import tempfile
 import zipfile
 from pathlib import Path
 
-PACKAGE = "org.steleofd.reader"
+PACKAGE = "org.sofd.reader"
 ACTIVITY = "android.app.NativeActivity"
 MIN_SDK = 24
 TARGET_SDK = 34
 # The archive the release publishes, named so the workflow can checksum it
 # beside the desktop executables rather than in a directory of its own.
-ARCHIVE_NAME = "steleofd-reader-android.apk"
+ARCHIVE_NAME = "sofd-reader-android.apk"
 # The name `System.loadLibrary` looks for, which is the crate's library name.
-LIBRARY = "steleofd_reader"
+LIBRARY = "sofd_reader"
 # A `NativeActivity` that is asked to handle a configuration change itself is
 # not recreated for it. Recreation is what a reader cannot survive: the activity
 # it holds is destroyed, and with it the EGL surface the frame is drawn on, so a
@@ -109,7 +109,7 @@ MANIFEST = """<?xml version="1.0" encoding="utf-8"?>
     android:versionCode="{version_code}"
     android:versionName="{version_name}">
     <uses-sdk android:minSdkVersion="{min_sdk}" android:targetSdkVersion="{target_sdk}" />
-    <application android:label="SteleOFD Reader" android:hasCode="false">
+    <application android:label="sOFD Reader" android:hasCode="false">
         <activity
             android:name="{activity}"
             android:exported="true"
@@ -250,13 +250,13 @@ def keystore(work: Path) -> Path:
     run([
         java_tool("keytool"), "-genkeypair",
         "-keystore", str(path),
-        "-alias", "steleofd",
-        "-storepass", "steleofd",
-        "-keypass", "steleofd",
+        "-alias", "sofd",
+        "-storepass", "sofd",
+        "-keypass", "sofd",
         "-keyalg", "RSA",
         "-keysize", "2048",
         "-validity", "10000",
-        "-dname", "CN=SteleOFD Reader",
+        "-dname", "CN=sOFD Reader",
     ])
     return path
 
@@ -269,7 +269,7 @@ def package(sdk: Path, library: Path, out: Path) -> Path:
     written here: emptying this directory would take the notes and any part of
     the manifest a re-run had already gathered with it.
     """
-    work = Path(tempfile.mkdtemp(prefix="steleofd-android-"))
+    work = Path(tempfile.mkdtemp(prefix="sofd-android-"))
     try:
         version = workspace_version()
         manifest = write_manifest(work, version)
@@ -298,9 +298,9 @@ def package(sdk: Path, library: Path, out: Path) -> Path:
         run([
             build_tool(sdk, "apksigner"), "sign",
             "--ks", str(key),
-            "--ks-pass", "pass:steleofd",
-            "--ks-key-alias", "steleofd",
-            "--key-pass", "pass:steleofd",
+            "--ks-pass", "pass:sofd",
+            "--ks-key-alias", "sofd",
+            "--key-pass", "pass:sofd",
             "--out", str(signed),
             str(aligned),
         ])

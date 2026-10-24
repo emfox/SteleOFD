@@ -1,4 +1,4 @@
-# SteleOFD
+# sOFD
 
 A Rust implementation of OFD (Open Fixed-layout Document), covering reading,
 conversion and signature verification.
@@ -10,7 +10,7 @@ conversion and signature verification.
 [![License](https://img.shields.io/badge/license-Apache--2.0-green)](LICENSE)
 [![Standard](https://img.shields.io/badge/standard-GB%2FT%2033190--2016-red)]()
 
-SteleOFD implements [GB/T 33190-2016, the Chinese national standard for
+sOFD implements [GB/T 33190-2016, the Chinese national standard for
 fixed-layout electronic documents](https://openstd.samr.gov.cn/bzgk/gb/newGbInfo?hcno=3AF6682D939116B6F5EED53D01A9DB5D).
 Parsing and rendering are written from scratch; the one C library in the tree is
 fontconfig, reached through `font-kit` by the reader on Linux.
@@ -18,15 +18,15 @@ fontconfig, reached through `font-kit` by the reader on Linux.
 The current release is `0.4.0`. It removes four feature names that enabled
 nothing, which is why it is `0.4.0` and not a patch. What it offers is in the
 [`CHANGELOG`](CHANGELOG.md); concrete work still to do is in the
-[issue tracker](https://github.com/emfox/SteleOFD/issues), and the direction it
+[issue tracker](https://github.com/emfox/sOFD/issues), and the direction it
 serves is in [`docs/Roadmap.md`](docs/Roadmap.md).
 
-This document has two halves: the first is for anyone using SteleOFD, the second
+This document has two halves: the first is for anyone using sOFD, the second
 for anyone working on it.
 
 ---
 
-# Part 1: Using SteleOFD
+# Part 1: Using sOFD
 
 ## Features
 
@@ -45,11 +45,11 @@ somewhere, `cargo run` away:
 
 | Form | Example | What it shows |
 |---|---|---|
-| CLI | [`command_line.rs`](crates/steleofd-cli/examples/command_line.rs) | open from a path, read what the document declares, render every page, verify signatures |
-| C ABI | [`c_abi.rs`](crates/steleofd-ffi/examples/c_abi.rs) | the same calls a C host makes, against the generated [header](crates/steleofd-ffi/include/steleofd.h) |
-| Browser | [`browser.rs`](crates/steleofd-wasm/examples/browser.rs) | the JS boundary from the Rust side: raster, SVG, search |
-| HTTP | [`http_service.rs`](crates/steleofd-server/examples/http_service.rs) | the router, the store and a graceful shutdown, mounted in your own process |
-| Desktop | [`desktop_viewer.rs`](crates/steleofd-reader/examples/desktop_viewer.rs) | the reader's interface drawn into an `egui::Ui`, with no window and no display |
+| CLI | [`command_line.rs`](crates/sofd-cli/examples/command_line.rs) | open from a path, read what the document declares, render every page, verify signatures |
+| C ABI | [`c_abi.rs`](crates/sofd-ffi/examples/c_abi.rs) | the same calls a C host makes, against the generated [header](crates/sofd-ffi/include/sofd.h) |
+| Browser | [`browser.rs`](crates/sofd-wasm/examples/browser.rs) | the JS boundary from the Rust side: raster, SVG, search |
+| HTTP | [`http_service.rs`](crates/sofd-server/examples/http_service.rs) | the router, the store and a graceful shutdown, mounted in your own process |
+| Desktop | [`desktop_viewer.rs`](crates/sofd-reader/examples/desktop_viewer.rs) | the reader's interface drawn into an `egui::Ui`, with no window and no display |
 
 `cargo build --workspace --examples` builds four of them; the browser one needs
 `--target wasm32-unknown-unknown`, and CI builds it there.
@@ -61,9 +61,9 @@ publishes it beside the C ABI library and the engine's WebAssembly bindings:
 
 | Artefact | Platform | How it runs |
 |---|---|---|
-| `steleofd-reader-linux`, `-macos`, `-windows.exe` | Desktop | run the file directly |
-| `steleofd-reader-web.zip` | Browser | unzip and serve over HTTP; a `file://` page cannot load the module |
-| `steleofd-reader-android.apk` | Android 7.0+ (arm64) | sideload; signed with a throwaway debug key, not a store upload |
+| `sofd-reader-linux`, `-macos`, `-windows.exe` | Desktop | run the file directly |
+| `sofd-reader-web.zip` | Browser | unzip and serve over HTTP; a `file://` page cannot load the module |
+| `sofd-reader-android.apk` | Android 7.0+ (arm64) | sideload; signed with a throwaway debug key, not a store upload |
 
 iOS is the one `egui` platform left out: an app for it can only be installed
 after a macOS signing and packaging step, and no key ships with this project.
@@ -78,14 +78,14 @@ sha256sum -c SHA256SUMS          # or without this project at all
 
 The crates themselves are not on a registry yet: which of them will publish, and
 what is left before they can, is
-[issue #4](https://github.com/emfox/SteleOFD/issues/4).
+[issue #4](https://github.com/emfox/sOFD/issues/4).
 
 Nineteen crates reach a registry, but only some of them are interfaces. Add
-`steleofd-core` and you are done; the crates it depends on come along because
+`sofd-core` and you are done; the crates it depends on come along because
 cargo requires them, not because you were meant to name them. Which is which is
 in [Architecture.md § 3](docs/Architecture.md#3-crate-inventory), and
 `python3 scripts/publish_order.py` prints the dependency closure — from
-`steleofd-core` that is all nineteen, while `steleofd-crypto` alone needs three.
+`sofd-core` that is all nineteen, while `sofd-crypto` alone needs three.
 
 ## What it reads
 
@@ -133,7 +133,7 @@ parser is the part handling untrusted input.
 
 ---
 
-# Part 2: Working on SteleOFD
+# Part 2: Working on sOFD
 
 ## Module map
 
@@ -150,7 +150,7 @@ depends on; boxes below the facade are pulled in only when a feature names them.
                                   │
                                   ▼
   ┌──────────────────────────────────────────────────────────────────────┐
-  │  steleofd-core                                                       │
+  │  sofd-core                                                       │
   │  one handle, one feature per capability                              │
   └──────────────────────────────────────────────────────────────────────┘
                                   │
@@ -180,11 +180,11 @@ depends on; boxes below the facade are pulled in only when a feature names them.
   │          archive   package, model                                    │
   └──────────────────────────────────────────────────────────────────────┘
 
-  steleofd-i18n      messages for the shells; the engine emits none
-  steleofd-testkit   fixtures for the test suites, a dev-dependency only
+  sofd-i18n      messages for the shells; the engine emits none
+  sofd-testkit   fixtures for the test suites, a dev-dependency only
 ```
 
-The keystone is `steleofd-display`: every output backend reads the same
+The keystone is `sofd-display`: every output backend reads the same
 flattened list, so an export cannot drift from the preview. Section 3 of
 [`docs/Architecture.md`](docs/Architecture.md) carries the same inventory as a
 table, with the responsibility and registry status of each crate.
@@ -226,7 +226,7 @@ FormatError::PageOutOfRange { index: 42, total: 100 }
 "page index out of range: 42 (document has 100 pages)"
 ```
 
-The engine's own message catalogue (`steleofd-i18n`) holds engine messages only.
+The engine's own message catalogue (`sofd-i18n`) holds engine messages only.
 A presentation layer that has product-facing strings of its own — the reader
 does — keeps them beside itself and merges them in with `I18nBuilder`, so the
 engine never names a widget it does not own.
@@ -252,8 +252,8 @@ Building the crates needs no C toolchain. The reader is the exception on Linux:
 `libfontconfig1-dev` and `pkg-config` installed.
 
 ```bash
-git clone https://github.com/emfox/SteleOFD.git
-cd SteleOFD
+git clone https://github.com/emfox/sOFD.git
+cd sOFD
 
 cargo check --workspace          # check the whole workspace
 cargo build --release            # release build
@@ -292,7 +292,7 @@ cargo clippy --workspace -- -D warnings
 python3 scripts/check_all.py
 ```
 
-New code needs tests. Do not introduce `unsafe`; `steleofd-ffi` is the only
+New code needs tests. Do not introduce `unsafe`; `sofd-ffi` is the only
 documented exemption, because a C ABI requires it. Code, comments, commit
 messages and issues are English only: [docs/Conventions.md](docs/Conventions.md).
 

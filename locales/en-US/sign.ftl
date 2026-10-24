@@ -1,4 +1,4 @@
-# SteleOFD English (US) · Signature module
+# sOFD English (US) · Signature module
 # Note: English distinguishes singular/plural, unlike Chinese.
 
 sign-valid = Valid

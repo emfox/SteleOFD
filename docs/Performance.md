@@ -12,20 +12,20 @@ Four targets, one per stage a reader pays for:
 
 | Target | Crate | Measures |
 | --- | --- | --- |
-| `parse` | `steleofd-parser` | Opening a document, and flattening one page or all of them |
-| `memory` | `steleofd-parser` | What a rasterized page holds, counted rather than timed |
-| `convert` | `steleofd-convert` | PNG, SVG and PDF output for one page |
-| `search` | `steleofd-search` | Building an index, and querying it |
+| `parse` | `sofd-parser` | Opening a document, and flattening one page or all of them |
+| `memory` | `sofd-parser` | What a rasterized page holds, counted rather than timed |
+| `convert` | `sofd-convert` | PNG, SVG and PDF output for one page |
+| `search` | `sofd-search` | Building an index, and querying it |
 
 The timed targets run at one page, eight and twenty, and report throughput in
 objects, so both the per-page and the per-object cost are visible. A single
-target runs alone with `cargo bench -p steleofd-parser --bench parse`.
+target runs alone with `cargo bench -p sofd-parser --bench parse`.
 
 ## The document being measured
 
 The benchmarks do not use the fixtures. Samples are fetched rather than
 committed, and a benchmark needs the same bytes on every machine and every
-run. `steleofd_testkit::bench_archive(pages)` builds one instead: a real
+run. `sofd_testkit::bench_archive(pages)` builds one instead: a real
 archive with a real embedded face, 120 objects per page, mixed on purpose —
 filled paths, strokes, axial and radial shadings, and text runs — because a
 baseline of one path and one word measures nothing a reader would wait for.
@@ -122,7 +122,7 @@ Both readings come from the `memory` benchmark, which wraps the allocator and
 prints what a page holds once it has been drawn:
 
 ```sh
-cargo bench -p steleofd-parser --bench memory | tee memory.log
+cargo bench -p sofd-parser --bench memory | tee memory.log
 python3 scripts/check_performance.py --logs memory.log
 ```
 
@@ -175,9 +175,9 @@ checks each budgeted line against its ceiling. It runs locally after a
 `cargo bench`, and in CI as the `performance` job:
 
 ```sh
-cargo bench -p steleofd-parser --bench parse
-cargo bench -p steleofd-parser --bench memory | tee memory.log
-cargo bench -p steleofd-convert --bench convert
+cargo bench -p sofd-parser --bench parse
+cargo bench -p sofd-parser --bench memory | tee memory.log
+cargo bench -p sofd-convert --bench convert
 python3 scripts/check_performance.py --logs memory.log
 ```
 

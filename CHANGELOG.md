@@ -26,15 +26,15 @@ release is written up is in
   changes in what a document draws — 25 samples render byte-identically before
   and after.
 
-- **An image resource is decoded in one place, `steleofd_io::decode`.** The
+- **An image resource is decoded in one place, `sofd_io::decode`.** The
   parser, the raster backend and the PDF exporter each read the same bytes and
   each accepted a slightly different set of formats, so a resource could paint
   and then refuse to export. `parse::pixel_size` and the rasteriser's
   `decode_resource` now ask there, and `Pixels` picks RGB for an image XObject
   and premultiplied RGBA for a canvas. JBIG2 is read through the decoder
   `hayro-jbig2` registers with `image`, so the hand-written collector and its
-  separate format branch are gone; `steleofd-io` now depends on
-  `steleofd-display` for `ImageCodec`.
+  separate format branch are gone; `sofd-io` now depends on
+  `sofd-display` for `ImageCodec`.
 
 - **A comparison's verdicts are told apart from the judging that produces
   them.** `Comparison`, `PageDiff` and `PageChange` are what a caller reads and
@@ -45,10 +45,10 @@ release is written up is in
 ### Examples
 
 - **One worked example per delivery form**, each a single file that opens a
-  document and takes it somewhere: `command_line.rs` under `steleofd-cli`,
-  `c_abi.rs` under `steleofd-ffi`, `browser.rs` under `steleofd-wasm`,
-  `http_service.rs` under `steleofd-server` and `desktop_viewer.rs` under
-  `steleofd-reader`. CI builds all five, the browser one on `wasm32`.
+  document and takes it somewhere: `command_line.rs` under `sofd-cli`,
+  `c_abi.rs` under `sofd-ffi`, `browser.rs` under `sofd-wasm`,
+  `http_service.rs` under `sofd-server` and `desktop_viewer.rs` under
+  `sofd-reader`. CI builds all five, the browser one on `wasm32`.
 
 ### Reader
 
@@ -71,8 +71,8 @@ clips cost one mask rather than one per save.
 ### Features
 
 - **Four features that compiled to nothing are gone**: `office` and `ocr` in
-  `steleofd-convert` and `steleofd-core`, `xsd-validate` in
-  `steleofd-archive`, and `backend-raster` in `steleofd-render`. Enabling one
+  `sofd-convert` and `sofd-core`, `xsd-validate` in
+  `sofd-archive`, and `backend-raster` in `sofd-render`. Enabling one
   now fails the build rather than succeeding and changing nothing, so a caller
   who asks for a capability is told it is absent. `scripts/check_publish.py`
   holds every remaining feature to being read by code.
@@ -133,7 +133,7 @@ budget for memory beside the one for time.
 
 ### Removed
 
-- **`steleofd-font` no longer shapes text.** `rustybuzz` went with `shape_text`, because clause 11.4's `CGTransform` already says which glyph to draw. This is what makes the version `0.3.0`.
+- **`sofd-font` no longer shapes text.** `rustybuzz` went with `shape_text`, because clause 11.4's `CGTransform` already says which glyph to draw. This is what makes the version `0.3.0`.
 - **`ttf-parser` is gone**, replaced by `skrifa` after RustSec recorded its author declaring it unmaintained. The five font golden pages render byte for byte unchanged.
 
 ### Tooling
@@ -148,7 +148,7 @@ budget for memory beside the one for time.
 
 ### Known limits
 
-- No crate is published to a registry yet, so this release is a source tag and a set of artefacts rather than a `cargo add steleofd-core`.
+- No crate is published to a registry yet, so this release is a source tag and a set of artefacts rather than a `cargo add sofd-core`.
 - Blending is deliberately unsupported: the standard defines no blend mode, and `Alpha` is the whole of its transparency model.
 - Office formats and OCR are planned, not built.
 - iOS is not in the release matrix, and the release artefacts are unsigned.
@@ -191,7 +191,7 @@ signature is allowed to say.
 
 ### Known limits
 
-- No crate is published to a registry yet, so this release is a source tag and a set of artefacts rather than a `cargo add steleofd-core`.
+- No crate is published to a registry yet, so this release is a source tag and a set of artefacts rather than a `cargo add sofd-core`.
 - Blending is deliberately unsupported: the standard defines no blend mode, and `Alpha` is the whole of its transparency model.
 - Office formats and OCR are planned, not built.
 - iOS is not in the release matrix, and the release artefacts are unsigned.
@@ -209,7 +209,7 @@ The first release, cut from `0.1.0-rc.1`: the two tags differ in the documentati
 
 ### What this is
 
-SteleOFD implements [GB/T 33190-2016](https://openstd.samr.gov.cn/bzgk/gb/newGbInfo?hcno=3AF6682D939116B6F5EED53D01A9DB5D), the Chinese national standard for fixed-layout electronic documents, in safe Rust: the tree carries `#![forbid(unsafe_code)]`, and the only C library under it is fontconfig. Twenty-six crates sit in layers that only ever point downward, and [`docs/Architecture.md`](docs/Architecture.md) draws them out.
+sOFD implements [GB/T 33190-2016](https://openstd.samr.gov.cn/bzgk/gb/newGbInfo?hcno=3AF6682D939116B6F5EED53D01A9DB5D), the Chinese national standard for fixed-layout electronic documents, in safe Rust: the tree carries `#![forbid(unsafe_code)]`, and the only C library under it is fontconfig. Twenty-six crates sit in layers that only ever point downward, and [`docs/Architecture.md`](docs/Architecture.md) draws them out.
 
 ### Reading
 
@@ -221,29 +221,29 @@ SteleOFD implements [GB/T 33190-2016](https://openstd.samr.gov.cn/bzgk/gb/newGbI
 
 ### Writing and conversion
 
-- `steleofd-convert` replays a display list into SVG, PDF and PNG, so export and re-parse stay one code path.
-- `steleofd-edit` gives command-pattern editing with undo and permission checks, `steleofd-search` indexes display-list text, and `steleofd-print` rasterizes at print resolution.
+- `sofd-convert` replays a display list into SVG, PDF and PNG, so export and re-parse stay one code path.
+- `sofd-edit` gives command-pattern editing with undo and permission checks, `sofd-search` indexes display-list text, and `sofd-print` rasterizes at print resolution.
 
 ### Signatures
 
-- SM3, SM4, SM2 and X.509 primitives in `steleofd-crypto`, with the international algorithms behind the same interface.
-- `steleofd-sign` verifies SM3+SM2 check values, reading the check method and signed-value path from the schema rather than assuming them.
+- SM3, SM4, SM2 and X.509 primitives in `sofd-crypto`, with the international algorithms behind the same interface.
+- `sofd-sign` verifies SM3+SM2 check values, reading the check method and signed-value path from the schema rather than assuming them.
 - Seal and incremental update, so a signed document can carry a countersignature (`18.2.4`).
 - GB/T 20520 timestamp tokens read as a CMS `SignedData` and given four verdicts through `Document::verify_timestamps`.
 
 ### Archiving
 
-- `steleofd-archive` audits a container for archival readiness, and `archive()` produces the GB/T 42133-2022 profile (`6.2.2`) with `DocType="OFD-A"`.
+- `sofd-archive` audits a container for archival readiness, and `archive()` produces the GB/T 42133-2022 profile (`6.2.2`) with `DocType="OFD-A"`.
 
 ### Delivery
 
 | Form | Crate | What it gives you |
 |---|---|---|
-| CLI | `steleofd-cli` | The engine as the `steleofd` command |
-| WebAssembly | `steleofd-wasm` | The engine in a browser page, over the same frame code |
-| C ABI | `steleofd-ffi` | The engine behind a committed header, `steleofd.h` |
-| HTTP | `steleofd-server` | Documents over HTTP: a persistent store, per-tenant API keys, rate limiting, graceful drain and OpenAPI docs held to the router |
-| Desktop and mobile | `steleofd-reader` | A window over the engine: drag to open, print, annotations, a two-revision comparison, full keyboard navigation |
+| CLI | `sofd-cli` | The engine as the `sofd` command |
+| WebAssembly | `sofd-wasm` | The engine in a browser page, over the same frame code |
+| C ABI | `sofd-ffi` | The engine behind a committed header, `sofd.h` |
+| HTTP | `sofd-server` | Documents over HTTP: a persistent store, per-tenant API keys, rate limiting, graceful drain and OpenAPI docs held to the router |
+| Desktop and mobile | `sofd-reader` | A window over the engine: drag to open, print, annotations, a two-revision comparison, full keyboard navigation |
 
 The reader is built for every platform `egui` runs on, and every artefact ships beside a `SHA256SUMS` manifest.
 
@@ -265,10 +265,10 @@ A nine-page golden book is compared against another vendor's reader and a second
 - Office formats and OCR are planned, not built.
 - iOS is not in the release matrix, and the release artefacts are unsigned.
 
-[Unreleased]: https://github.com/emfox/SteleOFD/compare/v0.4.0...HEAD
-[0.4.0]: https://github.com/emfox/SteleOFD/releases/tag/v0.4.0
-[0.3.0]: https://github.com/emfox/SteleOFD/releases/tag/v0.3.0
-[0.2.0]: https://github.com/emfox/SteleOFD/releases/tag/v0.2.0
-[0.1.1]: https://github.com/emfox/SteleOFD/releases/tag/v0.1.1
-[0.1.0]: https://github.com/emfox/SteleOFD/releases/tag/v0.1.0
-[0.1.0-rc.1]: https://github.com/emfox/SteleOFD/releases/tag/v0.1.0-rc.1
+[Unreleased]: https://github.com/emfox/sOFD/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/emfox/sOFD/releases/tag/v0.4.0
+[0.3.0]: https://github.com/emfox/sOFD/releases/tag/v0.3.0
+[0.2.0]: https://github.com/emfox/sOFD/releases/tag/v0.2.0
+[0.1.1]: https://github.com/emfox/sOFD/releases/tag/v0.1.1
+[0.1.0]: https://github.com/emfox/sOFD/releases/tag/v0.1.0
+[0.1.0-rc.1]: https://github.com/emfox/sOFD/releases/tag/v0.1.0-rc.1

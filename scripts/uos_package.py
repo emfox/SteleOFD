@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-SteleOFD UOS package builder.
+sOFD UOS package builder.
 
 UOS Desktop V20 is Debian 10 underneath, so the package is a `.deb`: the
 control file, the binary, a desktop entry that puts it in the launcher, and an
@@ -54,12 +54,12 @@ def gzip_bytes(data: bytes) -> bytes:
     return packed.getvalue()
 
 
-PACKAGE = "steleofd-reader"
+PACKAGE = "sofd-reader"
 VERSION_FALLBACK = "0.3.0"
-MAINTAINER = "SteleOFD <steleofd@example.invalid>"
+MAINTAINER = "sOFD <sofd@example.invalid>"
 SECTION = "office"
 PRIORITY = "optional"
-HOMEPAGE = "https://github.com/emfox/SteleOFD"
+HOMEPAGE = "https://github.com/emfox/sOFD"
 
 # The `Architecture` field `dpkg` matches against the host. UOS V20 runs on
 # both an x86 board and the Kunpeng and Phytium ARM64 ones, so the field is
@@ -88,12 +88,12 @@ DESKTOP_DIR = "usr/share/applications"
 ICON_DIR = "usr/share/icons/hicolor/scalable/apps"
 DOC_DIR = f"usr/share/doc/{PACKAGE}"
 
-EXECUTABLE = "steleofd-reader"
+EXECUTABLE = "sofd-reader"
 ARCHIVE_NAME = f"{PACKAGE}-uos.deb"
 
 DESKTOP_ENTRY = f"""[Desktop Entry]
 Type=Application
-Name=SteleOFD Reader
+Name=sOFD Reader
 GenericName=OFD Reader
 Comment=Read and export OFD documents
 Exec={EXECUTABLE} %f
@@ -367,7 +367,7 @@ def package(
 
     architecture = elf_architecture(binary)
     name = ARCHIVE_NAME.replace(".deb", f"-{architecture}{suffix}.deb")
-    staging = Path(tempfile.mkdtemp(prefix="steleofd-uos-"))
+    staging = Path(tempfile.mkdtemp(prefix="sofd-uos-"))
     try:
         stage(staging, binary, version, architecture)
         archive = write_archive(staging, out / name)
@@ -385,7 +385,7 @@ def selftest() -> int:
     assert GLIBC_BASELINE == (2, 28)
 
     control = control_file("1.2.3", "amd64", 4096)
-    assert "Package: steleofd-reader" in control
+    assert "Package: sofd-reader" in control
     assert "Architecture: amd64" in control
     assert "Version: 1.2.3" in control
     assert "libc6 (>= 2.28)" in control

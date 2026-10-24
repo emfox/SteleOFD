@@ -1,0 +1,25 @@
+[package]
+name = "sofd-ffi"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+# Ships as an application, not as a dependency.
+publish = false
+
+[lib]
+# The rlib is what the tests link; cdylib and staticlib are the shipping
+# forms for host applications.
+crate-type = ["cdylib", "staticlib", "rlib"]
+
+[dependencies]
+sofd-core = { workspace = true, features = ["sign", "convert", "search", "pdf"] }
+sofd-error.workspace = true
+sofd-font.workspace = true
+
+[build-dependencies]
+cbindgen = "0.29"
+
+[dev-dependencies]
+sofd-testkit.workspace = true

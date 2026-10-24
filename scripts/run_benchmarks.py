@@ -29,9 +29,9 @@ READINGS = CRITERION / "memory-readings.log"
 
 # Crate and bench target, in the order the gate expects to find them.
 BENCHES = (
-    ("steleofd-parser", "parse"),
-    ("steleofd-parser", "memory"),
-    ("steleofd-convert", "convert"),
+    ("sofd-parser", "parse"),
+    ("sofd-parser", "memory"),
+    ("sofd-convert", "convert"),
 )
 
 

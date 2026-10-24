@@ -1,0 +1,16 @@
+[package]
+name = "sofd-testkit"
+description = "Shared fixtures for the sOFD test suites"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+# A dev-dependency only, so nothing outside the workspace needs it.
+publish = false
+
+[dependencies]
+sofd-crypto.workspace = true
+sofd-error.workspace = true
+sofd-package.workspace = true
+sofd-sign.workspace = true

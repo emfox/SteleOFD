@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-SteleOFD message catalogue consistency check.
+sOFD message catalogue consistency check.
 
 Checks performed:
 1. Every locale directory has the same set of .ftl files;
@@ -27,13 +27,13 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 LOCALES_DIR = ROOT / "locales"
-I18N_SRC = ROOT / "crates" / "steleofd-i18n" / "src"
+I18N_SRC = ROOT / "crates" / "sofd-i18n" / "src"
 
 # The reader owns its own catalogue, kept beside the crate that shows the
 # strings rather than inside the engine. It is checked the same way, against
 # the key list in its own message module.
-READER_LOCALES_DIR = ROOT / "crates" / "steleofd-reader" / "locales"
-READER_MESSAGE_RS = ROOT / "crates" / "steleofd-reader" / "src" / "message.rs"
+READER_LOCALES_DIR = ROOT / "crates" / "sofd-reader" / "locales"
+READER_MESSAGE_RS = ROOT / "crates" / "sofd-reader" / "src" / "message.rs"
 
 # Baseline locale; every other locale is compared against it
 BASE_LOCALE = "en-US"

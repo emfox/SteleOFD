@@ -1,0 +1,29 @@
+[package]
+name = "sofd-render"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+description = "Rasterise a display list to pixels"
+keywords = ["ofd", "raster", "render", "anti-aliasing", "tiny-skia"]
+categories = ["rendering", "multimedia::images"]
+
+[dependencies]
+sofd-common.workspace = true
+sofd-error.workspace = true
+sofd-geometry.workspace = true
+sofd-font.workspace = true
+sofd-display.workspace = true
+sofd-io.workspace = true
+tiny-skia.workspace = true
+image.workspace = true
+tracing.workspace = true
+
+# No `backend-raster` feature: the raster backend is the one that exists, so
+# naming it was a promise of a choice the crate does not offer. A command-stream
+# backend for browsers lands as its own feature when it lands, not before.
+
+[package.metadata.cargo-semver-checks.lints]
+workspace = true

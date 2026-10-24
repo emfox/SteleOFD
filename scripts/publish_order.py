@@ -5,8 +5,8 @@ A crate reaches a registry only with the crates it names. Cargo rewrites a
 `path` dependency to a version requirement at packaging time, so a published
 crate whose dependency is not in the registry cannot be installed by anyone —
 the published set is a *closure*, not a list chosen per crate. Publishing
-`steleofd-core` alone is not possible: it names `steleofd-parser`, which names
-`steleofd-model`, and so on down to `steleofd-error`.
+`sofd-core` alone is not possible: it names `sofd-parser`, which names
+`sofd-model`, and so on down to `sofd-error`.
 
 Order follows from the same rule: a crate can only go up once everything it
 depends on is already there, so the topological order of the workspace is the
@@ -19,7 +19,7 @@ section 3 says what each one promises a consumer.
 Usage:
     python3 scripts/publish_order.py            # the closure, in order
     python3 scripts/publish_order.py --commands  # as cargo publish lines
-    python3 scripts/publish_order.py --closure steleofd-core  # just one entry point
+    python3 scripts/publish_order.py --closure sofd-core  # just one entry point
 
 Exit code: 0 when the closure is sound, 1 when a cycle or a missing crate
 makes it unbuildable.
@@ -68,8 +68,8 @@ def internal_deps(text: str, known: dict[str, Path]) -> set[str]:
     # Only the real dependency sections count; a `[[bench]]` table naming a
     # crate is not a dependency.
     body = re.split(r"^\[\[", body, flags=re.M)[0]
-    named = set(re.findall(r'^(steleofd-[a-z]+)\s*[.=\s]', body, re.M))
-    named |= set(re.findall(r'^steleofd-[a-z]+\s*=\s*\{[^}]*package\s*=\s*"([^"]+)"', body, re.M))
+    named = set(re.findall(r'^(sofd-[a-z]+)\s*[.=\s]', body, re.M))
+    named |= set(re.findall(r'^sofd-[a-z]+\s*=\s*\{[^}]*package\s*=\s*"([^"]+)"', body, re.M))
     return {n for n in named if n in known}
 
 

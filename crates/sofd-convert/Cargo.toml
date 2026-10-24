@@ -1,0 +1,44 @@
+[package]
+name = "sofd-convert"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+description = "Write a display list as SVG, PDF or PNG"
+keywords = ["ofd", "pdf", "svg", "png", "convert"]
+categories = ["multimedia::encoding"]
+
+# Conversion reads one display list and writes another format,
+# so it depends on display plus the relevant format readers and writers.
+[dependencies]
+sofd-common.workspace = true
+sofd-error.workspace = true
+sofd-display.workspace = true
+sofd-io.workspace = true
+sofd-geometry.workspace = true
+sofd-font.workspace = true
+sofd-render.workspace = true
+image.workspace = true
+tracing.workspace = true
+lopdf = { workspace = true, optional = true }
+
+[features]
+default = ["pdf"]
+pdf     = ["dep:lopdf"]
+# No `office` or `ocr` feature: one that compiles and does nothing reads as a
+# capability this crate has. Enabling either now fails the build, which is the
+# honest answer. `docs/Roadmap.md` carries the intent.
+
+[dev-dependencies]
+criterion.workspace = true
+sofd-core.workspace = true
+sofd-testkit.workspace = true
+
+[[bench]]
+name = "convert"
+harness = false
+
+[package.metadata.cargo-semver-checks.lints]
+workspace = true

@@ -171,13 +171,13 @@ CHECKS: tuple[Check, ...] = (
     Check(
         "golden",
         "rust",
-        (("cargo", "test", "-p", "steleofd-convert", "--test", "golden"),),
+        (("cargo", "test", "-p", "sofd-convert", "--test", "golden"),),
         needs=("cargo",),
     ),
     Check(
         "reader-window",
         "rust",
-        (("cargo", "test", "-p", "steleofd-reader", "--test", "window"),),
+        (("cargo", "test", "-p", "sofd-reader", "--test", "window"),),
         needs=("cargo",),
         unset=("DISPLAY", "WAYLAND_DISPLAY"),
     ),

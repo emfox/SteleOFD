@@ -1,0 +1,32 @@
+[package]
+name = "sofd-i18n"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+# Messages for the shell, which the engine does not emit.
+publish = false
+description = "sOFD localization message layer built on Fluent"
+keywords = ["ofd", "i18n", "localization", "fluent"]
+categories = ["localization"]
+
+# Layer L1.5: depended on by presentation only (CLI, WASM, FFI, server, GUI).
+# Engine crates never depend on this one; they return structured errors and
+# data, and presentation renders the localized text.
+
+[dependencies]
+sofd-error.workspace = true
+fluent.workspace = true
+fluent-bundle.workspace = true
+fluent-langneg.workspace = true
+unic-langid.workspace = true
+tracing.workspace = true
+serde.workspace = true
+
+[features]
+default = ["locales-zh-cn", "locales-en-us"]
+locales-zh-cn = []
+locales-en-us = []
+# Convenience feature: English only, for embedded or slim distributions.
+english-only = ["locales-en-us"]

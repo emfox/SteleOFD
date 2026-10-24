@@ -217,7 +217,7 @@ GBT33190 = Set(
 SETS: dict[str, Set] = {one.name: one for one in (OFDRW, GBT33190)}
 
 # How `--parse` opens one sample. Built by the caller before this runs.
-PARSE_COMMAND = "cargo run --quiet -p steleofd-cli -- info".split()
+PARSE_COMMAND = "cargo run --quiet -p sofd-cli -- info".split()
 
 
 def sanity(name: str, blob: bytes) -> str | None:

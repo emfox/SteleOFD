@@ -1,0 +1,62 @@
+[package]
+name = "sofd-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+description = "Open and use an OFD document: render, convert, print, sign, edit, search and audit behind one facade"
+keywords = ["ofd", "document", "render", "convert", "digital-signature"]
+categories = ["parser-implementations", "multimedia::images"]
+
+# Facade crate: the only public surface, so internals can be refactored freely.
+[dependencies]
+sofd-common.workspace = true
+sofd-error.workspace = true
+sofd-io.workspace = true
+sofd-model.workspace = true
+sofd-package.workspace = true
+sofd-geometry.workspace = true
+sofd-font.workspace = true
+sofd-display.workspace = true
+sofd-parser.workspace = true
+sofd-render = { workspace = true, optional = true }
+sofd-crypto = { workspace = true, optional = true }
+sofd-sign = { workspace = true, optional = true }
+sofd-convert = { workspace = true, optional = true }
+sofd-edit = { workspace = true, optional = true }
+sofd-search = { workspace = true, optional = true }
+sofd-archive = { workspace = true, optional = true }
+sofd-print = { workspace = true, optional = true }
+tracing.workspace = true
+rayon = { version = "1.11", optional = true }
+
+[dev-dependencies]
+# Fixture archives, so a test opens a real document rather than hand-built XML.
+sofd-testkit.workspace = true
+
+[features]
+default = ["render", "sign", "convert", "pdf"]
+
+# Capability features, to trim binary size per delivery form.
+render   = ["dep:sofd-render"]
+print    = ["dep:sofd-print"]
+sign     = ["dep:sofd-sign", "dep:sofd-crypto"]
+# Convert pulls in the raster backend anyway (PNG output goes through it),
+# so naming the dependency here costs no extra compilation.
+convert  = ["dep:sofd-convert", "dep:sofd-render"]
+pdf      = ["convert", "sofd-convert/pdf"]
+# No `office` or `ocr` feature here either: a forwarding name enabled nothing
+# in the crate it named, so a caller asked for a capability and compiled
+# without it. Enabling one now fails the build rather than lying.
+edit     = ["dep:sofd-edit"]
+search   = ["dep:sofd-search"]
+archive  = ["dep:sofd-archive"]
+# Annotations are read through the parser, which is never optional, so this
+# feature only names the capability: it trims nothing at compile time.
+annot    = []
+async    = ["dep:rayon"]
+
+[package.metadata.cargo-semver-checks.lints]
+workspace = true

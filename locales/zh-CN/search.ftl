@@ -1,4 +1,4 @@
-# SteleOFD 简体中文 · 检索模块
+# sOFD 简体中文 · 检索模块
 
 search-placeholder = 搜索文档内容
 search-result-count = { $count ->

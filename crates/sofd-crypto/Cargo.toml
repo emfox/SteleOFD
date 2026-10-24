@@ -1,0 +1,41 @@
+[package]
+name = "sofd-crypto"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+description = "SM3, SM4, SM2, X.509 inspection and GB/T 20520 timestamps, for OFD signatures"
+keywords = ["ofd", "sm2", "sm3", "sm4", "digital-signature"]
+categories = ["cryptography", "authentication"]
+
+[dependencies]
+sofd-error.workspace = true
+sm2.workspace = true
+signature.workspace = true
+getrandom.workspace = true
+sm3.workspace = true
+sm4.workspace = true
+cipher.workspace = true
+der.workspace = true
+x509-parser.workspace = true
+tracing.workspace = true
+
+# The identity-hash test signs with a different distinguishing ID on purpose,
+# which means reaching past this crate's fixed one into the upstream API.
+[dev-dependencies]
+sm2.workspace = true
+signature.workspace = true
+
+# wasm32-unknown-unknown has no OS randomness source, and the dependents that
+# pull getrandom in (crypto-bigint, sm2, rand) cannot name the target
+# themselves. Three major versions coexist in the graph, each with its own
+# feature name for the browser backend.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+getrandom = { version = "0.3", features = ["wasm_js"] }
+getrandom04 = { package = "getrandom", version = "0.4", features = ["wasm_js"] }
+getrandom02 = { package = "getrandom", version = "0.2", features = ["js"] }
+
+[package.metadata.cargo-semver-checks.lints]
+workspace = true

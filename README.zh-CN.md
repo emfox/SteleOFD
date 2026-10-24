@@ -1,4 +1,4 @@
-# SteleOFD
+# sOFD
 
 OFD（Open Fixed-layout Document，版式文档）的 Rust 实现，涵盖阅读、转换与签章验证。
 
@@ -9,16 +9,16 @@ OFD（Open Fixed-layout Document，版式文档）的 Rust 实现，涵盖阅读
 [![License](https://img.shields.io/badge/license-Apache--2.0-green)](LICENSE)
 [![Standard](https://img.shields.io/badge/standard-GB%2FT%2033190--2016-red)]()
 
-SteleOFD 是 [GB/T 33190-2016《电子文件存储与交换格式 版式文档》](https://openstd.samr.gov.cn/bzgk/gb/newGbInfo?hcno=3AF6682D939116B6F5EED53D01A9DB5D)
+sOFD 是 [GB/T 33190-2016《电子文件存储与交换格式 版式文档》](https://openstd.samr.gov.cn/bzgk/gb/newGbInfo?hcno=3AF6682D939116B6F5EED53D01A9DB5D)
 的 Rust 实现。从解析到渲染全部自研，仓库里唯一的 C 库是 fontconfig——
 由 reader 在 Linux 上经 `font-kit` 调用。
 
 当前发布版本为 `0.4.0`：本版本移除了四个不启用任何功能的特性名，因此是
 `0.4.0` 而非补丁版本。本版本提供了什么见 [`CHANGELOG`](CHANGELOG.md)，
-尚待完成的具体工作见 [issue 列表](https://github.com/emfox/SteleOFD/issues)，
+尚待完成的具体工作见 [issue 列表](https://github.com/emfox/sOFD/issues)，
 它服务于哪些大方向见 [`docs/Roadmap.md`](docs/Roadmap.md)。
 
-本文档分两部分：前半部分给使用 SteleOFD 的人，后半部分给参与开发的人。
+本文档分两部分：前半部分给使用 sOFD 的人，后半部分给参与开发的人。
 
 ---
 
@@ -40,11 +40,11 @@ SteleOFD 是 [GB/T 33190-2016《电子文件存储与交换格式 版式文档�
 
 | 形态 | 示例 | 展示的内容 |
 |---|---|---|
-| CLI | [`command_line.rs`](crates/steleofd-cli/examples/command_line.rs) | 按路径打开、读出文档声明的内容、逐页渲染、校验签名 |
-| C ABI | [`c_abi.rs`](crates/steleofd-ffi/examples/c_abi.rs) | C 宿主会发起的同一组调用，对照生成的[头文件](crates/steleofd-ffi/include/steleofd.h) |
-| 浏览器 | [`browser.rs`](crates/steleofd-wasm/examples/browser.rs) | 从 Rust 侧看到的 JS 边界：位图、SVG、检索 |
-| HTTP | [`http_service.rs`](crates/steleofd-server/examples/http_service.rs) | 路由、存储与优雅退出，可挂进你自己的进程 |
-| 桌面 | [`desktop_viewer.rs`](crates/steleofd-reader/examples/desktop_viewer.rs) | 阅读器界面画进一个 `egui::Ui`，无窗口、无显示服务 |
+| CLI | [`command_line.rs`](crates/sofd-cli/examples/command_line.rs) | 按路径打开、读出文档声明的内容、逐页渲染、校验签名 |
+| C ABI | [`c_abi.rs`](crates/sofd-ffi/examples/c_abi.rs) | C 宿主会发起的同一组调用，对照生成的[头文件](crates/sofd-ffi/include/sofd.h) |
+| 浏览器 | [`browser.rs`](crates/sofd-wasm/examples/browser.rs) | 从 Rust 侧看到的 JS 边界：位图、SVG、检索 |
+| HTTP | [`http_service.rs`](crates/sofd-server/examples/http_service.rs) | 路由、存储与优雅退出，可挂进你自己的进程 |
+| 桌面 | [`desktop_viewer.rs`](crates/sofd-reader/examples/desktop_viewer.rs) | 阅读器界面画进一个 `egui::Ui`，无窗口、无显示服务 |
 
 `cargo build --workspace --examples` 可构建其中四个；浏览器那个需要
 `--target wasm32-unknown-unknown`，CI 就在该目标上构建它。
@@ -56,9 +56,9 @@ WebAssembly 绑定一同发布：
 
 | 产物 | 平台 | 运行方式 |
 |---|---|---|
-| `steleofd-reader-linux`、`-macos`、`-windows.exe` | 桌面 | 直接运行 |
-| `steleofd-reader-web.zip` | 浏览器 | 解压后用 HTTP 提供；`file://` 页面无法加载该模块 |
-| `steleofd-reader-android.apk` | Android 7.0+（arm64） | 侧载；用一次性调试密钥签名，不能上架应用商店 |
+| `sofd-reader-linux`、`-macos`、`-windows.exe` | 桌面 | 直接运行 |
+| `sofd-reader-web.zip` | 浏览器 | 解压后用 HTTP 提供；`file://` 页面无法加载该模块 |
+| `sofd-reader-android.apk` | Android 7.0+（arm64） | 侧载；用一次性调试密钥签名，不能上架应用商店 |
 
 iOS 是唯一被排除的 `egui` 平台：其应用必须经 macOS 签名打包后才能安装，
 而本项目不附带任何密钥。
@@ -72,13 +72,13 @@ sha256sum -c SHA256SUMS          # 或者完全不依赖本项目
 ```
 
 crate 目前尚未发布到注册表：哪些会发布、发布前还差什么，见
-[issue #4](https://github.com/emfox/SteleOFD/issues/4)。
+[issue #4](https://github.com/emfox/sOFD/issues/4)。
 
-19 个 crate 会进入注册表，但其中只有一部分是接口。加上 `steleofd-core` 就够用；
+19 个 crate 会进入注册表，但其中只有一部分是接口。加上 `sofd-core` 就够用；
 它依赖的那些 crate 是被 cargo 一起带过来的，并不是让你逐个点名。哪些是哪一类，
 见 [Architecture.md 第 3 节](docs/Architecture.md#3-crate-inventory)；
-`python3 scripts/publish_order.py` 会打印依赖闭包——从 `steleofd-core` 出发
-是全部 19 个，而单独发布 `steleofd-crypto` 只需要 3 个。
+`python3 scripts/publish_order.py` 会打印依赖闭包——从 `sofd-core` 出发
+是全部 19 个，而单独发布 `sofd-crypto` 只需要 3 个。
 
 ## 遵循的规范
 
@@ -133,7 +133,7 @@ OFD 和 PDF 都是版式文档，区别在于 OFD 是开放的 ZIP + XML 容器�
                                   │
                                   ▼
   ┌──────────────────────────────────────────────────────────────────────┐
-  │  steleofd-core —— 一个句柄，每个能力对应一个 feature                 │
+  │  sofd-core —— 一个句柄，每个能力对应一个 feature                 │
   └──────────────────────────────────────────────────────────────────────┘
                                   │
   ┌──────────────────────────────────────────────────────────────────────┐
@@ -162,11 +162,11 @@ OFD 和 PDF 都是版式文档，区别在于 OFD 是开放的 ZIP + XML 容器�
   │    archive   package, model                                          │
   └──────────────────────────────────────────────────────────────────────┘
 
-  steleofd-i18n      供外壳使用的文案；引擎自身从不产生文案
-  steleofd-testkit   测试用的夹具，仅作为 dev-dependency
+  sofd-i18n      供外壳使用的文案；引擎自身从不产生文案
+  sofd-testkit   测试用的夹具，仅作为 dev-dependency
 ```
 
-关键在 `steleofd-display`：所有输出后端读取同一份扁平化后的显示列表，
+关键在 `sofd-display`：所有输出后端读取同一份扁平化后的显示列表，
 导出结果因此不会与预览产生偏差。[`docs/Architecture.md`](docs/Architecture.md)
 第 3 节以表格形式给出同一份清单，逐 crate 列出职责与发布状态。
 
@@ -204,7 +204,7 @@ FormatError::PageOutOfRange { index: 42, total: 100 }
 "page index out of range: 42 (document has 100 pages)"
 ```
 
-引擎自己的消息目录（`steleofd-i18n`）只装引擎消息。若某个表现层有自己的产品文案
+引擎自己的消息目录（`sofd-i18n`）只装引擎消息。若某个表现层有自己的产品文案
 ——reader 就是如此——它把文案放在自己身边，再通过 `I18nBuilder` 合并进来，
 这样引擎就永远不会提到一个不属于它的控件。
 
@@ -229,8 +229,8 @@ FormatError::PageOutOfRange { index: 42, total: 100 }
 `libfontconfig1-dev` 与 `pkg-config`。
 
 ```bash
-git clone https://github.com/emfox/SteleOFD.git
-cd SteleOFD
+git clone https://github.com/emfox/sOFD.git
+cd sOFD
 
 cargo check --workspace          # 检查整个 workspace
 cargo build --release            # 发布构建
@@ -266,7 +266,7 @@ cargo clippy --workspace -- -D warnings
 python3 scripts/check_all.py
 ```
 
-新代码需要测试。不要引入 `unsafe`；`steleofd-ffi` 是唯一有文档记录的例外，
+新代码需要测试。不要引入 `unsafe`；`sofd-ffi` 是唯一有文档记录的例外，
 因为 C ABI 必须用到它。代码、注释、提交信息与 issue 一律使用英文：
 [docs/Conventions.md](docs/Conventions.md)。
 

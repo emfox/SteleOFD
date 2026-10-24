@@ -1,0 +1,44 @@
+[package]
+name = "sofd-parser"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+description = "Parse an OFD document into display lists, one flattening for every output"
+keywords = ["ofd", "parser", "document", "display-list", "gb-t-33190"]
+categories = ["parser-implementations"]
+
+[dependencies]
+sofd-common.workspace = true
+sofd-error.workspace = true
+sofd-model.workspace = true
+sofd-xml.workspace = true
+sofd-package.workspace = true
+sofd-geometry.workspace = true
+sofd-font.workspace = true
+sofd-display.workspace = true
+sofd-io.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
+criterion.workspace = true
+sofd-render.workspace = true
+sofd-testkit.workspace = true
+# The memory benchmark rasterizes a page, which is where a page's bytes go.
+sofd-core.workspace = true
+sofd-convert.workspace = true
+
+[[bench]]
+name = "parse"
+harness = false
+
+# The memory ceiling, measured through a counting allocator rather than timed.
+[[bench]]
+name = "memory"
+harness = false
+
+[package.metadata.cargo-semver-checks.lints]
+workspace = true

@@ -2,14 +2,14 @@
 
 What this engine can draw with, one row per kind of face, and — just as
 importantly — what it cannot yet do. Each row is a real face under
-[`crates/steleofd-font/tests/data`](../../crates/steleofd-font/tests/data) and
+[`crates/sofd-font/tests/data`](../../crates/sofd-font/tests/data) and
 a test in
-[`crates/steleofd-font/tests/matrix.rs`](../../crates/steleofd-font/tests/matrix.rs)
+[`crates/sofd-font/tests/matrix.rs`](../../crates/sofd-font/tests/matrix.rs)
 that proves the row. A row without a test is a claim, not a row.
 
 The fixtures are subsets of Noto faces, cut down so a test can say exactly what
 it expects. They carry the SIL Open Font License 1.1 and no Reserved Font
-Name; see the [fixtures README](../../crates/steleofd-font/tests/data/README.md).
+Name; see the [fixtures README](../../crates/sofd-font/tests/data/README.md).
 
 Five of these faces are also drawn into the golden book, one page each —
 `latin`, `cjk`, `ttc`, `rtl` and `manytomany` — and those pages are the only
@@ -64,7 +64,7 @@ pins today's behaviour so the day it changes, the test fails.
    resolving to a Latin-only face is how a "substitute" still produced a blank
    page. When no listed family covers the text, every listed family is tried
    before the shape alone is accepted. A run whose own face will not load gets
-   one more chance through the chain (`steleofd_display::run_face_for`), and a
+   one more chance through the chain (`sofd_display::run_face_for`), and a
    code the chain cannot cover is counted, not swallowed.
 
    Reporting is the other half, and it is not optional: `RasterOutput` and
@@ -77,7 +77,7 @@ pins today's behaviour so the day it changes, the test fails.
    One limit remains by design: a build with no system fonts and nothing pinned
    (`system-fonts` off, or wasm) can find nothing, so it reports every named
    face as missing rather than drawing something unrelated. `tests/font.rs`,
-   `tests/core.rs` and `crates/steleofd-parser/tests/fonts.rs` pin the chain,
+   `tests/core.rs` and `crates/sofd-parser/tests/fonts.rs` pin the chain,
    the substitution and the unshipped-declaration contract from the repo's own
    fixtures rather than a host font.
 
@@ -98,7 +98,7 @@ iOS, with the same `all_families` / `select_family_by_name` surface.
 | Generic families | Yes | font-kit maps `sans-serif` to Arial and `monospace` to Courier New on Windows and macOS: Latin faces both. This is why they come last, not first |
 | Coverage check | No | `FontFace::covers` reads the code points out of the face itself |
 
-`crates/steleofd-font/tests/host.rs` pins the rules a host without the pinned
+`crates/sofd-font/tests/host.rs` pins the rules a host without the pinned
 family depends on — a cached face is searched again for characters it lacks, a
 run of Han is never answered by the Latin face the previous run left in the
 cache, a changed pinned family clears the recorded misses — so those run on
@@ -112,7 +112,7 @@ to change it.
 
 5. **No subsetting on the way out.** Embedded faces are carried whole. A
    document that embeds a 20 MB CJK collection pays for it in every conversion,
-   which is what `steleofd-font::subset` exists to avoid; the limits it answers
+   which is what `sofd-font::subset` exists to avoid; the limits it answers
    to are its own module documentation.
 
 ## Font families as configuration
@@ -122,7 +122,7 @@ that the manager is handed, and the engine owns only the *default* value of it.
 
 | Layer | Where it lives | Who sets it |
 | --- | --- | --- |
-| Built-in default | `default_cjk_families()` in `crates/steleofd-font/src/config.rs` | The engine, once, as data |
+| Built-in default | `default_cjk_families()` in `crates/sofd-font/src/config.rs` | The engine, once, as data |
 | Host or user | Any caller holding a `FontManager` | `set_config`, or `set_default_cjk_family` for one family |
 | Document | Not read yet — see below | — |
 
@@ -153,7 +153,7 @@ accepted one would be reading a document no other reader can. Until that
 decision is made, a host-level configuration is the way to name a family the
 built-in list does not know.
 
-[`FontConfig`]: https://docs.rs/steleofd-font/latest/steleofd_font/struct.FontConfig.html
+[`FontConfig`]: https://docs.rs/sofd-font/latest/sofd_font/struct.FontConfig.html
 
 ## How a face gets from a document to a glyph
 

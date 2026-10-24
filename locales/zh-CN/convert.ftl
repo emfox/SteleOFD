@@ -1,4 +1,4 @@
-# SteleOFD 简体中文 · 转换模块
+# sOFD 简体中文 · 转换模块
 
 convert-start = 开始转换
 convert-progress = 正在转换：{ $done } / { $total }

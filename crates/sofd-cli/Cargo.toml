@@ -1,0 +1,30 @@
+[package]
+name = "sofd-cli"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+# Ships as an application, not as a dependency.
+publish = false
+
+[[bin]]
+name = "sofd"
+path = "src/main.rs"
+
+[dependencies]
+sofd-core = { workspace = true, features = ["render", "sign", "convert", "print", "edit", "search", "archive", "async"] }
+sofd-error.workspace = true
+sofd-font.workspace = true
+sofd-i18n.workspace = true
+sofd-io.workspace = true
+sofd-archive.workspace = true
+sofd-print.workspace = true
+clap = { version = "4", features = ["derive"] }
+anyhow.workspace = true
+tracing.workspace = true
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+serde_json.workspace = true
+
+[dev-dependencies]
+sofd-package.workspace = true

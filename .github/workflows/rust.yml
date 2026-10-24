@@ -125,7 +125,7 @@ jobs:
         run: |
           cargo build --workspace --examples
           rustup target add wasm32-unknown-unknown
-          cargo build -p steleofd-wasm --example browser --target wasm32-unknown-unknown
+          cargo build -p sofd-wasm --example browser --target wasm32-unknown-unknown
 
       # The Android build is checked here rather than only on a release tag: a
       # feature its device lacks compiles to a library that loads and exits, so
@@ -133,7 +133,7 @@ jobs:
       - name: Android target
         run: |
           rustup target add aarch64-linux-android
-          cargo clippy -p steleofd-reader --target aarch64-linux-android \
+          cargo clippy -p sofd-reader --target aarch64-linux-android \
             --message-format=short -- -D warnings
 
       # The layout of a real invoice is pinned against the producer's own
@@ -152,7 +152,7 @@ jobs:
       # keeps a rendering regression readable on the run page rather than buried
       # in the suite. A reference that needs updating is a deliberate commit.
       - name: Golden images
-        run: cargo test -p steleofd-convert --test golden
+        run: cargo test -p sofd-convert --test golden
 
       # The reader's window is a real widget tree, so this drives it without a
       # display and without an X server: labels come from the catalogue and
@@ -161,7 +161,7 @@ jobs:
       - name: Reader window, driven headlessly
         run: |
           unset DISPLAY WAYLAND_DISPLAY
-          cargo test -p steleofd-reader --test window
+          cargo test -p sofd-reader --test window
 
       - name: Message catalogues
         run: python3 scripts/check_i18n.py --strict
@@ -271,9 +271,9 @@ jobs:
       # its reading in a file beside criterion's, which the gate reads back.
       - name: Run the budgeted benchmarks
         run: |
-          cargo bench -p steleofd-parser --bench parse
-          cargo bench -p steleofd-parser --bench memory
-          cargo bench -p steleofd-convert --bench convert
+          cargo bench -p sofd-parser --bench parse
+          cargo bench -p sofd-parser --bench memory
+          cargo bench -p sofd-convert --bench convert
 
       - name: Every benchmarked stage is within budget
         run: python3 scripts/check_performance.py
@@ -289,7 +289,7 @@ jobs:
       - name: Install nightly toolchain
         uses: dtolnay/rust-toolchain@nightly
 
-      # The font target builds steleofd-font, whose font-kit dependency needs
+      # The font target builds sofd-font, whose font-kit dependency needs
       # the fontconfig headers even though nothing is drawn.
       - name: Install fontconfig headers
         run: sudo apt-get update && sudo apt-get install -y libfontconfig1-dev pkg-config
@@ -297,7 +297,7 @@ jobs:
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: crates/steleofd-fuzz/fuzz
+          workspaces: crates/sofd-fuzz/fuzz
           shared-key: fuzz
 
       # Kept as `cargo install` rather than moved to the install action: it is
@@ -310,25 +310,25 @@ jobs:
       # one directory below the workspace member that wraps it, hence the
       # working-directory on every run below.
       - name: Fuzz the ZIP reader
-        working-directory: crates/steleofd-fuzz/fuzz
+        working-directory: crates/sofd-fuzz/fuzz
         run: cargo +nightly fuzz run package_open -- -runs=20000 -max_len=4096
 
       - name: Fuzz the XML cursor
-        working-directory: crates/steleofd-fuzz/fuzz
+        working-directory: crates/sofd-fuzz/fuzz
         run: cargo +nightly fuzz run xml_cursor -- -runs=20000 -max_len=4096
 
       # The three below take bytes the document supplies rather than bytes a
       # caller passes, which is the difference that makes them worth running.
       - name: Fuzz the TrueType reader
-        working-directory: crates/steleofd-fuzz/fuzz
+        working-directory: crates/sofd-fuzz/fuzz
         run: cargo +nightly fuzz run ttf_face -- -runs=20000 -max_len=65536
 
       - name: Fuzz the certificate reader
-        working-directory: crates/steleofd-fuzz/fuzz
+        working-directory: crates/sofd-fuzz/fuzz
         run: cargo +nightly fuzz run certificate -- -runs=20000 -max_len=4096
 
       - name: Fuzz the PDF writer
-        working-directory: crates/steleofd-fuzz/fuzz
+        working-directory: crates/sofd-fuzz/fuzz
         run: cargo +nightly fuzz run pdf_write -- -runs=20000 -max_len=64
 
   audit:

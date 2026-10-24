@@ -1,6 +1,6 @@
 # Documentation and Language Policy
 
-SteleOFD is an international open-source project. To keep the codebase consistent
+sOFD is an international open-source project. To keep the codebase consistent
 and reviewable by contributors worldwide, all engineering artifacts use English.
 
 ## 1. Language rules
@@ -47,7 +47,7 @@ comment is noise.
 | Trailing comment on one line | 1 line |
 
 Doc comments get the wider limit because they are published: rustdoc shows
-them, and cbindgen writes them into `crates/steleofd-ffi/include/steleofd.h`, so
+them, and cbindgen writes them into `crates/sofd-ffi/include/sofd.h`, so
 a contract a C caller has to honour has no other home than the `///` above the
 type it describes. The wider limit does not extend to a `//` line, so an
 implementation note in the middle of a doc block still fails.
@@ -82,7 +82,7 @@ in `docs/`.
 
 Allowed types: `feat`, `fix`, `docs`, `chore`, `refactor`, `perf`, `test`, `build`, `ci`.
 
-`<scope>` is normally the crate name without the `steleofd-` prefix, for example
+`<scope>` is normally the crate name without the `sofd-` prefix, for example
 `parser`, `display`, `font`, `i18n`, `cli`.
 
 The subject alone should be enough to understand the change. Do not list every
@@ -194,7 +194,7 @@ is silent:
   check that calls them.
 - **An edit is checked by reopening what it wrote.** A test that asserts on the
   writer's own bookkeeping passes while the reader loses an entry, so
-  `steleofd-edit` asserts on the document it gets back.
+  `sofd-edit` asserts on the document it gets back.
 
 Everything in `review` reports rather than blocks. A script can measure where
 the lines landed; it cannot know why they landed there, and a move, a rename or
@@ -250,7 +250,7 @@ Seven exemptions exist, each deliberately narrow:
 | Whole file and name | fetched test samples under `tests/fixtures/` | A sample is named by the producer that wrote it, and renaming one severs the only link back to where it came from |
 | Whole file | `docs/Conventions.md`, `scripts/check_language.py`, `scripts/check_i18n.py` | They exist to hold, quote or match Chinese |
 | Whole file | `scripts/sample_fetch.py` | Its pin lists spell out the producer's own file names, exactly like the samples they fetch |
-| Whole file | `crates/steleofd-i18n/src/format.rs` | Holds the locale day-period literals, which are Chinese and Japanese |
+| Whole file | `crates/sofd-i18n/src/format.rs` | Holds the locale day-period literals, which are Chinese and Japanese |
 | Single line | the `README.md` language switcher | The bilingual pair must cross-link by the other language's own name |
 
 The `format.rs` exemption covers the whole file rather than its string literals

@@ -1,0 +1,31 @@
+[package]
+name = "sofd-edit"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+description = "Command-pattern editing of an OFD document with an undo stack"
+keywords = ["ofd", "edit", "document", "undo"]
+categories = ["text-processing"]
+
+# Editing applies undoable changes through the command pattern,
+# produces a new package, and persists it through the package layer.
+[dependencies]
+sofd-common.workspace = true
+sofd-error.workspace = true
+sofd-model.workspace = true
+sofd-package.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+# The round-trip test asserts on what a reader reports, not on the model the
+# command touched, so it opens the archive back through the facade.
+sofd-core = { workspace = true, features = ["render"] }
+sofd-display.workspace = true
+# Fixture documents whose page files a test can replace.
+sofd-testkit.workspace = true
+
+[package.metadata.cargo-semver-checks.lints]
+workspace = true

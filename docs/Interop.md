@@ -1,7 +1,7 @@
 # Interoperability: reading what other implementations produce
 
 An OFD reader is only useful if it agrees with the other readers in the
-field. This document records the differences found between SteleOFD and
+field. This document records the differences found between sOFD and
 other implementations on the same documents, what the standard says about
 each, and which side each difference falls on. It is evidence, not a task
 list: the finding outlives whatever issue it came from.
@@ -13,12 +13,12 @@ the same as being right.
 
 ## 1. Method
 
-The **golden book** ([`crates/steleofd-testkit/src/golden.rs`](../crates/steleofd-testkit/src/golden.rs))
+The **golden book** ([`crates/sofd-testkit/src/golden.rs`](../crates/sofd-testkit/src/golden.rs))
 is fourteen small pages: nine, one per renderer feature, each with a known
 expected picture, and five font pages added later. The nine are what the oracle
 saw. It was rendered twice at 96 dpi into 378x227 PNGs:
 
-- by SteleOFD (`steleofd render`), and
+- by sOFD (`sofd render`), and
 - by a **second vendor's desktop reader** ("the oracle" below).
 
 The comparison was then checked a third way — against the standard's text
@@ -38,7 +38,7 @@ The book grew five **font** pages afterwards, `latin`, `cjk`, `ttc`, `rtl` and
 other direction of drift: a font parser that rounds `units_per_em` differently
 or resolves a `cmap` subtable in another order moves glyph geometry while every
 op-level assertion still passes, and R22 replaced the parser outright.
-Each page draws through one face of `crates/steleofd-font/tests/data`, the same
+Each page draws through one face of `crates/sofd-font/tests/data`, the same
 subsets `tests/matrix.rs` claims coverage for, so a face that loses a glyph shows
 up as a page with less ink. They are a regression detector, not an interop
 finding, and no conclusion in the sections below rests on them.
@@ -71,7 +71,7 @@ covers the whole 100x60 mm page, and clips it to the inner rectangle
 
 | | Green pixels | Shape |
 | --- | --- | --- |
-| SteleOFD | 62 481 | solid fill of the clip rectangle |
+| sOFD | 62 481 | solid fill of the clip rectangle |
 | oracle | 569 | outline only |
 
 The oracle's green pixels form a one-pixel frame whose bounding box is
@@ -98,7 +98,7 @@ if (pathObject.getFill() != null && pathObject.getFill()) {      // default fals
 It applies a clip with `graphics.setClip(shape)` and never draws it
 (`AWTMaker.java:714-719`).
 
-**Verdict.** A gap in the oracle. SteleOFD and ofdrw both follow Table 35;
+**Verdict.** A gap in the oracle. sOFD and ofdrw both follow Table 35;
 the oracle fills nothing and strokes the clip outline instead.
 
 ## 3. Shadings: `AxialShd` and `RadialShd`
@@ -111,7 +111,7 @@ stroking graphics and text".
 
 **Observed.**
 
-| Page | oracle | SteleOFD |
+| Page | oracle | sOFD |
 | --- | --- | --- |
 | `gradient` (`AxialShd`) | 64 473 px of one colour, black | ramp, hundreds of colours |
 | `radial` (`RadialShd`) | 2 colours total (black, white) | 727 colours |
@@ -129,7 +129,7 @@ degrades to *nothing* where the oracle degrades to *black*.
 **Verdict.** A gap in the oracle (and, on this point, a smaller one in
 ofdrw). Verified against Table 28 and clause 8.3.4; the ramp our render
 produces is what the text asks for. Our `Shading` model lives in
-[`crates/steleofd-model/src/color.rs`](../crates/steleofd-model/src/color.rs).
+[`crates/sofd-model/src/color.rs`](../crates/sofd-model/src/color.rs).
 
 ## 4. A page box wider than `CommonData.PageArea`
 
@@ -142,7 +142,7 @@ document root)". A page may carry its own `Area`; the document default in
 
 | | Output | Aspect |
 | --- | --- | --- |
-| SteleOFD | 1754x591 | 2.97 (297:100) |
+| sOFD | 1754x591 | 2.97 (297:100) |
 | oracle | 378x227 | 1.67 |
 
 The oracle renders the 297x100 mm page into a ~A4-ratio box, i.e. it takes
@@ -153,10 +153,10 @@ wider `PhysicalBox`.
 area first (`ofdrw-reader/.../OFDReader.java:506-511`), falling back to the
 template, then `CommonData.PageArea` (`539`), then A4; `ImageMaker.makePage`
 sizes the bitmap from that box (`ImageMaker.java:59-63`). Same precedence as
-SteleOFD (`crates/steleofd-parser/src/lib.rs:105-107`: page area's
+sOFD (`crates/sofd-parser/src/lib.rs:105-107`: page area's
 `physical_box`, else `common_data.page_area.physical_box`).
 
-**Verdict.** A gap in the oracle. Both SteleOFD and ofdrw honour the page's
+**Verdict.** A gap in the oracle. Both sOFD and ofdrw honour the page's
 own box; the oracle clamps to the document default.
 
 ## 5. One correction to our own reading: `Clips` and `TransFlag`
@@ -188,11 +188,11 @@ So the honest position has two halves:
   extension, not an invention.
 
 The fix is the same either way: the attribute is gone
-(`crates/steleofd-model/src/object.rs`, `crates/steleofd-parser/src/content.rs`),
+(`crates/sofd-model/src/object.rs`, `crates/sofd-parser/src/content.rs`),
 and the clip stays in object space unconditionally, which is what clause 8.4
 says and what every sample does. The regression test is
 `gb_t_33190_8_4_a_clip_stays_in_object_space_beside_the_ctm`
-(`crates/steleofd-parser/tests/conformance.rs`).
+(`crates/sofd-parser/tests/conformance.rs`).
 
 ## 6. A Gouraud mesh in SVG, where SVG 1.1 has no mesh
 
@@ -259,7 +259,7 @@ above are external; these were ours, found while establishing them:
 ## 9. Reproducing
 
 The golden fixtures and the writer are in
-[`crates/steleofd-testkit`](../crates/steleofd-testkit). Regression compares
-SteleOFD's own output against the committed reference PNGs only; no second
+[`crates/sofd-testkit`](../crates/sofd-testkit). Regression compares
+sOFD's own output against the committed reference PNGs only; no second
 implementation is invoked in CI. The oracle renders and the ofdrw source
 citations above are evidence for this document, not test inputs.

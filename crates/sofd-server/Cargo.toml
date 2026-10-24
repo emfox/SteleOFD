@@ -1,0 +1,34 @@
+[package]
+name = "sofd-server"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+# Ships as an application, not as a dependency.
+publish = false
+
+[lib]
+name = "sofd_server"
+path = "src/lib.rs"
+
+[[bin]]
+name = "sofd-server"
+path = "src/main.rs"
+
+[dependencies]
+sofd-core = { workspace = true, features = ["render", "sign", "convert", "search", "pdf"] }
+sofd-error.workspace = true
+sofd-font.workspace = true
+axum.workspace = true
+tokio.workspace = true
+tower-http = { version = "0.6", features = ["cors", "limit", "trace", "timeout"] }
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+uuid.workspace = true
+
+[dev-dependencies]
+tower = { version = "0.5", features = ["util"] }
+sofd-testkit.workspace = true

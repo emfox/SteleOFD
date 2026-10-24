@@ -1,6 +1,6 @@
 # What is left
 
-SteleOFD builds, tests and releases on every platform `egui` runs on, and the
+sOFD builds, tests and releases on every platform `egui` runs on, and the
 register holds no `partial` clause.
 
 This file is for **direction**: the large outcomes the project is steering
@@ -11,7 +11,7 @@ in [`CHANGELOG.md`](../CHANGELOG.md).
 
 ## Where the work happens
 
-- **[Issues](https://github.com/emfox/SteleOFD/issues)** carry everything that
+- **[Issues](https://github.com/emfox/sOFD/issues)** carry everything that
   can be stated as a problem with an exit criterion: a defect, a missing
   feature, a specific debt. If you can write "done when", it is an issue.
 - **This file** carries what has no such statement yet: a direction the project
@@ -43,10 +43,10 @@ question has a shape.
 
 | Need | Why it is not shaped yet |
 | --- | --- |
-| **Other shells** — a Tauri shell, a Qt or GTK binding | Both are alternatives to the shipped `egui` reader rather than gaps in it. Which one is worth building depends on a user who wants it. [#13](https://github.com/emfox/SteleOFD/issues/13) |
-| **A public extension surface** for colour profiles, font providers and render backends | The three traits can be guessed, but an extension point without a worked example is a guess at a requirement. It waits until somebody forks a crate to plug something in, because that fork says what the trait has to be. [#12](https://github.com/emfox/SteleOFD/issues/12) |
-| **A cache for what a window redraws** | The stated budgets are met without one, so the shape of the answer depends on a measurement nobody has taken. [#6](https://github.com/emfox/SteleOFD/issues/6) |
-| **Which constructs `office` and `ocr` would name, if implemented** | A DOCX or OOXML conversion in one direction and OCR in the other each needs a model before it needs code, and nobody has asked for either. [#10](https://github.com/emfox/SteleOFD/issues/10) |
+| **Other shells** — a Tauri shell, a Qt or GTK binding | Both are alternatives to the shipped `egui` reader rather than gaps in it. Which one is worth building depends on a user who wants it. [#13](https://github.com/emfox/sOFD/issues/13) |
+| **A public extension surface** for colour profiles, font providers and render backends | The three traits can be guessed, but an extension point without a worked example is a guess at a requirement. It waits until somebody forks a crate to plug something in, because that fork says what the trait has to be. [#12](https://github.com/emfox/sOFD/issues/12) |
+| **A cache for what a window redraws** | The stated budgets are met without one, so the shape of the answer depends on a measurement nobody has taken. [#6](https://github.com/emfox/sOFD/issues/6) |
+| **Which constructs `office` and `ocr` would name, if implemented** | A DOCX or OOXML conversion in one direction and OCR in the other each needs a model before it needs code, and nobody has asked for either. [#10](https://github.com/emfox/sOFD/issues/10) |
 | **Tracking revisions of GB/T 33190** | Nothing is pending today. This is the standing task that keeps it that way rather than work with a shape. |
 
 ## Standing constraints

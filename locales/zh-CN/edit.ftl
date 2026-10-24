@@ -1,4 +1,4 @@
-# SteleOFD 简体中文 · 编辑模块
+# sOFD 简体中文 · 编辑模块
 
 edit-undo = 撤销
 edit-redo = 重做

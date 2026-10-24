@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ofd:PageAnnot xmlns:ofd="http://www.ofdspec.org/2016">
-  <ofd:Annot ID="14" Type="Stamp" Creator="SteleOFD conformance fixtures" LastModDate="2024-01-01" Visible="true">
+  <ofd:Annot ID="14" Type="Stamp" Creator="sOFD conformance fixtures" LastModDate="2024-01-01" Visible="true">
     <ofd:Remark>A stamp annotation over the page body</ofd:Remark>
     <ofd:Parameters>
       <ofd:Parameter Name="Source">fixtures</ofd:Parameter>

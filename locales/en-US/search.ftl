@@ -1,4 +1,4 @@
-# SteleOFD English (US) · Search module
+# sOFD English (US) · Search module
 
 search-placeholder = Search in document
 search-result-count = { $count ->

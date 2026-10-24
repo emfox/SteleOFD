@@ -1,0 +1,34 @@
+[package]
+name = "sofd-font"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+description = "Embedded fonts, system-resolved names, CID indices and metrics for OFD text"
+keywords = ["ofd", "font", "truetype", "cff", "text"]
+categories = ["text-processing"]
+
+[dependencies]
+sofd-error.workspace = true
+sofd-geometry.workspace = true
+skrifa.workspace = true
+serde.workspace = true
+tracing.workspace = true
+
+# font-kit binds the host's own font stack. Android has none of them, and wasm32
+# resolves its fonts in the browser, so the crate degrades on both and the
+# caller supplies faces instead.
+[target.'cfg(not(any(target_arch = "wasm32", target_os = "android")))'.dependencies]
+font-kit = { version = "0.13", optional = true }
+
+[dev-dependencies]
+serde_json.workspace = true
+
+[features]
+default = ["system-fonts"]
+system-fonts = ["dep:font-kit"]
+
+[package.metadata.cargo-semver-checks.lints]
+workspace = true

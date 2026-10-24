@@ -58,7 +58,7 @@ from pathlib import Path
 FIXTURES = "emfox/OFD-fixtures"
 COMMIT = "1ad683e"
 ARCHIVE = "https://codeload.github.com/" + FIXTURES + "/tar.gz/" + COMMIT
-USER_AGENT = "steleofd-fixtures"
+USER_AGENT = "sofd-fixtures"
 
 
 class FixtureError(Exception):

@@ -36,7 +36,7 @@ ALLOWLIST_SUFFIX = ".zh-CN.md"
 # Files exempt as locale data. The whole file is skipped rather than its string
 # literals alone: the CJK in it is the day-period markers and no prose.
 ALLOWLIST_CJK_LITERALS = {
-    "crates/steleofd-i18n/src/format.rs": "locale day-period markers",
+    "crates/sofd-i18n/src/format.rs": "locale day-period markers",
 }
 
 # Lines exempt from the language rule even inside otherwise English files.

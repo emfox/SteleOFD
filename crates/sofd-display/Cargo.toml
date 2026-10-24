@@ -1,0 +1,26 @@
+[package]
+name = "sofd-display"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+description = "The display list that the nested OFD template tree flattens into, shared by every consumer"
+keywords = ["ofd", "display-list", "rendering", "document"]
+categories = ["rendering"]
+
+# The display list is the shared IR for render, print and export.
+# It depends on geometry and fonts, never on a concrete backend.
+[dependencies]
+sofd-common.workspace = true
+sofd-error.workspace = true
+sofd-geometry.workspace = true
+sofd-font.workspace = true
+serde.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+
+[package.metadata.cargo-semver-checks.lints]
+workspace = true

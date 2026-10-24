@@ -98,7 +98,7 @@ def review(subject: str, lines: dict[str, int]) -> list[str]:
 
     match = SUBJECT_RE.match(subject)
     scope = match.group(2) if match else None
-    named = f"crates/steleofd-{scope}" if scope else None
+    named = f"crates/sofd-{scope}" if scope else None
 
     # The subject names the area it changes. A second area of that size is a
     # second change, unless the subject is the only place the scope appears.

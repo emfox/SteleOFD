@@ -22,10 +22,10 @@ import check_commit_scope as scope  # noqa: E402
 
 class AreaTest(unittest.TestCase):
     def test_crate_paths_group_by_crate(self):
-        self.assertEqual(scope.area("crates/steleofd-parser/src/lib.rs"),
-                         "crates/steleofd-parser")
-        self.assertEqual(scope.area("crates/steleofd-parser/tests/a.rs"),
-                         "crates/steleofd-parser")
+        self.assertEqual(scope.area("crates/sofd-parser/src/lib.rs"),
+                         "crates/sofd-parser")
+        self.assertEqual(scope.area("crates/sofd-parser/tests/a.rs"),
+                         "crates/sofd-parser")
 
     def test_workspace_manifest_is_its_own_area(self):
         # `crates` is in this repository a directory of crates, not a crate
@@ -45,11 +45,11 @@ class AreaTest(unittest.TestCase):
 
 class ReviewTest(unittest.TestCase):
     def test_one_area_is_one_change(self):
-        lines = {"crates/steleofd-parser": 200}
+        lines = {"crates/sofd-parser": 200}
         self.assertEqual(scope.review("fix(parser): step glyphs", lines), [])
 
     def test_a_small_second_area_is_a_mention(self):
-        lines = {"crates/steleofd-parser": 200, "scripts": 5}
+        lines = {"crates/sofd-parser": 200, "scripts": 5}
         self.assertEqual(scope.review("fix(parser): step glyphs", lines), [])
 
     def test_two_heavy_areas_are_reported(self):
@@ -57,31 +57,31 @@ class ReviewTest(unittest.TestCase):
         # the first have to hold half the lines. Two crates at 200 and 180
         # with nothing else is the borderline the check deliberately lets
         # through: at that ratio the "second change" may be a move.
-        lines = {"crates/steleofd-parser": 200,
-                 "crates/steleofd-display": 150,
-                 "crates/steleofd-font": 150}
+        lines = {"crates/sofd-parser": 200,
+                 "crates/sofd-display": 150,
+                 "crates/sofd-font": 150}
         reasons = scope.review("fix(parser): step glyphs", lines)
         self.assertTrue(reasons, lines)
 
     def test_subject_naming_a_crate_the_bulk_is_not_in_is_reported(self):
-        lines = {"crates/steleofd-display": 200,
-                 "crates/steleofd-parser": 60}
+        lines = {"crates/sofd-display": 200,
+                 "crates/sofd-parser": 60}
         reasons = scope.review("fix(parser): step glyphs", lines)
         self.assertTrue(reasons)
-        self.assertIn("crates/steleofd-parser", reasons[0])
+        self.assertIn("crates/sofd-parser", reasons[0])
 
     def test_subject_scope_matches_primary_area(self):
         # The bulk is where the subject says it is. That is not enough to
         # clear the commit: `review` also asks whether the lines outside the
         # primary area hold half the total, and here they do not, so this
         # passes -- but for the spread rule, not because of the subject.
-        lines = {"crates/steleofd-parser": 300, "crates/steleofd-display": 20}
+        lines = {"crates/sofd-parser": 300, "crates/sofd-display": 20}
         self.assertEqual(scope.review("fix(parser): step glyphs", lines), [])
 
     def test_a_concentrated_change_is_not_a_squash(self):
         # A rename moves lines into one area; the others are mentions.
-        lines = {"crates/steleofd-parser": 400,
-                 "crates/steleofd-display": 39,
+        lines = {"crates/sofd-parser": 400,
+                 "crates/sofd-display": 39,
                  "scripts": 20}
         self.assertEqual(scope.review("refactor(parser): rename a type", lines), [])
 
@@ -126,7 +126,7 @@ class EndToEndTest(unittest.TestCase):
     def test_reports_a_squash_and_passes_a_clean_history(self):
         with tempfile.TemporaryDirectory() as tmp:
             repo = pathlib.Path(tmp)
-            for path in ("crates/steleofd-parser", "crates/steleofd-display",
+            for path in ("crates/sofd-parser", "crates/sofd-display",
                          "scripts"):
                 (repo / path).mkdir(parents=True)
             self.git(repo, "init", "-q")
@@ -136,7 +136,7 @@ class EndToEndTest(unittest.TestCase):
             self.git(repo, "add", ".")
             self.git(repo, "commit", "-qm", "chore(ci): start")
 
-            for crate in ("steleofd-parser", "steleofd-display"):
+            for crate in ("sofd-parser", "sofd-display"):
                 for name in ("a.rs", "b.rs", "c.rs"):
                     (repo / "crates" / crate / name).write_text("x\n" * 100)
             self.git(repo, "add", ".")

@@ -29,8 +29,8 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 CHANGELOG = REPO / "CHANGELOG.md"
-BLOB = "https://github.com/emfox/SteleOFD/blob/main/"
-REPO_URL = "https://github.com/emfox/SteleOFD"
+BLOB = "https://github.com/emfox/sOFD/blob/main/"
+REPO_URL = "https://github.com/emfox/sOFD"
 
 
 def version_from_tag(tag: str) -> str:

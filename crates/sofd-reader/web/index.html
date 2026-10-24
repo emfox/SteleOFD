@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+<title>sOFD Reader</title>
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: #1b1b1f;
+  }
+  /* The canvas is the whole page: the reader draws its own panels. */
+  canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    touch-action: none;
+  }
+  #status {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #c8c8cc;
+    font: 15px/1.6 system-ui, sans-serif;
+    text-align: center;
+    padding: 2rem;
+  }
+</style>
+</head>
+<body>
+<div id="status">正在载入…</div>
+<canvas id="reader"></canvas>
+<script type="module">
+  import init, { ReaderHandle } from './pkg/sofd_reader.js';
+
+  const status = document.getElementById('status');
+  const canvas = document.getElementById('reader');
+
+  async function main() {
+    // The module has to be loaded before the canvas can be handed over.
+    await init();
+    const reader = new ReaderHandle();
+    await reader.start(canvas);
+    status.remove();
+  }
+
+  main().catch((err) => {
+    // A reader that cannot start says why rather than showing an empty page.
+    status.textContent = `无法启动阅读器：${err}`;
+    console.error(err);
+  });
+</script>
+</body>
+</html>

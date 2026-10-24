@@ -245,7 +245,7 @@ the Rust callers, not a first step.
 
 ## What the parser has to learn first
 
-`crates/steleofd-crypto/src/cert.rs` reads six fields today — subject, issuer,
+`crates/sofd-crypto/src/cert.rs` reads six fields today — subject, issuer,
 serial, the two validity bounds and the public key — through `x509-parser`, and
 keeps nothing else. None of the three extensions above is among them, so a path
 cannot be built until the parser keeps `basicConstraints`, `keyUsage` and

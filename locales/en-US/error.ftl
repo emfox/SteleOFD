@@ -1,4 +1,4 @@
-# SteleOFD English (US) · Error messages
+# sOFD English (US) · Error messages
 # Design: errors originate from structured enums; parameters are filled in by the
 # presentation layer, so word order can be rearranged per language.
 

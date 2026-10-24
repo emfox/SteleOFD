@@ -1,0 +1,26 @@
+[package]
+name = "sofd-sign"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+description = "Read and verify OFD electronic signatures (GB/T 33190 clause 18)"
+keywords = ["ofd", "signature", "sm2", "digital-signature", "gb-t-33190"]
+categories = ["authentication", "cryptography"]
+
+[dependencies]
+sofd-common.workspace = true
+sofd-error.workspace = true
+sofd-xml.workspace = true
+sofd-package.workspace = true
+sofd-crypto.workspace = true
+serde.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+sofd-testkit.workspace = true
+
+[package.metadata.cargo-semver-checks.lints]
+workspace = true

@@ -1,4 +1,4 @@
-# SteleOFD English (US) · Command line output
+# sOFD English (US) · Command line output
 
 cli-pages = Pages: { $count }
 cli-page-size = Page size: { $w } x { $h } mm

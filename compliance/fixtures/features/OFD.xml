@@ -2,9 +2,9 @@
 <ofd:OFD xmlns:ofd="http://www.ofdspec.org/2016" Version="1.0" DocType="OFD">
   <ofd:DocBody>
     <ofd:DocInfo>
-      <ofd:DocID>urn:steleofd:features:0001</ofd:DocID>
+      <ofd:DocID>urn:sofd:features:0001</ofd:DocID>
       <ofd:Title>Document exercising the resource, action and mark clauses</ofd:Title>
-      <ofd:Author>SteleOFD conformance fixtures</ofd:Author>
+      <ofd:Author>sOFD conformance fixtures</ofd:Author>
       <ofd:CreationDate>2024-01-01</ofd:CreationDate>
     </ofd:DocInfo>
     <ofd:DocRoot>Doc_0/Document.xml</ofd:DocRoot>

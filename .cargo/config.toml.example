@@ -1,4 +1,4 @@
-# Example local build configuration for SteleOFD
+# Example local build configuration for sOFD
 #
 # Usage: copy to .cargo/config.toml (which .gitignore excludes)
 #

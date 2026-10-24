@@ -1,7 +1,7 @@
-# SteleOFD English (US) · Core UI strings
+# sOFD English (US) · Core UI strings
 # Convention: keys are lowercase-hyphenated English. Never use sentences as keys.
 
-app-name = SteleOFD
+app-name = sOFD
 app-ready = Ready
 app-loading = Loading… ({ $percent }%)
 app-cancelled = Operation cancelled

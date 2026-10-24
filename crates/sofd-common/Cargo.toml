@@ -1,0 +1,18 @@
+[package]
+name = "sofd-common"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+description = "Foundational types shared across the OFD stack"
+keywords = ["ofd", "document", "shared"]
+categories = ["parser-implementations"]
+
+[dependencies]
+bitflags.workspace = true
+serde.workspace = true
+
+[package.metadata.cargo-semver-checks.lints]
+workspace = true
