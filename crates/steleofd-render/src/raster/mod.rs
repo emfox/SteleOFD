@@ -231,7 +231,10 @@ pub fn render_page(
                 }
                 if let Some(paint) = stroke {
                     let p = paint_for(paint, total).unwrap_or_else(|| solid_paint(paint));
-                    let ts_stroke = to_ts_stroke(stroke_style, &state, options.dpi);
+                    let mut ts_stroke = to_ts_stroke(stroke_style, &state, options.dpi);
+                    if is_hairline(&p, &ts_stroke) {
+                        ts_stroke.width = hairline_width(&ts_stroke);
+                    }
                     pixmap.stroke_path(
                         &ts_path,
                         &p,
@@ -287,8 +290,8 @@ mod text;
 
 use gradient::{focal_shader, linear_shader};
 use shape::{
-    State, clip_mask, fill_rule, glyph_outlines, paint_for, solid_paint, to_color, to_ts,
-    to_ts_path, to_ts_stroke, total_transform,
+    State, clip_mask, fill_rule, glyph_outlines, hairline_width, is_hairline, paint_for,
+    solid_paint, to_color, to_ts, to_ts_path, to_ts_stroke, total_transform,
 };
 use text::{ImageOutcome, TextOutcome, draw_image, draw_text};
 

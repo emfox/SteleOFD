@@ -715,6 +715,90 @@ fn a_pattern_fill_stays_inside_its_path() {
     assert_eq!(pixel(&output, 15, 15)[1], 128, "inside the path is painted");
 }
 
+/// A circle, drawn as four quarter arcs, on a page that fills the
+/// raster exactly: 20 mm across at 25.4 DPI, so a point's millimetres and its
+/// pixels coincide and a rim of radius 8 must reach 8px in every direction.
+fn circle_page(stroke_width: f64) -> PageDisplay {
+    let mut rim = Path::default();
+    rim.segments
+        .push(steleofd_geometry::PathSegment::MoveTo(18.0, 10.0));
+    for to in [(10.0, 2.0), (2.0, 10.0), (10.0, 18.0), (18.0, 10.0)] {
+        rim.segments.push(steleofd_geometry::PathSegment::Arc {
+            rx: 8.0,
+            ry: 8.0,
+            x_axis_rotation: 0.0,
+            large_arc: false,
+            sweep: false,
+            to,
+        });
+    }
+    PageDisplay {
+        index: 0,
+        page_box: Rect::new(0.0, 0.0, 20.0, 20.0),
+        ops: vec![DrawOp::Path {
+            path: rim,
+            fill: None,
+            stroke: Some(Paint::Solid(Color::rgba(0, 0, 0, 255))),
+            stroke_style: StrokeStyle {
+                width: stroke_width,
+                ..StrokeStyle::default()
+            },
+            rule: PaintRule::NonZero,
+        }],
+        content_bbox: Rect::new(2.0, 2.0, 16.0, 16.0),
+    }
+}
+
+/// How far the ink reaches along a ray from the centre, in pixels.
+fn rim_reach(output: &steleofd_render::RasterOutput, cx: f64, cy: f64, degrees: f64) -> u32 {
+    let a = degrees.to_radians();
+    let mut reach = 0;
+    for t in 0..40u32 {
+        let t = t as f64;
+        let (x, y) = (cx + t * a.cos(), cy + t * a.sin());
+        if x < 0.0 || y < 0.0 || x >= output.width as f64 || y >= output.height as f64 {
+            break;
+        }
+        if pixel(output, x as u32, y as u32)[3] > 40 {
+            reach = t as u32;
+        }
+    }
+    reach
+}
+
+#[test]
+fn a_one_pixel_stroke_follows_the_curve_it_outlines() {
+    // tiny-skia paints a stroke under a pixel as a hairline, and that painter
+    // drops cubic segments: the circle becomes a polygon up to a tenth of its
+    // radius off the rim, which turned a real invoice's round mark into a square.
+    let fonts = FontManager::new();
+    let options = RenderOptions {
+        background: None,
+        dpi: 25.4,
+        ..Default::default()
+    };
+    for width in [0.01, 0.02, 0.04] {
+        let output = render_page(&circle_page(width), &fonts, &options).expect("render");
+        let (cx, cy) = (output.width as f64 / 2.0, output.height as f64 / 2.0);
+        let reaches: Vec<u32> = (0..24)
+            .map(|i| rim_reach(&output, cx, cy, i as f64 * 15.0))
+            .collect();
+
+        let (min, max) = (
+            *reaches.iter().min().unwrap(),
+            *reaches.iter().max().unwrap(),
+        );
+        assert!(
+            min > 0,
+            "width {width}: the rim did not render at all, reaches {reaches:?}"
+        );
+        assert!(
+            max - min <= 2,
+            "width {width}: the rim is not a circle, reaches {reaches:?}"
+        );
+    }
+}
+
 /// Mark every pixel that has ink on it.
 fn ink_map(output: &steleofd_render::RasterOutput) -> Vec<bool> {
     let mut map = vec![false; (output.width * output.height) as usize];

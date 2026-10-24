@@ -189,6 +189,34 @@ pub(crate) fn to_ts_stroke(style: &StrokeStyle, state: &State, dpi: f64) -> Stro
     }
 }
 
+/// Whether tiny-skia will paint this stroke as a modulated one-pixel hairline
+/// rather than outlining it. The test is the one `treat_as_hairline` applies,
+/// restated so this side can tell which painter will run: tiny-skia's hairline
+/// scan converter only understands quadratic curve segments, and drops the
+/// cubic ones, which turns a circle drawn as cubics into a polygon.
+pub(crate) fn is_hairline(paint: &TsPaint<'_>, stroke: &Stroke) -> bool {
+    stroke.width > 0.0 && paint.anti_alias && !reaches_a_pixel(stroke.width)
+}
+
+fn reaches_a_pixel(width: f32) -> bool {
+    fast_len(width, 0.0) > 1.0 || fast_len(0.0, width) > 1.0
+}
+
+fn fast_len(x: f32, y: f32) -> f32 {
+    let (mut x, mut y) = (x.abs(), y.abs());
+    if x < y {
+        std::mem::swap(&mut x, &mut y);
+    }
+    x + y * 0.5
+}
+
+/// One device pixel, in the units the stroke width is in — the two went through
+/// the same scale, so a width of one draws the same mark the hairline painter
+/// would, and now goes through a painter that can outline a curve.
+pub(crate) fn hairline_width(_stroke: &Stroke) -> f32 {
+    1.0
+}
+
 pub(crate) fn push_segment(builder: &mut TsBuilder, seg: &PathSegment, cur: &mut (f64, f64)) {
     match seg {
         PathSegment::MoveTo(x, y) => {
