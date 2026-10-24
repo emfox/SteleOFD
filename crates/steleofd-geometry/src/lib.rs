@@ -6,7 +6,9 @@
 #![warn(missing_docs)]
 
 pub mod affine;
+pub mod arc;
 pub mod path;
 
 pub use affine::Affine;
-pub use path::{Path, PathBuilder, PathSegment};
+pub use arc::arc_cubics;
+pub use path::{Cubic, Path, PathBuilder, PathSegment};

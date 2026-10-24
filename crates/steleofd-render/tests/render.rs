@@ -714,3 +714,139 @@ fn a_pattern_fill_stays_inside_its_path() {
     );
     assert_eq!(pixel(&output, 15, 15)[1], 128, "inside the path is painted");
 }
+
+/// Mark every pixel that has ink on it.
+fn ink_map(output: &steleofd_render::RasterOutput) -> Vec<bool> {
+    let mut map = vec![false; (output.width * output.height) as usize];
+    for y in 0..output.height {
+        for x in 0..output.width {
+            map[(y * output.width + x) as usize] = pixel(output, x, y)[3] > 40;
+        }
+    }
+    map
+}
+
+/// The placeholder a real invoice puts before the amount in words, as the file
+/// writes it: `M 10.07 5.54`, four `B` commands of three points each, then the
+/// strokes of the cross, all moved five millimetres right and down onto a
+/// twenty-millimetre page. Read one point out, as taking `B` for `C` does, the
+/// last arc ends at `(10.07,8.04)` instead of `(10.07,5.54)` and the ring is
+/// left open on its right, which is the break this test exists to catch.
+fn placeholder_page(stroke_width: f64) -> PageDisplay {
+    use steleofd_geometry::PathSegment;
+    // The file's own numbers, in the order they follow the `M`.
+    const DATA: [(f64, f64); 12] = [
+        (10.07, 3.04),
+        (8.04, 1.0),
+        (5.53, 1.0),
+        (3.03, 1.0),
+        (1.0, 3.04),
+        (1.0, 5.54),
+        (1.0, 8.04),
+        (3.03, 10.08),
+        (5.53, 10.08),
+        (8.04, 10.08),
+        (10.07, 8.04),
+        (10.07, 5.54),
+    ];
+    const START: (f64, f64) = (10.07, 5.54);
+    let shifted = |p: (f64, f64)| (p.0 + 5.0, p.1 + 5.0);
+    let mut mark = Path::default();
+    let from = shifted(START);
+    mark.segments.push(PathSegment::MoveTo(from.0, from.1));
+    for chunk in DATA.chunks(3) {
+        mark.segments.push(PathSegment::CurveTo {
+            c1: shifted(chunk[0]),
+            c2: shifted(chunk[1]),
+            to: shifted(chunk[2]),
+        });
+    }
+    mark.segments.push(PathSegment::MoveTo(7.3, 7.3));
+    mark.segments.push(PathSegment::LineTo(13.7, 13.7));
+    mark.segments.push(PathSegment::MoveTo(7.3, 13.7));
+    mark.segments.push(PathSegment::LineTo(13.7, 7.3));
+    PageDisplay {
+        index: 0,
+        page_box: Rect::new(0.0, 0.0, 20.0, 20.0),
+        ops: vec![DrawOp::Path {
+            path: mark,
+            fill: None,
+            stroke: Some(Paint::Solid(Color::rgba(0, 0, 0, 255))),
+            stroke_style: StrokeStyle {
+                width: stroke_width,
+                ..StrokeStyle::default()
+            },
+            rule: PaintRule::NonZero,
+        }],
+        content_bbox: Rect::new(6.0, 6.0, 10.0, 10.0),
+    }
+}
+
+#[test]
+fn a_placeholder_ring_written_as_four_cubics_comes_out_whole() {
+    // Each arc has to end where the next begins, and the last where the ring
+    // began. Read one point out and the ring is left open on its right: no
+    // direction may fall short of the others.
+    let fonts = FontManager::new();
+    // Two pixels to the millimetre, so the ring's four-and-a-half-millimetre
+    // radius shows as a circle about nine pixels out, where a gap of half a
+    // millimetre on an axis cannot pass as part of it.
+    let options = RenderOptions {
+        background: None,
+        dpi: 50.8,
+        ..Default::default()
+    };
+    // The axis and diagonal directions, which is where a gap in the ring shows.
+    let directions = [0.0_f64, 45.0, 90.0, 135.0, 180.0, 225.0, 270.0, 315.0];
+    for width in [0.5, 1.0] {
+        let output = render_page(&placeholder_page(width), &fonts, &options).expect("render");
+        let reaches: Vec<f64> = directions
+            .iter()
+            .map(|d| reach_from_middle(&ink_map(&output), output.width, output.height, *d))
+            .collect();
+        let (min, max) = (
+            reaches.iter().cloned().fold(f64::MAX, f64::min),
+            reaches.iter().cloned().fold(f64::MIN, f64::max),
+        );
+        // A ring reaches the same distance in every direction; one with a gap in
+        // it falls short where the gap is.
+        assert!(
+            max - min <= 1.5,
+            "width {width}: the ring reaches {min:.1}px at its narrowest and {max:.1}px at \
+             its widest, so it is not whole, reaches {reaches:?}"
+        );
+    }
+}
+
+/// The centre of everything inked, and how far the ink reaches in one direction
+/// from it, in pixels.
+fn reach_from_middle(map: &[bool], width: u32, height: u32, degrees: f64) -> f64 {
+    let (mut x0, mut y0, mut x1, mut y1) = (f64::MAX, f64::MAX, f64::MIN, f64::MIN);
+    for y in 0..height {
+        for x in 0..width {
+            if map[(y * width + x) as usize] {
+                x0 = x0.min(x as f64);
+                y0 = y0.min(y as f64);
+                x1 = x1.max(x as f64 + 1.0);
+                y1 = y1.max(y as f64 + 1.0);
+            }
+        }
+    }
+    let centre = ((x0 + x1) / 2.0, (y0 + y1) / 2.0);
+    let (sin, cos) = degrees.to_radians().sin_cos();
+    let mut reach = 0.0;
+    // Walk out a tenth of a pixel at a time; a pixel is as fine as the edge can
+    // be told, so the reach carries the grid's own error and no more.
+    for step in 1..=300 {
+        let t = step as f64 * 0.1;
+        let px = (centre.0 + t * cos).floor();
+        let py = (centre.1 + t * sin).floor();
+        if px < 0.0 || py < 0.0 || px >= width as f64 || py >= height as f64 {
+            break;
+        }
+        if map[(py as u32 * width + px as u32) as usize] {
+            reach = t;
+        }
+    }
+    reach
+}

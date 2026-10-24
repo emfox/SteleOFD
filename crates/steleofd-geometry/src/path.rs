@@ -6,6 +6,10 @@ use serde::{Deserialize, Serialize};
 use steleofd_common::Rect;
 
 use crate::Affine;
+use crate::arc::arc_cubics;
+
+/// One cubic segment of a flattened arc: two control points and the endpoint.
+pub type Cubic = ((f64, f64), (f64, f64), (f64, f64));
 
 /// One segment of a path.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -313,9 +317,31 @@ fn bbox_of_segments(segments: &[PathSegment], tight: bool) -> Rect {
                 cur = to;
                 acc(to.0, to.1);
             }
-            PathSegment::Arc { to, .. } => {
-                acc(to.0, to.1);
+            PathSegment::Arc {
+                rx,
+                ry,
+                x_axis_rotation,
+                large_arc,
+                sweep,
+                to,
+            } => {
+                if tight {
+                    // An arc's endpoints say nothing about where it bulges, so
+                    // the curve is sampled: four semicircle arcs put all four
+                    // endpoints on the rim and would measure as a square.
+                    for (c1, c2, end) in
+                        arc_cubics(rx, ry, x_axis_rotation, large_arc, sweep, cur, to)
+                    {
+                        for i in 0..=16 {
+                            let t = i as f64 / 16.0;
+                            let p = cubic_at(cur, c1, c2, end, t);
+                            acc(p.0, p.1);
+                        }
+                        cur = end;
+                    }
+                }
                 cur = to;
+                acc(to.0, to.1);
             }
             PathSegment::Close => {}
         }

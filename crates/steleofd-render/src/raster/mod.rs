@@ -292,7 +292,7 @@ use shape::{
 };
 use text::{ImageOutcome, TextOutcome, draw_image, draw_text};
 
-pub use shape::{Cubic, arc_cubics};
+pub use steleofd_geometry::{Cubic, arc_cubics};
 
 /// Rasterize a pattern cell at `scale` pixels per millimetre, so a tile and the
 /// page it repeats on agree. The cell carries its own bounds, which become the
