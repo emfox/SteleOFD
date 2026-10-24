@@ -1230,7 +1230,7 @@ mod tests {
     }
 
     #[test]
-    fn an_object_takes_the_draw_param_its_layer_states() {
+    fn gb_t_33190_8_5_a_layer_gives_its_objects_a_draw_parameter() {
         let ops = run_in_layer(
             Some("7"),
             vec![Object::PathObject(filled_path_object("M 0 0 L 10 10"))],
