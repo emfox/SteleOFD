@@ -4,9 +4,21 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). How a
 release is written up is in
-[Conventions.md](docs/Conventions.md#5-closing-a-roadmap-item).
+[Conventions.md](docs/Conventions.md#5-closing-an-issue).
 
 ## [Unreleased]
+
+### Reader
+
+- **An OFD opened from a share arrives even when the sender named the container**:
+  the Android filter now takes `application/zip` and `application/octet-stream`
+  beside `application/ofd`, which is what a file manager that cannot name OFD
+  sends. A share of the wrong type opens and is refused with a reason.
+- **The window frame draws its title through Crossfont** rather than `ab_glyph`,
+  which leaves no unmaintained crate in the dependency tree.
+- **Two writes of one document are byte-identical.** The archive writer stamped
+  each entry with the clock, so a document saved twice differed and no digest
+  could be compared.
 
 ## [0.4.0] - 2026-10-23
 
