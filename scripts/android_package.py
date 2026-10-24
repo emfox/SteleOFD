@@ -251,8 +251,8 @@ def keystore(work: Path) -> Path:
         java_tool("keytool"), "-genkeypair",
         "-keystore", str(path),
         "-alias", "sofd",
-        "-storepass", "sofd",
-        "-keypass", "sofd",
+        "-storepass", "sofdpass",
+        "-keypass", "sofdpass",
         "-keyalg", "RSA",
         "-keysize", "2048",
         "-validity", "10000",
@@ -298,9 +298,9 @@ def package(sdk: Path, library: Path, out: Path) -> Path:
         run([
             build_tool(sdk, "apksigner"), "sign",
             "--ks", str(key),
-            "--ks-pass", "pass:sofd",
+            "--ks-pass", "pass:sofdpass",
             "--ks-key-alias", "sofd",
-            "--key-pass", "pass:sofd",
+            "--key-pass", "pass:sofdpass",
             "--out", str(signed),
             str(aligned),
         ])
