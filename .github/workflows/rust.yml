@@ -117,6 +117,16 @@ jobs:
       - name: Build every target and feature
         run: cargo build --workspace --all-targets --all-features
 
+      # The five worked examples are the starting point a third party copies,
+      # so an example that stops compiling is a broken front door. They are
+      # named rather than left to `--all-targets`, because the browser one only
+      # exists on wasm32 and the host build proves nothing about it.
+      - name: Worked examples
+        run: |
+          cargo build --workspace --examples
+          rustup target add wasm32-unknown-unknown
+          cargo build -p steleofd-wasm --example browser --target wasm32-unknown-unknown
+
       # The Android build is checked here rather than only on a release tag: a
       # feature its device lacks compiles to a library that loads and exits, so
       # the gate runs on every push. Device tests cannot, without an emulator.

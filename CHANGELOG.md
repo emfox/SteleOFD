@@ -8,6 +8,14 @@ release is written up is in
 
 ## [Unreleased]
 
+### Examples
+
+- **One worked example per delivery form**, each a single file that opens a
+  document and takes it somewhere: `command_line.rs` under `steleofd-cli`,
+  `c_abi.rs` under `steleofd-ffi`, `browser.rs` under `steleofd-wasm`,
+  `http_service.rs` under `steleofd-server` and `desktop_viewer.rs` under
+  `steleofd-reader`. CI builds all five, the browser one on `wasm32`.
+
 ### Reader
 
 - **An OFD opened from a share arrives even when the sender named the container**:

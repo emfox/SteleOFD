@@ -34,6 +34,21 @@ SteleOFD 是 [GB/T 33190-2016《电子文件存储与交换格式 版式文档�
 | 多端交付 | 同一内核编译为 CLI、WASM、C ABI、HTTP 服务与桌面阅读器 |
 | 国际化 | 基于 Fluent 的消息层，内置 en-US / zh-CN |
 
+## 可直接运行的示例
+
+每种交付形态一个，各是一个文件：打开文档，把它带到某处，`cargo run` 即可：
+
+| 形态 | 示例 | 展示的内容 |
+|---|---|---|
+| CLI | [`command_line.rs`](crates/steleofd-cli/examples/command_line.rs) | 按路径打开、读出文档声明的内容、逐页渲染、校验签名 |
+| C ABI | [`c_abi.rs`](crates/steleofd-ffi/examples/c_abi.rs) | C 宿主会发起的同一组调用，对照生成的[头文件](crates/steleofd-ffi/include/steleofd.h) |
+| 浏览器 | [`browser.rs`](crates/steleofd-wasm/examples/browser.rs) | 从 Rust 侧看到的 JS 边界：位图、SVG、检索 |
+| HTTP | [`http_service.rs`](crates/steleofd-server/examples/http_service.rs) | 路由、存储与优雅退出，可挂进你自己的进程 |
+| 桌面 | [`desktop_viewer.rs`](crates/steleofd-reader/examples/desktop_viewer.rs) | 阅读器界面画进一个 `egui::Ui`，无窗口、无显示服务 |
+
+`cargo build --workspace --examples` 可构建其中四个；浏览器那个需要
+`--target wasm32-unknown-unknown`，CI 就在该目标上构建它。
+
 ## 获取构建产物
 
 推送 `v*` 标签会为每个 `egui` 支持的平台构建阅读器，并与 C ABI 库、内核的

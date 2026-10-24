@@ -38,6 +38,22 @@ for anyone working on it.
 | Delivery | One engine, built as a CLI, WebAssembly, a C ABI library, an HTTP service and a desktop reader |
 | Localization | Fluent message layer, en-US and zh-CN |
 
+## Working examples
+
+One per delivery form, each a single file that opens a document and takes it
+somewhere, `cargo run` away:
+
+| Form | Example | What it shows |
+|---|---|---|
+| CLI | [`command_line.rs`](crates/steleofd-cli/examples/command_line.rs) | open from a path, read what the document declares, render every page, verify signatures |
+| C ABI | [`c_abi.rs`](crates/steleofd-ffi/examples/c_abi.rs) | the same calls a C host makes, against the generated [header](crates/steleofd-ffi/include/steleofd.h) |
+| Browser | [`browser.rs`](crates/steleofd-wasm/examples/browser.rs) | the JS boundary from the Rust side: raster, SVG, search |
+| HTTP | [`http_service.rs`](crates/steleofd-server/examples/http_service.rs) | the router, the store and a graceful shutdown, mounted in your own process |
+| Desktop | [`desktop_viewer.rs`](crates/steleofd-reader/examples/desktop_viewer.rs) | the reader's interface drawn into an `egui::Ui`, with no window and no display |
+
+`cargo build --workspace --examples` builds four of them; the browser one needs
+`--target wasm32-unknown-unknown`, and CI builds it there.
+
 ## Getting the artefacts
 
 Pushing a `v*` tag builds the reader for every platform `egui` runs on, and
