@@ -38,6 +38,7 @@ tests = [
     "gb_t_33190_6_2_reference_outside_the_container_is_rejected",
     "gb_t_33190_6_2_reference_escaping_the_container_is_rejected",
     "gb_t_33190_6_2_a_reference_outside_the_container_fails_the_audit",
+    "gb_t_33190_6_2_a_rooted_reference_names_an_entry_rather_than_leaving",
 ]
 
 [[item]]
@@ -136,6 +137,7 @@ tests = [
     "gb_t_33190_7_9_an_unknown_space_falls_back_to_hex",
     "gb_t_33190_7_9_each_declared_resource_must_be_reachable",
     "gb_t_33190_7_9_the_audit_reports_a_severity_per_finding",
+    "gb_t_33190_7_9_a_table_base_loc_anchors_the_files_it_names",
 ]
 
 [[item]]
@@ -287,6 +289,7 @@ tests = [
     "gb_t_33190_8_5_a_graphics_unit_resolves_from_its_resource_id",
     "gb_t_33190_3_a_page_block_holds_objects_and_blocks_nest",
     "gb_t_33190_3_a_nested_block_moves_its_objects_into_its_own_space",
+    "gb_t_33190_8_5_a_layer_gives_its_objects_a_draw_parameter",
 ]
 note = "Table 3 lists PageBlock among the objects a layer holds, and a block holds the same choice, so blocks recur."
 
@@ -334,7 +337,7 @@ tests = ["gb_t_33190_9_3_3_line_after_move_extends_the_path"]
 clause = "9.3.4"
 title = "Abbreviated data: bezier"
 status = "verified"
-tests = ["gb_t_33190_9_3_4_cubic_and_quadratic_segments"]
+tests = ["gb_t_33190_9_3_4_cubic_and_quadratic_segments", "gb_t_33190_9_3_4_b_states_both_control_points_and_the_end"]
 
 [[item]]
 clause = "9.3.5"
@@ -496,6 +499,7 @@ tests = [
   "gb_t_33190_18_2_3_a_seal_resolves_to_its_image_and_placements",
   "gb_t_33190_18_2_3_a_seal_with_no_image_still_places",
   "gb_t_33190_18_2_3_validation_reports_the_scope_it_checked",
+  "gb_t_33190_18_2_3_a_signed_value_is_checked_over_its_own_content",
 ]
 
 [[item]]
@@ -536,4 +540,5 @@ title = "Normative schema OFD.xsd"
 status = "verified"
 tests = [
     "gb_t_33190_a_1_the_normative_schemas_are_vendored",
+    "gb_t_33190_annex_a_a_path_naming_only_a_fill_colour_is_stroked",
 ]
