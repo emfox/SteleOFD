@@ -13,6 +13,11 @@ use steleofd_display::ImageCodec;
 /// image XObject wants RGB, and both used to spell out the expansion
 /// themselves.
 pub fn decode(data: &[u8], codec: ImageCodec, pixels: Pixels) -> Result<Decoded, String> {
+    // JBIG2 keeps no signature `image` could guess from, so it is read here and
+    // handed on as bytes rather than through the crate's format table.
+    if codec == ImageCodec::Jbig2 {
+        return decode_jbig2(data, pixels);
+    }
     let read = read(data, codec)?;
     let (width, height) = (read.width(), read.height());
     let bytes = match pixels {
@@ -36,6 +41,11 @@ pub fn decode(data: &[u8], codec: ImageCodec, pixels: Pixels) -> Result<Decoded,
 /// The pixel size of an image, read from its own header rather than from OFD's
 /// `<Size>`, which a placement may scale.
 pub fn pixel_size(data: &[u8], codec: ImageCodec) -> Option<(u32, u32)> {
+    // JBIG2 keeps its dimensions in a segment rather than a magic number, so it
+    // is asked directly instead of being left to `image` to fail on.
+    if codec == ImageCodec::Jbig2 {
+        return jbig2::dimensions(data);
+    }
     read(data, codec)
         .ok()
         .map(|image| (image.width(), image.height()))
@@ -65,33 +75,46 @@ pub struct Decoded {
     pub height: u32,
 }
 
-/// Read a resource with the `image` crate, one call per encoding.
+/// Decode a bi-level page, then repeat each sample into colour channels.
 ///
-/// A decode may only name the formats `image` spells out, so a decoder
-/// registered under another name is out of reach through
-/// `load_from_memory_with_format`; a named file reaches the same table by the
-/// one route `image` leaves open. The rest name their format directly.
-fn read(data: &[u8], codec: ImageCodec) -> Result<image::DynamicImage, String> {
-    let fail = |e: image::ImageError| e.to_string();
-    match codec {
-        ImageCodec::Jbig2 => {
-            hayro_jbig2::integration::register_decoding_hook();
-            let path = named(data, "jbig2");
-            // Unlinked once read, so a decode leaves nothing behind even if a
-            // later step fails or the caller panics.
-            let loaded = image::ImageReader::open(&path).and_then(|reader| {
-                reader
-                    .with_guessed_format()
-                    .map_err(std::io::Error::other)
-                    .and_then(|reader| reader.decode().map_err(std::io::Error::other))
-            });
-            let _ = std::fs::remove_file(&path);
-            loaded.map_err(|e| e.to_string())
+/// A decoded page has only two values, so the three colour channels are the
+/// same byte and the fourth is opaque.
+fn decode_jbig2(data: &[u8], pixels: Pixels) -> Result<Decoded, String> {
+    let gray = jbig2::decode_to_gray(data)?;
+    let (width, height) = jbig2::dimensions(data).ok_or("JBIG2 has no dimensions")?;
+    if gray.len() != width as usize * height as usize {
+        return Err(format!(
+            "JBIG2 declares {width}x{height} but decoded {} bytes",
+            gray.len()
+        ));
+    }
+    let channels = match pixels {
+        Pixels::Rgb => 3,
+        Pixels::Rgba => 4,
+    };
+    let mut bytes = Vec::with_capacity(gray.len() * channels);
+    for &v in &gray {
+        bytes.extend_from_slice(&[v, v, v]);
+        if channels == 4 {
+            bytes.push(u8::MAX);
         }
+    }
+    Ok(Decoded {
+        bytes,
+        width,
+        height,
+    })
+}
+
+/// Read a resource with the `image` crate, naming the format it declares.
+fn read(data: &[u8], codec: ImageCodec) -> Result<image::DynamicImage, String> {
+    match codec {
         // Bare pixels carry no header, so `image` has nothing to read them by,
         // and naming one would paint noise. No sample uses a raw resource.
         ImageCodec::Raw => Err("bare pixels carry no header to read them by".to_string()),
-        _ => image::load_from_memory_with_format(data, format_of(codec)).map_err(fail),
+        // Answered by `decode` and `pixel_size` before this is reached.
+        ImageCodec::Jbig2 => Err("JBIG2 has no format in `image` to be named".to_string()),
+        _ => image::load_from_memory_with_format(data, format_of(codec)).map_err(|e| e.to_string()),
     }
 }
 
@@ -107,28 +130,10 @@ fn format_of(codec: ImageCodec) -> image::ImageFormat {
         ImageCodec::Tiff => image::ImageFormat::Tiff,
         ImageCodec::Bmp => image::ImageFormat::Bmp,
         ImageCodec::Gif => image::ImageFormat::Gif,
-        // Answered by `read` before this is reached, for the reason it gives.
+        // Answered by the callers above, for the reason each gives.
         ImageCodec::Jbig2 | ImageCodec::Raw => image::ImageFormat::Png,
     }
 }
-
-/// Write the bytes to a temporary file whose extension names their format.
-///
-/// `image` reads an extension only from a path, so a decode that names a format
-/// has to arrive as one.
-fn named(data: &[u8], extension: &str) -> std::path::PathBuf {
-    let path = std::env::temp_dir().join(format!(
-        "steleofd-{}-{}.{extension}",
-        std::process::id(),
-        NAMED[0].fetch_add(1, std::sync::atomic::Ordering::Relaxed)
-    ));
-    std::fs::write(&path, data).expect("a temporary file for one decode");
-    path
-}
-
-/// Counts the files this process has written, so two decodes racing in one
-/// process do not share a name.
-static NAMED: [std::sync::atomic::AtomicU64; 1] = [std::sync::atomic::AtomicU64::new(0)];
 
 /// Scale a colour channel by its alpha, the form a raster canvas expects.
 ///
@@ -142,3 +147,5 @@ pub fn premultiply(px: [u8; 4]) -> [u8; 4] {
     let m = |c: u8| ((c as u32 * a + 127) / 255) as u8;
     [m(px[0]), m(px[1]), m(px[2]), px[3]]
 }
+
+pub mod jbig2;

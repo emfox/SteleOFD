@@ -2271,7 +2271,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "000e025850f4592ddcaee85640db70704151f2bafd43b6f431aa5b6a2c6a35a9"
 dependencies = [
  "hayro-ccitt",
- "image",
 ]
 
 [[package]]
