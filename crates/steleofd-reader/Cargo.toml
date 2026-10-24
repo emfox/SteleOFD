@@ -102,10 +102,14 @@ features = ["android-native-activity", "default_fonts", "glow", "wgpu"]
 
 # The window decorations winit draws itself when a compositor offers none.
 # `eframe` does not pass this through, so the desktop target names winit too.
+# The `crossfont` variant rather than the default `ab_glyph` one, because the
+# latter parses its title face through `owned_ttf_parser` and leaves an
+# unmaintained crate in the tree; this project reads its own fonts with
+# `skrifa`, and the frame's face should not be the exception.
 [target.'cfg(not(any(target_arch = "wasm32", target_os = "android")))'.dependencies.winit]
 version = "0.30"
 default-features = false
-features = ["wayland-csd-adwaita"]
+features = ["wayland-csd-adwaita-crossfont"]
 
 [dev-dependencies]
 egui.workspace = true

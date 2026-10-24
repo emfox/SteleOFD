@@ -17,16 +17,11 @@ version = 2
 # and turning every yanked crate into a blocked build trains people to ignore it.
 db-urls = ["https://github.com/RustSec/advisory-db"]
 ignore = [
-    # ttf-parser is unmaintained (RUSTSEC-2026-0192). Nothing here parses a font
-    # with it: steleofd-font reads through skrifa. It stays reachable as
-    # sctk-adwaita -> owned_ttf_parser, the adapter winit draws its own window
-    # decorations with, so the fix is an eframe upgrade rather than a bump.
-    # Tracked as R21 beside the zbus entries below, which that upgrade carries.
-    "RUSTSEC-2026-0192",
     # zbus, zbus_names and zvariant are deprecated by their own authors in
     # favour of each other. They reach this build only through accesskit_unix,
-    # which winit pulls in for Linux accessibility, so the fix is an eframe
-    # upgrade and not a change this project can make. Tracked as R21.
+    # which winit pulls in for Linux accessibility, and atspi still names
+    # zbus_names even at its newest version, so the fix is an eframe upgrade
+    # and not a change this project can make. Tracked as #5.
     "RUSTSEC-2026-0371",
     "RUSTSEC-2026-0370",
     "RUSTSEC-2026-0372",
