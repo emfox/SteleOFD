@@ -15,8 +15,6 @@ steleofd-common.workspace = true
 steleofd-error.workspace = true
 steleofd-model.workspace = true
 steleofd-package.workspace = true
-steleofd-parser.workspace = true
-steleofd-geometry.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]

@@ -9,7 +9,6 @@ readme.workspace = true
 description = "Embedded fonts, system-resolved names, CID indices and metrics for OFD text"
 
 [dependencies]
-steleofd-common.workspace = true
 steleofd-error.workspace = true
 steleofd-geometry.workspace = true
 skrifa.workspace = true

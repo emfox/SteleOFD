@@ -10,7 +10,6 @@ description = "Full-text search over an OFD document, answering with page, run a
 
 [dependencies]
 steleofd-common.workspace = true
-steleofd-error.workspace = true
 steleofd-display.workspace = true
 steleofd-geometry.workspace = true
 tracing.workspace = true

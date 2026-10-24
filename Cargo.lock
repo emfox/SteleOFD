@@ -4668,9 +4668,7 @@ name = "steleofd-archive"
 version = "0.5.0"
 dependencies = [
  "serde",
- "steleofd-common",
  "steleofd-error",
- "steleofd-model",
  "steleofd-package",
  "steleofd-xml",
  "tracing",
@@ -4717,8 +4715,6 @@ dependencies = [
  "steleofd-font",
  "steleofd-geometry",
  "steleofd-io",
- "steleofd-model",
- "steleofd-parser",
  "steleofd-render",
  "steleofd-testkit",
  "tracing",
@@ -4763,7 +4759,6 @@ dependencies = [
  "sm2",
  "sm3",
  "sm4",
- "steleofd-common",
  "steleofd-error",
  "tracing",
  "x509-parser",
@@ -4789,10 +4784,8 @@ dependencies = [
  "steleofd-core",
  "steleofd-display",
  "steleofd-error",
- "steleofd-geometry",
  "steleofd-model",
  "steleofd-package",
- "steleofd-parser",
  "steleofd-testkit",
  "tracing",
 ]
@@ -4823,7 +4816,6 @@ dependencies = [
  "serde",
  "serde_json",
  "skrifa 0.48.0",
- "steleofd-common",
  "steleofd-error",
  "steleofd-geometry",
  "tracing",
@@ -4840,7 +4832,6 @@ dependencies = [
  "kurbo 0.12.0",
  "serde",
  "steleofd-common",
- "steleofd-error",
 ]
 
 [[package]]
@@ -4884,7 +4875,6 @@ dependencies = [
  "proptest",
  "steleofd-error",
  "steleofd-io",
- "steleofd-xml",
  "tracing",
  "zip",
 ]
@@ -4973,7 +4963,6 @@ dependencies = [
  "criterion",
  "steleofd-common",
  "steleofd-display",
- "steleofd-error",
  "steleofd-font",
  "steleofd-geometry",
  "steleofd-package",
@@ -5009,8 +4998,6 @@ dependencies = [
  "steleofd-common",
  "steleofd-crypto",
  "steleofd-error",
- "steleofd-geometry",
- "steleofd-model",
  "steleofd-package",
  "steleofd-testkit",
  "steleofd-xml",

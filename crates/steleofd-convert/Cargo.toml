@@ -13,12 +13,10 @@ description = "Write a display list as SVG, PDF or PNG"
 [dependencies]
 steleofd-common.workspace = true
 steleofd-error.workspace = true
-steleofd-model.workspace = true
 steleofd-display.workspace = true
 steleofd-io.workspace = true
 steleofd-geometry.workspace = true
 steleofd-font.workspace = true
-steleofd-parser.workspace = true
 steleofd-render.workspace = true
 image.workspace = true
 tracing.workspace = true

@@ -9,7 +9,6 @@ readme.workspace = true
 description = "SM3, SM4, SM2, X.509 inspection and GB/T 20520 timestamps, for OFD signatures"
 
 [dependencies]
-steleofd-common.workspace = true
 steleofd-error.workspace = true
 sm2.workspace = true
 signature.workspace = true

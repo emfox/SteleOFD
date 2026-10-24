@@ -9,9 +9,7 @@ readme.workspace = true
 description = "Audit an OFD file for archival readiness under GB/T 33190-2016 and GB/T 42133-2022"
 
 [dependencies]
-steleofd-common.workspace = true
 steleofd-error.workspace = true
-steleofd-model.workspace = true
 steleofd-package.workspace = true
 steleofd-xml.workspace = true
 serde.workspace = true
