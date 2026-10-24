@@ -31,8 +31,10 @@ release is written up is in
   each accepted a slightly different set of formats, so a resource could paint
   and then refuse to export. `parse::pixel_size` and the rasteriser's
   `decode_resource` now ask there, and `Pixels` picks RGB for an image XObject
-  and premultiplied RGBA for a canvas. JBIG2 moves to `steleofd_io::decode::jbig2`;
-  `steleofd-io` now depends on `steleofd-display` for `ImageCodec`.
+  and premultiplied RGBA for a canvas. JBIG2 is read through the decoder
+  `hayro-jbig2` registers with `image`, so the hand-written collector and its
+  separate format branch are gone; `steleofd-io` now depends on
+  `steleofd-display` for `ImageCodec`.
 
 - **A comparison's verdicts are told apart from the judging that produces
   them.** `Comparison`, `PageDiff` and `PageChange` are what a caller reads and
