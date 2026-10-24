@@ -1,6 +1,7 @@
 # sOFD
 
-OFD（Open Fixed-layout Document，版式文档）的 Rust 实现，涵盖阅读、转换与签章验证。
+**OFD 文档的完整 Rust 引擎** —— 打开、渲染、转换、打印、签章、编辑、检索、合规审计，
+一套 API 全覆盖。纯 Rust，零 unsafe，遵循 GB/T 33190-2016。
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
@@ -9,13 +10,24 @@ OFD（Open Fixed-layout Document，版式文档）的 Rust 实现，涵盖阅读
 [![License](https://img.shields.io/badge/license-Apache--2.0-green)](LICENSE)
 [![Standard](https://img.shields.io/badge/standard-GB%2FT%2033190--2016-red)]()
 
+```rust
+use sofd::{Document, RenderOptions};
+use sofd_io::FileSource;
+
+let source = FileSource::open("合同.ofd")?;
+let doc = Document::open(&source)?;
+let png = doc.to_png(0, &RenderOptions::default())?;
+```
+
 sOFD 是 [GB/T 33190-2016《电子文件存储与交换格式 版式文档》](https://openstd.samr.gov.cn/bzgk/gb/newGbInfo?hcno=3AF6682D939116B6F5EED53D01A9DB5D)
 的 Rust 实现。从解析到渲染全部自研，仓库里唯一的 C 库是 fontconfig——
 由 reader 在 Linux 上经 `font-kit` 调用。
 
-当前发布版本为 `0.4.0`：本版本移除了四个不启用任何功能的特性名，因此是
-`0.4.0` 而非补丁版本。本版本提供了什么见 [`CHANGELOG`](CHANGELOG.md)，
-尚待完成的具体工作见 [issue 列表](https://github.com/emfox/sOFD/issues)，
+当前发布版本为 `0.5.0`：所有 crate 统一改名为 `sofd`，门面即
+`cargo add sofd` 与 `use sofd::Document`；文档画出来的内容不变，
+35 个样例在改名前后的渲染结果逐字节一致。本版本提供了什么见
+[`CHANGELOG`](CHANGELOG.md)，尚待完成的具体工作见
+[issue 列表](https://github.com/emfox/sOFD/issues)，
 它服务于哪些大方向见 [`docs/Roadmap.md`](docs/Roadmap.md)。
 
 本文档分两部分：前半部分给使用 sOFD 的人，后半部分给参与开发的人。

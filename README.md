@@ -1,7 +1,8 @@
 # sOFD
 
-A Rust implementation of OFD (Open Fixed-layout Document), covering reading,
-conversion and signature verification.
+**A complete Rust engine for OFD documents** — open, render, convert, print,
+sign, edit, search and audit, behind one API. Pure Rust, zero unsafe, built to
+GB/T 33190-2016.
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
@@ -10,15 +11,25 @@ conversion and signature verification.
 [![License](https://img.shields.io/badge/license-Apache--2.0-green)](LICENSE)
 [![Standard](https://img.shields.io/badge/standard-GB%2FT%2033190--2016-red)]()
 
+```rust
+use sofd::{Document, RenderOptions};
+use sofd_io::FileSource;
+
+let source = FileSource::open("合同.ofd")?;
+let doc = Document::open(&source)?;
+let png = doc.to_png(0, &RenderOptions::default())?;
+```
+
 sOFD implements [GB/T 33190-2016, the Chinese national standard for
 fixed-layout electronic documents](https://openstd.samr.gov.cn/bzgk/gb/newGbInfo?hcno=3AF6682D939116B6F5EED53D01A9DB5D).
 Parsing and rendering are written from scratch; the one C library in the tree is
 fontconfig, reached through `font-kit` by the reader on Linux.
 
-The current release is `0.4.0`. It removes four feature names that enabled
-nothing, which is why it is `0.4.0` and not a patch. What it offers is in the
-[`CHANGELOG`](CHANGELOG.md); concrete work still to do is in the
-[issue tracker](https://github.com/emfox/sOFD/issues), and the direction it
+The current release is `0.5.0`. It renames every crate to `sofd`, so the facade
+is `cargo add sofd` and `use sofd::Document`; what a document draws is
+unchanged, and the 35 samples render byte-identically before and after. What it
+offers is in the [`CHANGELOG`](CHANGELOG.md); concrete work still to do is in
+the [issue tracker](https://github.com/emfox/sOFD/issues), and the direction it
 serves is in [`docs/Roadmap.md`](docs/Roadmap.md).
 
 This document has two halves: the first is for anyone using sOFD, the second
