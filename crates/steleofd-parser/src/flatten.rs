@@ -6,21 +6,23 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use steleofd_common::{Point, Rect};
-use steleofd_display::ops::{Color, GradientStop, LineCap, LineJoin};
+use steleofd_display::ops::{LineCap, LineJoin};
 use steleofd_display::{
     DisplayListBuilder, DrawOp, GlyphRun, ImageCodec, ImageRef, LinearGradientSpec, MeshSpec,
-    MeshVertex, Paint, PaintRule, RadialGradientSpec, StrokeStyle,
+    Paint, PaintRule, RadialGradientSpec, StrokeStyle,
 };
 use steleofd_error::{FormatError, OfdError, Result};
 use steleofd_font::FontId;
 use steleofd_geometry::{Affine, Path};
 use steleofd_model::PageBlock;
-use steleofd_model::color::{ColorRef, MeshPoint, PatternSpec, ReflectMethod, Segment, Shading};
+use steleofd_model::color::{ColorRef, PatternSpec, ReflectMethod, Shading};
 use steleofd_model::object::{
     CGTransform, CharDirection, DrawParam, ImageObject, LineCapStyle, LineJoinStyle, Object,
     ObjectBase, PathObject, ReadDirection, TextCode, TextObject,
 };
 use steleofd_xml::parse_number_list_n;
+
+use crate::color::{mesh_vertices, solid, stops_of};
 
 /// Default stroke width in millimetres when neither the object nor its draw
 /// parameter says otherwise; the standard names 0.35 mm as the default.
@@ -236,93 +238,6 @@ fn with_object_space(
     result
 }
 
-fn solid(color: &ColorRef, colors: &ColorTable) -> Result<Paint> {
-    // A colour carrying a shading has no flat value: the gradient is the
-    // colour. Text reaches here without going through `paint_of`, so such a
-    // run read as invalid and took the document with it.
-    let (r, g, b) = if color.shading.is_some() {
-        (0, 0, 0)
-    } else {
-        resolve_rgb(color, colors)?
-    };
-    let alpha = color.clone().alpha();
-    Ok(Paint::Solid(Color::rgba(r, g, b, alpha)))
-}
-
-/// GB/T 33190 clause 7.13: a colour that names a declared space has its
-/// channels read in that space, `Index` picking a palette entry when the
-/// space carries one. Anything that does not resolve falls back to sRGB.
-fn resolve_rgb(color: &ColorRef, colors: &ColorTable) -> Result<(u8, u8, u8)> {
-    let Some(space) = color.space.as_ref().and_then(|id| colors.get(id.as_str())) else {
-        return color.to_rgb();
-    };
-    if let Some(entry) = palette_entry(space, color.index)? {
-        return Ok(entry);
-    }
-    // An empty `Value` has no channels to read in any space, so the space
-    // cannot change the answer.
-    if color.value.trim().is_empty() {
-        return color.to_rgb();
-    }
-    let channels = color.channels()?;
-    Ok(convert_by_kind(space.kind, &channels))
-}
-
-/// The palette entry the index names, `Ok(None)` when the space has no
-/// palette or the colour carries no index.
-fn palette_entry(
-    space: &steleofd_model::ColorSpace,
-    index: Option<i32>,
-) -> Result<Option<(u8, u8, u8)>> {
-    let Some(index) = index else {
-        return Ok(None);
-    };
-    if space.palette.is_empty() {
-        return Ok(None);
-    }
-    let at = usize::try_from(index)
-        .ok()
-        .filter(|i| *i < space.palette.len());
-    let Some(entry) = at.map(|i| space.palette[i].as_str()) else {
-        return Ok(None);
-    };
-    let samples: Vec<u8> = entry
-        .split_whitespace()
-        .filter_map(|t| t.parse::<f64>().ok())
-        .map(|v| v.clamp(0.0, 255.0) as u8)
-        .collect();
-    if samples.is_empty() {
-        return Ok(None);
-    }
-    Ok(Some(convert_by_kind(space.kind, &samples)))
-}
-
-/// Sample channels in a declared space down to sRGB.
-fn convert_by_kind(kind: steleofd_model::ColorSpaceKind, channels: &[u8]) -> (u8, u8, u8) {
-    match kind {
-        steleofd_model::ColorSpaceKind::Gray => {
-            let g = channels[0];
-            (g, g, g)
-        }
-        steleofd_model::ColorSpaceKind::Rgb => match channels {
-            [r, g, b, ..] => (*r, *g, *b),
-            [g] => (*g, *g, *g),
-            _ => (0, 0, 0),
-        },
-        steleofd_model::ColorSpaceKind::Cmyk => match channels {
-            [c, m, y, k, ..] => (from_cmyk(*c, *k), from_cmyk(*m, *k), from_cmyk(*y, *k)),
-            _ => (0, 0, 0),
-        },
-    }
-}
-
-/// One CMYK channel to RGB, the same reduction `ColorRef` uses, so a colour
-/// means the same thing whether or not it names a CMYK space.
-fn from_cmyk(channel: u8, key: u8) -> u8 {
-    let ink = u16::from(channel) * u16::from(255 - key) / 255 + u16::from(key);
-    255 - ink.min(255) as u8
-}
-
 /// Resolve a colour into a paint. A colour carrying a shading becomes a
 /// gradient paint that travels with the object, so no backend depends on
 /// having seen some earlier op to know what the fill is.
@@ -397,36 +312,6 @@ fn pattern_spec(spec: &PatternSpec) -> Result<steleofd_display::PatternSpec> {
             ReflectMethod::RowAndColumn => steleofd_display::Reflect::RowAndColumn,
         },
     })
-}
-
-/// One vertex per mesh point, its colour resolved to RGB here so the backend
-/// interpolates numbers rather than parsing colour text per pixel.
-fn mesh_vertices(points: &[MeshPoint]) -> Result<Vec<MeshVertex>> {
-    points
-        .iter()
-        .map(|p| {
-            let color = ColorRef::from_hex(p.color.clone()).with_alpha(p.alpha);
-            let (r, g, b) = color.to_rgb()?;
-            Ok(MeshVertex {
-                x: p.point.0,
-                y: p.point.1,
-                color: Color::rgba(r, g, b, p.alpha),
-            })
-        })
-        .collect()
-}
-
-fn stops_of(segments: &[Segment]) -> Result<Vec<GradientStop>> {
-    segments
-        .iter()
-        .map(|s| {
-            let (r, g, b) = s.color.to_rgb()?;
-            Ok(GradientStop {
-                offset: s.position,
-                color: Color::rgba(r, g, b, s.color.clone().alpha()),
-            })
-        })
-        .collect()
 }
 
 /// GB/T 33190 clause 8.4: the clip areas an object narrows its drawing to.
@@ -1105,6 +990,7 @@ fn flatten_composite(
 mod tests {
     use super::*;
     use steleofd_common::Rect;
+    use steleofd_display::ops::Color;
     use steleofd_model::document::{Layer, PageBlock};
     use steleofd_model::object::{ImageObject, PathObject, TextCode, TextObject};
 

@@ -4,6 +4,7 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
+mod color;
 pub mod content;
 pub mod flatten;
 pub mod fonts;
