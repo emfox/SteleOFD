@@ -171,16 +171,15 @@ impl Auditor {
         report: &mut Report,
     ) -> Result<()> {
         let xml = read(package, found_in)?;
-        let base = parent_of(found_in);
         // A table is namespaced, so the local name has to be matched rather
         // than the prefixed spelling the file happens to use.
         for reference in references(&xml, RESOURCE_TABLES)? {
-            let table_path = resolve(&base, &reference.value);
+            let table_path = resolve(&base_of(found_in, &xml), &reference.value);
             if !package.contains(&table_path) {
                 continue;
             }
             let table = read(package, &table_path)?;
-            let table_base = parent_of(&table_path);
+            let table_base = base_of(&table_path, &table);
             for file in references(&table, RESOURCE_FILES)? {
                 self.check(package, &table_base, &table_path, &file, report);
             }
@@ -197,7 +196,7 @@ impl Auditor {
         // before descending into pages.
         self.audit_resource_tables(package, path, report)?;
         let xml = read(package, path)?;
-        let base = parent_of(path);
+        let base = base_of(path, &xml);
         for reference in references(&xml, REFERENCING)? {
             if reference.element == "DocRoot" {
                 continue;
@@ -211,6 +210,9 @@ impl Auditor {
                 continue;
             }
             let res_base = parent_of(&page_path);
+            // Clause 7.9 wants every file the page's own resource tables name,
+            // and each table keeps a `BaseLoc` of its own that the names inside
+            // it are relative to.
             let page_xml = read(package, &page_path)?;
             self.audit_resource_tables(package, &page_path, report)?;
             for nested in references(&page_xml, PAGE_RESOURCES)? {
@@ -282,9 +284,9 @@ impl Auditor {
             code,
             Severity::Error,
             clause,
-            resolved,
+            found_in,
             format!(
-                "{} refers to {value:?}, which the container does not hold",
+                "{} refers to {value:?}, which the container does not hold; it wanted {resolved:?}",
                 reference.element
             ),
         ));
@@ -302,14 +304,30 @@ pub fn audit(package: &mut Package) -> Result<Report> {
     Auditor::new().audit(package)
 }
 
-/// A reference is external when it names a scheme or is absolute.
+/// A reference is external when it names a scheme.
 fn is_external(value: &str) -> bool {
-    value.contains("://") || value.starts_with('/') || value.starts_with('\\')
+    value.contains("://")
 }
 
-/// A reference escapes when normalisation leaves a parent step in it.
+/// A reference escapes when normalisation leaves a parent step in it, or when
+/// it is rooted. OFD writers commonly write container paths as `/Doc_0/x.xml`,
+/// which the reader resolves against the archive root, so a leading slash is a
+/// spelling rather than an escape; one that walks above that root is not.
 fn escapes(value: &str) -> bool {
-    value.split('/').any(|part| part == "..")
+    let mut depth = 0i32;
+    for part in value.split('/') {
+        match part {
+            "" | "." => {}
+            ".." => {
+                depth -= 1;
+                if depth < 0 {
+                    return true;
+                }
+            }
+            _ => depth += 1,
+        }
+    }
+    false
 }
 
 /// Read an entry as text, treating a missing one as empty.
@@ -343,6 +361,37 @@ fn references(xml: &str, wanted: &[&str]) -> Result<Vec<Reference>> {
         }
     }
     Ok(found)
+}
+
+/// The directory a file's references are relative to.
+/// Clause 7.8 makes `BaseLoc` optional; an absent one means the file's own
+/// directory. A declared one is written from the document directory, not from
+/// the file, so `Doc_0/Res/DocumentRes.xml` with `BaseLoc="Res"` names
+/// `Doc_0/Res` rather than `Doc_0/Res/Res`.
+fn base_of(path: &str, xml: &str) -> String {
+    let here = parent_of(path);
+    match base_loc_of(xml) {
+        Some(loc) if !loc.trim().is_empty() => resolve(&document_dir(path), &loc),
+        _ => here,
+    }
+}
+
+/// The `Doc_N` directory a path sits under, or the root when it sits above
+/// every document.
+fn document_dir(path: &str) -> String {
+    match path.split_once('/') {
+        Some((head, _)) if head.starts_with("Doc_") => head.to_string(),
+        _ => String::new(),
+    }
+}
+
+/// `BaseLoc` of the root element, or `None` when it declares none.
+fn base_loc_of(xml: &str) -> Option<String> {
+    let mut cursor = Cursor::new(xml);
+    match cursor.next_event().ok()? {
+        Event::Start(node) => node.attributes().get("BaseLoc").map(str::to_string),
+        _ => None,
+    }
 }
 
 /// Text of the first occurrence of an element, trimmed.
@@ -390,8 +439,21 @@ mod tests {
     #[test]
     fn external_references_are_detected() {
         assert!(is_external("http://example.com/a.xml"));
-        assert!(is_external("/etc/passwd"));
+        assert!(is_external("file:///etc/passwd"));
         assert!(!is_external("Doc_0/Document.xml"));
+    }
+
+    #[test]
+    fn a_rooted_container_path_is_not_an_escape() {
+        // OFD writers spell container paths from the root, and the reader
+        // resolves them there, so the slash names an entry rather than leaving.
+        assert!(!escapes("/Doc_0/Signs/Signatures.xml"));
+        assert_eq!(
+            resolve("", "/Doc_0/Signs/Signatures.xml"),
+            "Doc_0/Signs/Signatures.xml"
+        );
+        assert!(escapes("/../outside.xml"));
+        assert!(escapes("/Doc_0/../../out.xml"));
     }
 
     #[test]

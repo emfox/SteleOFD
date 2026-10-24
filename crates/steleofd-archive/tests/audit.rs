@@ -321,3 +321,70 @@ fn gb_t_33190_7_9_the_audit_reports_a_severity_per_finding() {
         );
     }
 }
+
+#[test]
+fn gb_t_33190_6_2_a_rooted_reference_names_an_entry_rather_than_leaving() {
+    // Producers commonly spell container paths from the root. The reader
+    // resolves such a path against the archive, so the audit must too; calling
+    // it a reach outside the container reports a clean document as broken.
+    let mut entries = healthy();
+    entries[0].1 = r#"<ofd:OFD xmlns:ofd="http://www.ofdspec.org/2016" Version="1.0" DocType="OFD">
+  <ofd:DocBody>
+    <ofd:DocInfo><ofd:DocID>urn:test:1</ofd:DocID></ofd:DocInfo>
+    <ofd:DocRoot>/Doc_0/Document.xml</ofd:DocRoot>
+    <ofd:Signatures>/Doc_0/Signs/Signatures.xml</ofd:Signatures>
+  </ofd:DocBody>
+</ofd:OFD>"#;
+    let report = audit_of(&entries);
+    assert_eq!(
+        codes(&report),
+        vec!["ARCH-101"],
+        "a rooted path holds nothing to report, got {:?}",
+        report.findings
+    );
+}
+
+#[test]
+fn gb_t_33190_7_9_a_table_base_loc_anchors_the_files_it_names() {
+    // Clause 7.8: names inside a table are relative to its BaseLoc, which is
+    // written from the document directory. The table sits in Doc_0/Tables and
+    // declares BaseLoc="Res", so its file is Doc_0/Res/photo.png.
+    let mut entries = healthy();
+    entries[1].1 = r#"<ofd:Document xmlns:ofd="http://www.ofdspec.org/2016">
+  <ofd:CommonData>
+    <ofd:MaxUnitID>1</ofd:MaxUnitID>
+    <ofd:PageArea><ofd:PhysicalBox>0 0 210 297</ofd:PhysicalBox></ofd:PageArea>
+    <ofd:DocumentRes>Tables/DocumentRes.xml</ofd:DocumentRes>
+  </ofd:CommonData>
+  <ofd:Pages>
+    <ofd:Page ID="1" BaseLoc="Pages/Page_0/Content.xml"/>
+  </ofd:Pages>
+</ofd:Document>"#;
+    entries[3].0 = "Doc_0/Tables/DocumentRes.xml";
+    entries[3].1 = r#"<ofd:Res xmlns:ofd="http://www.ofdspec.org/2016" BaseLoc="Res">
+  <ofd:MultiMedias>
+    <ofd:MultiMedia ID="7" Type="Image"><ofd:MediaFile>photo.png</ofd:MediaFile></ofd:MultiMedia>
+  </ofd:MultiMedias>
+</ofd:Res>"#;
+    entries.push(("Doc_0/Res/photo.png", "not really a PNG"));
+    let report = audit_of(&entries);
+    assert!(
+        !codes(&report).contains(&"ARCH-004"),
+        "the file the base names is held, got {:?}",
+        report.findings
+    );
+
+    // Removing it is still reported, which is what keeps the check honest.
+    entries.retain(|(name, _)| *name != "Doc_0/Res/photo.png");
+    let report = audit_of(&entries);
+    let finding = report
+        .findings
+        .iter()
+        .find(|f| f.code == "ARCH-004")
+        .expect("a file the table names but the container lacks is reported");
+    assert!(
+        finding.detail.contains("Doc_0/Res/photo.png"),
+        "the finding names the entry it wanted, got {:?}",
+        finding.detail
+    );
+}

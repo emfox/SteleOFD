@@ -210,7 +210,11 @@ fn gb_t_42133_6_2_6_e_only_six_raster_formats_are_accepted() {
         "a JPEG is one of the six formats, got {:?}",
         report.findings
     );
-    assert!(report.is_acceptable(), "the JPEG page is archivable");
+    assert!(
+        report.is_acceptable(),
+        "the JPEG page is archivable, got {:?}",
+        report.findings
+    );
 }
 
 #[test]
