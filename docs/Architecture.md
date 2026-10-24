@@ -213,7 +213,7 @@ which is also the order `cargo publish` has to run in.
 |---|---|---|---|
 | L0 | `steleofd-common` | Value types (`Millimeter`, `Point`, `Rect`), versions, standard constants | transitive |
 | L0 | `steleofd-error` | Unified error taxonomy | transitive |
-| L0 | `steleofd-io` | `ByteSource` and `ByteSink` abstraction over file, memory, slice and directory | transitive |
+| L0 | `steleofd-io` | `ByteSource`/`ByteSink` over file, memory, slice and directory, and the one image-resource decoder | transitive |
 | L1 | `steleofd-model` | OFD data model (`CT_*` and `ST_*` type system) | transitive |
 | L1 | `steleofd-xml` | XML codec wrapping quick-xml | transitive |
 | L1 | `steleofd-package` | ZIP container I/O, safety validation, atomic replacement | transitive |
