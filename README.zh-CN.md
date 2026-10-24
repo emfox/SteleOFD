@@ -74,6 +74,12 @@ sha256sum -c SHA256SUMS          # 或者完全不依赖本项目
 crate 目前尚未发布到注册表：哪些会发布、发布前还差什么，见
 [issue #4](https://github.com/emfox/SteleOFD/issues/4)。
 
+19 个 crate 会进入注册表，但其中只有一部分是接口。加上 `steleofd-core` 就够用；
+它依赖的那些 crate 是被 cargo 一起带过来的，并不是让你逐个点名。哪些是哪一类，
+见 [Architecture.md 第 3 节](docs/Architecture.md#3-crate-inventory)；
+`python3 scripts/publish_order.py` 会打印依赖闭包——从 `steleofd-core` 出发
+是全部 19 个，而单独发布 `steleofd-crypto` 只需要 3 个。
+
 ## 遵循的规范
 
 | 标准 | 范围 |
@@ -239,6 +245,7 @@ python3 scripts/check_all.py --quick     # 只跑策略类检查
 python3 scripts/check_i18n.py            # 各语言消息键的一致性
 python3 scripts/check_language.py        # 仅英文策略与注释密度
 python3 scripts/check_publish.py --list  # 哪些 crate 会发布到注册表
+python3 scripts/publish_order.py         # 注册表接受的发布顺序
 python3 scripts/check_readme.py          # 两版 README 各自声明的数字
 ```
 

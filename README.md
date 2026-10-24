@@ -80,6 +80,13 @@ The crates themselves are not on a registry yet: which of them will publish, and
 what is left before they can, is
 [issue #4](https://github.com/emfox/SteleOFD/issues/4).
 
+Nineteen crates reach a registry, but only some of them are interfaces. Add
+`steleofd-core` and you are done; the crates it depends on come along because
+cargo requires them, not because you were meant to name them. Which is which is
+in [Architecture.md § 3](docs/Architecture.md#3-crate-inventory), and
+`python3 scripts/publish_order.py` prints the dependency closure — from
+`steleofd-core` that is all nineteen, while `steleofd-crypto` alone needs three.
+
 ## What it reads
 
 | Standard | Scope |
@@ -261,6 +268,7 @@ python3 scripts/check_all.py --quick     # the policy gates only
 python3 scripts/check_i18n.py            # message key consistency across locales
 python3 scripts/check_language.py        # English-only policy and comment density
 python3 scripts/check_publish.py --list  # which crates reach a registry
+python3 scripts/publish_order.py         # the order a registry accepts them in
 python3 scripts/check_readme.py          # the counts both READMEs state
 ```
 
@@ -268,9 +276,10 @@ The i18n check compares the catalogues: same file set, same key set, consistent
 placeholders, and the `all_keys()` list in Rust matching the keys in the FTL
 files. The publish check holds the two sets — nineteen crates that publish and
 eight that do not — to the whole workspace, so a new crate cannot slip in
-without saying where it goes. The README check reads every count out of the
-English README and the same sentence out of the Chinese one, so the two cannot
-state different figures: `README.md` is the source of truth and
+without saying where it goes, and `scripts/publish_order.py` holds the published
+set to being closed under its own dependencies. The README check reads every
+count out of the English README and the same sentence out of the Chinese one, so
+the two cannot state different figures: `README.md` is the source of truth and
 `README.zh-CN.md` follows it.
 
 ## Contributing
