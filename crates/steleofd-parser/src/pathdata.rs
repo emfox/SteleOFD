@@ -137,12 +137,12 @@ fn emit(tokens: &[Token], b: &mut PathBuilder) -> Result<()> {
                 b.quad_to((v[0], v[1]), (v[2], v[3]));
                 cur = (v[2], v[3]);
             }
-            // `B` is a cubic Bezier from the current point, so six numbers
-            // where `C` carries the same six plus the repeated start. A
-            // Chinese invoice draws its supervisory seal with it.
+            // Clause 9.3.4 gives `B` three points: both control points and the
+            // end, the start coming from the segment before. Reading it the way
+            // `C` repeats the start shifts every operand one point.
             'B' => {
                 let v = take(tokens, &mut i, 6)?;
-                b.curve_to(cur, (v[0], v[1]), (v[2], v[3]));
+                b.curve_to((v[0], v[1]), (v[2], v[3]), (v[4], v[5]));
                 cur = (v[4], v[5]);
             }
             'A' => {

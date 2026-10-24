@@ -319,6 +319,32 @@ fn gb_t_33190_9_3_4_cubic_and_quadratic_segments() {
 }
 
 #[test]
+fn gb_t_33190_9_3_4_b_states_both_control_points_and_the_end() {
+    // Clause 9.3.4 numbers a cubic's operands Point1, Point2, Point3, the start
+    // coming from the segment before; taking `B` for `C` shifts them one point.
+    let path = parse_path("M 0 0 B 1 1 2 2 3 3").expect("parse cubic");
+    let Some(PathSegment::CurveTo { c1, c2, to }) = path.segments.get(1).copied() else {
+        panic!("expected a cubic, got {:?}", path.segments);
+    };
+    assert_eq!(c1, (1.0, 1.0), "Point1 is the first control point");
+    assert_eq!(c2, (2.0, 2.0), "Point2 is the second control point");
+    assert_eq!(
+        to,
+        (3.0, 3.0),
+        "Point3 is the end, which the next segment starts from"
+    );
+    let next = parse_path("M 0 0 B 1 1 2 2 3 3 B 4 4 5 5 6 6").expect("parse two cubics");
+    let Some(PathSegment::CurveTo { c1, .. }) = next.segments.get(2).copied() else {
+        panic!("expected a second cubic, got {:?}", next.segments);
+    };
+    assert_eq!(
+        c1,
+        (4.0, 4.0),
+        "the second cubic starts where the first ended"
+    );
+}
+
+#[test]
 fn gb_t_33190_9_3_5_arc_is_split_into_cubics() {
     let path = parse_path("M 0 0 A 10 10 0 0 1 20 0").expect("parse arc");
     assert!(path.len() >= 2, "an arc becomes one or more cubic segments");
@@ -2898,4 +2924,64 @@ fn gb_t_33190_7_9_an_unknown_space_falls_back_to_hex() {
     <AbbreviatedData>M 0 0 L 10 0 L 10 10 Z</AbbreviatedData>
   </PathObject>"##;
     assert_eq!(solid_rgb(fill_of(spaces, body)), (0, 255, 0));
+}
+
+#[test]
+fn a_template_survives_the_page_area_above_its_layers() {
+    // Clause 8 gives a template file a `PageArea` beside its layers. Skipping
+    // that element without consuming it parsed a real invoice's grid template
+    // as nothing, and every page but the first came out blank.
+    let template = r#"<?xml version="1.0" encoding="UTF-8"?>
+<ofd:Page xmlns:ofd="http://www.ofdspec.org/2016">
+  <ofd:Area>
+    <ofd:PhysicalBox>0 0 210 297</ofd:PhysicalBox>
+  </ofd:Area>
+  <ofd:Content>
+    <ofd:Layer ID="7">
+      <ofd:PageBlock>
+        <ofd:PathObject ID="9" Boundary="10 10 190 0.4" AbbreviatedData="M 10 10 L 200 10">
+          <ofd:FillColor Value="255 0 0"/>
+        </ofd:PathObject>
+      </ofd:PageBlock>
+    </ofd:Layer>
+  </ofd:Content>
+</ofd:Page>"#;
+    let block = steleofd_parser::content::read_template_block(template).expect("parse template");
+    assert_eq!(block.layers.len(), 1, "the template's layer must survive");
+    assert_eq!(block.layers[0].objects.len(), 1);
+}
+
+#[test]
+fn gb_t_33190_annex_a_a_path_naming_only_a_fill_colour_is_stroked() {
+    // Annex A defaults `CT_Path` to stroked and unfilled, the reverse of
+    // `CT_Text`. Read the other way round, every rule of a table becomes an
+    // invisible zero-area fill.
+    let entries = [
+        ("OFD.xml", OFD_XML.to_string()),
+        (
+            "Doc_0/Document.xml",
+            document_xml(r#"<Page ID="1" BaseLoc="Pages/Page_0/Content.xml"/>"#),
+        ),
+        (
+            "Doc_0/Pages/Page_0/Content.xml",
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+<Page><Content><Layer>
+  <PathObject ID="10" Boundary="10 20 180 0.4">
+    <AbbreviatedData>M 10 20 L 190 20</AbbreviatedData>
+    <FillColor Value="255 0 0"/>
+  </PathObject>
+</Layer></Content></Page>"#
+                .to_string(),
+        ),
+    ];
+    let mut parser = open(&entries);
+    let doc = parser.open_document().expect("open document");
+    let page = parser.page_display(&doc, 0).expect("flatten page");
+    let Some(DrawOp::Path { fill, stroke, .. }) =
+        page.ops.iter().find(|op| matches!(op, DrawOp::Path { .. }))
+    else {
+        panic!("expected a path, got {:?}", page.ops);
+    };
+    assert!(fill.is_none(), "a path with no `Fill` is not filled");
+    assert!(stroke.is_some(), "a path with no `Stroke` is stroked");
 }
