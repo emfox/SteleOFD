@@ -841,6 +841,18 @@ fn parse_base(node: &Node) -> Result<ObjectBase> {
             _ => LineJoinStyle::Miter,
         }),
         miter_limit: a.optional_as::<f64>(element, "MiterLimit")?,
+        // The paint an object carries lives on the graphic unit, so every kind
+        // of object reads it here rather than restating the same four fields.
+        fill_color: None,
+        stroke_color: None,
+        fill: match a.get("Fill") {
+            Some(raw) => Some(parse_bool(element, "Fill", raw)?),
+            None => None,
+        },
+        stroke: match a.get("Stroke") {
+            Some(raw) => Some(parse_bool(element, "Stroke", raw)?),
+            None => None,
+        },
         clips: None,
         actions: None,
     })
@@ -899,7 +911,6 @@ fn read_composite_object(cursor: &mut Cursor<'_>, node: &Node) -> Result<Composi
             .get("ResourceID")
             .unwrap_or_default()
             .to_string(),
-        ..Default::default()
     };
     if !node.is_self_closing() {
         loop {
@@ -1104,21 +1115,10 @@ fn read_path_object(cursor: &mut Cursor<'_>, node: &Node) -> Result<PathObject> 
     let a = node.attributes();
     let mut p = PathObject {
         base: parse_base(node)?,
-        graphics: PathGraphics {
-            fill: match a.get("Fill") {
-                Some(raw) => Some(parse_bool("PathObject", "Fill", raw)?),
-                None => None,
-            },
-            stroke: match a.get("Stroke") {
-                Some(raw) => Some(parse_bool("PathObject", "Stroke", raw)?),
-                None => None,
-            },
-            rule: match a.get("Rule") {
-                Some("Even-Odd") => Some(FillRuleStyle::EvenOdd),
-                Some(_) => Some(FillRuleStyle::NonZero),
-                None => None,
-            },
-            ..Default::default()
+        rule: match a.get("Rule") {
+            Some("Even-Odd") => Some(FillRuleStyle::EvenOdd),
+            Some(_) => Some(FillRuleStyle::NonZero),
+            None => None,
         },
         ..Default::default()
     };
@@ -1129,10 +1129,10 @@ fn read_path_object(cursor: &mut Cursor<'_>, node: &Node) -> Result<PathObject> 
                     p.abbreviated_data = cursor.read_text()?
                 }
                 Event::Start(n) if n.is("FillColor") => {
-                    p.graphics.fill_color = Some(read_color(&n, cursor)?)
+                    p.base.fill_color = Some(read_color(&n, cursor)?)
                 }
                 Event::Start(n) if n.is("StrokeColor") => {
-                    p.graphics.stroke_color = Some(read_color(&n, cursor)?)
+                    p.base.stroke_color = Some(read_color(&n, cursor)?)
                 }
                 Event::Start(n) if n.is("Clips") => p.base.clips = Some(read_clips(cursor)?),
                 Event::Start(n) if n.is("Actions") => p.base.actions = Some(read_actions(cursor)?),
@@ -1156,14 +1156,6 @@ fn read_text_object(cursor: &mut Cursor<'_>, node: &Node) -> Result<TextObject> 
         h_scale: a.optional_as::<f64>("TextObject", "HScale")?,
         read_direction: angle_of(a.get("ReadDirection")).map(ReadDirection),
         char_direction: angle_of(a.get("CharDirection")).map(CharDirection),
-        stroke: match a.get("Stroke") {
-            Some(raw) => Some(parse_bool("TextObject", "Stroke", raw)?),
-            None => None,
-        },
-        fill: match a.get("Fill") {
-            Some(raw) => Some(parse_bool("TextObject", "Fill", raw)?),
-            None => None,
-        },
         ..Default::default()
     };
     if !node.is_self_closing() {
@@ -1178,10 +1170,10 @@ fn read_text_object(cursor: &mut Cursor<'_>, node: &Node) -> Result<TextObject> 
                     t.cg_transforms.push(read_cg_transform(cursor, &n)?)
                 }
                 Event::Start(n) if n.is("StrokeColor") => {
-                    t.stroke_color = Some(read_color(&n, cursor)?)
+                    t.base.stroke_color = Some(read_color(&n, cursor)?)
                 }
                 Event::Start(n) if n.is("FillColor") => {
-                    t.fill_color = Some(read_color(&n, cursor)?)
+                    t.base.fill_color = Some(read_color(&n, cursor)?)
                 }
                 Event::Start(n) if n.is("Clips") => t.base.clips = Some(read_clips(cursor)?),
                 Event::Start(n) if n.is("Actions") => t.base.actions = Some(read_actions(cursor)?),

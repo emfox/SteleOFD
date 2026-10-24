@@ -53,9 +53,6 @@ pub struct CompositeObject {
     /// Id of the vector resource inside the document.
     #[serde(rename = "ResourceID", default)]
     pub resource_id: RefId,
-    /// Fill and stroke, which annex A lets a composite state on itself.
-    #[serde(flatten)]
-    pub graphics: PathGraphics,
 }
 impl Object {
     /// Reference id common to every authored object.
@@ -228,6 +225,19 @@ pub struct ObjectBase {
     /// Miter limit written on the object itself.
     #[serde(rename = "MiterLimit", skip_serializing_if = "Option::is_none")]
     pub miter_limit: Option<f64>,
+    /// Fill colour written on the object itself.
+    #[serde(rename = "FillColor", skip_serializing_if = "Option::is_none")]
+    pub fill_color: Option<ColorRef>,
+    /// Stroke colour written on the object itself.
+    #[serde(rename = "StrokeColor", skip_serializing_if = "Option::is_none")]
+    pub stroke_color: Option<ColorRef>,
+    /// Whether the interior is filled; `None` leaves it to the draw parameter
+    /// and then to the default for the object's kind.
+    #[serde(rename = "Fill", skip_serializing_if = "Option::is_none")]
+    pub fill: Option<bool>,
+    /// Whether the outline is stroked; `None` defers as `fill` does.
+    #[serde(rename = "Stroke", skip_serializing_if = "Option::is_none")]
+    pub stroke: Option<bool>,
     /// What the object does when clicked, hovered or loaded, clause 14.1.
     #[serde(rename = "Actions", skip_serializing_if = "Option::is_none")]
     pub actions: Option<Actions>,
@@ -297,53 +307,32 @@ pub type ObjectRef = RefId;
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct PathObject {
-    /// Attributes shared by every object.
+    /// Attributes shared by every object, including the paint the figure is
+    /// drawn with.
     #[serde(flatten)]
     pub base: ObjectBase,
     /// The figure itself, as the path commands an OFD file abbreviates.
     #[serde(rename = "AbbreviatedData", default)]
     pub abbreviated_data: String,
-    /// The paint the figure is drawn with, and the rule that decides which
-    /// side of its outline is inside.
-    #[serde(flatten)]
-    pub graphics: PathGraphics,
+    /// Which side of the outline counts as inside, `NonZero` where nothing is
+    /// said. It decides the geometry rather than the paint, so it sits here and
+    /// not on the base every object shares.
+    #[serde(rename = "Rule", skip_serializing_if = "Option::is_none")]
+    pub rule: Option<FillRuleStyle>,
 }
 
 impl PathObject {
     /// The effective presence of each paint, once defaults are applied.
+    ///
     /// Annex A defaults `CT_Path` to stroked and unfilled, the reverse of the
     /// pair `CT_Text` carries, so a producer that names only `FillColor` is
     /// still drawing a line.
     pub fn paints(&self) -> (bool, bool) {
         (
-            self.graphics.fill.unwrap_or(false),
-            self.graphics.stroke.unwrap_or(true),
+            self.base.fill.unwrap_or(false),
+            self.base.stroke.unwrap_or(true),
         )
     }
-}
-
-/// The paint of a figure, which annex A hangs off `CT_Path` — the same element
-/// a `CompositeObject` names through `ResourceID` when its vector graphic is
-/// embedded in the file. Both reach a renderer as a figure to stroke or fill,
-/// so both are described once and the parser accepts either.
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct PathGraphics {
-    /// Fill colour, overriding any draw parameter.
-    #[serde(rename = "FillColor", skip_serializing_if = "Option::is_none")]
-    pub fill_color: Option<ColorRef>,
-    /// Stroke colour, overriding any draw parameter.
-    #[serde(rename = "StrokeColor", skip_serializing_if = "Option::is_none")]
-    pub stroke_color: Option<ColorRef>,
-    /// Whether the interior is filled; `false` where the file says nothing.
-    #[serde(rename = "Fill", skip_serializing_if = "Option::is_none")]
-    pub fill: Option<bool>,
-    /// Whether the outline is stroked; `true` where the file says nothing.
-    #[serde(rename = "Stroke", skip_serializing_if = "Option::is_none")]
-    pub stroke: Option<bool>,
-    /// Fill rule, `NonZero` where the file says nothing.
-    #[serde(rename = "Rule", skip_serializing_if = "Option::is_none")]
-    pub rule: Option<FillRuleStyle>,
 }
 
 impl Valid for PathObject {
@@ -523,18 +512,6 @@ pub struct TextObject {
     /// Horizontal glyph scale; `1.0` is unscaled.
     #[serde(rename = "HScale", skip_serializing_if = "Option::is_none")]
     pub h_scale: Option<f64>,
-    /// Whether the glyph outlines are stroked.
-    #[serde(rename = "Stroke", skip_serializing_if = "Option::is_none")]
-    pub stroke: Option<bool>,
-    /// Whether the glyph interiors are filled.
-    #[serde(rename = "Fill", skip_serializing_if = "Option::is_none")]
-    pub fill: Option<bool>,
-    /// Stroke colour, overriding any draw parameter.
-    #[serde(rename = "StrokeColor", skip_serializing_if = "Option::is_none")]
-    pub stroke_color: Option<ColorRef>,
-    /// Fill colour of the glyphs.
-    #[serde(rename = "FillColor", skip_serializing_if = "Option::is_none")]
-    pub fill_color: Option<ColorRef>,
     /// Runs of glyphs in this object.
     #[serde(rename = "TextCode", default)]
     pub codes: Vec<TextCode>,
@@ -625,10 +602,10 @@ mod tests {
         assert_eq!(p.paints(), (false, true));
 
         let both = PathObject {
-            graphics: PathGraphics {
+            base: ObjectBase {
                 fill: Some(true),
                 stroke: Some(false),
-                ..Default::default()
+                ..p.base.clone()
             },
             ..p.clone()
         };
@@ -710,15 +687,15 @@ mod tests {
     #[test]
     fn objects_survive_a_serde_round_trip() {
         let obj = Object::PathObject(PathObject {
-            base: base(),
-            abbreviated_data: "M 0 0 L 10 10 Z".to_string(),
-            graphics: PathGraphics {
+            base: ObjectBase {
                 fill_color: Some(ColorRef::from_hex("#FF0000")),
                 stroke_color: None,
                 fill: Some(true),
                 stroke: Some(true),
-                rule: Some(FillRuleStyle::EvenOdd),
+                ..base()
             },
+            abbreviated_data: "M 0 0 L 10 10 Z".to_string(),
+            rule: Some(FillRuleStyle::EvenOdd),
         });
 
         let json = serde_json::to_string(&obj).expect("serialize");

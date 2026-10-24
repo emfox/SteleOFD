@@ -563,6 +563,36 @@ fn fill_rule(rule: Option<steleofd_model::object::FillRuleStyle>) -> PaintRule {
     }
 }
 
+/// The paint an object ends up with, resolved the one way clause 12.2 describes:
+/// what the object writes, else what the draw parameter it names writes, else
+/// the default for its kind. Only the default differs between kinds, and annex A
+/// sets the two in opposite directions, so the order is stated once here and the
+/// pair passed in.
+fn resolve_paint(
+    base: &ObjectBase,
+    param: Option<&DrawParam>,
+    fallback: (bool, bool),
+) -> (bool, bool) {
+    let on = |own: Option<bool>, from_param: Option<bool>, otherwise: bool| {
+        own.or(from_param).unwrap_or(otherwise)
+    };
+    (
+        on(base.fill, param.and_then(|d| d.fill), fallback.0),
+        on(base.stroke, param.and_then(|d| d.stroke), fallback.1),
+    )
+}
+
+/// The colour a paint uses, resolved the same way as its switch: the object's
+/// own, else the draw parameter's, else black.
+fn resolve_paint_color<'a>(
+    own: Option<&'a ColorRef>,
+    param: Option<&'a DrawParam>,
+    which: fn(&'a DrawParam) -> Option<&'a ColorRef>,
+    black: &'a ColorRef,
+) -> &'a ColorRef {
+    own.or_else(|| param.and_then(which)).unwrap_or(black)
+}
+
 fn flatten_path(
     p: &PathObject,
     params: &HashMap<String, DrawParam>,
@@ -578,29 +608,21 @@ fn flatten_path(
     // Annex A defaults `Stroke` true and `Fill` false. A producer that writes
     // only `FillColor` is drawing a line, and reading the pair the other way
     // round turns every such line into a zero-area fill that shows nothing.
-    let mut paints = p.paints();
-    // Clause 12.2 gives the draw parameter the same two switches, and names it
-    // as the source the object falls back to, so it decides where the object
-    // says nothing.
-    if let Some(d) = param {
-        paints.0 = p.graphics.fill.or(d.fill).unwrap_or(paints.0);
-        paints.1 = p.graphics.stroke.or(d.stroke).unwrap_or(paints.1);
-    }
-    let (fill_on, stroke_on) = paints;
+    let (fill_on, stroke_on) = resolve_paint(&p.base, param, (false, true));
     let style = stroke_style_of(&p.base, param);
     let black = default_color();
-    let fill_color = p
-        .graphics
-        .fill_color
-        .as_ref()
-        .or(param.and_then(|d| d.fill_color.as_ref()))
-        .unwrap_or(&black);
-    let stroke_color = p
-        .graphics
-        .stroke_color
-        .as_ref()
-        .or(param.and_then(|d| d.stroke_color.as_ref()))
-        .unwrap_or(&black);
+    let fill_color = resolve_paint_color(
+        p.base.fill_color.as_ref(),
+        param,
+        |d| d.fill_color.as_ref(),
+        &black,
+    );
+    let stroke_color = resolve_paint_color(
+        p.base.stroke_color.as_ref(),
+        param,
+        |d| d.stroke_color.as_ref(),
+        &black,
+    );
     with_object_space(&p.base, params, builder, |b| {
         let fill = if fill_on {
             Some(paint_of(fill_color, &path, colors, b)?)
@@ -617,7 +639,7 @@ fn flatten_path(
             fill,
             stroke,
             stroke_style: style,
-            rule: fill_rule(p.graphics.rule),
+            rule: fill_rule(p.rule),
         });
         Ok(())
     })
@@ -630,16 +652,18 @@ fn flatten_text(
     builder: &mut DisplayListBuilder,
 ) -> Result<()> {
     let param = resolve_param(&t.base, params)?;
-    let fill_on = t.fill.or(param.and_then(|d| d.fill)).unwrap_or(true);
     // Text is filled by default and stroked only when asked, which is the
     // opposite of a path's defaults.
-    let stroke_on = t.stroke.or(param.and_then(|d| d.stroke)).unwrap_or(false);
+    let (fill_on, stroke_on) = resolve_paint(&t.base, param, (true, false));
+    let black = default_color();
     let fill = if fill_on {
         Some(solid(
-            t.fill_color
-                .as_ref()
-                .or(param.and_then(|d| d.fill_color.as_ref()))
-                .unwrap_or(&default_color()),
+            resolve_paint_color(
+                t.base.fill_color.as_ref(),
+                param,
+                |d| d.fill_color.as_ref(),
+                &black,
+            ),
             colors,
         )?)
     } else {
@@ -647,10 +671,12 @@ fn flatten_text(
     };
     let stroke = if stroke_on {
         Some(solid(
-            t.stroke_color
-                .as_ref()
-                .or(param.and_then(|d| d.stroke_color.as_ref()))
-                .unwrap_or(&default_color()),
+            resolve_paint_color(
+                t.base.stroke_color.as_ref(),
+                param,
+                |d| d.stroke_color.as_ref(),
+                &black,
+            ),
             colors,
         )?)
     } else {
@@ -1080,7 +1106,7 @@ mod tests {
     use super::*;
     use steleofd_common::Rect;
     use steleofd_model::document::{Layer, PageBlock};
-    use steleofd_model::object::{ImageObject, PathGraphics, PathObject, TextCode, TextObject};
+    use steleofd_model::object::{ImageObject, PathObject, TextCode, TextObject};
 
     fn builder() -> DisplayListBuilder {
         DisplayListBuilder::new(Rect::A4_PORTRAIT)
@@ -1123,12 +1149,13 @@ mod tests {
     /// A path object that asks for a fill, so the colour defaults are visible
     /// without the object also asking for a stroke.
     fn filled_path_object(data: &str) -> PathObject {
+        let p = path_object(data);
         PathObject {
-            graphics: PathGraphics {
+            base: ObjectBase {
                 fill: Some(true),
-                ..Default::default()
+                ..p.base
             },
-            ..path_object(data)
+            ..p
         }
     }
 
