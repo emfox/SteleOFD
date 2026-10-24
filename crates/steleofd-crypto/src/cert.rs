@@ -358,6 +358,24 @@ pub fn split_signed_value(der: &[u8]) -> Option<(Vec<u8>, Option<Vec<u8>>)> {
     Some((signature, certificate))
 }
 
+/// The bytes a `SignedValue`'s own signature is over.
+///
+/// GB/T 38540 wraps the signed content one level down: the outer SEQUENCE holds
+/// the content SEQUENCE, then the certificate, the algorithm and the signature.
+/// The signature covers that content SEQUENCE whole, tag and length included.
+pub fn signed_value_content(der: &[u8]) -> Option<&[u8]> {
+    let outer = tlv(der, 0)?;
+    if outer.content_at + outer.content_len != der.len() || der[0] != 0x30 {
+        return None;
+    }
+    let content = tlv(der, outer.content_at)?;
+    if der[outer.content_at] != 0x30 {
+        return None;
+    }
+    let end = content.content_at + content.content_len;
+    der.get(outer.content_at..end)
+}
+
 /// The SM3 digest a `SignedValue` states for the descriptor it covers, when it
 /// states one. GB/T 38540 makes the signed content a digest plus the name of
 /// what it digests, so the envelope says what the signature is over rather
@@ -465,6 +483,30 @@ mod tests {
     fn a_value_that_is_not_an_envelope_carries_no_certificate() {
         // A file holding only the signature has no SEQUENCE around it.
         assert!(split_signed_value(&[0x05, 0x00]).is_none());
+    }
+
+    #[test]
+    fn a_signed_value_names_the_bytes_its_signature_is_over() {
+        // SEQUENCE { SEQUENCE{...}, OCTET STRING, OID, BIT STRING }. What the
+        // signature covers is the content SEQUENCE whole, tag and length too,
+        // which is everything from the outer body's start to its end.
+        let mut inner = vec![0x30, 0x05, 0x02, 0x01, 0x04, 0x03, 0x00];
+        let content = inner.clone();
+        inner.extend_from_slice(&[0x04, 0x02, 0xAA, 0xBB]);
+        inner.extend_from_slice(&[0x06, 0x01, 0x01]);
+        inner.extend_from_slice(&[0x03, 0x02, 0x00, 0x11]);
+        let mut der = vec![0x30, 0x81, inner.len() as u8];
+        der.extend_from_slice(&inner);
+
+        assert_eq!(
+            signed_value_content(&der),
+            Some(content.as_slice()),
+            "the content sequence, not the whole envelope"
+        );
+        assert!(
+            signed_value_content(&[0x05, 0x00]).is_none(),
+            "a bare signature names no content"
+        );
     }
 
     #[test]

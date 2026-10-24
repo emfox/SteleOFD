@@ -104,6 +104,10 @@ pub struct Signature {
     /// present the signature is over that digest rather than over the digests
     /// of the files the descriptor names, which is GB/T 38540's arrangement.
     pub sealed_digest: Option<Vec<u8>>,
+    /// The bytes the signature in `SignedValue` is over. GB/T 38540 signs the
+    /// content SEQUENCE inside the envelope rather than the digest, so a proof
+    /// read from one brings its own subject and there is nothing to recompute.
+    pub signed_content: Option<Vec<u8>>,
     /// Archive path of the signed value, from `SignedValue`. The proof itself
     /// lives in a separate file there rather than inline in the descriptor.
     pub signed_value_ref: Option<String>,
@@ -315,6 +319,10 @@ impl Signature {
                 if covers_self {
                     self.sealed_digest = steleofd_crypto::signed_value_digest(&bytes);
                 }
+                // The signature the envelope carries is over its own content
+                // SEQUENCE, so the bytes to check against come with it.
+                self.signed_content =
+                    steleofd_crypto::signed_value_content(&bytes).map(<[u8]>::to_vec);
             }
             None => self.check_value = b64_ish(&bytes),
         }
@@ -551,6 +559,21 @@ pub fn verify_with_public_key(
     sig: &Signature,
     public_key: &[u8],
 ) -> Result<VerifyStatus, OfdError> {
+    // A proof read from a `SignedValue` brings the bytes it is over, and those
+    // bytes are checked before the signature is, so an edited envelope fails
+    // whether or not the seal on the descriptor still matches.
+    if let Some(content) = &sig.signed_content {
+        if public_key.is_empty() {
+            return Ok(VerifyStatus::Unchecked);
+        }
+        let ok = sm2_verify(public_key, content, &sig.check_value)
+            .map_err(|e| OfdError::Signature(SignatureError::UnsupportedFormat(e.to_string())))?;
+        return Ok(if ok {
+            VerifyStatus::Valid
+        } else {
+            VerifyStatus::Tampered
+        });
+    }
     let Some(digest) = signed_digest(package, sig)? else {
         return Ok(VerifyStatus::Unchecked);
     };

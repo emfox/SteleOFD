@@ -346,6 +346,51 @@ fn gb_t_33190_18_2_3_the_proof_lives_behind_signed_value() {
 }
 
 #[test]
+fn gb_t_33190_18_2_3_a_signed_value_is_checked_over_its_own_content() {
+    // GB/T 38540 puts the signed content in the envelope: the signature is over
+    // the content SEQUENCE, tag and length included, so the bytes to check come
+    // with the proof instead of being recomputed from the descriptor.
+    let pair = Sm2KeyPair::generate().expect("keygen");
+    let content = vec![0x30, 0x06, 0x02, 0x01, 0x04, 0x18, 0x01, 0x32];
+    let signature = pair.sign(&content);
+    let mut sig = Signature {
+        signed_value_ref: Some("/Signs/Sign_0/SignedValue.dat".to_string()),
+        descriptor_path: Some(SIG_FILE.to_string()),
+        ..Default::default()
+    };
+
+    let mut body = content.clone();
+    body.extend_from_slice(&[0x06, 0x01, 0x01]);
+    body.push(0x03);
+    body.push(signature.len() as u8 + 1);
+    body.push(0x00);
+    body.extend_from_slice(&signature);
+    let mut envelope = vec![0x30, 0x81, body.len() as u8];
+    envelope.extend_from_slice(&body);
+
+    let mut package = open(&[
+        ("Signs/Signs.xml", signs_xml()),
+        (SIG_FILE, b"<Sign/>".to_vec()),
+        ("Signs/Sign_0/SignedValue.dat", envelope),
+    ]);
+    assert_eq!(
+        verify_descriptor(&mut package, &sig, &pair.public_bytes()).expect("verify"),
+        VerifyStatus::Valid,
+        "the content the envelope carries is what the signature covers"
+    );
+
+    // An envelope whose content moved no longer matches its own signature,
+    // whatever the descriptor still says about it.
+    sig.check_value = signature.clone();
+    sig.signed_content = Some(vec![0x30, 0x06, 0x02, 0x01, 0x05, 0x18, 0x01, 0x32]);
+    assert_eq!(
+        verify_with_public_key(&mut package, &sig, &pair.public_bytes()).expect("verify"),
+        VerifyStatus::Tampered,
+        "edited content fails the same check the original passed"
+    );
+}
+
+#[test]
 fn gb_t_33190_18_2_3_a_stamp_records_where_it_sits() {
     // An electronic seal also says where on which page it is drawn, and may
     // clip itself to a smaller region.
