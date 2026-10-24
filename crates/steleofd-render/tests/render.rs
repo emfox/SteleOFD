@@ -431,14 +431,15 @@ fn an_image_lands_inside_the_rect_its_boundary_names() {
     );
 }
 
-/// JBIG2 is the encoding a scanned page carries, and `image` does not read it,
-/// so it takes a separate path through the decoder.
+/// JBIG2 is the encoding a scanned page carries, and `image` reads it through
+/// the decoder `hayro-jbig2` registers, so it is named rather than guessed: an
+/// embedded stream has no signature `image` could look for.
 #[test]
 fn a_jbig2_image_is_decoded_and_painted() {
     let fonts = FontManager::new();
     let data = std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/qr.jb2"))
         .expect("the sample is present");
-    let (w, h) = steleofd_io::decode::jbig2::dimensions(&data).expect("dimensions");
+    let (w, h) = steleofd_io::decode::pixel_size(&data, ImageCodec::Jbig2).expect("dimensions");
     assert_eq!((w, h), (100, 100), "the sample is a 100x100 QR code");
     let dst = Rect::new(20.0, 20.0, 50.0, 50.0);
     let image = ImageRef::new("1", Arc::new(data), (w, h), ImageCodec::Jbig2);
@@ -464,10 +465,11 @@ fn a_jbig2_page_is_black_on_white_rather_than_inverted() {
     let _fonts = FontManager::new();
     let data = std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/qr.jb2"))
         .expect("the sample is present");
-    let gray = steleofd_io::decode::jbig2::decode_to_gray(&data).expect("decode");
-    assert_eq!(gray.len(), 100 * 100, "one byte per pixel");
-    let black = gray.iter().filter(|&&v| v == 0).count();
-    let ratio = black as f64 / gray.len() as f64;
+    let decoded =
+        steleofd_io::decode(&data, ImageCodec::Jbig2, steleofd_io::Pixels::Rgb).expect("decode");
+    assert_eq!(decoded.bytes.len(), 100 * 100 * 3, "three bytes per pixel");
+    let black = decoded.bytes.iter().filter(|&&v| v == 0).count();
+    let ratio = black as f64 / decoded.bytes.len() as f64;
     assert!(
         (0.2..0.6).contains(&ratio),
         "black covers {ratio:.2} of the page, which is neither blank nor solid"

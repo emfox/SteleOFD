@@ -116,7 +116,7 @@ image      = { version = "0.25", default-features = false, features = ["png", "j
 
 # JBIG2 for scanned pages. The `simd` feature is off on purpose: it pulls in
 # fearless_simd, and every backend here is `#![forbid(unsafe_code)]`.
-hayro-jbig2 = { version = "0.3", default-features = false }
+hayro-jbig2 = { version = "0.3", default-features = false, features = ["image"] }
 
 # PDF interop
 pdf        = { version = "0.10", default-features = false }
