@@ -273,7 +273,7 @@ def main() -> int:
         print(f"\nFAILED: {len(problems)} problem(s)\n")
         for problem in problems:
             print(f"  {problem}")
-        print("\nSee docs/Roadmap.md (R7) for what the registry surface is.")
+        print("\nSee issue #4 for what the registry surface is.")
         return 1
 
     print("\nOK: every crate states where it goes, with what a registry asks for,")

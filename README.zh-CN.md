@@ -15,7 +15,8 @@ SteleOFD 是 [GB/T 33190-2016《电子文件存储与交换格式 版式文档�
 
 当前发布版本为 `0.4.0`：本版本移除了四个不启用任何功能的特性名，因此是
 `0.4.0` 而非补丁版本。本版本提供了什么见 [`CHANGELOG`](CHANGELOG.md)，
-尚待完成的事项及其所属版本见 [`docs/Roadmap.md`](docs/Roadmap.md)。
+尚待完成的具体工作见 [issue 列表](https://github.com/emfox/SteleOFD/issues)，
+它服务于哪些大方向见 [`docs/Roadmap.md`](docs/Roadmap.md)。
 
 本文档分两部分：前半部分给使用 SteleOFD 的人，后半部分给参与开发的人。
 
@@ -55,8 +56,8 @@ python3 scripts/release_checksums.py verify .
 sha256sum -c SHA256SUMS          # 或者完全不依赖本项目
 ```
 
-crate 目前尚未发布到注册表，各 crate 的去向记录在
-[`docs/Roadmap.md`](docs/Roadmap.md) 的 R7。
+crate 目前尚未发布到注册表：哪些会发布、发布前还差什么，见
+[issue #4](https://github.com/emfox/SteleOFD/issues/4)。
 
 ## 遵循的规范
 

@@ -250,8 +250,8 @@ async    = ["dep:rayon"]
 `office` and `ocr` are not features, and were removed rather than finished:
 both compiled and changed nothing, so enabling one asked for a capability and
 got a crate without it. A feature is a promise that something happens, and
-these are recorded in `docs/Roadmap.md` until something does. Everything above
-trims what it names.
+these are recorded in issue #10 until something does. Everything above trims
+what it names.
 
 Typical combinations:
 
@@ -419,8 +419,9 @@ displaying a single OFD page, then broaden capabilities. That yields end-to-end
 feedback early instead of spinning inside abstraction layers.
 
 **Still to build:** the original sequence is complete and shipped as `0.1.0`;
-what is left, and which release has claimed it, is in
-[`Roadmap.md`](Roadmap.md). Clause-level conformance is tracked in
+concrete work is in the [issue tracker](https://github.com/emfox/SteleOFD/issues)
+and the direction it serves in [`Roadmap.md`](Roadmap.md). Clause-level
+conformance is tracked in
 `compliance/gb-t-33190.toml`; 74 clauses are registered, 73 of them `verified`
 and one — `8.1.6` `PrintQuality` — a `deviation` with a stated reason. The
 register is the single source of truth that `scripts/check_compliance.py` gates

@@ -1,107 +1,53 @@
 # What is left
 
 SteleOFD builds, tests and releases on every platform `egui` runs on, and the
-register holds no `partial` clause. What this file lists is the work that is
-still open, and nothing else: what a release offers is in
-[`CHANGELOG.md`](../CHANGELOG.md).
+register holds no `partial` clause.
 
-The previous roadmap carried four horizons of closed tasks. Keeping them made
-the open items hard to find, so they were deleted and this file took their
-place.
+This file is for **direction**: the large outcomes the project is steering
+towards, and the changes still too vague to be planned. A concrete piece of
+work does not belong here. It belongs in an issue, where its problem, its exit
+criterion and the commits that met it stay together. What a release offers is
+in [`CHANGELOG.md`](../CHANGELOG.md).
 
-## When
+## Where the work happens
 
-`0.1.1` is gone: it repaired what `0.1.0` said about itself and changed no
-behaviour. The rows under a version are the ones a release has claimed, and
-everything else is marked `unversioned`: it is agreed to be worth doing, but no
-release has claimed it, and putting a number on it today would be a guess
-dressed as a plan.
+- **[Issues](https://github.com/emfox/SteleOFD/issues)** carry everything that
+  can be stated as a problem with an exit criterion: a defect, a missing
+  feature, a specific debt. If you can write "done when", it is an issue.
+- **This file** carries what has no such statement yet: a direction the project
+  is heading in, or a need nobody has worked out the shape of. An entry here
+  graduates into one or more issues once the shape appears.
 
-Publishing is the one item held back by a decision rather than by order: it
-waits until the features and the API have settled, because a version already
-on a registry cannot be replaced. `0.5` is where that is expected, not a
-promise.
+An entry that turns out to be concrete is not kept in both places. It moves
+out, and a pointer is left behind only while the issues it became are open.
 
-| Version | Theme |
+## Direction
+
+These are the outcomes the project is steering towards. None has a date, and
+none is a promise of a version.
+
+| Direction | What reaching it would mean |
 | --- | --- |
-| `0.5+` | R3 the Android build that crashes on open, and R7 which crates are published |
-| unversioned | R8 packaging, and the rest |
+| **Every render is right on a real document** | A reader that draws a licence or an invoice incorrectly is worse than one that is slow. Correctness of output outranks everything below it, and a crash is the same failure in its worst form. |
+| **A signature verification that says no more than it checked** | A signature reported valid is the reason the format is used at all. A verification that overstates its coverage defeats the point of having one. |
+| **The engine is usable without this project's applications** | The crates are what a third party builds with, so they need a registry, worked examples and an extension surface. Distribution follows from being usable, not the other way round. |
+| **Installs and upgrades are a step an organisation takes, not a project** | Every form that gets deployed — package, bundle, installer, container — installs without a manual step and upgrades without losing state. |
+| **The evidence covers more than one producer** | Every construct is checked against documents this project did not write. A construct only our writer emits is one we have only ever read through somebody else's file. |
 
-## Ranking
+## Open, and still unshaped
 
-Open items are ordered by **what the project is for**, then by what unblocks
-what. The README says OFD is the legal carrier for official documents, licences,
-invoices and archives, so the order puts wrong output on a real document first,
-then what a signature is asked to prove, then distribution, then the rest.
+The needs below are agreed to be worth answering, and nobody has yet said what
+the answer looks like. Most of them hold an issue for the part that is already
+concrete; the issue is where the work goes, and the row stays until the whole
+question has a shape.
 
-1. **Wrong output on a real document** — a reader that renders a legal document
-   incorrectly is worse than one that is slow. A crash is the same failure in
-   its worst form: it produces no output at all.
-2. **A verification that says more than it checked** — a signature reported
-   valid is the reason the format is used at all.
-3. **Blocks the thing above it** — an item that unblocks several others moves up
-   regardless of its own size.
-4. **Enforcement** — a check that stops a regression outlives the feature it
-   guards.
-5. **Everything else** — smallest first.
-
-The version column is not the ranking read downwards. R3 is the crash, which by
-the first rule ranks at the top, and it sits below the publishing work only
-because diagnosing it needs a device or an emulator that no other row does; a
-version promise would be one the project cannot keep.
-
-## Open
-
-Each row below is tracked as an issue, indexed by
-[#1](https://github.com/emfox/SteleOFD/issues/1). This file stays the source of
-truth for the ranking and the exit criteria; the issue is where the work moves.
-
-| # | Issue | Version |
-| --- | --- | --- |
-| R3 | [#3](https://github.com/emfox/SteleOFD/issues/3) | `0.5+` |
-| R7 | [#4](https://github.com/emfox/SteleOFD/issues/4) | `0.5+` |
-| R21 | [#5](https://github.com/emfox/SteleOFD/issues/5) | unversioned |
-| R25 | [#6](https://github.com/emfox/SteleOFD/issues/6) | unversioned |
-| R26 | [#7](https://github.com/emfox/SteleOFD/issues/7) | unversioned |
-| R8 | [#8](https://github.com/emfox/SteleOFD/issues/8) | unversioned |
-| R9 | [#9](https://github.com/emfox/SteleOFD/issues/9) | unversioned |
-| R12 | [#10](https://github.com/emfox/SteleOFD/issues/10) | unversioned |
-| R13 | [#11](https://github.com/emfox/SteleOFD/issues/11) | unversioned |
-| R14 | [#12](https://github.com/emfox/SteleOFD/issues/12) | unversioned |
-| R15 | [#13](https://github.com/emfox/SteleOFD/issues/13) | unversioned |
-
-R16 is a standing task rather than an item, so it has no issue.
-
-### 0.5+
-
-| # | Item | Target | Why it ranks here | Done when |
-| --- | --- | --- | --- | --- |
-| R3 | **The Android build crashes on open.** The archive installs, then exits before a page is drawn. Six causes are found and fixed. The Android `eframe` features asked for Wayland and X11, which no device has, so the loaded library quit. `android_main` was compiled but not exported, so nothing the platform calls existed. The URI reader appended the chunk it allocated rather than the bytes the provider returned, so every document arrived as zeros. The `log` calls had no sink, so a device run said nothing. Only wgpu was linked, and an emulator's software Vulkan refuses its pipelines, so there was no renderer to fall back to. The manifest claimed sixteen `configChanges`, so a rotation rebuilt the activity and lost the surface. On an emulator the archive now logs the document from the intent, all 29752 bytes of it, and draws the page. What remains is a device run. | `0.5+` | A crash outranks a slow page, so it sits above the packaging work; but the last step needs a device, which no other row does, so it is not promised to a version. | The arm64 archive from the release page opens `ofdrw/999.ofd` on a device, and the fixes carry regression tests that fail without them. |
-| R7 | **The crates are not on a registry yet.** The surface is decided: nineteen crates publish and eight do not, each stating its `publish` field and a `description`, and `check_publish.py` enforces both sets in CI. What remains is the act. `cargo package -p steleofd-core` still fails because the crates it depends on are not there, so publishing has to go leaf first through the dependency layers, and a version already on the registry cannot be replaced. The semver gate is now set for it: a break needs a minor version and the check compares against the parent commit, so the bump a break costs is decided when it merges rather than when it ships. | Publishing is how the engine reaches anyone not building an application around it. It is held back by a decision rather than by order: a published API is fixed per version, so it waits until the features and the surface have settled. | `cargo add steleofd-core` builds against crates.io at the version then shipped, the release notes name the nineteen crates, and a CI job fails when a published crate's metadata stops being complete. |
-
-### Unversioned
-
-| # | Item | Why it ranks here | Done when |
-| --- | --- | --- | --- |
-| R8 | **Packaging, for every form that is deployed.** The release page has loose executables: no `.rpm`, `.dmg` or Windows installer, no container image for `steleofd-server`, and the 77 MB static C archive ships beside the shared one whether or not anyone asked. One `.deb` exists, built by `scripts/uos_package.py` for UOS Desktop V20 and its glibc 2.28 baseline rather than for Debian at large, and not yet published per tag. A package for one distribution does not answer this row. | Installs and upgrades are how an OA deployment adopts a tool, and the server is the form most likely to be deployed first. It sits below the correctness work because the executable already runs. | At least one Linux package not tied to a single distribution, one macOS bundle, one Windows installer and one container image are published per tag, and each installs without a manual step. |
-| R9 | **Samples from more than one producer.** `compliance/fixtures` carries our own documents plus the standard's fetched samples; the 28-document third-party set is fetched, not committed. | A construct our writer never emits is one we have only ever read through somebody else's file, so this grows what every other row is checked against — but the fetched set already covers the common producers. | The committed fixtures hold documents from at least two producers, and CI validates all of them against the annex A schemas. |
-| R12 | **Which constructs `office` and `ocr` would name, if implemented.** A DOCX or OOXML conversion in one direction, and OCR in the other, each needs its own model before it needs code. | Nobody has asked for either, and a capability nobody asked for is a guess at a requirement rather than a gap. | Either a reader that opens a DOCX or OOXML document with the fidelity the changelog can state without a hedge, or the entry is closed as unwanted. |
-| R13 | **A worked example per delivery form, compiled in CI.** | The crates are documented; what is missing is a start-to-finish example a third party can copy. It comes after R7, because an example is worth little if nobody can add the crate. | Five examples build in CI, one per delivery form, and each is linked from the README. |
-| R21 | **The accessibility stack is one eframe upgrade behind.** `accesskit_unix` reaches `zbus`, whose own authors have deprecated `zbus_names` and `zvariant` into it; RustSec records the deprecation as unmaintained, and the fix is a newer `eframe`, not a change this project can make. `deny.toml` names those three advisories, and `RUSTSEC-2026-0192` from `sctk-adwaita` above them, which R26 carries, so the audit stays green in the meantime. | It fails the `deps` gate for a reason that is not this project's to fix, so it sits here rather than above — but an ignore list is a debt, not a settlement. | `cargo deny check advisories` passes with those four IDs removed from the ignore list. |
-| R25 | **No raster cache across windows and frames.** Every page drawn is rasterized again, and nothing evicts a bitmap once a distant page is left behind. The memory budget is stated per page and per document, so the ceiling is met; what is missing is the other direction — a window that is redrawn repeatedly pays for the ink each time. | The budgets in `docs/Performance.md` hold without it, so this waits for a measurement rather than for a reason. | A cache with a stated eviction rule, and a benchmark line that shows the redraw cost it removes. |
-| R26 | **`ttf-parser` is still in the tree, through window decorations.** This project reads fonts through `skrifa` since R22, and `deny.toml` keeps `RUSTSEC-2026-0192` for a path it did not choose: `winit` 0.30 draws its own frame on Wayland through `sctk-adwaita` 0.10, which reaches `ab_glyph`, which parses with `owned_ttf_parser` and therefore `ttf-parser`. The advisory is unmaintained rather than a known flaw, and nothing here hands it a document: the faces it parses are the desktop's own window-title typeface. `steleofd-reader` selects it by turning on `winit`'s `wayland-csd-adwaita`. | It is a debt recorded where the fix lives rather than work this project can do alone: dropping the feature costs the window frame on a compositor that draws no decorations of its own, so the settlement is the `eframe` upgrade R21 already waits on. Kept separate from R21 because the two retire on their own versions even where one upgrade clears both. | `ttf-parser` is absent from `Cargo.lock`, and `RUSTSEC-2026-0192` is gone from `deny.toml` with nothing added in its place. |
-| R14 | **A public extension surface** for colour profiles, font providers and render backends. | An organisation cannot plug in its own without forking. It follows the examples because an extension point without a worked example is a guess. | The three provider traits are public, documented, and exercised by the examples above. |
-| R15 | **Other shells.** A Tauri shell and a Qt or GTK binding, each a separate crate over `core`. | Both are alternatives to the shipped `egui` reader, not gaps in it. | A second shell opens a document and draws a page through `core` alone. |
-| R16 | **Track GB/T 33190 revisions** and keep the annex A schemas regenerable from the standard text. | Nothing is pending today; this is the standing task that keeps it that way. | A new revision of the standard regenerates the schemas with the existing scripts and the register stays consistent. |
-
-A browser shell over the `wasm` bindings is not listed: the reader now builds
-for `wasm32` and ships as a page in each release, which is what it would have
-asked for.
-
-An in-memory open that takes ownership of a caller's buffer is not listed
-either. The C and wasm callers already hand over bytes and get one copy back;
-removing that copy saves memory on a 30 MB document, and it is worth doing when
-a caller says so rather than in advance.
+| Need | Why it is not shaped yet |
+| --- | --- |
+| **Other shells** — a Tauri shell, a Qt or GTK binding | Both are alternatives to the shipped `egui` reader rather than gaps in it. Which one is worth building depends on a user who wants it. [#13](https://github.com/emfox/SteleOFD/issues/13) |
+| **A public extension surface** for colour profiles, font providers and render backends | The three traits can be guessed, but an extension point without a worked example is a guess at a requirement. It waits until somebody forks a crate to plug something in, because that fork says what the trait has to be. [#12](https://github.com/emfox/SteleOFD/issues/12) |
+| **A cache for what a window redraws** | The stated budgets are met without one, so the shape of the answer depends on a measurement nobody has taken. [#6](https://github.com/emfox/SteleOFD/issues/6) |
+| **Which constructs `office` and `ocr` would name, if implemented** | A DOCX or OOXML conversion in one direction and OCR in the other each needs a model before it needs code, and nobody has asked for either. [#10](https://github.com/emfox/SteleOFD/issues/10) |
+| **Tracking revisions of GB/T 33190** | Nothing is pending today. This is the standing task that keeps it that way rather than work with a shape. |
 
 ## Standing constraints
 
@@ -111,18 +57,13 @@ a caller says so rather than in advance.
 - **Blending is deliberately unsupported.** GB/T 33190-2016 defines no blend
   mode; `Alpha` is the whole of its transparency model. Recorded in
   `docs/Interop.md` §6.
-- **`0.1.0` and `0.1.1` changed no behaviour.** The first rewrote the release
-  notes by capability and renamed the documents to `Conventions.md`; the second
-  fixed where the release notes come from and a placeholder `repository`.
-- **Far-term work is not scheduled.** The rows above describe a direction, not
-  dates.
-- **`RUSTSEC-2026-0192` no longer reaches this project's own parsing.**
-  `steleofd-font` reads fonts through `skrifa`, and `ttf_face` fuzzes that. The
-  advisory stays in `deny.toml` for one reachable path that is not ours to
-  choose: `sctk-adwaita` draws winit's own window decorations through
-  `ab_glyph`. It is open as R26, which is where that path and its fix live.
+- **Far-term work is not scheduled.** The directions above describe an
+  outcome, not a date.
+- **A closed issue is not a closed direction.** The direction stays until the
+  outcome it names is reached, whatever the issue count underneath it does.
 
 ## How to propose a change
 
 Open an issue, state the problem, name the exit criterion. A task without a
-verifiable exit criterion does not belong here.
+verifiable exit criterion belongs in neither place: it is a wish, and this file
+already lists the wishes it has.

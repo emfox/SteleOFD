@@ -264,21 +264,18 @@ built, and one nobody can trace upstream is one nobody can explain.
 New exemptions should be added to the allowlists in the script with a one-line
 reason, so that every exception stays self-documenting.
 
-## 5. Closing a roadmap item
+## 5. Closing an issue
 
-`docs/Roadmap.md` lists only what is still open, so closing an item is the act
-of deleting its row. An open item is somebody's plan; a closed one that leaves
-no trace in `CHANGELOG.md` is a capability nobody reading the release notes can
-find, and the commit history is not where a user looks for it.
+An issue closes when its exit criterion is met, and the closing commit writes
+what it delivered into the `Unreleased` section of `CHANGELOG.md`, in the
+release's own words rather than the issue's: the issue says what was missing
+and why, and the changelog says what a reader can now do. An issue closed for
+another reason — superseded, withdrawn, decided against — says so in the
+changelog only when a user could notice.
 
-The same commit that deletes the row writes what it delivered into the
-`Unreleased` section, in the release's own words rather than the roadmap's: the
-roadmap says what was missing and why, and the changelog says what a reader can
-now do. A row deleted for another reason — superseded, withdrawn, decided
-against — says so in the changelog only when a user could notice.
-
-This is what keeps `Roadmap.md` from becoming a history: a closed item moves
-into the changelog, and nothing is left behind in the file it came from.
+`docs/Roadmap.md` is not updated by a closing issue. It carries directions and
+needs that have no exit criterion yet, so an issue finishing says nothing about
+whether the direction it served has been reached.
 
 An entry is one sentence, and two only when the change is one a user could get
 hurt by. What a reader needs is what they can now do and what it replaced; the

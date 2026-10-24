@@ -17,8 +17,9 @@ fontconfig, reached through `font-kit` by the reader on Linux.
 
 The current release is `0.4.0`. It removes four feature names that enabled
 nothing, which is why it is `0.4.0` and not a patch. What it offers is in the
-[`CHANGELOG`](CHANGELOG.md); what is still to build, and which release has
-claimed it, is in [`docs/Roadmap.md`](docs/Roadmap.md).
+[`CHANGELOG`](CHANGELOG.md); concrete work still to do is in the
+[issue tracker](https://github.com/emfox/SteleOFD/issues), and the direction it
+serves is in [`docs/Roadmap.md`](docs/Roadmap.md).
 
 This document has two halves: the first is for anyone using SteleOFD, the second
 for anyone working on it.
@@ -59,8 +60,9 @@ python3 scripts/release_checksums.py verify .
 sha256sum -c SHA256SUMS          # or without this project at all
 ```
 
-The crates themselves are not on a registry yet: where each one is headed is
-recorded in [`docs/Roadmap.md`](docs/Roadmap.md) as R7.
+The crates themselves are not on a registry yet: which of them will publish, and
+what is left before they can, is
+[issue #4](https://github.com/emfox/SteleOFD/issues/4).
 
 ## What it reads
 
