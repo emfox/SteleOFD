@@ -10,8 +10,7 @@ use steleofd_display::ops::{Color, GradientStop, LineCap, LineJoin, PaintRule, S
 use steleofd_display::{GlyphRun, ImageRef, LinearGradientSpec, MeshSpec, RadialGradientSpec};
 use steleofd_error::{ConvertError, OfdError, Result};
 use steleofd_font::FontManager;
-use steleofd_geometry::{Affine, Path, PathSegment};
-use steleofd_render::arc_cubics;
+use steleofd_geometry::{Affine, Path, PathSegment, arc_cubics};
 
 use crate::replay::{PageSink, PaintShape, PathShape, replay};
 use crate::{ConversionStats, TextExport};

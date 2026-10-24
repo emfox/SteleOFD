@@ -7,7 +7,7 @@
 
 pub mod raster;
 
-pub use raster::{Cubic, RasterOutput, RenderOptions, arc_cubics, render_page};
+pub use raster::{RasterOutput, RenderOptions, render_page};
 
 // Subsetting is not this crate's to do: `steleofd-core` cuts each embedded face
 // to the glyphs the display list names, and neither exporter carries a font;
