@@ -8,6 +8,24 @@ release is written up is in
 
 ## [Unreleased]
 
+### Changed
+
+- **The paint a graphic unit carries is stated once, on `ObjectBase`.** Fill
+  colour, stroke colour and the two switches were repeated on `PathObject`,
+  `TextObject` and `DrawParam` and resolved again in each flattening path; they
+  now live on the base every object already had, and one `resolve_paint` states
+  the object-then-draw-parameter-then-default order clause 12.2 describes. Only
+  the default differs between kinds, and annex A sets the two in opposite
+  directions, so it stays a parameter rather than a second copy of the rule.
+  `PathGraphics` is gone; `PathObject` keeps `rule`, which decides geometry
+  rather than paint. `CompositeObject` loses the paint fields it never had in
+  `CT_Composite` and never read.
+
+  This breaks the public API: `PathObject.graphics.*` and the inline
+  `TextObject.{fill,stroke,fill_color,stroke_color}` are now `base.*`. Nothing
+  changes in what a document draws — 25 samples render byte-identically before
+  and after.
+
 ### Examples
 
 - **One worked example per delivery form**, each a single file that opens a
