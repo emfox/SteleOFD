@@ -8,6 +8,8 @@ release is written up is in
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-25
+
 ### Changed
 
 - **The crates are named `sofd`, and the facade is that bare name.** Every
@@ -272,7 +274,8 @@ A nine-page golden book is compared against another vendor's reader and a second
 - Office formats and OCR are planned, not built.
 - iOS is not in the release matrix, and the release artefacts are unsigned.
 
-[Unreleased]: https://github.com/emfox/sOFD/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/emfox/sOFD/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/emfox/sOFD/releases/tag/v0.5.0
 [0.4.0]: https://github.com/emfox/sOFD/releases/tag/v0.4.0
 [0.3.0]: https://github.com/emfox/sOFD/releases/tag/v0.3.0
 [0.2.0]: https://github.com/emfox/sOFD/releases/tag/v0.2.0
