@@ -65,6 +65,12 @@ CONFIG_CHANGES = "|".join(
         "uiMode",
     ]
 )
+# The types a share can carry, and the reason there is more than one: a file
+# manager that cannot name OFD sends the container's type instead, so a filter
+# that named only `application/ofd` left the reader absent from the sheet that
+# offers it. A share of the wrong type opens and is refused by the reader,
+# which says so, and that is better than a share menu with no reader in it.
+SEND_MIMES = ["application/ofd", "application/zip", "application/octet-stream"]
 # The workspace manifest, which is where the one version of everything lives.
 MANIFEST_TOML = Path(__file__).resolve().parent.parent / "Cargo.toml"
 
@@ -134,8 +140,7 @@ MANIFEST = """<?xml version="1.0" encoding="utf-8"?>
             <intent-filter android:label="Open an OFD">
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
-                <data android:mimeType="application/ofd" />
-            </intent-filter>
+{send_mimes}            </intent-filter>
         </activity>
     </application>
 </manifest>
@@ -144,6 +149,9 @@ MANIFEST = """<?xml version="1.0" encoding="utf-8"?>
 
 def manifest_text(version: str) -> str:
     """The manifest for one version, with every count filled in."""
+    send_mimes = "".join(
+        f'                <data android:mimeType="{mime}" />\n' for mime in SEND_MIMES
+    )
     return MANIFEST.format(
         package=PACKAGE,
         version_code=version_code(version),
@@ -153,6 +161,7 @@ def manifest_text(version: str) -> str:
         activity=ACTIVITY,
         library=LIBRARY,
         config_changes=CONFIG_CHANGES,
+        send_mimes=send_mimes,
     )
 
 
@@ -341,6 +350,11 @@ def selftest() -> int:
     assert "android.intent.action.SEND" in rendered
     assert 'android:mimeType="application/ofd"' in rendered
     assert 'android:pathSuffix=".ofd"' in rendered
+    # A share the reader is offered has to arrive even when the sender names
+    # the container rather than the format, which most file managers do.
+    send = rendered.split("android.intent.action.SEND", 1)[1].split("</intent-filter>", 1)[0]
+    for mime in SEND_MIMES:
+        assert f'android:mimeType="{mime}"' in send, mime
 
     # A configuration change the activity does not claim recreates it, and the
     # recreation destroys the surface the frame is drawn on: the reader then
