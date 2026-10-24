@@ -26,6 +26,14 @@ release is written up is in
   changes in what a document draws — 25 samples render byte-identically before
   and after.
 
+- **An image resource is decoded in one place, `steleofd_io::decode`.** The
+  parser, the raster backend and the PDF exporter each read the same bytes and
+  each accepted a slightly different set of formats, so a resource could paint
+  and then refuse to export. `parse::pixel_size` and the rasteriser's
+  `decode_resource` now ask there, and `Pixels` picks RGB for an image XObject
+  and premultiplied RGBA for a canvas. JBIG2 moves to `steleofd_io::decode::jbig2`;
+  `steleofd-io` now depends on `steleofd-display` for `ImageCodec`.
+
 ### Examples
 
 - **One worked example per delivery form**, each a single file that opens a
