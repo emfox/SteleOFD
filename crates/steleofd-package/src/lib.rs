@@ -195,7 +195,10 @@ impl Package {
     }
 
     /// Whether a path exists in the archive.
+    /// Entries are named without a leading slash, but producers write paths
+    /// from the root, so `/Doc_0/x.xml` and `Doc_0/x.xml` name one entry.
     pub fn contains(&self, path: &str) -> bool {
+        let path = strip_root(path);
         self.paths.iter().any(|p| p == path) || self.match_ignoring_case(path).is_some()
     }
 
@@ -211,6 +214,7 @@ impl Package {
 
     /// Read one entry in full.
     pub fn read(&mut self, path: &str) -> Result<Vec<u8>> {
+        let path = strip_root(path);
         let path = match self.paths.iter().any(|p| p == path) {
             true => path.to_string(),
             false => self
@@ -316,6 +320,12 @@ impl Package {
     pub fn kind_of(&self, path: &str) -> Option<EntryKind> {
         EntryKind::from_path(path)
     }
+}
+
+/// A path with any leading slashes removed, the way producers spell a
+/// container path from the root.
+fn strip_root(path: &str) -> &str {
+    path.trim_start_matches('/')
 }
 
 /// Strip a leading `./` and collapse backslashes so lookups are predictable.
