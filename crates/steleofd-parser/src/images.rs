@@ -92,16 +92,8 @@ pub fn attach_images(page: &mut steleofd_display::PageDisplay, table: &ImageTabl
 
 /// The pixel size of an image, read from its own header.
 ///
-/// JBIG2 carries its dimensions in a segment rather than a magic number.
+/// The reading is `steleofd_io`'s, so a resource placed here is one the
+/// rasteriser and the exporters can also read.
 pub fn pixel_size(data: &[u8], codec: ImageCodec) -> Option<(u32, u32)> {
-    let by_codec = match codec {
-        ImageCodec::Jbig2 => steleofd_io::jbig2::dimensions(data),
-        _ => None,
-    };
-    match by_codec {
-        Some(size) => Some(size),
-        None => image::load_from_memory(data)
-            .ok()
-            .map(|i| (i.width(), i.height())),
-    }
+    steleofd_io::pixel_size(data, codec)
 }

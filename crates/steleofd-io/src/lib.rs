@@ -1,14 +1,17 @@
 //! Input and output abstraction.
 //! OFD data may come from a file, memory, a stream or a map; [`ByteSource`] and
 //! [`ByteSink`] abstract that away so WASM and server builds share parsing code.
+//! [`decode`] reads an image resource, so the parser, the rasteriser and the
+//! exporters all accept the same set of formats instead of each their own.
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
-pub mod jbig2;
+pub mod decode;
 pub mod sink;
 pub mod source;
 
+pub use decode::{Decoded, Pixels, decode, pixel_size, premultiply};
 pub use sink::{ByteSink, DirSink, VecSink};
 pub use source::{ByteSource, FileSource, MemorySource, SliceSource};
 

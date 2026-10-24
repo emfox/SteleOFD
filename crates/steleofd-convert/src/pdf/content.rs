@@ -11,20 +11,15 @@ pub(crate) fn channel_array(c: &Color) -> Object {
     )
 }
 
-/// Build an image XObject from encoded bytes, dropping alpha. JBIG2 is not one
-/// `image` reads, so a bi-level stream is decoded to grey first and expanded to
-/// RGB, exactly as the raster backend does.
+/// Build an image XObject from encoded bytes, dropping alpha.
+///
+/// The decode is `steleofd_io`'s, the same one the rasteriser asks for, so a
+/// resource this exports is a resource that paints: OFD's two groups of formats
+/// are one set here rather than two that drift apart.
 pub(crate) fn image_xobject(image: &PendingImage) -> Result<Stream> {
-    let rgb = if image.codec == steleofd_display::ImageCodec::Jbig2 {
-        let gray = steleofd_io::jbig2::decode_to_gray(&image.data)
-            .map_err(|reason| convert_error("image", reason))?;
-        gray.iter().flat_map(|&v| [v, v, v]).collect()
-    } else {
-        image::load_from_memory(&image.data)
-            .map_err(|e| convert_error("image", e.to_string()))?
-            .to_rgb8()
-            .into_raw()
-    };
+    let rgb = steleofd_io::decode(&image.data, image.codec, steleofd_io::Pixels::Rgb)
+        .map_err(|reason| convert_error("image", reason))?
+        .bytes;
     let mut dict = Dictionary::new();
     dict.set("Type", Object::Name(b"XObject".to_vec()));
     dict.set("Subtype", Object::Name(b"Image".to_vec()));

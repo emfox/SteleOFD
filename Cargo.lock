@@ -4852,7 +4852,9 @@ name = "steleofd-io"
 version = "0.5.0"
 dependencies = [
  "hayro-jbig2",
+ "image",
  "memmap2",
+ "steleofd-display",
  "steleofd-error",
  "tracing",
 ]
@@ -4884,7 +4886,6 @@ name = "steleofd-parser"
 version = "0.5.0"
 dependencies = [
  "criterion",
- "image",
  "proptest",
  "steleofd-common",
  "steleofd-convert",

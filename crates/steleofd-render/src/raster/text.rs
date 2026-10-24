@@ -154,43 +154,27 @@ pub(crate) fn draw_image(
     Ok(ImageOutcome::Drawn)
 }
 
-/// Decode a placed resource into RGBA, whichever encoding it uses.
+/// Decode a placed resource into premultiplied RGBA.
 ///
-/// JBIG2 is not one `image` reads, so it takes its own path.
+/// Which encodings this accepts, and how each is read, is `steleofd_io`'s to
+/// say: an export embeds the same bytes, so a format known here and not there
+/// would render and then refuse to leave the page.
 pub(crate) fn decode_resource(image: &ImageRef) -> Result<(Vec<u8>, u32, u32)> {
-    let fail = |reason: String| {
-        OfdError::Render(RenderError::ImageDecode {
+    let decoded = steleofd_io::decode(&image.data, image.codec, steleofd_io::Pixels::Rgba)
+        .map_err(|reason| {
+            OfdError::Render(RenderError::ImageDecode {
+                page: 0,
+                reason: format!("resource {}: {reason}", image.id),
+            })
+        })?;
+    if decoded.width == 0 || decoded.height == 0 {
+        return Err(OfdError::Render(RenderError::ImageDecode {
             page: 0,
-            reason: format!("resource {}: {reason}", image.id),
-        })
-    };
-    if image.codec == steleofd_display::ImageCodec::Jbig2 {
-        let gray = steleofd_io::jbig2::decode_to_gray(&image.data).map_err(fail)?;
-        let (w, h) = (image.pixel_size.0, image.pixel_size.1);
-        if gray.len() != (w * h) as usize {
-            return Err(fail(format!(
-                "JBIG2 declares {w}x{h} but decoded {} bytes",
-                gray.len()
-            )));
-        }
-        if w == 0 || h == 0 {
-            return Err(fail(format!("JBIG2 size {w}x{h} rejected")));
-        }
-        let rgba: Vec<u8> = gray.iter().flat_map(|&v| [v, v, v, u8::MAX]).collect();
-        return Ok((rgba, w, h));
+            reason: format!(
+                "resource {}: size {}x{} rejected",
+                image.id, decoded.width, decoded.height
+            ),
+        }));
     }
-    let decoded = image::load_from_memory(&image.data).map_err(|e| fail(e.to_string()))?;
-    let rgba = decoded.to_rgba8();
-    let (w, h) = (rgba.width(), rgba.height());
-    let premul: Vec<u8> = rgba.pixels().flat_map(|p| premultiply(p.0)).collect();
-    Ok((premul, w, h))
-}
-
-pub(crate) fn premultiply(px: [u8; 4]) -> [u8; 4] {
-    let a = px[3] as u32;
-    if a == 255 {
-        return px;
-    }
-    let m = |c: u8| ((c as u32 * a + 127) / 255) as u8;
-    [m(px[0]), m(px[1]), m(px[2]), px[3]]
+    Ok((decoded.bytes, decoded.width, decoded.height))
 }

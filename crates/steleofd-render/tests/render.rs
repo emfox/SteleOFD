@@ -438,7 +438,7 @@ fn a_jbig2_image_is_decoded_and_painted() {
     let fonts = FontManager::new();
     let data = std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/qr.jb2"))
         .expect("the sample is present");
-    let (w, h) = steleofd_io::jbig2::dimensions(&data).expect("dimensions");
+    let (w, h) = steleofd_io::decode::jbig2::dimensions(&data).expect("dimensions");
     assert_eq!((w, h), (100, 100), "the sample is a 100x100 QR code");
     let dst = Rect::new(20.0, 20.0, 50.0, 50.0);
     let image = ImageRef::new("1", Arc::new(data), (w, h), ImageCodec::Jbig2);
@@ -464,7 +464,7 @@ fn a_jbig2_page_is_black_on_white_rather_than_inverted() {
     let _fonts = FontManager::new();
     let data = std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/qr.jb2"))
         .expect("the sample is present");
-    let gray = steleofd_io::jbig2::decode_to_gray(&data).expect("decode");
+    let gray = steleofd_io::decode::jbig2::decode_to_gray(&data).expect("decode");
     assert_eq!(gray.len(), 100 * 100, "one byte per pixel");
     let black = gray.iter().filter(|&&v| v == 0).count();
     let ratio = black as f64 / gray.len() as f64;

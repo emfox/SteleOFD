@@ -6,11 +6,13 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 readme.workspace = true
-description = "Byte sources and sinks, so OFD data can come from a file, memory, a stream or a map"
+description = "Byte sources and sinks, and the one decoder every reader of an image resource shares"
 
 [dependencies]
 steleofd-error.workspace = true
+steleofd-display.workspace = true
 tracing.workspace = true
+image.workspace = true
 memmap2 = { version = "0.9", optional = true }
 hayro-jbig2.workspace = true
 
