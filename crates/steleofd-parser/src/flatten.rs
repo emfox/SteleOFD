@@ -74,7 +74,9 @@ pub fn flatten_block(
 /// Flatten one object with the layer's draw parameter as a fallback.
 ///
 /// Clause 8.5 puts `DrawParam` on every graphic unit, a layer included, so an
-/// object that states none takes the one its layer states.
+/// object that states none takes the one its layer states. One that states its
+/// own keeps it, and a layer name that resolves to nothing leaves the object
+/// as it stands rather than failing the page.
 fn flatten_in_layer(
     object: &Object,
     inherited: Option<&str>,
@@ -89,17 +91,12 @@ fn flatten_in_layer(
     if base_of(object).is_some_and(|b| b.draw_param.is_some()) {
         return flatten_object(object, params, colors, composites, builder);
     }
-    // A dangling layer parameter is reported the way a dangling object one is,
-    // and only when an object actually needed it.
-    if !params.contains_key(id) {
-        return Err(OfdError::Format(FormatError::DanglingReference {
-            kind: "DrawParam",
-            id: id.to_string(),
-        }));
-    }
+    let Some(param) = params.get(id) else {
+        return flatten_object(object, params, colors, composites, builder);
+    };
     let mut object = object.clone();
     if let Some(base) = base_of_mut(&mut object) {
-        base.draw_param = Some(id.to_string());
+        base.draw_param = Some(param.id.clone());
     }
     flatten_object(&object, params, colors, composites, builder)
 }
@@ -1293,23 +1290,28 @@ mod tests {
     }
 
     #[test]
-    fn a_layer_draw_param_that_names_nothing_is_reported() {
-        let err = run_in_layer(
+    fn a_layer_draw_param_that_names_nothing_leaves_the_object_as_it_stands() {
+        // The sample this reader is measured against writes a layer style on
+        // every template and ships no such parameter, so failing here would
+        // refuse a document that draws perfectly well without it.
+        let ops = run_in_layer(
             Some("missing"),
-            vec![Object::PathObject(filled_path_object("M 0 0 L 10 10"))],
+            vec![Object::PathObject(path_object("M 0 0 L 10 10"))],
             &HashMap::new(),
         )
-        .expect_err("a layer naming an absent parameter must be reported");
-        assert!(
-            matches!(
-                err,
-                OfdError::Format(FormatError::DanglingReference {
-                    kind: "DrawParam",
-                    ..
-                })
-            ),
-            "got {err:?}"
-        );
+        .expect("a layer style that names nothing is no reason to refuse a page");
+        assert_eq!(ops.len(), 1, "the object is still drawn: {ops:?}");
+        let (fill, _) = paint_of(&ops[0]);
+        assert!(fill.is_none(), "and carries no fill it was never given");
+    }
+
+    #[test]
+    fn an_object_draw_param_that_names_nothing_is_still_reported() {
+        // An object saying which style it wants, when that style is absent, is
+        // a statement about the object rather than a layer habit.
+        let mut p = path_object("M 0 0 L 10 10");
+        p.base.draw_param = Some("missing".to_string());
+        assert!(run_in_layer(Some("7"), vec![Object::PathObject(p)], &red_param("7")).is_err());
     }
 
     #[test]
