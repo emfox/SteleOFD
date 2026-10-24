@@ -759,6 +759,7 @@ pub(crate) fn read_layer(cursor: &mut Cursor<'_>, node: &Node) -> Result<Layer> 
     let a = node.attributes();
     let mut layer = Layer {
         id: a.get("ID").map(str::to_string),
+        draw_param: a.get("DrawParam").map(str::to_string),
         objects: Vec::new(),
     };
     if !node.is_self_closing() {

@@ -43,6 +43,7 @@ fn text_object(id: &str, text: &str) -> Object {
 fn layer_of(objects: Vec<Object>) -> Layer {
     Layer {
         id: Some("1".to_string()),
+        draw_param: None,
         objects,
     }
 }

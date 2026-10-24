@@ -724,6 +724,9 @@ pub struct Layer {
     /// Reference id.
     #[serde(rename = "ID", skip_serializing_if = "Option::is_none")]
     pub id: Option<RefId>,
+    /// Draw parameter the objects in this layer inherit, clause 8.5.
+    #[serde(rename = "DrawParam", skip_serializing_if = "Option::is_none")]
+    pub draw_param: Option<RefId>,
     /// Objects in this layer, bottom first.
     #[serde(rename = "$value", default)]
     pub objects: Vec<crate::object::Object>,
@@ -829,6 +832,7 @@ mod tests {
             content: Some(PageBlock {
                 layers: vec![Layer {
                     id: None,
+                    draw_param: None,
                     objects: vec![Object::unknown()],
                 }],
             }),
@@ -843,10 +847,12 @@ mod tests {
             layers: vec![
                 Layer {
                     id: Some("1".into()),
+                    draw_param: None,
                     objects: vec![Object::unknown(), Object::unknown()],
                 },
                 Layer {
                     id: Some("2".into()),
+                    draw_param: None,
                     objects: vec![Object::unknown()],
                 },
             ],

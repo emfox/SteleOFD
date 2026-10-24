@@ -61,11 +61,47 @@ pub fn flatten_block(
     builder: &mut DisplayListBuilder,
 ) -> Result<()> {
     for layer in &block.layers {
+        // A layer may name a draw parameter for the objects inside it. One
+        // that names its own still wins, so this only fills the silence.
         for object in &layer.objects {
-            flatten_object(object, params, colors, composites, builder)?;
+            let inherited = layer.draw_param.as_deref();
+            flatten_in_layer(object, inherited, params, colors, composites, builder)?;
         }
     }
     Ok(())
+}
+
+/// Flatten one object with the layer's draw parameter as a fallback.
+///
+/// Clause 8.5 puts `DrawParam` on every graphic unit, a layer included, so an
+/// object that states none takes the one its layer states.
+fn flatten_in_layer(
+    object: &Object,
+    inherited: Option<&str>,
+    params: &HashMap<String, DrawParam>,
+    colors: &ColorTable,
+    composites: &CompositeTable,
+    builder: &mut DisplayListBuilder,
+) -> Result<()> {
+    let Some(id) = inherited else {
+        return flatten_object(object, params, colors, composites, builder);
+    };
+    if base_of(object).is_some_and(|b| b.draw_param.is_some()) {
+        return flatten_object(object, params, colors, composites, builder);
+    }
+    // A dangling layer parameter is reported the way a dangling object one is,
+    // and only when an object actually needed it.
+    if !params.contains_key(id) {
+        return Err(OfdError::Format(FormatError::DanglingReference {
+            kind: "DrawParam",
+            id: id.to_string(),
+        }));
+    }
+    let mut object = object.clone();
+    if let Some(base) = base_of_mut(&mut object) {
+        base.draw_param = Some(id.to_string());
+    }
+    flatten_object(&object, params, colors, composites, builder)
 }
 
 fn flatten_object(
@@ -98,12 +134,29 @@ fn flatten_object(
 
 /// GB/T 33190 clause 8.5: every object exposes the same base attributes.
 fn visible_of(object: &Object) -> Option<bool> {
+    base_of(object).and_then(|base| base.visible)
+}
+
+/// The base attributes of whichever object this is, which every kind shares.
+fn base_of(object: &Object) -> Option<&ObjectBase> {
     match object {
-        Object::PathObject(o) => o.base.visible,
-        Object::TextObject(o) => o.base.visible,
-        Object::ImageObject(o) => o.base.visible,
-        Object::CompositeObject(o) => o.base.visible,
-        Object::PageBlockObject(o) => o.base.visible,
+        Object::PathObject(o) => Some(&o.base),
+        Object::TextObject(o) => Some(&o.base),
+        Object::ImageObject(o) => Some(&o.base),
+        Object::CompositeObject(o) => Some(&o.base),
+        Object::PageBlockObject(o) => Some(&o.base),
+        Object::Unknown(_) => None,
+    }
+}
+
+/// The same base, for filling in what the layer supplies.
+fn base_of_mut(object: &mut Object) -> Option<&mut ObjectBase> {
+    match object {
+        Object::PathObject(o) => Some(&mut o.base),
+        Object::TextObject(o) => Some(&mut o.base),
+        Object::ImageObject(o) => Some(&mut o.base),
+        Object::CompositeObject(o) => Some(&mut o.base),
+        Object::PageBlockObject(o) => Some(&mut o.base),
         Object::Unknown(_) => None,
     }
 }
@@ -1037,8 +1090,21 @@ mod tests {
     }
 
     fn run(objects: Vec<Object>, params: &HashMap<String, DrawParam>) -> Result<Vec<DrawOp>> {
+        run_in_layer(None, objects, params)
+    }
+
+    /// Flatten one layer whose own draw parameter the test chooses.
+    fn run_in_layer(
+        layer_param: Option<&str>,
+        objects: Vec<Object>,
+        params: &HashMap<String, DrawParam>,
+    ) -> Result<Vec<DrawOp>> {
         let block = PageBlock {
-            layers: vec![Layer { id: None, objects }],
+            layers: vec![Layer {
+                id: None,
+                draw_param: layer_param.map(str::to_string),
+                objects,
+            }],
         };
         let mut b = builder();
         flatten_block(&block, params, &no_colors(), &no_composites(), &mut b)?;
@@ -1138,6 +1204,112 @@ mod tests {
         let mut p = path_object("M 0 0 L 10 10");
         p.base.draw_param = Some("missing".to_string());
         assert!(run(vec![Object::PathObject(p)], &HashMap::new()).is_err());
+    }
+
+    /// One red, half-a-millimetre parameter under the id the tests ask for.
+    fn red_param(id: &str) -> HashMap<String, DrawParam> {
+        let mut params = HashMap::new();
+        params.insert(
+            id.to_string(),
+            DrawParam {
+                id: id.to_string(),
+                line_width: Some(0.5),
+                fill_color: Some(ColorRef::from_hex("#FF0000")),
+                ..Default::default()
+            },
+        );
+        params
+    }
+
+    /// The paint and width a path op carries, which is where a parameter shows.
+    fn paint_of(op: &DrawOp) -> (Option<Paint>, f64) {
+        let DrawOp::Path {
+            fill, stroke_style, ..
+        } = op
+        else {
+            panic!("expected a path op, got {op:?}");
+        };
+        (fill.clone(), stroke_style.width)
+    }
+
+    #[test]
+    fn an_object_takes_the_draw_param_its_layer_states() {
+        let ops = run_in_layer(
+            Some("7"),
+            vec![Object::PathObject(filled_path_object("M 0 0 L 10 10"))],
+            &red_param("7"),
+        )
+        .expect("flatten");
+        let (fill, width) = paint_of(&ops[0]);
+        assert!(
+            matches!(
+                fill,
+                Some(Paint::Solid(Color {
+                    r: 255,
+                    g: 0,
+                    b: 0,
+                    a: 255
+                }))
+            ),
+            "the layer's colour reached the object: {fill:?}"
+        );
+        assert!((width - 0.5).abs() < 1e-9, "and so did its width: {width}");
+    }
+
+    #[test]
+    fn an_object_that_states_its_own_draw_param_keeps_it() {
+        // The layer says blue and wide, the object says red and thin: clause
+        // 8.5 leaves the nearer statement in charge.
+        let mut own = HashMap::new();
+        own.insert(
+            "9".to_string(),
+            DrawParam {
+                id: "9".to_string(),
+                line_width: Some(0.25),
+                fill_color: Some(ColorRef::from_hex("#0000FF")),
+                ..Default::default()
+            },
+        );
+        let mut layer = red_param("7");
+        layer.extend(own);
+
+        let mut p = filled_path_object("M 0 0 L 10 10");
+        p.base.draw_param = Some("9".to_string());
+        let ops = run_in_layer(Some("7"), vec![Object::PathObject(p)], &layer).expect("flatten");
+        let (fill, width) = paint_of(&ops[0]);
+        assert!(
+            matches!(
+                fill,
+                Some(Paint::Solid(Color {
+                    r: 0,
+                    g: 0,
+                    b: 255,
+                    a: 255
+                }))
+            ),
+            "the object's own colour wins over the layer's: {fill:?}"
+        );
+        assert!((width - 0.25).abs() < 1e-9, "and its own width: {width}");
+    }
+
+    #[test]
+    fn a_layer_draw_param_that_names_nothing_is_reported() {
+        let err = run_in_layer(
+            Some("missing"),
+            vec![Object::PathObject(filled_path_object("M 0 0 L 10 10"))],
+            &HashMap::new(),
+        )
+        .expect_err("a layer naming an absent parameter must be reported");
+        assert!(
+            matches!(
+                err,
+                OfdError::Format(FormatError::DanglingReference {
+                    kind: "DrawParam",
+                    ..
+                })
+            ),
+            "got {err:?}"
+        );
     }
 
     #[test]
@@ -1269,10 +1441,12 @@ mod tests {
             layers: vec![
                 Layer {
                     id: None,
+                    draw_param: None,
                     objects: vec![Object::PathObject(path_object("M 0 0 L 1 1"))],
                 },
                 Layer {
                     id: None,
+                    draw_param: None,
                     objects: vec![Object::PathObject(path_object("M 2 2 L 3 3"))],
                 },
             ],
